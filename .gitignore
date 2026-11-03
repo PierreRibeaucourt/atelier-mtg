@@ -1,0 +1,17 @@
+# Données personnelles : les decks (listes, photos, historique, versions, simulations, discussions) restent sur ce PC
+Deck */
+Corbeille Atelier/
+outils/atelier/discussion.json
+
+# Articles enregistrés depuis d'autres sites (Magic-Casual, Magic-Ville, Wizards) : pas à republier
+*.mhtml
+
+# Caches reconstruits automatiquement (Scryfall, Commander Spellbook)
+outils/cache_cartes.json
+outils/atelier/cache_infos.json
+outils/atelier/cache_spellbook.json
+
+# Divers
+__pycache__/
+*.tmp
+.claude/
