@@ -111,7 +111,7 @@ function ficheSurvol(c) {
   return `
     <div class="fs-tete"><span class="fs-nom">${esc(nom)}</span>${mana(f.cout)}</div>
     ${nom !== c.nom ? `<div class="fs-en">${esc(c.nom)}</div>` : ""}
-    <div class="fs-type">${esc(f.fr_type || f.type || "")}</div>
+    <div class="fs-type">${esc(f.fr_type || f.type || "")}${f.pt ? ` <span class="fs-pt">${esc(f.pt)}</span>` : ""}</div>
     ${texte ? `<div class="fs-texte">${texte.split("\n").map((l) => l.trim() === "//" ? "<hr>" : l.trim() ? `<p>${texteMana(l)}</p>` : "").join("")}</div>` : ""}
     <div class="fs-pied">
       <span class="${cher ? "cher" : ""}">${f.prix == null ? "prix inconnu" : euros(f.prix)}</span>${f.prix_edition ? `<span class="muet"> · ${esc(f.prix_edition)}</span>` : ""}
@@ -484,7 +484,7 @@ function modaleNouveauDeck() {
 }
 
 // ------------------------------------------------------------------ page d'un deck
-const ONGLETS = [["liste", "Liste"], ["stats", "Statistiques"], ["versions", "Versions"], ["bracket", "Bracket"], ["simulation", "Simulation"]];
+const ONGLETS = [["liste", "Liste"], ["stats", "Statistiques"], ["combos", "Combos"], ["versions", "Versions"], ["bracket", "Bracket"], ["simulation", "Simulation"]];
 
 async function vueDeck(id, onglet, extra = null, donnees = null) {
   if (!etat.deck || etat.deck.id !== id) {
@@ -524,6 +524,7 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
   const contenu = $("#contenu");
   if (onglet === "stats") return ongletStats(contenu, d);
   if (onglet === "bracket") return ongletBracket(contenu, d);
+  if (onglet === "combos") return ongletCombos(contenu, d, extra);
   if (onglet === "simulation") return ongletSimulation(contenu, d, extra);
   if (onglet === "versions" || onglet === "historique") return ongletVersions(contenu, d);
   ongletListe(contenu, d);
@@ -756,13 +757,13 @@ function ouvrirCarte(c) {
   const tags = c.tags.filter((t) => t !== "Maybeboard" && t !== "Commander");
   ouvrirModale(`
     <div class="fiche-carte">
-      <div class="fc-image">${f.image ? `<img src="${esc(f.image)}" alt="${esc(c.nom)}">` : `<div class="sans-image">${esc(c.nom)}</div>`}</div>
+      <div class="fc-image">${f.image ? `<img src="${esc(f.image)}" alt="${esc(c.nom)}">` : `<div class="sans-image">${esc(c.nom)}</div>`}${lienVersion(c.version)}</div>
       <div class="fc-infos">
         <div class="fc-tete">
           <div><h2>${esc(c.nom)} ${mana(f.cout)}</h2>${f.fr && f.fr !== c.nom ? `<div class="muet">${esc(f.fr)}</div>` : ""}</div>
           <button class="btn btn-discret" id="fc-fermer" aria-label="Fermer">✕</button>
         </div>
-        <div class="petit muet">${esc(f.fr_type || f.type || "")}${cmd ? " · commandant" : maybe ? " · Maybeboard (hors deck)" : ""}</div>
+        <div class="petit muet">${esc(f.fr_type || f.type || "")}${f.pt ? " · " + esc(f.pt) : ""}${cmd ? " · commandant" : maybe ? " · Maybeboard (hors deck)" : ""}</div>
         <div class="chiffres">
           ${f.prix_lien ? `<a class="badge ${cher ? "badge-cher" : ""}" href="${esc(f.prix_lien)}" target="_blank" rel="noopener" title="Voir sur Cardmarket">${euros(f.prix)}${f.prix_edition ? ` · ${esc(f.prix_edition)}` : ""} · Cardmarket ↗</a>`
             : `<span class="badge">${euros(f.prix)}</span>`}
@@ -780,6 +781,7 @@ function ouvrirCarte(c) {
             <input class="champ champ-petit" type="number" id="fc-n" min="1" max="99" value="${c.n}" style="width:4.5rem"></div>`}
         <div class="fc-actions">
           <button class="btn" data-act="remplacer">Remplacer… (même place)</button>
+          <a class="btn" href="#/deck/${enc(d.id)}/combos/${enc(c.nom)}">Combos avec cette carte</a>
           ${cmd ? "" : `<button class="btn" data-act="maybe">${maybe ? "Remettre dans le deck" : "Passer en Maybeboard"}</button>`}
           ${cmd ? `<button class="btn" data-act="cmd">Ne plus en faire le commandant</button>`
             : !maybe && legendaire ? `<button class="btn" data-act="cmd">Définir comme commandant</button>` : ""}
@@ -801,6 +803,7 @@ function ouvrirCarte(c) {
       const act = x.dataset.act;
       if (act === "prec" || act === "suiv") return ouvrirCarte(d.cartes[ordre[pos + (act === "suiv" ? 1 : -1)]]);
       if (act === "tags") return modaleTags(c, true);
+      if (act === "version") return modaleVersion(c);
       if (act === "remplacer") return modaleRemplacer(c);
       if (act === "retirer") {
         if (!confirm(`Retirer ${c.nom} du deck ?`)) return;
@@ -894,6 +897,95 @@ function modaleTags(c, retourFiche = false) {
   });
 }
 
+// ------------------------------------------------------------------ choisir la version (le visuel) d'une carte
+// Impressions anglaises et françaises ; le choix s'écrit « (ima) 205 » dans la liste, comme dans les exports Archidekt.
+const memeVersion = (a, b) => !!a && !!b && a.set === b.set && a.num === b.num && (a.lang || "en") === (b.lang || "en");
+const editionVersion = (p) => p ? { set: p.set, num: p.num, lang: p.lang, nom_edition: p.edition } : null;
+
+function lienVersion(v) {
+  return `<div class="fc-version">
+    ${v ? `<span class="petit muet">${esc(v.edition)}${v.annee ? " · " + esc(v.annee) : ""}${v.lang === "fr" ? " · en français" : ""}</span>` : ""}
+    <button type="button" class="lien-discret" data-act="version">Changer la version (visuel)</button>
+  </div>`;
+}
+
+function prixVersion(p) {
+  if (p.prix != null) return euros(p.prix);
+  if (p.prix_foil != null) return euros(p.prix_foil) + " (foil)";
+  return "";
+}
+
+async function choixVersion(zone, { nom, titre = nom, actuelle = null, surChoix, retour = null }) {
+  zone.innerHTML = `<p class="muet">Impressions de ${esc(titre)}…</p>`;
+  let liste;
+  try { liste = await api("/api/impressions?nom=" + enc(nom)); }
+  catch (e) { zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; return; }
+  let langue = PREF.get("langue-versions", "toutes");
+  if (!liste.some((p) => langue === "toutes" || p.lang === langue)) langue = "toutes";
+  const nb = (l) => liste.filter((p) => p.lang === l).length;
+  const estActuelle = (p) => (actuelle ? memeVersion(p, actuelle) : p.defaut);
+  const tuile = (p, i) => {
+    const prix = prixVersion(p);
+    return `<button type="button" class="version ${estActuelle(p) ? "actuelle" : ""}" data-v="${i}" aria-pressed="${estActuelle(p)}"
+        data-image="${esc(p.image)}" data-legende="${esc(`${p.edition} · ${p.annee}${p.lang === "fr" ? " · en français" : ""}${prix ? " · " + prix : ""}`)}">
+      ${p.petite ? `<img src="${esc(p.petite)}" alt="" loading="lazy">` : `<span class="sans-image">${esc(p.edition)}</span>`}
+      <span class="v-ed">${esc(p.edition)}</span>
+      <span class="v-info">${esc(p.annee)} · ${esc(p.set.toUpperCase())} ${esc(p.num)}${p.lang === "fr" ? ` · <b class="v-fr">FR</b>` : ""}</span>
+      ${prix ? `<span class="v-info">${prix}</span>` : ""}
+      ${estActuelle(p) ? `<span class="v-marque">actuelle</span>` : p.defaut ? `<span class="v-marque v-defaut">par défaut</span>` : ""}
+    </button>`;
+  };
+  zone.innerHTML = `<div class="choix-versions">
+    <div class="versions-tete">
+      <div class="versions-titre">Changer la version de ${esc(titre)}</div>
+      ${retour ? `<button type="button" class="btn btn-petit" data-retour>← Retour à la fiche</button>` : ""}
+    </div>
+    <p class="muet petit">${liste.length} impression${liste.length > 1 ? "s" : ""} avec image. Celle que tu choisis s'affiche partout dans l'Atelier et part dans l'export Archidekt.
+      Le prix du deck reste celui de l'édition la moins chère.${nb("fr") ? " Archidekt ne note pas la langue : il montrera la même édition en anglais." : ""}</p>
+    <div class="barre-outils">
+      <div class="segments" role="group">${[["toutes", `Toutes (${liste.length})`], ["en", `Anglais (${nb("en")})`], ["fr", `Français (${nb("fr")})`]]
+        .map(([k, l]) => `<button type="button" data-langue="${k}" class="${k === langue ? "actif" : ""}" aria-pressed="${k === langue}">${l}</button>`).join("")}</div>
+      ${actuelle ? `<button type="button" class="btn btn-petit" data-defaut>Revenir à l'image par défaut</button>` : ""}
+    </div>
+    <div class="grille-versions"></div>
+  </div>`;
+  const boite = $(".choix-versions", zone), grille = $(".grille-versions", zone);
+  const rendre = () => {
+    const vis = liste.map((p, i) => [p, i]).filter(([p]) => langue === "toutes" || p.lang === langue);
+    grille.innerHTML = vis.length ? vis.map(([p, i]) => tuile(p, i)).join("")
+      : `<p class="muet">${liste.length ? "Aucune impression dans cette langue." : "Scryfall ne donne aucune impression avec image pour cette carte."}</p>`;
+  };
+  rendre();
+  boite.addEventListener("click", (ev) => {
+    const x = ev.target.closest("[data-v], [data-langue], [data-defaut], [data-retour]");
+    if (!x) return;
+    if (x.dataset.langue) {
+      langue = x.dataset.langue;
+      PREF.set("langue-versions", langue);
+      $$("[data-langue]", boite).forEach((b) => { b.classList.toggle("actif", b === x); b.setAttribute("aria-pressed", b === x); });
+      return rendre();
+    }
+    cacherApercu();
+    if (x.dataset.retour !== undefined) return retour();
+    if (x.dataset.defaut !== undefined) return surChoix(null);
+    surChoix(liste[+x.dataset.v]);
+  });
+}
+
+function modaleVersion(c) {
+  ouvrirModale(`<div id="choix-v"></div>`, (b) => {
+    choixVersion($("#choix-v", b), {
+      nom: c.nom, titre: nomAffiche(c), actuelle: c.version, retour: () => ouvrirCarte(c),
+      surChoix: async (p) => {
+        if (p ? memeVersion(p, c.version) : !c.version) return ouvrirCarte(c);       // rien ne change
+        fermerModale();
+        const nd = await modifier("edition", c, { edition: editionVersion(p) }, p ? `Visuel : ${p.edition}${p.lang === "fr" ? " (français)" : ""}.` : "Image par défaut.");
+        if (nd) ouvrirCarte(nd.cartes[c.index]);
+      },
+    });
+  }, { focus: false, large: true });
+}
+
 // ------------------------------------------------------------------ recherche d'une carte (ajout, remplacement, commandant)
 // Liste de résultats avec coût, prix (le plus bas du jour, chargé juste après) et image + prix au survol.
 function rechercheCarte(zone, { surChoix, deck = () => etat.deck, placeholder = "Nom en français ou en anglais…" }) {
@@ -975,15 +1067,17 @@ function rechercheCarte(zone, { surChoix, deck = () => etat.deck, placeholder = 
   return { champ, vider() { numero++; champ.value = ""; liste = []; res.innerHTML = ""; champ.focus(); } };
 }
 
-async function chargerFiche(zone, nom) {
+// surVersion : la fiche propose « Changer la version (visuel) » et rend la fiche de l'impression choisie
+async function chargerFiche(zone, nom, { version = null, surVersion = null } = {}) {
   zone.innerHTML = `<p class="muet">Fiche de ${esc(nom)}…</p>`;
-  const f = await api("/api/carte?nom=" + enc(nom));
+  const q = version ? `&set=${enc(version.set)}&num=${enc(version.num)}&lang=${enc(version.lang || "en")}` : "";
+  const f = await api("/api/carte?nom=" + enc(nom) + q);
   const d = etat.deck;
   const deja = d && d.cartes.some((c) => c.nom === f.nom);
   const hors = d && d.identite && (f.couleurs || []).some((x) => !d.identite.includes(x));
   zone.innerHTML = `
     <div class="fiche">
-      <img src="${esc(f.image)}" alt="${esc(f.nom)}">
+      <div class="fiche-image"><img src="${esc(f.image)}" alt="${esc(f.nom)}">${surVersion ? lienVersion(f.version) : ""}</div>
       <div>
         <h3 style="margin-top:0">${esc(f.nom)} ${mana(f.cout)}</h3>
         ${f.fr ? `<div class="muet">${esc(f.fr)}</div>` : ""}
@@ -999,6 +1093,15 @@ async function chargerFiche(zone, nom) {
         <div class="texte">${esc(f.texte)}</div>
       </div>
     </div>`;
+  const lien = $('[data-act="version"]', zone);
+  if (lien) lien.onclick = () => choixVersion(zone, {
+    nom: f.nom, titre: f.fr || f.nom, actuelle: f.version,
+    retour: () => chargerFiche(zone, nom, { version, surVersion }).catch(erreur),
+    surChoix: async (p) => {
+      try { surVersion(await chargerFiche(zone, nom, { version: p, surVersion })); }
+      catch (e) { zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
+    },
+  });
   return f;
 }
 
@@ -1026,7 +1129,7 @@ function modaleAjout() {
         choix = null;
         $("#ok", b).disabled = true;
         try {
-          choix = await chargerFiche($("#fiche", b), x.nom);
+          choix = await chargerFiche($("#fiche", b), x.nom, { surVersion: (g) => { choix = g; } });
           $("#ajout-form", b).hidden = false;
           $("#ok", b).disabled = false;
           $("#ok", b).textContent = `Ajouter ${choix.nom}`;
@@ -1043,7 +1146,7 @@ function modaleAjout() {
       if (etat.dernierMaybe) tags.unshift("Maybeboard");
       const n = Math.max(1, +$("#qte-ajout", b).value || 1);
       $("#ok", b).disabled = true;
-      const res = await modifier("ajouter", null, { nom: choix.nom, tags, n }, "");
+      const res = await modifier("ajouter", null, { nom: choix.nom, tags, n, edition: editionVersion(choix.version) }, "");
       if (!res) { $("#ok", b).disabled = false; return; }
       $("#journal", b).insertAdjacentHTML("afterbegin",
         `<div>✓ ${n > 1 ? n + "× " : ""}${esc(choix.nom)} ajoutée${etat.dernierMaybe ? " au Maybeboard" : ""} · le deck a ${res.total} cartes</div>`);
@@ -1070,7 +1173,7 @@ function modaleRemplacer(c) {
         choix = null;
         $("#ok", b).disabled = true;
         try {
-          choix = await chargerFiche($("#fiche", b), x.nom);
+          choix = await chargerFiche($("#fiche", b), x.nom, { surVersion: (g) => { choix = g; } });
           $("#ok", b).disabled = false;
           $("#ok", b).textContent = `Remplacer par ${choix.nom}`;
           $("#ok", b).focus();
@@ -1078,7 +1181,7 @@ function modaleRemplacer(c) {
       },
     });
     $("#annuler", b).onclick = fermerModale;
-    $("#ok", b).onclick = () => { if (!choix) return; fermerModale(); modifier("remplacer", c, { nom: choix.nom }); };
+    $("#ok", b).onclick = () => { if (!choix) return; fermerModale(); modifier("remplacer", c, { nom: choix.nom, edition: editionVersion(choix.version) }); };
   });
 }
 
@@ -1497,10 +1600,7 @@ async function ongletBracket(el, d, force = false) {
       <div><h3>Destruction massive de terrains</h3><p>${listeCartes(b.mld)}</p></div>
     </div>
 
-    ${sb && sb.presque.length ? `
-      <h2>Combos à une carte près</h2>
-      <p class="muet petit">Commander Spellbook trouve ${sb.presque.length} combo${sb.presque.length > 1 ? "s" : ""} qu'une seule carte compléterait (en orange). Des idées, pas des conseils : vérifie le prix et le bracket.</p>
-      <details><summary>Voir les combos</summary>${sb.presque.map((c) => blocCombo(c, true)).join("")}</details>` : ""}
+    <p class="petit"><a href="#/deck/${enc(d.id)}/combos">Toutes les combos (MTGPics, Spellbook, Claude) : onglet Combos →</a></p>
 
     <h2>Rappel des règles</h2>
     <table class="tableau petit">
@@ -1508,6 +1608,219 @@ async function ongletBracket(el, d, force = false) {
       <tbody>${REGLES_BRACKETS.map((r) => `<tr>${r.map((x) => `<td>${esc(x)}</td>`).join("")}</tr>`).join("")}</tbody>
     </table>`;
   $("#btn-recalc").onclick = () => ongletBracket(el, d, true);
+}
+
+// ------------------------------------------------------------------ onglet Combos : le deck, ou une carte
+// Sources : MTGPics (la base de combos de Magic-Ville, site jumeau sans Cloudflare), Commander Spellbook (base ouverte)
+// et Claude (synergies du deck, à la demande).
+const sepMilliers = (n) => (n == null ? "—" : Number(n).toLocaleString("fr-FR"));
+const SOURCES = { mtgpics: "MTGPics", spellbook: "Spellbook", claude: "Claude" };
+
+function nomCombo(f) {
+  const leg = `${f.fr && f.fr !== f.nom ? f.nom + " · " : ""}${f.prix != null ? euros(f.prix) : "prix inconnu"}${f.dans ? " · dans le deck" : ""}`;
+  return `<button type="button" class="cc ${f.dans ? "cc-dans" : ""}" data-nom="${esc(f.nom)}" data-image="${esc(f.image)}" data-legende="${esc(leg)}"
+    ${(f.prix || 0) > 5 ? 'data-cher="1"' : ""}>${esc(f.fr || f.nom)}</button>`;
+}
+
+function ligneCombo(c, carte = null) {
+  const fiches = carte ? c.fiches.filter((f) => f.nom !== carte) : c.fiches;      // vue carte : seulement les autres cartes
+  const info = c.source === "claude" ? "★".repeat(c.force || 1)
+    : c.popularite ? (c.source === "mtgpics" ? `Top 8 : ${c.popularite}` : `${sepMilliers(c.popularite)} decks`) : "";
+  const manque = carte ? fiches.filter((f) => !f.dans) : [];
+  const etapes = c.description ? c.description.split("\n").filter((l) => l.trim()) : [];
+  const details = c.explication || etapes.length || (c.resultats || []).length;
+  const lien = c.lien ? `<a class="petit" href="${esc(c.lien)}" target="_blank" rel="noopener">Voir sur ${SOURCES[c.source]} ↗</a>` : "";
+  let etatCarte = "";
+  if (carte) {
+    if (!manque.length) etatCarte = `<span class="ok">✓ tout est dans le deck</span>`;
+    else {
+      const maybe = manque.length === 1 ? ((c.maybe || []).includes(manque[0].nom) ? ` <span class="badge">au Maybeboard</span>`
+        : ` <button type="button" class="btn btn-petit" data-maybe="${esc(manque[0].nom)}">+ Maybeboard</button>`) : "";
+      etatCarte = `Pas dans le deck : ${manque.map((f) => `${esc(f.fr || f.nom)} <span class="${(f.prix || 0) > 5 ? "cher" : "muet"}">${euros(f.prix)}</span>`).join(" · ")}${maybe}`;
+    }
+  }
+  return `<div class="combo">
+    <div class="combo-ligne">
+      <div class="combo-cartes">${fiches.map(nomCombo).join(`<span class="plus">+</span>`)}${(c.autres || []).map((t) =>
+        `<span class="plus">+</span><span class="cc-autre" title="N'importe quelle carte de ce genre">${esc(t)}</span>`).join("")}</div>
+      <div class="combo-source">${SOURCES[c.source]}${info ? ` · ${info}` : ""}</div>
+      <div><span class="classe classe-${esc(c.classe)}">${esc(c.classe_lib)}</span></div>
+    </div>
+    ${etatCarte ? `<div class="combo-manque petit">${etatCarte}</div>` : ""}
+    ${details ? `<details class="combo-details"><summary>${esc(c.titre || (c.resultats || []).join(" · ") || "Comment ça marche")}</summary>
+        ${c.explication ? `<p class="petit">${esc(c.explication)}</p>` : ""}
+        ${c.prerequis ? `<p class="petit"><strong>Il faut :</strong> ${esc(c.prerequis)}</p>` : ""}
+        ${etapes.length ? `<ol class="etapes petit">${etapes.map((l) => `<li>${esc(l)}</li>`).join("")}</ol><p class="petit muet">Étapes en anglais (Commander Spellbook).</p>` : ""}
+        ${lien}</details>` : lien ? `<div class="combo-lien">${lien}</div>` : ""}
+  </div>`;
+}
+
+// ---- vue « le deck » : les combos présentes
+async function vueCombosDeck(zone, d) {
+  zone.innerHTML = `<p class="chargement">Combos du deck…</p>`;
+  let r;
+  try { r = await api(`/api/decks/${enc(d.id)}/combos`); }
+  catch (e) { zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; return; }
+  if (!zone.isConnected) return;
+  zone.innerHTML = `
+    <p><strong>${r.combos.length ? `${r.combos.length} combo${r.combos.length > 1 ? "s" : ""} dans le deck` : "Aucune combo connue dans le deck"}</strong></p>
+    ${r.erreur ? `<p class="erreur petit">Commander Spellbook ne répond pas : ${esc(r.erreur)}</p>` : ""}
+    ${r.combos.length ? `<div class="combos">${r.combos.map((c) => ligneCombo(c)).join("")}</div>` : ""}
+    <p class="muet petit" style="margin-top:.8rem">Clique sur une carte pour voir toutes ses combos.</p>
+    <div id="cb-mtgpics" class="petit ligne-outil"></div>
+    <div id="cb-claude" class="petit ligne-outil"></div>`;
+  rendreMtgpics($("#cb-mtgpics", zone), d, r.mtgpics, () => vueCombosDeck(zone, d));
+  rendreClaude($("#cb-claude", zone), d, r.synergies, () => vueCombosDeck(zone, d));
+}
+
+// Combos MTGPics : lues carte par carte (une requête toutes les 1,5 s), gardées 30 jours
+function rendreMtgpics(zone, d, st, apres) {
+  if (!st) return;
+  if (st.actif) {
+    zone.innerHTML = `<span class="pulse">●</span> MTGPics : ${st.fait} carte${st.fait > 1 ? "s" : ""} sur ${st.total}… (tu peux changer de page)`;
+    setTimeout(async () => {
+      if (!zone.isConnected) return;
+      const s = await api(`/api/decks/${enc(d.id)}/mtgpics`).catch(() => null);
+      if (!zone.isConnected || !s) return;
+      if (s.actif) rendreMtgpics(zone, d, s, apres);
+      else apres();
+    }, 3000);
+    return;
+  }
+  const reste = st.cartes - st.connues;
+  const minutes = Math.max(1, Math.round((reste * 4 * 1.5) / 60));
+  zone.innerHTML = reste
+    ? `Combos MTGPics : ${st.connues} carte${st.connues > 1 ? "s" : ""} du deck sur ${st.cartes} regardée${st.connues > 1 ? "s" : ""}.
+       <button class="btn btn-petit" id="btn-mtgpics">Chercher pour ${reste === st.cartes ? "toutes les cartes" : `les ${reste} autres`} (≈ ${minutes} min)</button>`
+    : `Combos MTGPics : les ${st.cartes} cartes du deck ont été regardées (moins de 30 jours).`;
+  if (st.erreur) zone.insertAdjacentHTML("beforeend", ` <span class="erreur">${esc(st.erreur)}</span>`);
+  const b = $("#btn-mtgpics", zone);
+  if (b) b.onclick = async () => {
+    try { rendreMtgpics(zone, d, await api(`/api/decks/${enc(d.id)}/mtgpics`, { method: "POST", body: {} }), apres); }
+    catch (e) { erreur(e); }
+  };
+}
+
+function rendreClaude(zone, d, st, apres) {
+  if (st.actif) {
+    zone.innerHTML = `<span class="pulse">●</span> Claude cherche les synergies du deck… (1 à 3 minutes, tu peux changer de page)`;
+    (async () => {
+      while (zone.isConnected) {
+        await attendre(3000);
+        const s = await api(`/api/decks/${enc(d.id)}/synergies`).catch(() => null);
+        if (s && !s.actif) {
+          if (s.erreur) toast("Synergies : " + s.erreur, 6000);
+          if (zone.isConnected) apres();
+          return;
+        }
+      }
+    })();
+    return;
+  }
+  const r = st.resultat;
+  zone.innerHTML = `${st.erreur ? `<span class="erreur">${esc(st.erreur)}</span> ` : ""}
+    ${r ? `Synergies de Claude du ${new Date(r.date * 1000).toLocaleDateString("fr-FR")}${st.a_jour ? "" : " (la liste a changé depuis)"}.`
+        : "Claude peut ajouter les synergies du deck en lisant chaque carte (1 à 3 minutes, compte dans ta limite Claude)."}
+    <button class="btn btn-petit" id="btn-claude">${r ? "Relancer" : "Chercher les synergies avec Claude"}</button>`;
+  $("#btn-claude", zone).onclick = async () => {
+    try { rendreClaude(zone, d, await api(`/api/decks/${enc(d.id)}/synergies`, { method: "POST", body: {} }), apres); }
+    catch (e) { erreur(e); }
+  };
+}
+
+// ---- vue « une carte » : les autres cartes qui combotent avec elle
+async function vueCombosCarte(zone, d, carte = null) {
+  const cartes = d.cartes.filter((c) => c.cat !== "Maybeboard").map((c) => ({ nom: c.nom, aff: c.info.fr || c.nom }))
+    .sort((a, b) => a.aff.localeCompare(b.aff, "fr"));
+  const affiche = (nom) => (cartes.find((c) => c.nom === nom) || { aff: nom }).aff;
+  zone.innerHTML = `<div class="cb-carte">
+    <div class="barre-outils">
+      <input class="champ" id="cb-carte" list="cb-cartes" placeholder="Choisis une carte du deck…" value="${carte ? esc(affiche(carte)) : ""}" style="flex:1;min-width:220px" autocomplete="off">
+      <datalist id="cb-cartes">${cartes.map((c) => `<option value="${esc(c.aff)}">`).join("")}</datalist>
+      <label class="petit"><input type="checkbox" id="cb-couleurs" ${PREF.get("combos-couleurs", "1") === "1" ? "checked" : ""}> Dans les couleurs du deck</label>
+    </div>
+    <div id="cb-src" class="petit"></div>
+    <div id="cb-liste">${carte ? "" : `<p class="muet">Choisis une carte pour voir les cartes qui combotent avec elle.</p>`}</div></div>`;
+  const champ = $("#cb-carte", zone), coul = $("#cb-couleurs", zone), liste = $("#cb-liste", zone), src = $("#cb-src", zone);
+  let courante = carte;
+
+  const afficher = async (force = false) => {
+    if (!courante) return;
+    const nom = courante;
+    src.innerHTML = "";
+    liste.innerHTML = `<p class="chargement">Combos de ${esc(affiche(nom))}… (MTGPics : quelques secondes la première fois)</p>`;
+    let r;
+    try { r = await api(`/api/decks/${enc(d.id)}/combos/carte?nom=${enc(nom)}&couleurs=${coul.checked ? 1 : 0}${force ? "&force=1" : ""}`); }
+    catch (e) { liste.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; return; }
+    if (nom !== courante) return;
+    const m = r.mtgpics;
+    src.innerHTML = m ? `<span class="muet">MTGPics : ${m.ref === null ? "carte introuvable"
+        : `${m.total} combo${m.total > 1 ? "s" : ""}${m.lues < m.pages ? ` (les ${m.lues * 20} plus fortes)` : ""}, lue${m.total > 1 ? "s" : ""} le ${new Date(m.date * 1000).toLocaleDateString("fr-FR")}`}.</span>
+      <button class="btn btn-petit btn-discret" data-actualiser>Actualiser</button>` : "";
+    const faisables = r.combos.filter((c) => !c.manque.length).length;
+    liste.innerHTML = (r.erreur ? `<p class="erreur petit">${esc(r.erreur)}</p>` : "") + (r.combos.length ? `
+      <p class="petit"><strong>${r.combos.length} combo${r.combos.length > 1 ? "s" : ""} avec ${esc(affiche(nom))}</strong>${faisables ? ` · ${faisables} déjà faisable${faisables > 1 ? "s" : ""} avec le deck` : ""}</p>
+      <div class="combos">${r.combos.map((c) => ligneCombo(c, nom)).join("")}</div>`
+      : `<p class="muet">Aucune combo connue avec ${esc(affiche(nom))}${coul.checked ? " dans les couleurs du deck" : ""}.</p>`);
+  };
+
+  const choisir = (nom) => {
+    courante = nom;
+    history.replaceState(null, "", `#/deck/${enc(d.id)}/combos/${enc(nom)}`);
+    champ.value = affiche(nom);
+    afficher();
+  };
+  zone.choisir = choisir;
+
+  champ.addEventListener("change", async () => {
+    const v = sansAccent(champ.value.trim());
+    if (!v) return;
+    let c = cartes.find((x) => sansAccent(x.aff) === v || sansAccent(x.nom) === v);
+    if (!c) {                                                    // une carte hors du deck : la recherche habituelle
+      const res = await api("/api/chercher?q=" + enc(champ.value.trim())).catch(() => []);
+      if (res[0]) c = { nom: res[0].nom };
+    }
+    if (c) choisir(c.nom); else toast("Carte introuvable.");
+  });
+  coul.onchange = () => { PREF.set("combos-couleurs", coul.checked ? "1" : "0"); afficher(); };
+  src.addEventListener("click", (ev) => { if (ev.target.closest("[data-actualiser]")) afficher(true); });
+  if (carte) choisir(carte);
+}
+
+async function ongletCombos(el, d, carte = null) {
+  el.innerHTML = `
+    <div class="segments" role="group" style="margin-bottom:1rem">
+      <button type="button" data-vue="deck">Le deck</button>
+      <button type="button" data-vue="carte">Une carte</button>
+    </div>
+    <div id="cb-vue"></div>`;
+  const zone = $("#cb-vue", el);
+  const montrer = (v, nom = null) => {
+    $$("[data-vue]", el).forEach((b) => { b.classList.toggle("actif", b.dataset.vue === v); b.setAttribute("aria-pressed", b.dataset.vue === v); });
+    zone.choisir = null;
+    if (v === "deck") { history.replaceState(null, "", `#/deck/${enc(d.id)}/combos`); vueCombosDeck(zone, d); }
+    else vueCombosCarte(zone, d, nom);
+  };
+  $$("[data-vue]", el).forEach((b) => (b.onclick = () => montrer(b.dataset.vue)));
+  el.addEventListener("click", async (ev) => {
+    const n = ev.target.closest(".cc[data-nom]");
+    if (n) {                                                   // un nom de carte : ses combos
+      cacherApercu();
+      if (zone.choisir) zone.choisir(n.dataset.nom); else montrer("carte", n.dataset.nom);
+      scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + scrollY - 80) });
+      return;
+    }
+    const b = ev.target.closest("[data-maybe]");
+    if (!b) return;
+    b.disabled = true;
+    try {
+      const nd = await api(`/api/decks/${enc(d.id)}/modifier`, { method: "POST", body: { op: "ajouter", nom: b.dataset.maybe, tags: ["Maybeboard"], n: 1 } });
+      etat.deck = nd;
+      b.outerHTML = `<span class="badge badge-ok">✓ ajoutée au Maybeboard</span>`;
+      toast("Ajoutée au Maybeboard. L'ancienne liste est dans l'historique.");
+    } catch (e) { erreur(e); b.disabled = false; }
+  });
+  montrer(carte ? "carte" : "deck", carte);
 }
 // ------------------------------------------------------------------ onglet Simulation
 const LIB_STAT = {

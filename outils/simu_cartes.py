@@ -107,10 +107,12 @@ def lire_liste(chemin):
                 cmd = m.group(1).strip()
             continue
         sb = ligne.upper().startswith("SB:")
+        ligne = re.sub(r"\s*\^[^^]*\^\s*$", "", ligne)          # étiquette Archidekt « ^Have,#37d67a^ »
         m = re.match(r"(?:SB:\s*)?(\d+)x?\s+(.+?)\s*(?:\[(.*)\])?\s*$", ligne)
         if not m:
             continue
         n, nom, tags = int(m.group(1)), m.group(2).strip(), m.group(3) or ""
+        nom = re.sub(r"\s+\([A-Za-z0-9]{2,6}\)(?:\s+[\w★-]+)?(?:\s+\*[A-Z]+\*)?$", "", nom)   # impression « (ima) 205 *F* »
         if "Maybeboard" in tags or "Sideboard" in tags:
             continue
         if "Commander" in tags or sb:

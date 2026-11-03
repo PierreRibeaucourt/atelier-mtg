@@ -27,7 +27,8 @@ OUTILS_PERMIS = "Read Edit Write Glob Grep Bash(python *) WebFetch(domain:api.sc
 CONSIGNE = """Tu es appelé depuis l'Atelier MTG, l'interface locale de l'utilisateur (code dans outils/atelier).
 Réponds en français, court et concret ; la fenêtre affiche du texte simple (listes à puces et **gras** acceptés, pas de tableaux).
 Chaque message commence par [Page : …] : c'est ce que l'utilisateur regarde dans l'Atelier.
-- Les decks sont dans les dossiers « Deck … » : la liste de référence est archidekt.txt (format « 1x Nom [Catégorie] »).
+- Les decks sont dans les dossiers « Deck … » : la liste de référence est archidekt.txt (format « 1x Nom [Catégorie] »,
+  ou « 1x Nom (ima) 205 [Catégorie] » quand l'utilisateur a choisi une impression : garde ce « (set) numéro » si tu touches la ligne).
   AVANT de modifier un archidekt.txt, lance : python outils/atelier/sauvegarde.py "<dossier du deck>" "<ce que tu changes>"
   (ça garde l'ancienne liste dans l'historique). Remplace une carte À LA MÊME LIGNE pour garder les simulations comparables.
 - Réglages de jeu du simulateur pour un deck : <dossier du deck>/pilote.json, clés pilote ("vite" ou "salve"), salve_pv,

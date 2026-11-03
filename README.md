@@ -7,11 +7,12 @@ Tout tourne sur ton PC, à l'adresse http://127.0.0.1:5000. Rien n'est mis en li
 ## Ce qu'on peut faire
 
 - **Decks.** Créer un deck, vide ou à partir d'une liste Archidekt, Moxfield ou MTG Arena. Le supprimer : il va dans une corbeille d'où on peut le récupérer. Le retrouver parmi des dizaines grâce à la recherche (nom, commandant ou carte contenue), au filtre de couleurs et au raccourci Ctrl+K.
-- **Liste.** Afficher le deck en texte ou en images étalées, comme sur Magic-Ville. Ranger les cartes par type ou par tags, les trier, les filtrer. Un clic sur une carte ouvre sa fiche : texte en français, prix, tags, actions. On ajoute une carte en la cherchant en français ou en anglais.
+- **Liste.** Afficher le deck en texte ou en images étalées, comme sur Magic-Ville. Ranger les cartes par type ou par tags, les trier, les filtrer. Un clic sur une carte ouvre sa fiche : texte en français, prix, tags, actions. On y choisit aussi la version de la carte (son visuel), parmi les impressions anglaises et françaises. On ajoute une carte en la cherchant en français ou en anglais.
 - **Règles du Commander.** Vérifier l'identité de couleur, l'unicité des cartes et les cartes interdites.
 - **Statistiques.** Consulter la courbe de mana, les couleurs, les types, les tags comparés à un gabarit de deck et la base de mana. Tirer une main de départ.
 - **Prix.** Afficher le prix Cardmarket du jour, celui de l'édition la moins chère, avec un lien vers Cardmarket.
-- **Bracket.** Repérer les Game Changers de la liste officielle. Afficher les combos et l'estimation de bracket de Commander Spellbook.
+- **Combos.** Deux vues. « Le deck » montre les combos déjà présentes dans le deck. « Une carte » montre les autres cartes qui combotent avec elle, avec ou sans le filtre des couleurs du commandant, leur prix et un bouton pour les mettre au Maybeboard. Les combos viennent de MTGPics, de Commander Spellbook et, à la demande, d'une analyse des synergies par Claude (voir plus bas).
+- **Bracket.** Repérer les Game Changers de la liste officielle. Afficher l'estimation de bracket de Commander Spellbook.
 - **Versions.** Enregistrer des versions nommées, consulter l'historique automatique, comparer deux versions.
 - **Simulation.** Jouer des parties à 4 joueurs contre des archétypes d'adversaires (méthode de Monte-Carlo). Comparer deux versions d'un deck, avec la marge d'erreur.
 - **Discussion avec Claude.** Une discussion par deck, avec son propre contexte, via Claude Code.
@@ -43,6 +44,13 @@ Chaque deck est un dossier `Deck <nom>` placé à la racine. Il contient sa list
 
 L'Atelier range aussi dans ce dossier l'historique, les versions, les simulations, les réglages de jeu (`pilote.json`) et la discussion. Les dossiers de decks ne sont pas dans ce dépôt (voir `.gitignore`).
 
+## Combos
+
+Les combos viennent de trois sources :
+- [MTGPics](https://www.mtgpics.com), la version internationale de Magic-Ville, avec la même base de combos. L'Atelier l'interroge poliment (une requête toutes les 1,5 seconde) et garde les résultats 30 jours. Il ne retient que les vraies combos : Win, Lock, Infinite, Threat, Synergy et clones.
+- [Commander Spellbook](https://commanderspellbook.com), la base ouverte des combos de Commander.
+- Claude, à la demande, pour les synergies du deck.
+
 ## Outils en ligne de commande
 
 - **Prix d'une ou plusieurs cartes** (nom français ou anglais), avec une alerte au-dessus de 5 € :
@@ -55,6 +63,6 @@ L'Atelier range aussi dans ce dossier l'historique, les versions, les simulation
 ## Sources
 
 - Données des cartes, images et prix : [Scryfall](https://scryfall.com), qui republie chaque jour les prix Cardmarket.
-- Combos et estimation de bracket : [Commander Spellbook](https://commanderspellbook.com).
+- Combos et estimation de bracket : [Commander Spellbook](https://commanderspellbook.com) et [MTGPics](https://www.mtgpics.com).
 
 Magic: The Gathering est une marque de Wizards of the Coast. Ce projet n'est ni affilié à Wizards of the Coast ni approuvé par elle.

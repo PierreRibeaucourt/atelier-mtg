@@ -31,13 +31,18 @@ def _spellbook(endpoint, corps):
     return json.load(urllib.request.urlopen(req, timeout=90))
 
 
+VERSION_CACHE = 2          # change quand on garde plus d'informations par combo (les anciennes entrées sont recalculées)
+
+
 def _combo(c, dans_deck):
     noms = [u["card"]["name"] for u in c.get("uses", [])]
     tag = c.get("bracketTag")
-    return dict(cartes=noms, manque=[n for n in noms if n not in dans_deck],
-                produit=[p["feature"]["name"] for p in c.get("produces", [])][:6],
+    return dict(id=c.get("id", ""), cartes=noms, manque=[n for n in noms if n not in dans_deck],
+                autres=[f"{r['template']['name']}" + (f" (×{r['quantity']})" if r.get("quantity", 1) > 1 else "") for r in c.get("requires", [])],
+                produit=[p["feature"]["name"] for p in c.get("produces", [])][:8],
                 description=c.get("description", ""), prerequis=c.get("easyPrerequisites", "") or "",
                 prerequis2=c.get("notablePrerequisites", "") or "", mana=c.get("manaNeeded", ""),
+                popularite=c.get("popularity"), identite=c.get("identity", ""),
                 bracket=TAGS.get(tag, (None, tag))[0], tag=TAGS.get(tag, (None, tag))[1],
                 lien=f"https://commanderspellbook.com/combo/{c.get('id')}/" if c.get("id") else "")
 
@@ -48,7 +53,7 @@ def spellbook(deck, force=False):
     jeu = [e for e in entrees if decks.categorie(e) != "Maybeboard"]
     corps = {"main": [{"card": e["nom"], "quantity": e["n"]} for e in jeu if decks.categorie(e) != "Commander"],
              "commanders": [{"card": e["nom"], "quantity": 1} for e in jeu if decks.categorie(e) == "Commander"]}
-    cle = hashlib.sha1(json.dumps(corps, sort_keys=True).encode()).hexdigest()
+    cle = hashlib.sha1(json.dumps(dict(corps, v=VERSION_CACHE), sort_keys=True).encode()).hexdigest()
     cache = json.load(open(CACHE, encoding="utf-8")) if os.path.exists(CACHE) else {}
     if not force and cle in cache:
         return cache[cle]
@@ -59,7 +64,7 @@ def spellbook(deck, force=False):
     tag = est.get("bracketTag")
     res = dict(date=time.time(), tag=tag, bracket=TAGS.get(tag, (None, tag))[0], libelle=TAGS.get(tag, (None, tag))[1], **drapeaux,
                combos=[_combo(c, dans) for c in fmc.get("included", [])],
-               presque=[_combo(c, dans) for c in fmc.get("almostIncluded", [])][:40])
+               presque=[_combo(c, dans) for c in fmc.get("almostIncluded", [])][:80])
     cache[cle] = res
     json.dump(cache, open(CACHE, "w", encoding="utf-8"), ensure_ascii=False)
     return res

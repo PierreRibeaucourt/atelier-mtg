@@ -15,3 +15,4 @@ outils/atelier/cache_spellbook.json
 __pycache__/
 *.tmp
 .claude/
+outils/atelier/mtgpics.json

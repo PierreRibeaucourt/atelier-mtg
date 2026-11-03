@@ -86,11 +86,42 @@ def alertes_cartes(entrees, I):
     return res, sorted(ident) if ident is not None else None
 
 
+def visuels(deck, entrees, seulement=None):
+    """Impression choisie de chaque carte qui en a une (« (ima) 205 » dans la liste) : {index: fiche de l'impression}."""
+    langues = decks.langues(deck)
+    cles = {}
+    for i, e in enumerate(entrees):
+        ed = e.get("edition")
+        if ed and ed.get("num") and (seulement is None or i in seulement):
+            cles[i] = (ed["set"], ed["num"], langues.get(f"{ed['set']}/{ed['num']}", "en"))
+    if not cles:
+        return {}
+    try:
+        P = ic.impressions(list(cles.values()))
+    except Exception:                                   # pas de réseau : l'image par défaut fera l'affaire
+        return {}
+    return {i: P[k] for i, k in cles.items() if P.get(k)}
+
+
+def avec_visuel(f, v):
+    """La fiche d'une carte, avec l'image de l'impression choisie."""
+    f = dict(f or {})
+    if v and v.get("image"):
+        f.update(image=v["image"], petite=v["petite"], art=v["art"] or f.get("art", ""))
+    return f
+
+
+def version_courte(v):
+    return dict(set=v["set"], num=v["num"], lang=v["lang"], edition=v["edition"], annee=v["annee"]) if v else None
+
+
 def resume_deck(deck, avec_cartes=False):
     entrees = decks.lire(decks.chemin(deck))
     cpt = decks.comptes(entrees)
     I = ic.infos(decks.noms(entrees))
     ic.game_changers()
+    i_cmd = next((i for i, e in enumerate(entrees) if decks.categorie(e) == "Commander"), None)
+    V = visuels(deck, entrees, None if avec_cartes else {i_cmd})
     jeu = [e for e in entrees if decks.categorie(e) != "Maybeboard"]
     prix_total = sum((I[e["nom"]] or {}).get("prix") or 0 for e in jeu for _ in range(e["n"]))
     gc = [e["nom"] for e in jeu if ic.est_gc(e["nom"])]
@@ -99,17 +130,18 @@ def resume_deck(deck, avec_cartes=False):
     alertes, ident = alertes_cartes(entrees, I)
     hors_maybe = {e["nom"] for e in jeu}
     r = dict(id=deck, titre=deck.removeprefix("Deck "), note=decks.note(deck), **cpt, prix_total=round(prix_total, 2),
-             gc=gc, trop_cher=trop_cher, art=(I.get(cmd) or {}).get("art", ""), image_cmd=(I.get(cmd) or {}).get("image", ""),
+             gc=gc, trop_cher=trop_cher, art=avec_visuel(I.get(cmd), V.get(i_cmd)).get("art", ""),
+             image_cmd=avec_visuel(I.get(cmd), V.get(i_cmd)).get("image", ""),
              identite=ident, alertes={n: a for n, a in alertes.items() if n in hors_maybe},
              modifie=os.path.getmtime(decks.chemin(deck)))
     if avec_cartes:
         cov = couverture_sim(entrees, cmd) if cmd else {}
         cartes = []
         for i, e in enumerate(entrees):
-            f = dict(I.get(e["nom"]) or {})
+            f = avec_visuel(I.get(e["nom"]), V.get(i))
             f["gc"] = ic.est_gc(e["nom"])
             cartes.append(dict(index=i, n=e["n"], nom=e["nom"], tags=e["tags"], cat=decks.categorie(e), info=f, sim=cov.get(e["nom"]),
-                               alertes=alertes.get(e["nom"], [])))
+                               alertes=alertes.get(e["nom"], []), version=version_courte(V.get(i))))
         r.update(cartes=cartes, categories=decks.categories(entrees), erreur_sim=cov.get("_erreur"))
     return r
 
@@ -324,10 +356,64 @@ def api_carte():
     ic.infos([nom])
     ic.rafraichir_prix([nom], suivi=False)
     ic.noms_francais([nom], suivi=False)
-    f = dict(ic._charge()["cartes"].get(nom) or {})
+    v = None
+    if request.args.get("set") and request.args.get("num"):          # impression choisie avant d'ajouter la carte
+        k = (request.args["set"], request.args["num"], request.args.get("lang", "en"))
+        v = ic.impressions([k]).get((k[0].lower(), k[1], k[2] or "en"))
+    f = avec_visuel(ic._charge()["cartes"].get(nom), v)
+    f["version"] = version_courte(v)
     f["gc"] = ic.est_gc(nom)
     f["trop_cher"] = (f.get("prix") or 0) > ic.BUDGET
     return jsonify(f)
+
+
+@app.get("/api/impressions")
+def api_impressions():
+    """Toutes les impressions d'une carte (anglaises et françaises), pour choisir son visuel."""
+    nom = request.args["nom"]
+    ic.infos([nom])
+    return jsonify(ic.impressions_carte(nom))
+
+
+@app.get("/api/decks/<path:deck>/combos")
+def api_combos(deck):
+    """Vue « deck » : combos présentes (Magic-Ville, Commander Spellbook, synergies de Claude)."""
+    import combos
+    return jsonify(combos.combos_deck(deck, force=request.args.get("force") == "1"))
+
+
+@app.get("/api/decks/<path:deck>/combos/carte")
+def api_combos_carte(deck):
+    """Vue « carte » : les cartes qui combotent avec elle, dans les couleurs du deck (couleurs=1) ou non."""
+    import combos
+    return jsonify(combos.combos_carte(deck, request.args["nom"], request.args.get("couleurs", "1") == "1",
+                                       force=request.args.get("force") == "1"))
+
+
+@app.get("/api/decks/<path:deck>/mtgpics")
+def api_mtgpics(deck):
+    """Combos MTGPics de toutes les cartes du deck : où en est la recherche."""
+    import mtgpics
+    return jsonify(mtgpics.etat_deck(deck))
+
+
+@app.post("/api/decks/<path:deck>/mtgpics")
+def api_mtgpics_lancer(deck):
+    """Cherche en tâche de fond les combos MTGPics des cartes du deck pas encore regardées (une requête toutes les 1,5 s)."""
+    import mtgpics
+    return jsonify(mtgpics.lancer_deck(deck))
+
+
+@app.get("/api/decks/<path:deck>/synergies")
+def api_synergies(deck):
+    import synergies
+    return jsonify(synergies.etat(deck))
+
+
+@app.post("/api/decks/<path:deck>/synergies")
+def api_lancer_synergies(deck):
+    import synergies
+    return jsonify(synergies.lancer(deck, (request.get_json(silent=True) or {}).get("modele", "")))
 
 
 @app.get("/api/decks/<path:deck>/bracket")

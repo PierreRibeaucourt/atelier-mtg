@@ -33,6 +33,7 @@ def _charge():
         _cache = json.load(open(CACHE, encoding="utf-8")) if os.path.exists(CACHE) else {}
         _cache.setdefault("cartes", {})
         _cache.setdefault("gc", {})
+        _cache.setdefault("impressions", {})       # « ima/205/fr » -> image et édition d'une impression précise ({} = introuvable)
     return _cache
 
 
@@ -57,7 +58,20 @@ def _fiche(c):
                 type=faces[0].get("type_line") or c.get("type_line", ""), texte=texte, couleurs=c.get("color_identity", []),
                 image=img.get("normal", ""), petite=img.get("small", ""), art=img.get("art_crop", ""),
                 gc=bool(c.get("game_changer")), prix=_eur(c), prix_lien=_lien(lien), prix_date=None, fr=None,
-                legal=(c.get("legalities") or {}).get("commander", ""), produit=c.get("produced_mana") or [])
+                legal=(c.get("legalities") or {}).get("commander", ""), produit=c.get("produced_mana") or [], pt=_pt(c))
+
+
+def _pt(c):
+    """Force/endurance (ou loyauté) de chaque face : « 6/1 », « 2/2 // 4/4 », « loyauté 3 »."""
+    vals = []
+    for f in (c.get("card_faces") or [c]):
+        if f.get("power") is not None:
+            vals.append(f"{f['power']}/{f.get('toughness', '')}")
+        elif f.get("loyalty") is not None:
+            vals.append(f"loyauté {f['loyalty']}")
+    if not vals and c.get("power") is not None:
+        vals.append(f"{c['power']}/{c.get('toughness', '')}")
+    return " // ".join(vals)
 
 
 GARDES = ("fr", "fr_type", "fr_texte", "prix", "prix_lien", "prix_date", "prix_edition")      # déjà calculés : on ne les perd pas quand une fiche est complétée
@@ -91,8 +105,8 @@ def _cle(nom):
 def infos(noms):
     """Fiches des cartes demandées ; celles qu'on n'a pas encore sont demandées à Scryfall (75 par requête)."""
     cache = _charge()
-    with _verrou:      # absentes, ou fiches d'avant l'ajout de la légalité et du mana produit
-        manquants = sorted({n for n in noms if n and (n not in cache["cartes"] or "legal" not in cache["cartes"][n])})
+    with _verrou:      # absentes, ou fiches d'avant l'ajout de la légalité, du mana produit, de la force/endurance
+        manquants = sorted({n for n in noms if n and (n not in cache["cartes"] or "pt" not in cache["cartes"][n])})
     for i in range(0, len(manquants), 75):
         bloc = manquants[i:i + 75]
         corps = json.dumps({"identifiers": [{"name": _cle(n)} for n in bloc]}).encode()
@@ -215,6 +229,74 @@ def noms_francais(noms, suivi=True):
                 f.setdefault("fr_type", "")
                 f.setdefault("fr_texte", "")
     _sauve()
+
+
+# ---------------------------------------------------------------- impressions (le visuel choisi d'une carte)
+def cle_impression(s, num, lang="en"):
+    return f"{s.lower()}/{num}/{lang or 'en'}"
+
+
+def _impression(c):
+    faces = c.get("card_faces") or [c]
+    img = c.get("image_uris") or faces[0].get("image_uris") or {}
+    p = c.get("prices") or {}
+    return dict(set=c["set"], num=c["collector_number"], lang=c.get("lang", "en"), nom=c["name"],
+                edition=c.get("set_name", ""), annee=(c.get("released_at") or "")[:4],
+                image=img.get("normal", ""), petite=img.get("small", ""), art=img.get("art_crop", ""),
+                prix=float(p["eur"]) if p.get("eur") else None, prix_foil=float(p["eur_foil"]) if p.get("eur_foil") else None)
+
+
+def impressions(cles):
+    """Fiches des impressions demandées [(set, num, langue)] : {(set, num, langue): fiche ou None}. Gardées pour toujours."""
+    cache = _charge()["impressions"]
+    cles = list(dict.fromkeys((s.lower(), num, lang or "en") for s, num, lang in cles))
+    with _verrou:
+        manquantes = [k for k in cles if cle_impression(*k) not in cache]
+    anglaises = [k for k in manquantes if k[2] == "en"]
+    for i in range(0, len(anglaises), 75):
+        bloc = anglaises[i:i + 75]
+        corps = json.dumps({"identifiers": [{"set": s, "collector_number": num} for s, num, _ in bloc]}).encode()
+        req = urllib.request.Request("https://api.scryfall.com/cards/collection", data=corps,
+                                     headers={**ENTETES, "Content-Type": "application/json"})
+        time.sleep(0.1)
+        rep = json.load(urllib.request.urlopen(req))
+        trouvees = {(c["set"], c["collector_number"]): _impression(c) for c in rep.get("data", [])}
+        with _verrou:
+            for s, num, lang in bloc:
+                cache[cle_impression(s, num, lang)] = trouvees.get((s, num)) or {}      # {} : code d'édition faux, on ne redemande pas
+    for s, num, lang in manquantes:
+        if lang != "en":                                 # impression française : une requête par carte (rare, et déjà connue si choisie dans l'Atelier)
+            c = get(f"https://api.scryfall.com/cards/{urllib.parse.quote(s)}/{urllib.parse.quote(num)}/{urllib.parse.quote(lang)}")
+            with _verrou:
+                cache[cle_impression(s, num, lang)] = _impression(c) if c else {}
+    if manquantes:
+        _sauve()
+    with _verrou:
+        return {k: cache.get(cle_impression(*k)) or None for k in cles}
+
+
+def impressions_carte(nom):
+    """Toutes les impressions papier d'une carte, en anglais et en français, des plus récentes aux plus anciennes."""
+    res = []
+    q = f'!"{_cle(nom)}" (lang:en or lang:fr) game:paper'
+    r = get("https://api.scryfall.com/cards/search", {"q": q, "unique": "prints", "order": "released", "dir": "desc"})
+    while r:
+        for c in r.get("data", []):
+            if _cle(c["name"]).lower() != _cle(nom).lower() or c.get("oversized") or c.get("image_status") in ("missing", "placeholder") \
+                    or c.get("set_type") in ("memorabilia", "token", "minigame"):
+                continue
+            res.append(_impression(c))
+        r = get(r["next_page"]) if r.get("has_more") else None
+    cache = _charge()["impressions"]
+    with _verrou:
+        for p in res:
+            cache[cle_impression(p["set"], p["num"], p["lang"])] = p
+    if res:
+        _sauve()
+    defaut = ((_charge()["cartes"].get(nom) or {}).get("image") or "").split("?")[0]
+    for p in res:
+        p["defaut"] = bool(defaut) and p["image"].split("?")[0] == defaut
+    return res
 
 
 # ---------------------------------------------------------------- Game Changers

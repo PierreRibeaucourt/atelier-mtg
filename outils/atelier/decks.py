@@ -2,6 +2,7 @@
 
 Chaque deck est un dossier « Deck … » à la racine du dossier MTG. La liste de référence est `archidekt.txt` :
 « 1x Nom [Catégorie,Autre] », le commandant tagué [Commander], les cartes à tester tagguées [Maybeboard,…].
+Une impression choisie (le visuel) s'écrit comme dans les exports Archidekt : « 1x Nom (ima) 205 [Tags] ».
 Chaque enregistrement garde l'ancienne version dans `historique/`.
 """
 import json
@@ -16,7 +17,8 @@ HISTO = "historique"
 CORBEILLE = "Corbeille Atelier"          # decks supprimés depuis l'Atelier (récupérables)
 LIGNE = re.compile(r"^(?:SB:\s*)?(\d+)x?\s+(.+?)\s*(?:\[([^\]]*)\])?\s*$")
 ETIQUETTE = re.compile(r"\s*(\^[^^]*\^)\s*$")
-EDITION = re.compile(r"\s+\([A-Za-z0-9]{2,6}\)(?:\s+[\w★-]+)?(?:\s+\*[A-Z]+\*)?$")   # « (cmm) 410 *F* » des exports
+EDITION = re.compile(r"\s+\(([A-Za-z0-9]{2,6})\)(?:\s+([\w★-]+))?(?:\s+\*([A-Z]+)\*)?$")   # « (cmm) 410 *F* » : l'impression choisie
+VISUELS = "visuels.json"   # langue des impressions choisies dans l'Atelier, qu'Archidekt ne note pas : {"ima/205": "fr"}
 NOM_INTERDIT = re.compile(r'[<>:"/\\|?*]')
 BASES = {"Mountain", "Swamp", "Island", "Plains", "Forest", "Wastes"}
 
@@ -61,8 +63,12 @@ def lire_lignes(lignes):
         tags = [t for t in tags if t]
         if l.upper().startswith("SB:") and "Commander" not in tags:
             tags.insert(0, "Commander")
-        nom = EDITION.sub("", m.group(2).strip()).strip()
-        entrees.append(dict(n=int(m.group(1)), nom=nom, tags=tags, etiquette=etiquette))
+        nom, edition = m.group(2).strip(), None
+        ed = EDITION.search(nom)
+        if ed:
+            nom = nom[:ed.start()].strip()
+            edition = dict(set=ed.group(1).lower(), num=ed.group(2) or "", fini=ed.group(3) or "")
+        entrees.append(dict(n=int(m.group(1)), nom=nom, tags=tags, etiquette=etiquette, edition=edition))
     if cmd_comment and not any("Commander" in e["tags"] for e in entrees):
         for e in entrees:
             if e["nom"] == cmd_comment:
@@ -93,9 +99,42 @@ def texte(entrees):
         if prec is not None and cat != prec:
             lignes.append("")
         tags = f" [{','.join(e['tags'])}]" if e["tags"] else ""
-        lignes.append(f"{e['n']}x {e['nom']}{tags}" + (f" {e['etiquette']}" if e.get("etiquette") else ""))
+        lignes.append(f"{e['n']}x {e['nom']}{texte_edition(e.get('edition'))}{tags}" + (f" {e['etiquette']}" if e.get("etiquette") else ""))
         prec = cat
     return "\n".join(lignes) + "\n"
+
+
+def texte_edition(ed):
+    """« (ima) 205 », comme les exports Archidekt : Archidekt affiche alors la même impression."""
+    if not ed or not ed.get("set"):
+        return ""
+    return f" ({ed['set']})" + (f" {ed['num']}" if ed.get("num") else "") + (f" *{ed['fini']}*" if ed.get("fini") else "")
+
+
+def _edition(d):
+    """Impression demandée par la page : {set, num} ; rien = l'image par défaut de Scryfall."""
+    d = d or {}
+    s, num = str(d.get("set") or "").strip().lower(), str(d.get("num") or "").strip()
+    return dict(set=s, num=num, fini="") if s and num else None
+
+
+def langues(deck):
+    p = os.path.join(RACINE, deck, VISUELS)
+    return json.load(open(p, encoding="utf-8")) if os.path.exists(p) else {}
+
+
+def _noter_langue(deck, ed, lang):
+    """Impression française choisie : on le note à côté de la liste (la ligne Archidekt n'a pas de place pour la langue)."""
+    if not ed:
+        return
+    L, cle = langues(deck), f"{ed['set']}/{ed['num']}"
+    if lang and lang != "en":
+        L[cle] = lang
+    elif cle in L:
+        del L[cle]
+    else:
+        return
+    json.dump(L, open(os.path.join(RACINE, deck, VISUELS), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 
 def instantane(deck, raison=""):
@@ -159,7 +198,7 @@ def categories(entrees):
 
 # ---------------------------------------------------------------- modifications
 def modifier(deck, op, d):
-    """op : ajouter, retirer, maybeboard, categorie, remplacer, quantite. Renvoie la nouvelle liste."""
+    """op : ajouter, retirer, maybeboard, categorie, remplacer, edition, quantite. Renvoie la nouvelle liste."""
     entrees = lire(chemin(deck))
     i = d.get("index")
     if i is not None:
@@ -168,13 +207,14 @@ def modifier(deck, op, d):
         e = entrees[i]
     if op == "ajouter":
         tags = [t for t in d.get("tags", []) if t]          # sans tag : rangée par type dans l'Atelier comme dans Archidekt
-        nouvelle = dict(n=int(d.get("n", 1)), nom=d["nom"], tags=tags, etiquette=None)
+        nouvelle = dict(n=int(d.get("n", 1)), nom=d["nom"], tags=tags, etiquette=None, edition=_edition(d.get("edition")))
         cat = categorie(nouvelle)
         meme = next((x for x in entrees if x["nom"] == d["nom"] and (categorie(x) == "Maybeboard") == (cat == "Maybeboard")), None)
         if meme:                                            # déjà là (ex. une Montagne de plus) : on augmente la quantité
             meme["n"] += nouvelle["n"]
             raison = f"+ {d['nom']} (×{meme['n']})"
         else:
+            _noter_langue(deck, nouvelle["edition"], (d.get("edition") or {}).get("lang"))
             pos = max((k for k, x in enumerate(entrees) if categorie(x) == cat), default=None)
             if pos is None:
                 pos = max((k for k, x in enumerate(entrees) if categorie(x) != "Maybeboard"), default=len(entrees) - 1)
@@ -214,6 +254,14 @@ def modifier(deck, op, d):
         e["nom"] = d["nom"]          # même ligne : la simulation garde le même mélange, la comparaison reste appariée
         e["n"] = 1
         e["etiquette"] = None
+        e["edition"] = _edition(d.get("edition"))
+        _noter_langue(deck, e["edition"], (d.get("edition") or {}).get("lang"))
+    elif op == "edition":            # autre impression de la même carte : seul le visuel change
+        e["edition"] = _edition(d.get("edition"))
+        _noter_langue(deck, e["edition"], (d.get("edition") or {}).get("lang"))
+        ed = d.get("edition") or {}
+        raison = f"{e['nom']} : visuel " + (f"{ed.get('nom_edition') or e['edition']['set'].upper()} {e['edition']['num']}"
+                                             + (" (français)" if ed.get("lang") == "fr" else "") if e["edition"] else "par défaut")
     elif op == "quantite":
         e["n"] = max(1, int(d["n"]))
         raison = f"{e['nom']} × {e['n']}"
@@ -243,7 +291,7 @@ def creer(nom, commandant="", liste=""):
             e["tags"] = ["Commander"] + [t for t in e["tags"] if t not in ("Commander", "Maybeboard")]
             e["n"] = 1
         else:
-            entrees.insert(0, dict(n=1, nom=commandant, tags=["Commander"], etiquette=None))
+            entrees.insert(0, dict(n=1, nom=commandant, tags=["Commander"], etiquette=None, edition=None))
     os.makedirs(p)
     with open(os.path.join(p, FICHIER), "w", encoding="utf-8", newline="\n") as f:
         f.write(texte(entrees) if entrees else "")
