@@ -19,7 +19,7 @@ Tout tourne sur ton PC, à l'adresse http://127.0.0.1:5000. Rien n'est mis en li
 - **Bracket.** Repérer les Game Changers de la liste officielle. Afficher l'estimation de bracket de Commander Spellbook.
 - **Versions.** Enregistrer des versions nommées, consulter l'historique automatique, comparer deux versions.
 - **Simulation.** Jouer des parties à 4 joueurs contre des archétypes d'adversaires (méthode de Monte-Carlo). Comparer deux versions d'un deck, avec la marge d'erreur.
-- **Discussion avec Claude.** Une discussion par deck, avec son propre contexte, via Claude Code.
+- **Discussion avec Claude.** Une discussion par deck, avec son propre contexte, plus une discussion générale, via Claude Code. On la choisit en haut du panneau, depuis n'importe quelle page : ouvrir un deck passe à sa discussion, et elle reste affichée pendant la recherche de cartes.
 - **Partage.** Publier la page d'un deck sur GitHub Pages et envoyer le lien (voir plus bas).
 
 ## Installation

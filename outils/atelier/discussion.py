@@ -5,7 +5,7 @@ Lancé dans le dossier MTG, Claude a la même mémoire que dans VS Code. Il peut
 et lancer python (rien d'autre).
 
 Une discussion par deck (<dossier du deck>/discussion.json : son historique et sa session Claude, donc son propre contexte),
-plus une discussion générale (outils/atelier/discussion.json) pour la page « Mes decks ». La conversation reprend d'un
+plus une discussion générale (outils/atelier/discussion.json), au choix depuis n'importe quelle page. La conversation reprend d'un
 message à l'autre (--resume). Chaque réponse tourne en tâche de fond sur le serveur, pas dans la page : fermer ou recharger
 la page ne la perd pas, et plusieurs decks peuvent avoir une réponse en cours en même temps.
 """
@@ -43,7 +43,7 @@ def consigne(cle):
     if cle:
         return CONSIGNE + (f"\n\nCETTE DISCUSSION PORTE SUR LE DECK DU DOSSIER « {cle} » (liste : {cle}/archidekt.txt). "
                            "Chaque deck a sa propre discussion dans l'Atelier : reste sur ce deck, sauf si l'utilisateur en parle d'un autre.")
-    return CONSIGNE + "\n\nDiscussion générale de l'Atelier (page « Mes decks ») : pas un deck en particulier."
+    return CONSIGNE + "\n\nDiscussion générale de l'Atelier : pas un deck en particulier."
 
 
 def trouver_claude():

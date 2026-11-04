@@ -425,7 +425,7 @@ button.puce-dispo:hover { border-color: var(--accent); color: var(--accent); }
 .chat { width: 400px; flex-shrink: 0; border-left: 1px solid var(--bord); background: var(--surface); display: flex; flex-direction: column;
   position: sticky; top: 54px; height: calc(100vh - 54px); }
 .chat-tete { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .6rem .8rem; border-bottom: 1px solid var(--bord); }
-.chat-tete strong { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-tete .chat-choix { min-width: 0; flex: 0 1 auto; font-weight: 600; text-overflow: ellipsis; }
 .chat-tete > div { display: flex; align-items: center; gap: .2rem; flex-shrink: 0; }
 .chat-fil { flex: 1; overflow: auto; padding: .8rem; display: flex; flex-direction: column; gap: .6rem; }
 .msg { padding: .55rem .75rem; border-radius: 10px; max-width: 92%; white-space: pre-wrap; overflow-wrap: anywhere; }

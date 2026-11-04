@@ -2784,6 +2784,7 @@ async function vueRecherche(params) {
   $("#rch-deck").onchange = async (ev) => {
     const id = ev.target.value;
     PREF.set("rch-deck", id);
+    if (id) choisirDiscussion(id);                 // chercher pour un autre deck : sa discussion suit
     const nc = { ...rch.crit, deck: id };
     if (!id) delete nc.horsdeck;
     const form = $("#moteur");
@@ -3436,10 +3437,12 @@ $("#btn-rafraichir").addEventListener("click", async () => {
 });
 
 // ------------------------------------------------------------------ discussion avec Claude
-// Une discussion par deck (son historique et son propre contexte Claude), plus une discussion générale sur « Mes decks ».
-// Le panneau suit la page : changer de deck change de discussion. Les réponses tournent sur le serveur (tâche de fond) :
-// fermer le panneau, changer de deck ou recharger la page ne les perd pas, et plusieurs decks peuvent attendre une réponse.
-const chat = { ouvert: false, charge: false, cle: null, suivi: false, bulle: null, nbOutils: 0 };
+// Une discussion par deck (son historique et son propre contexte Claude), plus une discussion générale.
+// On choisit la discussion dans l'en-tête du panneau, depuis n'importe quelle page ; ouvrir un deck (ou le choisir
+// comme cible de la recherche) passe à sa discussion. Ailleurs, la discussion choisie reste celle qui était là.
+// Les réponses tournent sur le serveur (tâche de fond) : fermer le panneau, changer de page ou recharger ne les perd pas,
+// et plusieurs decks peuvent attendre une réponse.
+const chat = { ouvert: false, charge: false, cle: "", contexte: null, suivi: false, bulle: null, nbOutils: 0 };
 const ETAT_CHAT = "";
 const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -3469,6 +3472,28 @@ function cleCourante() {
 const nomDiscussion = (cle) => (cle ? cle.replace(/^Deck /, "") : "générale");
 const qDeck = (cle) => "?deck=" + enc(cle || "");
 
+// le deck de la page de deck affichée, sinon null
+function deckDeLaPage() {
+  const parts = location.hash.replace(/^#\/?/, "").split("/");
+  return parts[0] === "deck" && parts[1] ? decodeURIComponent(parts[1]) : null;
+}
+
+function remplirChoixDiscussion(ds) {
+  const s = $("#chat-discussion");
+  if (!s) return;
+  const tri = [...ds].sort((a, b) => recence(b) - recence(a) || a.titre.localeCompare(b.titre));
+  s.innerHTML = `<option value="">Générale</option>` + tri.map((d) => `<option value="${esc(d.id)}">${esc(d.titre)}</option>`).join("")
+    + (chat.cle && !ds.some((d) => d.id === chat.cle) ? `<option value="${esc(chat.cle)}">${esc(nomDiscussion(chat.cle))}</option>` : "");
+  s.value = chat.cle;
+}
+
+async function choisirDiscussion(cle) {
+  if (cle === chat.cle) return;
+  chat.cle = cle;
+  PREF.set("chat-discussion", cle);
+  if (chat.charge) { try { await afficheHistorique(); } catch (e) { ajouteMessage("outil", "Erreur : " + (e.message || e)); } }
+}
+
 function ajouteMessage(role, texte) {
   const fil = $("#chat-fil");
   const div = document.createElement("div");
@@ -3495,10 +3520,16 @@ function boutonEnvoyer(enCours) {
 }
 
 async function afficheHistorique() {
+  let ds = await listeDecks().catch(() => null);
+  if (ds && chat.cle && !ds.some((d) => d.id === chat.cle)) {     // deck tout juste créé, ou supprimé depuis
+    etat.decks = [];
+    ds = await listeDecks().catch(() => null);
+    if (ds && !ds.some((d) => d.id === chat.cle)) { chat.cle = ""; PREF.set("chat-discussion", ""); }
+  }
   const cle = chat.cle;
   const h = await api("/api/discussion" + qDeck(cle));
-  if (cle !== chat.cle) return h;                 // on a changé de deck entre-temps
-  $("#chat-titre").textContent = cle ? `Discussion · ${nomDiscussion(cle)}` : "Discussion générale";
+  if (cle !== chat.cle) return h;                 // on a changé de discussion entre-temps
+  remplirChoixDiscussion(ds || etat.decks);
   const fil = $("#chat-fil");
   fil.innerHTML = "";
   if (!h.disponible) ajouteMessage("outil", "Claude Code est introuvable sur ce PC : la discussion ne marchera pas (installe l'extension Claude Code de VS Code).");
@@ -3513,19 +3544,20 @@ async function afficheHistorique() {
   return h;
 }
 
-// la page a changé : le panneau passe à la discussion du deck affiché
+// la page a changé : en arrivant sur un deck, le panneau passe à sa discussion ; ailleurs, il garde celle choisie
 async function changerDiscussion() {
-  const cle = cleCourante();
-  if (cle === chat.cle) return;
-  chat.cle = cle;
-  if (chat.charge) { try { await afficheHistorique(); } catch (e) { ajouteMessage("outil", "Erreur : " + (e.message || e)); } }
+  const ctx = deckDeLaPage();
+  const arrivee = ctx !== null && ctx !== chat.contexte;
+  chat.contexte = ctx;
+  if (arrivee && ctx !== chat.cle) await choisirDiscussion(ctx);
+  else if (chat.charge) listeDecks().then(remplirChoixDiscussion).catch(() => {});   // un deck a pu être créé ou supprimé
 }
 
 async function montageChat() {
   const a = $("#chat");
   a.innerHTML = `
     <div class="chat-tete">
-      <strong id="chat-titre">Discussion</strong>
+      <select id="chat-discussion" class="btn btn-petit chat-choix" aria-label="Discussion"></select>
       <div>
         <select id="chat-modele" class="btn btn-petit" title="Modèle">
           <option value="opus">Opus</option><option value="sonnet">Sonnet</option><option value="haiku">Haiku</option>
@@ -3545,6 +3577,7 @@ async function montageChat() {
   try { $("#chat-modele").value = localStorage.getItem("chat-modele") || "opus"; } catch (_) { $("#chat-modele").value = "opus"; }
   $("#chat-modele").onchange = (ev) => { try { localStorage.setItem("chat-modele", ev.target.value); } catch (_) {} };
   $("#chat-fermer").onclick = () => basculeChat(false);
+  $("#chat-discussion").onchange = (ev) => choisirDiscussion(ev.target.value);
   $("#chat-nouvelle").onclick = async () => {
     if (!confirm(`Effacer la discussion ${nomDiscussion(chat.cle)} ?`)) return;
     try {
@@ -3554,7 +3587,6 @@ async function montageChat() {
   };
   $("#chat-envoyer").onclick = () => ($("#chat-envoyer").textContent === "Arrêter" ? arreterChat() : envoyerChat());
   $("#chat-saisie").addEventListener("keydown", (ev) => { if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) envoyerChat(); });
-  chat.cle = cleCourante();
   chat.charge = true;
   await afficheHistorique();
 }
@@ -3605,7 +3637,7 @@ async function suivreChat() {
   try {
     for (;;) {
       let s;
-      try { s = await api("/api/discussion/en-cours" + qDeck(chat.cle ?? cleCourante())); echecs = 0; }
+      try { s = await api("/api/discussion/en-cours" + qDeck(chat.cle)); echecs = 0; }
       catch (_) { if (++echecs > 10) break; await attendre(2000); continue; }
       for (const k of avant) if (!s.actives.includes(k)) await reponseFinie(k);
       avant = s.actives;
@@ -3629,6 +3661,8 @@ async function basculeChat(ouvrir) {
 }
 
 async function ouvrirChat(texte) {
+  const ctx = deckDeLaPage();
+  if (ctx !== null) await choisirDiscussion(ctx);      // « Expliquer avec Claude » : la discussion du deck affiché
   await basculeChat(true);
   const t = $("#chat-saisie");
   t.value = texte || "";
@@ -3658,6 +3692,8 @@ async function arreterChat() {
 
 $("#btn-chat").addEventListener("click", () => basculeChat());
 if (!PARTAGE) {
+  chat.contexte = deckDeLaPage();
+  chat.cle = chat.contexte ?? PREF.get("chat-discussion", "");
   window.addEventListener("hashchange", changerDiscussion);
   try { if (localStorage.getItem("chat-ouvert")) basculeChat(true); } catch (_) {}
   api("/api/discussion/en-cours").then((s) => { if (s.actives.length) suivreChat(); }).catch(() => {});   // une réponse tournait déjà
