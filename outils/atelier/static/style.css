@@ -54,10 +54,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .espace { flex: 1; }
 /* « Aller à un deck » : une recherche plutôt qu'une liste, pour tenir avec 100 decks */
 .aller { position: relative; flex: 0 1 380px; min-width: 0; }
-.aller .champ { padding: .4rem 4.2rem .4rem .7rem; }
-.aller-touche { position: absolute; right: .5rem; top: 50%; transform: translateY(-50%); font: .72rem/1 system-ui, sans-serif; color: var(--texte-2);
-  border: 1px solid var(--bord); border-radius: 4px; padding: .15rem .3rem; pointer-events: none; }
-.aller .champ:focus + .aller-touche { display: none; }
+.aller .champ { padding: .4rem .7rem; }
 .aller-liste { position: absolute; top: calc(100% + 6px); left: 0; width: max(100%, 420px); max-width: calc(100vw - 16px); z-index: 45; background: var(--surface);
   border: 1px solid var(--bord); border-radius: 10px; box-shadow: var(--ombre); padding: .3rem; }
 .aller-item { display: grid; grid-template-columns: 3.4rem minmax(0, 1fr); grid-template-rows: auto auto; column-gap: .5rem; padding: .4rem .55rem;
@@ -69,7 +66,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .aller-vide { padding: .6rem; }
 .aller-pied { display: flex; justify-content: space-between; gap: 1rem; padding: .45rem .55rem .25rem; border-top: 1px solid var(--bord); margin-top: .3rem; }
 .aller-pied a { color: var(--accent); }
-@media (max-width: 700px) { .aller-touche, .etat-maj { display: none; } .aller .champ { padding-right: .7rem; } }
+@media (max-width: 700px) { .etat-maj { display: none; } }
 .fil { display: flex; gap: .45rem; align-items: center; font-size: .85rem; color: var(--texte-2); margin: -.25rem 0 .6rem; }
 .fil a { color: var(--texte-2); }
 .fil a:hover { color: var(--accent); }
@@ -356,7 +353,6 @@ button.puce-dispo:hover { border-color: var(--accent); color: var(--accent); }
 .hb-rep { font-size: .74rem; color: var(--texte-2); white-space: nowrap; }
 .hb:hover .hb-barre, .hb:focus-visible .hb-barre { filter: brightness(1.18); }
 .ligne-3 { grid-template-columns: minmax(0, 1fr) auto 4.6rem; }
-.souligne { text-decoration: underline dotted; cursor: default; }
 .carte-nouveau { align-items: center; justify-content: center; gap: .3rem; min-height: 220px; border: 2px dashed var(--bord); background: transparent;
   box-shadow: none; cursor: pointer; color: var(--texte); font: inherit; }
 .carte-nouveau:hover { border-color: var(--accent); }
@@ -467,13 +463,11 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; color:
 .fen-atelier .rch-nombres .champ { width: 4.8rem; }
 .fen-atelier { flex-direction: row; flex-wrap: wrap; align-items: center; gap: .6rem 1.2rem; }
 .fen-atelier .fen-titre { flex-basis: calc(100% + 1.6rem); }
-.fen-atelier .rch-aide { flex-basis: 100%; margin: 0; }
 .rch-bloc { display: flex; flex-direction: column; gap: .2rem; font-size: .88rem; color: var(--texte-2); }
 .rch-bloc .champ, .rch-bloc textarea { width: 100%; color: var(--texte); }
 .rch-bloc textarea { resize: vertical; min-height: 2.6rem; padding: .4rem .55rem; }
 .rch-texte-tete { display: flex; justify-content: space-between; align-items: center; }
 .rch-ligne-champ { display: flex; align-items: center; gap: .4rem; font-size: .85rem; color: var(--texte-2); flex-wrap: wrap; }
-.rch-aide { margin: 0; }
 .fen select.champ { width: 100%; }
 .fen-atelier select.champ { width: auto; }
 .eds-tete { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; }
@@ -543,7 +537,6 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; color:
   .rch-vignette img, .rch-vignette .sans-image { width: 60px; }
   .rch-actions { margin-left: 0; }
 }
-.rch-journal { color: var(--bon); }
 .rch-deck .champ { width: auto; min-width: 14rem; }
 .rch-outils label { display: inline-flex; align-items: center; gap: .4rem; }
 .moteur .champ-petit, .rch-outils .champ-petit, .rch-pages .champ-petit { padding: .3rem .5rem; }
@@ -558,14 +551,12 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; color:
 .rf-ajout-ligne .btn-accent { margin-left: auto; }
 .rf-n { display: inline-flex; align-items: center; gap: .35rem; }
 .rf-n .champ { width: 4rem; padding: .35rem .45rem; }
-.rf-aide { flex: 1; }
 .rf-deja { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1rem; }
 .rf-deja a { color: var(--accent); }
 .fc-liens { display: flex; flex-wrap: wrap; gap: .3rem 1.2rem; font-size: .88rem; }
 .fc-liens a { color: var(--texte-2); text-decoration: underline; text-decoration-color: var(--bord); text-underline-offset: 3px; }
 .fc-liens a:hover { color: var(--accent); text-decoration-color: currentColor; }
 .erreur-texte { color: var(--alerte); }
-.rch-base-aide { cursor: help; }
 /* cartes recto-verso : retourner la carte dans la fiche */
 .fc-retourner { display: block; margin: .45rem auto 0; }
 .fc-image .note { margin-top: .5rem; }
