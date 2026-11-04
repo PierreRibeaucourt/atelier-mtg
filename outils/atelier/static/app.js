@@ -1010,7 +1010,9 @@ function ongletListe(el, d) {
     ${!d.cartes.length ? `<div class="panneau vide"><p>Ce deck est vide.</p><button class="btn btn-accent ecrit" id="vide-ajouter">${ico("plus")}Ajouter des cartes</button></div>` : `
     <div class="barre-outils">
       ${segments("affichage", [["liste", "Liste", "liste"], ["visuel", "Visuel", "cartes"]], AFFICHAGE)}
-      <span class="outil"><span class="petit muet">Ranger par</span>${segments("rangement", [["type", "type"], ["tags", "tags"], ["fonction", "fonction"]], "type")}</span>
+      <label class="outil petit muet">Ranger par
+        <select class="champ champ-petit" id="rangement">${[["type", "type"], ["tags", "tags"], ["fonction", "fonction"]].map(([v, l]) =>
+          `<option value="${v}" ${PREF.get("rangement", "type") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       <label class="outil petit muet">Trier par
         <select class="champ champ-petit" id="tri">${[["cout", "coût"], ["nom", "nom"], ["prix", "prix"]].map(([v, l]) =>
           `<option value="${v}" ${PREF.get("tri", "cout") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
@@ -1033,6 +1035,7 @@ function ongletListe(el, d) {
     rendre();
   }));
   $("#tri", el).onchange = (ev) => { PREF.set("tri", ev.target.value); rendre(); };
+  $("#rangement", el).onchange = (ev) => { PREF.set("rangement", ev.target.value); rendre(); };
   $("#filtre", el).oninput = (ev) => { etat.filtre = ev.target.value; rendre(); };
   zone.addEventListener("click", (ev) => {
     const t = ev.target.closest("[data-tag]");
@@ -1605,7 +1608,7 @@ const COULEURS = [["W", "Blanc"], ["U", "Bleu"], ["B", "Noir"], ["R", "Rouge"], 
 const nbCartes = (l) => l.reduce((s, c) => s + c.n, 0);
 const estTerrain = (c) => typeCarte(c.info.type) === "Terrains";
 const REPERES = [[/^(ramp|acc[eé]l[eé]ration)$/i, "≈ 10"], [/^(draw|card draw|pioche)$/i, "≈ 10"],
-  [/^(removal|d[eé]gagement|anti-?cr[eé]atures?)$/i, "5 à 10"], [/^(board ?wipes?|wipes?|rase-?boards?)$/i, "≈ 5"],
+  [/^(removal|d[eé]gagement|anti-?cr[eé]atures?)$/i, "5 à 10"], [/^(board ?wipes?|wipes?|rase-?boards?|balayages?)$/i, "≈ 5"],
   [/^(lands?|terrains?)$/i, "37-38"]];
 const repere = (t) => (REPERES.find(([r]) => r.test(t.trim())) || [])[1] || "";
 
@@ -1647,15 +1650,22 @@ function colonnes(items, h = 120) {
     </div>`).join("")}</div>`;
 }
 
+// barres horizontales ; le repère du gabarit (« ≈ 10 », « 5 à 10 ») est un trait ou un intervalle sur la piste, détaillé au survol
 function hbarres(rows) {
-  const max = Math.max(1, ...rows.map((r) => r.valeur));
-  return `<div class="hbarres">${rows.map((r) => `
-    <div class="hb" tabindex="0" data-bulle="${esc(r.bulle)}">
+  const bornes = (r) => (r.repere ? (r.repere.match(/\d+/g) || []).map(Number) : []);
+  const max = Math.max(1, ...rows.map((r) => Math.max(r.valeur, ...bornes(r))));
+  const pc = (x) => (x / max) * 100;
+  return `<div class="hbarres">${rows.map((r) => {
+    const b = bornes(r);
+    const cible = !b.length ? "" : `<span class="hb-cible ${b.length > 1 ? "hb-intervalle" : ""}" style="left:${pc(b[0])}%;${b.length > 1 ? `width:${pc(b[1] - b[0])}%` : ""}"></span>`;
+    const bulle = r.repere ? r.bulle.replace(/^[^\n]*/, (t) => `${t} · repère ${r.repere}`) : r.bulle;
+    return `
+    <div class="hb" tabindex="0" data-bulle="${esc(bulle)}">
       <span class="hb-lib">${r.label}</span>
-      <span class="hb-piste"><span class="hb-barre" style="width:${(r.valeur / max) * 100}%"></span></span>
+      <span class="hb-piste"><span class="hb-barre" style="width:${pc(r.valeur)}%"></span>${cible}</span>
       <span class="hb-val">${r.valeur}</span>
-      <span class="hb-rep" title="Repère">${r.repere ? esc(r.repere) : ""}</span>
-    </div>`).join("")}</div>`;
+    </div>`;
+  }).join("")}</div>`;
 }
 
 function grapheCourbe(S, h) {
@@ -1701,6 +1711,11 @@ function ongletStats(el, d) {
   for (const c of S.jeu) for (const t of c.tags) if (t !== "Commander" && t !== "Maybeboard") (tags[t] ||= []).push(c);
   const lignesTags = Object.entries(tags).sort((a, b) => nbCartes(b[1]) - nbCartes(a[1]))
     .map(([t, l]) => ({ label: esc(t), valeur: nbCartes(l), bulle: nomsBulle(`${t} : ${nbCartes(l)}`, l), repere: repere(t) }));
+  // fonctions des sorts des 99 (une carte compte dans chacune des siennes), comparées au gabarit
+  const lignesFonctions = ORDRE_FONCTIONS.filter((f) => f !== "Terrains")
+    .map((f) => [f, S.sorts.filter((c) => (f === "Autres" ? !(c.fonctions || []).length : (c.fonctions || []).includes(f)))])
+    .filter(([, l]) => l.length)
+    .map(([f, l]) => ({ label: esc(f), valeur: nbCartes(l), bulle: nomsBulle(`${f} : ${nbCartes(l)}`, l), repere: repere(f) }));
   // couleurs du commandant (sinon celles que demandent les cartes) : Command Tower « produit » les 5, ça ne compte pas
   const coul = S.couleurs.filter((c) => d.identite ? d.identite.includes(c.x) : c.cartes.length);
   const colorees = S.sorts.filter((c) => coul.some((k) => k.cartes.includes(c)));
@@ -1721,8 +1736,8 @@ function ongletStats(el, d) {
       <div class="panneau"><h3>Cartes par couleur</h3>${grapheCouleurs(S, 170)}</div>
     </div>
     <div class="grille-deux">
-      <div class="panneau"><h3>Cartes par type</h3>${hbarres(S.types.map(([t, l]) => ({ label: esc(t), valeur: nbCartes(l), bulle: nomsBulle(`${t} : ${nbCartes(l)}`, l) })))}</div>
-      <div class="panneau"><h3>Tags</h3>${lignesTags.length ? hbarres(lignesTags) : `<p class="muet petit">Aucun tag.</p>`}</div>
+      <div class="panneau"><h3>Cartes par type</h3>${colonnes(S.types.map(([t, l]) => ({ label: esc(ABREV[t]), valeur: nbCartes(l), bulle: nomsBulle(`${t} : ${nbCartes(l)}`, l) })), 170)}</div>
+      <div class="panneau" id="st-roles"></div>
     </div>
     <div class="panneau">
       <h3 style="margin-top:0">Base de mana</h3>
@@ -1760,6 +1775,16 @@ function ongletStats(el, d) {
         ${c.info.prix_lien ? `<a class="prix ${c.info.prix > 5 ? "cher" : ""}" href="${esc(c.info.prix_lien)}" target="_blank" rel="noopener">${euros(c.info.prix)}</a>` : `<span class="prix">${euros(c.info.prix)}</span>`}
       </div>`).join("")}
     </div>`;
+  // fonctions ou tags : la même question (ce que font les cartes), un seul panneau avec son sélecteur
+  const roles = () => {
+    const z = $("#st-roles", el), v = PREF.get("stats-roles", "fonctions");
+    const lignes = v === "tags" ? lignesTags : lignesFonctions;
+    z.innerHTML = `<div class="panneau-tete"><h3>${v === "tags" ? "Tags" : "Fonctions"}</h3>
+        ${segments("stats-roles", [["fonctions", "Fonctions"], ["tags", "Tags"]], "fonctions").replace('class="segments"', 'class="segments segments-petits"')}</div>
+      ${lignes.length ? hbarres(lignes) : `<p class="muet petit">Aucun tag.</p>`}`;
+    $$("[data-pref]", z).forEach((b) => (b.onclick = () => { PREF.set("stats-roles", b.dataset.val); roles(); }));
+  };
+  roles();
   montageMain(el, S);
 }
 

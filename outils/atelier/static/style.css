@@ -362,7 +362,8 @@ legend { color: var(--texte-2); font-size: .85rem; padding: 0 .3rem; }
 .cases { display: flex; flex-wrap: wrap; gap: .4rem 1rem; }
 .cases label { display: inline-flex; gap: .35rem; align-items: center; white-space: nowrap; }
 .puces { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .4rem; }
-.puce { display: inline-flex; align-items: center; gap: .3rem; background: var(--surface-2); border-radius: 999px; padding: .15rem .3rem .15rem .6rem; font-size: .85rem; }
+.puce { display: inline-flex; align-items: center; gap: .3rem; background: var(--surface-2); border-radius: 999px; padding: .15rem .6rem; font-size: .85rem; }
+.puce:has(> button) { padding-right: .3rem; }             /* la croix de retrait a sa propre marge */
 .puce button { border: 0; background: transparent; cursor: pointer; color: var(--texte-2); }
 .puce .puce-nom { color: var(--texte); padding: 0; }
 .puce-1 { background: var(--accent-doux); }
@@ -373,7 +374,7 @@ button.puce-dispo:hover { border-color: var(--accent); color: var(--accent); }
 /* ---- statistiques */
 .grille-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; }
 .grille-deux { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; }
-.grille-deux + .grille-deux, .grille-deux + .panneau { margin-top: 1rem; }
+.grille-deux + .grille-deux, .grille-deux + .panneau, .grille-deux + .grille-3, .grille-3 + .panneau { margin-top: 1rem; }
 .grille-deux .panneau { margin-top: 0; }
 @media (max-width: 760px) { .grille-deux { grid-template-columns: 1fr; } }
 .grille-3 .panneau, .grille-2 .panneau { margin-top: 0; }
@@ -393,12 +394,18 @@ button.puce-dispo:hover { border-color: var(--accent); color: var(--accent); }
 .graphe .col:hover .baton, .graphe .col:focus-visible .baton { filter: brightness(1.18); }
 .graphe .col:hover .val, .graphe .col:focus-visible .val, .graphe .col:hover .lib { color: var(--texte); }
 .hbarres { display: grid; gap: 6px; margin-top: .4rem; }
-.hb { display: grid; grid-template-columns: minmax(5rem, 9rem) minmax(0, 1fr) 2rem 5.5rem; gap: .5rem; align-items: center; font-size: .85rem; outline: none; }
+.hb { display: grid; grid-template-columns: minmax(5rem, 9rem) minmax(0, 1fr) 2rem; gap: .6rem; align-items: center; font-size: .85rem; outline: none; }
 .hb-lib { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hb-piste { height: 12px; display: flex; align-items: center; border-left: 1px solid var(--bord); }
+.hb-piste { position: relative; height: 12px; display: flex; align-items: center; border-left: 1px solid var(--bord); }
 .hb-barre { height: 12px; background: var(--accent); border-radius: 0 4px 4px 0; }
 .hb-val { text-align: right; font-variant-numeric: tabular-nums; }
-.hb-rep { font-size: .74rem; color: var(--texte-2); white-space: nowrap; }
+.hb:hover .hb-barre, .hb:focus-visible .hb-barre { filter: brightness(1.18); }
+/* repère du gabarit : un trait (≈ 10) ou un intervalle (5 à 10) par-dessus la barre */
+.hb-cible { position: absolute; top: -3px; bottom: -3px; border-left: 2px solid var(--texte); opacity: .55; pointer-events: none; }
+.hb-cible.hb-intervalle { border-right: 2px solid var(--texte); background: color-mix(in srgb, var(--texte) 10%, transparent); border-radius: 2px; }
+.panneau-tete { display: flex; align-items: center; justify-content: space-between; gap: .8rem; margin-bottom: .2rem; }
+.panneau-tete h3 { margin: 0; }
+.segments-petits button { font-size: .8rem; padding: .2rem .6rem; }
 .hb:hover .hb-barre, .hb:focus-visible .hb-barre { filter: brightness(1.18); }
 .ligne-3 { grid-template-columns: minmax(0, 1fr) auto 4.6rem; }
 .carte-nouveau { align-items: center; justify-content: center; gap: .3rem; min-height: 220px; border: 2px dashed var(--bord); background: transparent;
