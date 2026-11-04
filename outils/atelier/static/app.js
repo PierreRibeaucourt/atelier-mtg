@@ -1386,19 +1386,19 @@ function rechercheCarte(zone, { surChoix, surAjout = null, deck = () => etat.dec
       choisir(Math.max(0, actif));
     }
   });
+  const vider = () => { numero++; clearTimeout(minuteur); champ.value = ""; liste = []; actif = -1; res.innerHTML = ""; champ.focus(); };
   res.addEventListener("click", async (ev) => {
     const p = ev.target.closest("button.res-plus");
     if (p) {
       p.disabled = true;
-      if (await surAjout(liste[+p.dataset.plus])) res.innerHTML = liste.map(ligne).join("");     // « déjà dans le deck »
-      else p.disabled = false;
-      champ.focus();
+      if (await surAjout(liste[+p.dataset.plus])) vider();         // carte ajoutée : le champ est prêt pour la suivante
+      else { p.disabled = false; champ.focus(); }
       return;
     }
     const b = ev.target.closest(".res-carte");
     if (b) choisir(+b.dataset.i);
   });
-  return { champ, vider() { numero++; champ.value = ""; liste = []; res.innerHTML = ""; champ.focus(); } };
+  return { champ, vider };
 }
 
 // surVersion : la fiche propose « Changer la version (visuel) » et rend la fiche de l'impression choisie
@@ -1469,7 +1469,19 @@ function modaleAjout() {
       return res;
     };
     const rech = rechercheCarte($("#rech", b), {
-      surAjout: (x) => ajouter(x.nom, null),
+      surAjout: async (x) => {
+        const res = await ajouter(x.nom, null);
+        if (res) {
+          $("#qte-ajout", b).value = 1;
+          if (choix && choix.nom === x.nom) {                 // la fiche affichée était celle de cette carte
+            choix = null;
+            $("#fiche", b).innerHTML = "";
+            $("#ok", b).disabled = true;
+            $("#ok span", b).textContent = "Ajouter au deck";
+          }
+        }
+        return res;
+      },
       surChoix: async (x) => {
         choix = null;
         $("#ok", b).disabled = true;
