@@ -405,9 +405,14 @@ function ouvrirMenu(bouton, items, ev = null) {
   cacherApercu();                               // sinon l'image survolée recouvre le menu
   const m = $("#menu");
   m.innerHTML = "";
-  for (const [libelle, action, classe] of items) {
+  for (const item of items) {
+    if (!item || typeof item === "string") {
+      m.insertAdjacentHTML("beforeend", item ? `<div class="menu-titre">${esc(item)}</div>` : `<hr class="menu-sep">`);
+      continue;
+    }
+    const [libelle, action, classe, icone] = item;
     const b = document.createElement("button");
-    b.textContent = libelle;
+    b.innerHTML = (icone ? ico(icone) : "") + esc(libelle);
     if (classe) b.className = classe;
     b.addEventListener("click", () => { fermerMenu(); action(); });
     m.appendChild(b);
@@ -779,7 +784,6 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
         </div>
         <div class="actions">
           <a class="btn" href="#/recherche?deck=${enc(id)}">${ico("chercher")}Chercher des cartes</a>
-          <button class="btn" id="btn-export">${ico("copier")}Copier pour Archidekt</button>
           <button class="btn btn-icone ouvre-menu" id="btn-deck-menu" aria-label="Autres actions sur le deck" title="Autres actions">${ico("plus_de")}</button>
         </div>
       </div>
@@ -791,9 +795,11 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
     </div>
     <section id="contenu"></section>`;
   $("#btn-ajouter").onclick = () => modaleAjout();
-  $("#btn-export").onclick = copierArchidekt;
   $("#btn-deck-menu").onclick = (ev) => ouvrirMenu(ev.currentTarget, [
-    ["Supprimer ce deck…", () => supprimerDeck(d), "btn-danger"],
+    "Copier la liste pour",
+    ...EXPORTS.map(([fmt, lib]) => [lib, () => copierListe(fmt, lib), "", "copier"]),
+    null,
+    ["Supprimer ce deck…", () => supprimerDeck(d), "btn-danger", "corbeille"],
   ]);
   const contenu = $("#contenu");
   if (onglet === "stats") return ongletStats(contenu, d);
@@ -804,11 +810,14 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
   ongletListe(contenu, d);
 }
 
-async function copierArchidekt() {
+const EXPORTS = [["archidekt", "Archidekt"], ["moxfield", "Moxfield"], ["arena", "MTG Arena"], ["mtgo", "MTGO"],
+  ["simple", "Liste simple"], ["fr", "Liste en français"]];
+
+async function copierListe(fmt, lib) {
   try {
-    const txt = await api("/api/decks/" + enc(etat.deck.id) + "/export");
+    const txt = await api(`/api/decks/${enc(etat.deck.id)}/export?format=${fmt}`);
     await navigator.clipboard.writeText(txt);
-    toast("Liste copiée.");
+    toast(`Liste copiée : ${lib}.`);
   } catch (e) { erreur(e); }
 }
 

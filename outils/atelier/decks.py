@@ -104,6 +104,33 @@ def texte(entrees):
     return "\n".join(lignes) + "\n"
 
 
+def exporter(entrees, fmt, nom=None):
+    """La liste à coller dans un autre site.
+    archidekt : le fichier tel quel (tags, Maybeboard, impressions choisies). Les autres laissent le Maybeboard de côté :
+    moxfield et arena en sections « Commander » / « Deck » (moxfield garde l'impression choisie), mtgo avec le
+    commandant en réserve après une ligne vide, simple et fr une carte par ligne, commandant d'abord.
+    nom(nom, fmt) : le nom à écrire (français, recto seul…)."""
+    if fmt == "archidekt":
+        return texte(entrees)
+    nom = nom or (lambda n, f: n)
+    cmd = [e for e in entrees if categorie(e) == "Commander"]
+    jeu = [e for e in ordonner(entrees) if categorie(e) not in ("Commander", "Maybeboard")]
+
+    def ligne(e):
+        ed = e.get("edition") or {}
+        impression = f" ({ed['set'].upper()}) {ed.get('num', '')}".rstrip() + (" *F*" if ed.get("fini") == "F" else "") if fmt == "moxfield" and ed.get("set") else ""
+        return f"{e['n']} {nom(e['nom'], fmt)}{impression}"
+    if fmt in ("moxfield", "arena"):
+        blocs = ([["Commander", *map(ligne, cmd)]] if cmd else []) + [["Deck", *map(ligne, jeu)]]
+    elif fmt == "mtgo":
+        blocs = [list(map(ligne, jeu)), list(map(ligne, cmd))]
+    elif fmt in ("simple", "fr"):
+        blocs = [list(map(ligne, cmd + jeu))]
+    else:
+        raise ValueError(f"format d'export inconnu : {fmt}")
+    return "\n\n".join("\n".join(b) for b in blocs if b) + "\n"
+
+
 def texte_edition(ed):
     """« (ima) 205 », comme les exports Archidekt : Archidekt affiche alors la même impression."""
     if not ed or not ed.get("set"):

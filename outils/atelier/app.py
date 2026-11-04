@@ -300,9 +300,25 @@ def api_modifier(deck):
     return jsonify(resume_deck(deck, avec_cartes=True))
 
 
+def nom_export(nom, fmt):
+    """fr : le nom français ; arena et mtgo : le recto seul d'une carte recto-verso (ou à aventure), comme dans ces jeux."""
+    import recherche
+    b = recherche._base
+    x = b and b["par_cle"].get(ic._cle(nom).lower())
+    if fmt == "fr":
+        return (ic._charge()["cartes"].get(nom) or {}).get("fr") or (x and x.get("fr")) or nom
+    if " // " in nom and fmt in ("arena", "mtgo"):
+        if x and x["lay"] in ("split", "aftermath"):               # Feu // Glace reste entière
+            return nom.replace(" // ", "/") if fmt == "mtgo" else nom
+        return ic._cle(nom)
+    return nom
+
+
 @app.get("/api/decks/<path:deck>/export")
 def api_export(deck):
-    return Response(decks.texte(decks.lire(decks.chemin(deck))), mimetype="text/plain; charset=utf-8")
+    """?format= archidekt (par défaut), moxfield, arena, mtgo, simple, fr."""
+    fmt = request.args.get("format", "archidekt")
+    return Response(decks.exporter(decks.lire(decks.chemin(deck)), fmt, nom_export), mimetype="text/plain; charset=utf-8")
 
 
 @app.get("/api/decks/<path:deck>/versions")

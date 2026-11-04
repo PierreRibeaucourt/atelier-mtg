@@ -217,8 +217,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ---- menu contextuel, modale, aperçu, toast */
 .menu { position: fixed; z-index: 66; min-width: 220px; background: var(--surface); border: 1px solid var(--bord); border-radius: 8px; box-shadow: var(--ombre); padding: .3rem; }
-.menu button { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: .45rem .7rem; border-radius: 6px; cursor: pointer; }
+.menu button { display: flex; align-items: center; gap: .55rem; width: 100%; text-align: left; border: 0; background: transparent; padding: .45rem .7rem; border-radius: 6px; cursor: pointer; }
 .menu button:hover { background: var(--surface-2); }
+.menu-titre { padding: .35rem .7rem .15rem; font-size: .78rem; color: var(--texte-2); }
+.menu-sep { border: 0; border-top: 1px solid var(--bord); margin: .3rem .2rem; }
 .modale { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.35); display: flex; align-items: flex-start; justify-content: center; padding: 6vh 1rem; }
 .modale-boite { width: min(680px, 100%); max-height: 88vh; overflow: auto; background: var(--surface); border-radius: 12px; box-shadow: var(--ombre); padding: 1.1rem 1.2rem 1.2rem; }
 .modale-boite h2 { margin-top: 0; }
