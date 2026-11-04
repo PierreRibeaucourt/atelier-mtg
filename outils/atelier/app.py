@@ -60,6 +60,46 @@ def couverture_sim(entrees, cmd):
 PLUSIEURS = re.compile(r"deck can have (?:any number|up to \w+) of cards named", re.I)
 
 
+def eligibilite(nom):
+    """Peut-elle être commandant (règles suivies par Scryfall : créatures légendaires, certains planeswalkers, véhicules
+    et vaisseaux légendaires…) ? None tant que la base de la recherche n'est pas prête."""
+    try:
+        import recherche
+        return recherche.eligibilite(nom)
+    except Exception:
+        return None
+
+
+def partenaires_ok(a, b):
+    """Deux commandants ensemble : Partner, Partner with, Partner—…, Friends forever, Historique, compagnon du Docteur."""
+    ta, tb = a.get("texte") or "", b.get("texte") or ""
+    na, nb = ic._cle(a.get("nom", "")).lower(), ic._cle(b.get("nom", "")).lower()
+
+    def avec(t):                                          # « Partner with Pir, Imaginative Rascal »
+        m = re.search(r"^Partner with ([^(\n]+)", t, re.M)
+        return ic._cle(m.group(1).strip()).lower() if m else None
+
+    def variante(t):                                      # « Partner—Survivors » : seulement avec la même variante
+        m = re.search(r"^Partner\s*[—-]\s*([^(\n]+)", t, re.M)
+        return m.group(1).strip().lower() if m else None
+
+    def simple(t):
+        return bool(re.search(r"^Partner\s*(\(|$)", t, re.M))
+
+    if avec(ta) or avec(tb):
+        return avec(ta) == nb or avec(tb) == na
+    if variante(ta) or variante(tb):
+        return variante(ta) == variante(tb)
+    if simple(ta) and simple(tb):
+        return True
+    if "Friends forever" in ta and "Friends forever" in tb:
+        return True
+    if ("Choose a Background" in ta and "Background" in (b.get("type") or "")) or ("Choose a Background" in tb and "Background" in (a.get("type") or "")):
+        return True
+    doc = lambda f: "Time Lord Doctor" in (f.get("type") or "")        # noqa: E731
+    return ("Doctor's companion" in ta and doc(b)) or ("Doctor's companion" in tb and doc(a))
+
+
 def alertes_cartes(entrees, I):
     """Règles du Commander, comme Archidekt et Moxfield : couleurs du commandant, une seule copie, cartes interdites."""
     cmds = [e["nom"] for e in entrees if decks.categorie(e) == "Commander"]
@@ -69,9 +109,21 @@ def alertes_cartes(entrees, I):
     for e in jeu:
         copies[e["nom"]] = copies.get(e["nom"], 0) + e["n"]
     res = {}
+    # le ou les commandants : combien, peuvent-ils l'être, vont-ils ensemble ?
+    for c in cmds:
+        a = []
+        if len(cmds) > 2:
+            a.append("trop de commandants")
+        el = eligibilite(c)
+        if el is not None and not el["commandant"]:
+            a.append("ne peut pas être commandant")
+        if len(cmds) == 2 and all(I.get(x) for x in cmds) and not partenaires_ok(I[cmds[0]], I[cmds[1]]):
+            a.append("partenaires incompatibles")
+        if a:
+            res[c] = a
     for e in entrees:
         f = I.get(e["nom"]) or {}
-        a = []
+        a = list(res.get(e["nom"], [])) if decks.categorie(e) == "Commander" else []
         if f.get("legal") == "banned":
             a.append("interdite")
         elif f.get("legal") == "not_legal" and decks.categorie(e) != "Commander":
@@ -130,6 +182,7 @@ def resume_deck(deck, avec_cartes=False):
     alertes, ident = alertes_cartes(entrees, I)
     hors_maybe = {e["nom"] for e in jeu}
     r = dict(id=deck, titre=deck.removeprefix("Deck "), note=decks.note(deck), **cpt, prix_total=round(prix_total, 2),
+             commandants=[e["nom"] for e in entrees if decks.categorie(e) == "Commander"],
              gc=gc, trop_cher=trop_cher, art=avec_visuel(I.get(cmd), V.get(i_cmd)).get("art", ""),
              image_cmd=avec_visuel(I.get(cmd), V.get(i_cmd)).get("image", ""),
              identite=ident, alertes={n: a for n, a in alertes.items() if n in hors_maybe},
@@ -140,6 +193,8 @@ def resume_deck(deck, avec_cartes=False):
         for i, e in enumerate(entrees):
             f = avec_visuel(I.get(e["nom"]), V.get(i))
             f["gc"] = ic.est_gc(e["nom"])
+            el = eligibilite(e["nom"])
+            f["peut_commander"], f["partenaire"] = (el["commandant"], el["partenaire"]) if el else (None, None)
             cartes.append(dict(index=i, n=e["n"], nom=e["nom"], tags=e["tags"], cat=decks.categorie(e), info=f, sim=cov.get(e["nom"]),
                                alertes=alertes.get(e["nom"], []), version=version_courte(V.get(i))))
         r.update(cartes=cartes, categories=decks.categories(entrees), erreur_sim=cov.get("_erreur"))
@@ -363,6 +418,8 @@ def api_carte():
     f = avec_visuel(ic._charge()["cartes"].get(nom), v)
     f["version"] = version_courte(v)
     f["gc"] = ic.est_gc(nom)
+    el = eligibilite(nom)
+    f["peut_commander"], f["partenaire"] = (el["commandant"], el["partenaire"]) if el else (None, None)
     f["trop_cher"] = (f.get("prix") or 0) > ic.BUDGET
     return jsonify(f)
 
@@ -407,6 +464,20 @@ def api_recherche_editions():
 def api_recherche_fonctions():
     import recherche
     return jsonify(recherche.fonctions())
+
+
+@app.get("/api/recherche/noms")
+def api_recherche_noms():
+    """Champ du haut : les cartes dont le nom (français ou anglais) correspond ; deck= pour marquer celles qu'il contient."""
+    import recherche
+    return jsonify(recherche.noms(request.args.get("q", ""), request.args.get("deck") or None))
+
+
+@app.get("/api/recherche/tags")
+def api_recherche_tags():
+    """Fonctions Scryfall Tagger qui correspondent au texte tapé (fenêtre Fonctions de la recherche)."""
+    import recherche
+    return jsonify(recherche.suggestions(request.args.get("q", "")))
 
 
 @app.get("/api/decks/<path:deck>/apercu")

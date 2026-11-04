@@ -59,7 +59,28 @@ def _fiche(c):
                 image=img.get("normal", ""), petite=img.get("small", ""), art=img.get("art_crop", ""),
                 gc=bool(c.get("game_changer")), prix=_eur(c), prix_lien=_lien(lien), prix_date=None, fr=None,
                 legal=(c.get("legalities") or {}).get("commander", ""), produit=c.get("produced_mana") or [], pt=_pt(c),
-                gatherer=(c.get("related_uris") or {}).get("gatherer", ""))
+                gatherer=(c.get("related_uris") or {}).get("gatherer", ""), dos=_dos(c), assemble=_assemble(c))
+
+
+def _dos(c):
+    """Le verso d'une carte recto-verso (Delver, Valakut Awakening…) : nom, type et image ; None sinon."""
+    faces = c.get("card_faces") or []
+    if len(faces) < 2 or not faces[1].get("image_uris"):
+        return None                                   # cartes doubles, aventures, à inversion : une seule image
+    img = faces[1]["image_uris"]
+    return dict(nom=faces[1].get("name", ""), type=faces[1].get("type_line", ""), image=img.get("normal", ""), petite=img.get("small", ""))
+
+
+def _assemble(c):
+    """Cartes qui s'assemblent (Bruna + Gisela = Brisela) : les autres morceaux et la carte formée ; None sinon."""
+    if c.get("layout") != "meld":
+        return None
+    parts = c.get("all_parts") or []
+    resultat = next((x["name"] for x in parts if x.get("component") == "meld_result"), "")
+    pieces = [x["name"] for x in parts if x.get("component") == "meld_part" and x["name"] != c["name"]]
+    if resultat == c["name"]:                          # la carte formée elle-même : elle ne se joue pas seule
+        return dict(resultat=resultat, pieces=[x["name"] for x in parts if x.get("component") == "meld_part"], est_resultat=True)
+    return dict(resultat=resultat, pieces=pieces, est_resultat=False)
 
 
 def _pt(c):
@@ -106,8 +127,8 @@ def _cle(nom):
 def infos(noms):
     """Fiches des cartes demandées ; celles qu'on n'a pas encore sont demandées à Scryfall (75 par requête)."""
     cache = _charge()
-    with _verrou:      # absentes, ou fiches d'avant l'ajout de la force/endurance ou du lien Gatherer
-        manquants = sorted({n for n in noms if n and (n not in cache["cartes"] or "gatherer" not in cache["cartes"][n])})
+    with _verrou:      # absentes, ou fiches d'avant l'ajout du lien Gatherer, du verso et des cartes qui s'assemblent
+        manquants = sorted({n for n in noms if n and (n not in cache["cartes"] or "assemble" not in cache["cartes"][n])})
     for i in range(0, len(manquants), 75):
         bloc = manquants[i:i + 75]
         corps = json.dumps({"identifiers": [{"name": _cle(n)} for n in bloc]}).encode()
@@ -190,7 +211,7 @@ def noms_francais(noms, suivi=True):
     fr = "" : la carte n'existe pas en français ; l'Atelier affiche alors le texte anglais."""
     cache = _charge()
     a_faire = [n for n in noms if n not in BASES_FR and cache["cartes"].get(n)
-               and (cache["cartes"][n].get("fr") is None or "fr_texte" not in cache["cartes"][n])]
+               and (cache["cartes"][n].get("fr") is None or cache["cartes"][n].get("fr_v") != 2)]
     if not a_faire:
         return
     par_cle = {_cle(n): n for n in a_faire}
@@ -212,7 +233,13 @@ def noms_francais(noms, suivi=True):
             typ = faces[0].get("printed_type_line", "")
         else:
             texte, typ = c.get("printed_text", ""), c.get("printed_type_line", "")
-        # éditions les plus récentes d'abord : chaque élément vient de la plus récente qui l'a (une promo n'a parfois pas de type)
+        # éditions les plus récentes d'abord : chaque élément vient de la plus récente qui l'a vraiment en français
+        # (une promo n'a parfois pas de type ; l'édition MID de Delver of Secrets garde le nom anglais, ISD dit « Sondeur de secrets »)
+        anglais = cache["cartes"][n]
+        if _simple(nom) == _simple(n) or _simple(nom) == _simple(anglais.get("nom", "")):
+            nom = ""
+        if _simple(texte) == _simple(anglais.get("texte", "")):
+            texte = ""
         nom0, typ0, texte0 = fr.get(n, ("", "", ""))
         fr[n] = (nom0 or nom, typ0 or typ, texte0 or texte)
     if suivi:
@@ -223,10 +250,11 @@ def noms_francais(noms, suivi=True):
     with _verrou:
         for n in a_faire:
             f = cache["cartes"][n]
+            f["fr_v"] = 2
             if n in fr:
                 f["fr"], f["fr_type"], f["fr_texte"] = fr[n]
             else:
-                f["fr"] = f.get("fr") or ""            # "" = pas d'édition française
+                f["fr"] = "" if _simple(f.get("fr") or "") == _simple(n) else (f.get("fr") or "")      # "" : nom anglais
                 f.setdefault("fr_type", "")
                 f.setdefault("fr_texte", "")
     _sauve()

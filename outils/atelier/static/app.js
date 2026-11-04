@@ -232,6 +232,8 @@ async function route() {
 }
 window.addEventListener("hashchange", route);
 
+// « Tymna the Weaver + Thrasios, Triton Hero » : les deux commandants d'un deck à partenaires
+const nomsCommandants = (d) => ((d.commandants && d.commandants.length) ? d.commandants : d.commandant ? [d.commandant] : []).join(" + ");
 const identiteHtml = (ident) => ident == null ? "" : (ident.length ? ident.map(symbole).join("") : symbole("C"));
 
 // decks ouverts récemment (gardés dans ce navigateur) : en tête du sélecteur et du tri « récents »
@@ -246,42 +248,85 @@ async function listeDecks() {
   return etat.decks;
 }
 
-// ------------------------------------------------------------------ « Aller à un deck » (barre du haut, Ctrl+K)
-(function selecteurDecks() {
+// ------------------------------------------------------------------ champ du haut (Ctrl+K) : une carte, comme sur Magic-Ville, ou un deck
+// Le deck de la page (ou celui lié à la recherche) sert à marquer les cartes qu'il contient et à y ajouter la carte choisie.
+function deckDeLaPage() {
+  if (location.hash.startsWith("#/recherche")) return rch.deck || null;
+  if (location.hash.startsWith("#/deck/") && etat.deck) return etat.deck;
+  return null;
+}
+
+(function champDuHaut() {
   const champ = $("#aller"), liste = $("#aller-liste");
-  let items = [], actif = 0;
-  const fermer = () => { liste.hidden = true; champ.value = ""; };
+  let items = [], actif = 0, numero = 0, minuteur;
+  const fermer = () => { liste.hidden = true; champ.value = ""; liste.innerHTML = ""; items = []; numero++; };
   const marque = () => $$(".aller-item", liste).forEach((el, i) => el.classList.toggle("choisi", i === actif));
+  const tous = (q) => {
+    const d = deckDeLaPage();
+    return "#/recherche?" + new URLSearchParams({ nom: q, r: "1", ...(d ? { deck: d.id } : {}) });
+  };
   const rendre = async () => {
-    const ds = await listeDecks();
-    const q = sansAccent(champ.value.trim());
+    const k = ++numero;
+    const brut = champ.value.trim(), q = sansAccent(brut);
+    const deck = deckDeLaPage();
+    const [ds, cartes] = await Promise.all([listeDecks(),
+      q.length >= 2 ? api("/api/recherche/noms?q=" + enc(brut) + (deck ? "&deck=" + enc(deck.id) : "")).catch(() => []) : Promise.resolve([])]);
+    if (k !== numero) return;
     const score = (d) => !q ? 0 : sansAccent(d.titre).startsWith(q) ? 0 : sansAccent(d.titre).includes(q) ? 1 : 2;
-    items = ds.filter((d) => !q || sansAccent(`${d.titre} ${d.commandant || ""}`).includes(q))
-      .sort((a, b) => score(a) - score(b) || recence(b) - recence(a) || a.titre.localeCompare(b.titre)).slice(0, 10);
+    const decksTrouves = ds.filter((d) => !q || sansAccent(`${d.titre} ${nomsCommandants(d)}`).includes(q))
+      .sort((a, b) => score(a) - score(b) || recence(b) - recence(a) || a.titre.localeCompare(b.titre)).slice(0, q ? 4 : 10);
+    items = [...cartes.map((c, i) => ({ carte: c, i, cartes })), ...decksTrouves.map((d) => ({ deck: d }))];
     actif = 0;
-    liste.innerHTML = (items.length ? items.map((d, i) => `
-        <a href="#/deck/${enc(d.id)}" class="aller-item ${i === actif ? "choisi" : ""}" role="option" data-i="${i}">
-          <span class="identite">${identiteHtml(d.identite)}</span>
-          <span class="aller-nom">${esc(d.titre)}</span>
-          <span class="aller-cmd">${esc(d.commandant || "")}</span>
-        </a>`).join("") : `<div class="aller-vide muet petit">Aucun deck ne correspond.</div>`)
-      + `<div class="aller-pied petit"><a href="#/">Tous les decks (${ds.length})</a><span class="muet">↑↓ puis Entrée</span></div>`;
+    const ligneCarte = (it, n) => {
+      const c = it.carte, cher = (c.prix || 0) > 5;
+      return `<button type="button" class="aller-item aller-carte ${n === actif ? "choisi" : ""}" data-n="${n}" role="option"
+          data-image="${esc(c.image)}" data-legende="${esc(`${c.fr || c.nom} — ${prixRch(c)}`)}" ${cher ? 'data-cher="1"' : ""}>
+        <span class="aller-cout">${mana(c.cout)}</span>
+        <span class="aller-nom">${esc(c.fr || c.nom)}${c.fr && c.fr !== c.nom ? ` <span class="aller-vo">${esc(c.nom)}</span>` : ""}</span>
+        <span class="aller-cmd">${esc(c.type_fr || c.type)} · <span class="${cher ? "cher" : ""}">${prixRch(c)}</span>${c.dans ? ` · <span class="ok">${c.dans === "maybe" ? "au Maybeboard" : "dans le deck"}</span>` : ""}</span>
+      </button>`;
+    };
+    const ligneDeck = (it, n) => `<a href="#/deck/${enc(it.deck.id)}" class="aller-item ${n === actif ? "choisi" : ""}" role="option" data-n="${n}">
+        <span class="identite">${identiteHtml(it.deck.identite)}</span>
+        <span class="aller-nom">${esc(it.deck.titre)}</span>
+        <span class="aller-cmd">${esc(nomsCommandants(it.deck))}</span>
+      </a>`;
+    const nc = cartes.length;
+    liste.innerHTML = (q.length >= 2 ? `<div class="aller-section">Cartes${deck ? ` <span class="muet">· ajout à ${esc(deck.titre)}</span>` : ""}</div>` + (nc ? items.slice(0, nc).map(ligneCarte).join("")
+        : `<div class="aller-vide muet petit">Aucune carte ne porte ce nom.</div>`) : "")
+      + (decksTrouves.length ? (q.length >= 2 ? `<div class="aller-section">Decks</div>` : "") + items.slice(nc).map((it, j) => ligneDeck(it, nc + j)).join("") : "")
+      + `<div class="aller-pied petit">${q.length >= 2 ? `<a href="${esc(tous(brut))}">Toutes les cartes « ${esc(brut)} » dans la recherche →</a>` : `<a href="#/">Tous les decks (${ds.length})</a>`}
+          <span class="muet">↑↓ puis Entrée</span></div>`;
     liste.hidden = false;
   };
+  const choisir = (it) => {
+    if (!it) return;
+    if (it.deck) { location.hash = `#/deck/${enc(it.deck.id)}`; fermer(); champ.blur(); return; }
+    fermer();
+    champ.blur();
+    const d = deckDeLaPage();
+    ficheRecherche(it.i, { liste: it.cartes, deck: d });
+  };
   champ.addEventListener("focus", rendre);
-  champ.addEventListener("input", rendre);
+  champ.addEventListener("input", () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 120); });
   champ.addEventListener("keydown", (ev) => {
     if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
       ev.preventDefault();
       if (items.length) { actif = (actif + (ev.key === "ArrowDown" ? 1 : -1) + items.length) % items.length; marque(); }
     } else if (ev.key === "Enter") {
       ev.preventDefault();
-      if (items[actif]) { location.hash = `#/deck/${enc(items[actif].id)}`; fermer(); champ.blur(); }
+      if (items[actif]) choisir(items[actif]);
+      else if (champ.value.trim().length >= 2) { location.hash = tous(champ.value.trim()); fermer(); champ.blur(); }
     } else if (ev.key === "Escape") { fermer(); champ.blur(); }
   });
   liste.addEventListener("mousemove", (ev) => {
     const a = ev.target.closest(".aller-item");
-    if (a && +a.dataset.i !== actif) { actif = +a.dataset.i; marque(); }
+    if (a && +a.dataset.n !== actif) { actif = +a.dataset.n; marque(); }
+  });
+  liste.addEventListener("mousedown", (ev) => { if (ev.target.closest("button.aller-item")) ev.preventDefault(); });
+  liste.addEventListener("click", (ev) => {
+    const b = ev.target.closest("button.aller-item");
+    if (b) choisir(items[+b.dataset.n]);
   });
   document.addEventListener("click", (ev) => {
     if (ev.target.closest(".aller-liste a")) fermer();
@@ -400,7 +445,7 @@ function carteDeck(d, noms) {
       ${d.art ? `<img class="art" src="${esc(d.art)}" alt="" loading="lazy">` : `<div class="art"></div>`}
       <div class="corps">
         <div class="titre">${esc(d.titre)} <span class="identite">${identiteHtml(d.identite)}</span></div>
-        <div class="muet petit">${esc(d.commandant || "pas encore de commandant")}</div>
+        <div class="muet petit">${esc(nomsCommandants(d) || "pas encore de commandant")}</div>
         <div class="chiffres">${chiffresDeck(d)}</div>
         ${d.note ? `<div class="petit muet">${esc(d.note)}</div>` : ""}
         ${contientHtml(noms)}
@@ -419,18 +464,18 @@ function rendreDecks(zone, cartes) {
   const ds = etat.decks.filter((d) => {
     const ident = d.identite || [];
     if (coul.includes("C") ? ident.length > 0 : !coul.every((x) => ident.includes(x))) return false;
-    return !q || sansAccent(`${d.titre} ${d.commandant || ""}`).includes(q) || cartes[d.id];
+    return !q || sansAccent(`${d.titre} ${nomsCommandants(d)}`).includes(q) || cartes[d.id];
   }).sort(TRIS_DECKS[PREF.get("tri-decks", "recent")] || TRIS_DECKS.recent);
   if (!etat.decks.length) { zone.innerHTML = `<p class="muet">Aucun deck pour l'instant : crée le premier avec « Nouveau deck ».</p>`; return; }
   if (!ds.length) { zone.innerHTML = `<p class="muet">Aucun deck ne correspond.</p>`; return; }
   const filtre = q || coul.length;
   const entete = filtre ? `<p class="muet petit">${ds.length} deck${ds.length > 1 ? "s" : ""} sur ${etat.decks.length}</p>` : "";
-  const noms = (d) => sansAccent(`${d.titre} ${d.commandant || ""}`).includes(q) ? null : cartes[d.id];
+  const noms = (d) => sansAccent(`${d.titre} ${nomsCommandants(d)}`).includes(q) ? null : cartes[d.id];
   if (PREF.get("vue-decks", "grille") === "liste") {
     zone.innerHTML = entete + `<table class="tableau tableau-decks">
       <thead><tr><th>Deck</th><th>Couleurs</th><th class="num">Cartes</th><th class="num">Prix</th><th class="num">Game Changers</th><th class="num">Modifié</th></tr></thead>
       <tbody>${ds.map((d) => `<tr data-deck="${esc(d.id)}">
-        <td><a href="#/deck/${enc(d.id)}"><strong>${esc(d.titre)}</strong></a><div class="muet petit">${esc(d.commandant || "pas encore de commandant")}</div>${contientHtml(noms(d))}</td>
+        <td><a href="#/deck/${enc(d.id)}"><strong>${esc(d.titre)}</strong></a><div class="muet petit">${esc(nomsCommandants(d) || "pas encore de commandant")}</div>${contientHtml(noms(d))}</td>
         <td><span class="identite">${identiteHtml(d.identite)}</span></td>
         <td class="num ${d.total === 100 ? "" : "alerte-texte"}">${d.total}${d.maybe ? `<div class="muet petit">+${d.maybe} maybe</div>` : ""}</td>
         <td class="num">${euros(d.prix_total)}</td>
@@ -505,7 +550,7 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
       <div class="infos">
         <div>
           <h1>${esc(d.titre)}</h1>
-          <div class="muet"><span data-image="${esc(d.image_cmd)}">${esc(d.commandant || "pas encore de commandant")}</span>
+          <div class="muet"><span data-image="${esc(d.image_cmd)}">${esc(nomsCommandants(d) || "pas encore de commandant")}</span>
             ${d.identite ? `<span class="identite" title="Identité de couleur du commandant">${d.identite.length ? d.identite.map(symbole).join("") : symbole("C")}</span>` : ""}</div>
           <div class="chiffres" style="margin-top:.5rem">${chiffresDeck(d)}</div>
         </div>
@@ -562,6 +607,9 @@ const LIBELLE_SIM = {
 };
 const TITRE_ALERTE = {
   "hors couleurs": "Une de ses couleurs n'est pas dans l'identité de ton commandant : interdite dans ce deck",
+  "ne peut pas être commandant": "Seules les créatures légendaires (et quelques planeswalkers, véhicules ou vaisseaux qui le disent) peuvent être commandant",
+  "partenaires incompatibles": "Deux commandants seulement s'ils vont ensemble : Partner (ou Partner with l'autre), Friends forever, Historique (Choose a Background), compagnon du Docteur",
+  "trop de commandants": "Un commandant, ou deux s'ils sont partenaires",
   "en double": "Une seule copie par carte en Commander (sauf les terrains de base et les cartes qui le permettent)",
   "interdite": "Carte bannie en Commander",
   "non légale": "Carte non légale en Commander (carte Un-, Alchimie…)",
@@ -747,6 +795,33 @@ function carteVisuelle(c) {
   </div>`;
 }
 
+// recto-verso : un bouton sous l'image pour retourner la carte (Delver, Valakut Awakening…)
+function boutonVerso(dos) {
+  if (!dos || !dos.image) return "";
+  return `<button type="button" class="lien-discret fc-retourner" data-act="retourner" title="${esc(dos.nom)} · ${esc(dos.type || "")}">↻ Voir le verso</button>`;
+}
+
+function retournerCarte(boite) {
+  const img = $(".fc-image img", boite), b = $('[data-act="retourner"]', boite);
+  if (!img || !img.dataset.verso) return;
+  const verso = img.src !== img.dataset.verso;
+  img.src = verso ? img.dataset.verso : img.dataset.recto;
+  b.textContent = verso ? "↻ Voir le recto" : "↻ Voir le verso";
+}
+
+// cartes qui s'assemblent (Bruna + Gisela = Brisela)
+function assembleHtml(a) {
+  if (!a || !a.resultat) return "";
+  return a.est_resultat
+    ? `<p class="note petit">Carte formée en assemblant ${a.pieces.map(esc).join(" et ")} : elle ne se met pas dans un deck.</p>`
+    : `<p class="note petit">S'assemble avec <strong>${a.pieces.map(esc).join(" et ")}</strong> pour former <strong>${esc(a.resultat)}</strong> : il faut les deux dans le deck.</p>`;
+}
+
+document.addEventListener("click", (ev) => {
+  const b = ev.target.closest('#modale [data-act="retourner"]');
+  if (b) { ev.stopPropagation(); retournerCarte(b.closest(".fiche-carte")); }
+}, true);
+
 // fiche d'une carte (clic gauche sur une carte, en liste ou en visuel) : grande image, texte, prix, tags et actions
 function ouvrirCarte(c) {
   if (!c) return;
@@ -756,13 +831,16 @@ function ouvrirCarte(c) {
   const pos = ordre.indexOf(c.index);
   const maybe = c.tags.includes("Maybeboard");
   const cmd = c.cat === "Commander";
-  const legendaire = /Legendary|Background/.test(f.type || "") || /can be your commander/i.test(f.texte || "");
+  const legendaire = f.peut_commander != null ? f.peut_commander
+    : /Legendary Creature|Background/.test(f.type || "") || /can be your commander/i.test(f.texte || "");
+  const second = !cmd && (d.commandants || []).length === 1;              // il y a déjà un commandant : celle-ci serait le second
   const sim = c.sim && LIBELLE_SIM[c.sim.classe];
   const cher = (f.prix || 0) > 5;
   const tags = c.tags.filter((t) => t !== "Maybeboard" && t !== "Commander");
   ouvrirModale(`
     <div class="fiche-carte">
-      <div class="fc-image">${f.image ? `<img src="${esc(f.image)}" alt="${esc(c.nom)}">` : `<div class="sans-image">${esc(c.nom)}</div>`}${lienVersion(c.version)}</div>
+      <div class="fc-image">${f.image ? `<img src="${esc(f.image)}" alt="${esc(c.nom)}" data-recto="${esc(f.image)}" data-verso="${esc((f.dos && f.dos.image) || "")}">` : `<div class="sans-image">${esc(c.nom)}</div>`}
+        ${boutonVerso(f.dos)}${lienVersion(c.version)}</div>
       <div class="fc-infos">
         <div class="fc-tete">
           <div><h2>${esc(c.nom)} ${mana(f.cout)}</h2>${f.fr && f.fr !== c.nom ? `<div class="muet">${esc(f.fr)}</div>` : ""}</div>
@@ -770,28 +848,35 @@ function ouvrirCarte(c) {
         </div>
         <div class="petit muet">${esc(f.fr_type || f.type || "")}${f.pt ? " · " + esc(f.pt) : ""}${cmd ? " · commandant" : maybe ? " · Maybeboard (hors deck)" : ""}</div>
         <div class="chiffres">
-          ${f.prix_lien ? `<a class="badge ${cher ? "badge-cher" : ""}" href="${esc(f.prix_lien)}" target="_blank" rel="noopener" title="Voir sur Cardmarket">${euros(f.prix)}${f.prix_edition ? ` · ${esc(f.prix_edition)}` : ""} · Cardmarket ↗</a>`
-            : `<span class="badge">${euros(f.prix)}</span>`}
-          <a class="badge" href="${esc(f.gatherer || lienGatherer(c.nom))}" target="_blank" rel="noopener" title="La carte sur Gatherer, le site officiel de Wizards">Gatherer ↗</a>
+          <span class="badge ${cher ? "badge-cher" : ""}" title="Le moins cher, toutes éditions (prix Cardmarket du jour)">${euros(f.prix)}${f.prix_edition ? ` · ${esc(f.prix_edition)}` : ""}</span>
           ${f.gc ? `<span class="badge badge-gc">Game Changer</span>` : ""}
           ${badgesAlerte(c)}
           ${sim ? `<span class="badge badge-sim" title="${esc(sim[1] + (c.sim.non_lu.length ? " :\n• " + c.sim.non_lu.join("\n• ") : ""))}">${sim[0]}</span>` : ""}
         </div>
+        ${assembleHtml(f.assemble)}
         ${f.fr_texte || f.texte ? `<div class="texte fs-texte">${(f.fr_texte || f.texte).split("\n").map((l) => l.trim() === "//" ? "<hr>" : l.trim() ? `<p>${texteMana(l)}</p>` : "").join("")}</div>` : ""}
         ${f.fr_texte && f.texte ? `<details class="petit"><summary>Texte anglais (Oracle)</summary><div class="fs-texte" style="margin-top:.4rem">${f.texte.split("\n").map((l) => l.trim() === "//" ? "<hr>" : `<p>${texteMana(l)}</p>`).join("")}</div></details>` : ""}
         ${cmd ? "" : `
           <div class="fc-ligne"><span class="petit muet">Tags</span>
             ${tags.length ? tags.map((t, i) => `<span class="puce ${i === 0 ? "puce-1" : ""}">${i === 0 ? "★ " : ""}${esc(t)}</span>`).join("") : `<span class="muet petit">aucun</span>`}
             <button class="btn btn-petit" data-act="tags">Modifier</button></div>
+          ${c.n > 1 || plusieursExemplaires({ type: f.type, texte: f.texte }) ? `
           <div class="fc-ligne"><label class="petit muet" for="fc-n">Exemplaires</label>
-            <input class="champ champ-petit" type="number" id="fc-n" min="1" max="99" value="${c.n}" style="width:4.5rem"></div>`}
-        <div class="fc-actions">
-          <button class="btn" data-act="remplacer">Remplacer… (même place)</button>
-          <a class="btn" href="#/deck/${enc(d.id)}/combos/${enc(c.nom)}">Combos avec cette carte</a>
-          ${cmd ? "" : `<button class="btn" data-act="maybe">${maybe ? "Remettre dans le deck" : "Passer en Maybeboard"}</button>`}
-          ${cmd ? `<button class="btn" data-act="cmd">Ne plus en faire le commandant</button>`
-            : !maybe && legendaire ? `<button class="btn" data-act="cmd">Définir comme commandant</button>` : ""}
-          <button class="btn btn-danger" data-act="retirer">Retirer du deck</button>
+            <input class="champ champ-petit" type="number" id="fc-n" min="1" max="99" value="${c.n}" style="width:4.5rem"></div>` : ""}`}
+        <div class="fc-bloc-actions" role="group" aria-label="Actions sur la carte">
+          <span class="petit muet">Dans ce deck</span>
+          <div class="fc-actions">
+            ${cmd ? "" : `<button class="btn btn-petit" data-act="maybe">${maybe ? "Remettre dans le deck" : "Passer en Maybeboard"}</button>`}
+            <button class="btn btn-petit" data-act="remplacer">Remplacer… (même place)</button>
+            ${cmd ? `<button class="btn btn-petit" data-act="cmd">Ne plus en faire le commandant</button>`
+              : !maybe && legendaire && (d.commandants || []).length < 2 && (!second || f.partenaire !== false) ? `<button class="btn btn-petit" data-act="cmd">${second ? "Ajouter comme second commandant" : "Définir comme commandant"}</button>` : ""}
+            <button class="btn btn-petit btn-danger fc-retirer" data-act="retirer">Retirer du deck</button>
+          </div>
+        </div>
+        <div class="fc-liens">
+          <a href="#/deck/${enc(d.id)}/combos/${enc(c.nom)}">Combos avec cette carte →</a>
+          <a href="${esc(f.prix_lien || lienCardmarket(c.nom))}" target="_blank" rel="noopener">Cardmarket ↗</a>
+          <a href="${esc(f.gatherer || lienGatherer(c.nom))}" target="_blank" rel="noopener" title="La carte sur Gatherer, le site officiel de Wizards">Gatherer ↗</a>
         </div>
         ${pos >= 0 && ordre.length > 1 ? `
           <div class="fc-nav">
@@ -1210,6 +1295,8 @@ function calculStats(d) {
   const bib = jeu.filter((c) => c.cat !== "Commander");            // les 99 : ce qu'on pioche
   const sorts = bib.filter((c) => !estTerrain(c));
   const terrains = bib.filter(estTerrain);
+  // sorts recto-verso dont le verso est un terrain (Valakut Awakening) : comptés comme sorts, comme Archidekt, mais signalés
+  const mdfc = sorts.filter((c) => c.info.dos && /\bLand\b/.test(c.info.dos.type || ""));
   const types = ORDRE_TYPES.map((t) => [t, bib.filter((c) => typeCarte(c.info.type) === t)]).filter(([, l]) => l.length);
   const courbe = Array.from({ length: 8 }, (_, k) => sorts.filter((c) => Math.min(7, Math.floor(c.info.mv || 0)) === k));
   const pips = (c, x) => ((c.info.cout || "").match(/\{[^}]+\}/g) || []).filter((s) => s.includes(x)).length;
@@ -1223,7 +1310,7 @@ function calculStats(d) {
   const incolores = sorts.filter((c) => !COULEURS.some(([x]) => pips(c, x) > 0));
   const n = nbCartes(sorts);
   const mvMoy = n ? sorts.reduce((s, c) => s + (c.info.mv || 0) * c.n, 0) / n : 0;
-  return { jeu, bib, sorts, terrains, types, courbe, couleurs, incolores, mvMoy };
+  return { jeu, bib, sorts, terrains, mdfc, types, courbe, couleurs, incolores, mvMoy };
 }
 
 // histogramme en colonnes : une seule série, barres fines arrondies en haut, valeur au-dessus, cartes au survol
@@ -1301,7 +1388,7 @@ function ongletStats(el, d) {
     <p class="muet petit">Calculées sur les ${N} cartes de la bibliothèque (sans le commandant ni le Maybeboard). Survole un graphique pour voir les cartes.</p>
     <div class="tuiles">
       ${tuile("Cartes", `${d.total} / 100`, `${N - K} sorts · ${K} terrains`)}
-      ${tuile("Terrains", K, "repère : 37-38, avec ~10 ramp")}
+      ${tuile("Terrains", K, "repère : 37-38, avec ~10 ramp" + (S.mdfc.length ? ` · + ${nbCartes(S.mdfc)} sort${nbCartes(S.mdfc) > 1 ? "s" : ""} recto-verso à verso terrain (${esc(S.mdfc.map(nomAffiche).join(", "))})` : ""))}
       ${tuile("Coût moyen", virgule(S.mvMoy, 2), "des sorts, sans les terrains")}
       ${p24 == null ? "" : tuile("Main de départ", pct(p24, 0), "de chances d'avoir 2 à 4 terrains en 7 cartes")}
       ${tuile("Prix", euros(d.prix_total), "prix Cardmarket du jour")}
@@ -2100,7 +2187,11 @@ const RCH_RARETES = [["M", "Mythique"], ["R", "Rare"], ["U", "Inhabituelle"], ["
 const RCH_TRIS = [["couleur", "Couleur"], ["nom", "Nom VO"], ["nomfr", "Nom VF"], ["type", "Type"], ["cout", "Coût"], ["prix", "Prix"],
   ["pop", "Popularité"], ["date", "Nouveautés"]];
 const RCH_TRI_DESC = { date: true };                 // sens naturel : les plus récentes d'abord
+// fonctions proposées d'un clic ; les autres (4 600 étiquettes de Scryfall Tagger) se cherchent dans le champ
+const FN_RAPIDES = ["ramp", "pioche", "tuteur", "spot", "balayage", "contresort", "recursion", "reanimation", "sacrifice", "mort",
+  "jetons", "celerite", "burn", "defausse", "wheel", "protection", "blink"];
 const RCH_GC = [["", "Game Changers : indifférent"], ["sans", "Sans Game Changer"], ["seul", "Game Changers seulement"]];
+const RCH_CMD = [["", "Commandant : indifférent"], ["peut", "Peut être commandant"], ["duo", "Partenaires et Historiques (deux commandants)"]];
 const RCH_RARETE_NOM = { c: "commune", u: "inhabituelle", r: "rare", m: "mythique", s: "spéciale", b: "bonus" };
 const rch = { crit: null, deck: null, res: null, editions: null, fonctions: null, ouvert: true, numero: 0, journal: {} };
 
@@ -2157,7 +2248,6 @@ function rchNombres(titre, cle, x, c) {
 
 function formulaireRecherche(c) {
   const d = rch.deck;
-  const fonctions = [["", "Fonction : toutes"], ...(rch.fonctions || []).map((f) => [f.cle, f.nom])];
   return `<form id="moteur" class="moteur" autocomplete="off">
     <div class="mt-nom">
       <input class="champ" name="nom" type="search" value="${esc(c.nom || "")}" placeholder="Titre : nom de la carte, en français ou en anglais…" aria-label="Titre de la carte">
@@ -2204,10 +2294,20 @@ function formulaireRecherche(c) {
           <label>Prix min ${rchChamp("prixmin", c, 'inputmode="decimal" size="4"')} €</label>
           <button type="button" class="btn btn-petit" data-act="budget" title="Ton budget habituel">≤ 5 €</button>
         </div>
-        ${rchSelect("fn", fonctions, c)}
         ${rchSelect("gc", RCH_GC, c)}
+        ${rchSelect("cmd", RCH_CMD, c)}
         ${d ? rchCase("horsdeck", `Pas déjà dans ${esc(d.titre)}`, c) : ""}
-        <p class="petit muet rch-aide">Fonctions : classement Scryfall Tagger (removal, ramp, pioche…). Prix : le moins cher, toutes éditions.</p>
+        <p class="petit muet rch-aide">Prix : le moins cher, toutes éditions (Cardmarket).</p>
+      </section>
+      <section class="fen fen-fonctions"><h3 class="fen-titre">Fonctions (Scryfall Tagger)</h3>
+        <div id="fn-choisies" class="puces"></div>
+        <div class="fn-champ">
+          <input class="champ champ-petit" id="fn-q" type="search" autocomplete="off" placeholder="Chercher une fonction : pinger, sacrifice, défausse, token…"
+            aria-label="Chercher une fonction" role="combobox" aria-expanded="false" aria-controls="fn-liste" aria-autocomplete="list">
+          <div id="fn-liste" class="fn-liste" role="listbox" hidden></div>
+        </div>
+        <div class="rch-bascules fn-rapides">${FN_RAPIDES.map((k) => `<button type="button" class="rch-bascule" data-fn="${k}">${esc(nomFn(k, true))}</button>`).join("")}</div>
+        <p class="petit muet rch-aide">Classement fait à la main par la communauté de Scryfall (tagger.scryfall.com), sous-fonctions comprises. Plusieurs fonctions : la carte doit les avoir toutes.</p>
       </section>
       <section class="fen fen-editions"><h3 class="fen-titre">Éditions</h3>
         <div class="eds-tete">
@@ -2226,7 +2326,8 @@ function formulaireRecherche(c) {
 function lireFormulaire(form) {
   const c = {};
   const val = (n) => (form.elements[n] ? form.elements[n].value.trim() : "");
-  for (const n of ["nom", "type", "texte", "cout", "mv", "mvmax", "mvmin", "f", "fmax", "fmin", "e", "emax", "emin", "prixmax", "prixmin", "spe", "spt", "fn", "gc"]) c[n] = val(n);
+  for (const n of ["nom", "type", "texte", "cout", "mv", "mvmax", "mvmin", "f", "fmax", "fmin", "e", "emax", "emin", "prixmax", "prixmin", "spe", "spt", "gc", "cmd"]) c[n] = val(n);
+  c.fn = (rch.fns || []).join(",");
   for (const n of ["fr", "en", "vanilla", "seules", "id", "mvx", "pair", "impair", "fx", "ex", "img", "versions", "fun", "neuves", "horsdeck"]) {
     const el = form.elements[n];
     c[n] = el && el.checked ? "1" : "";
@@ -2234,7 +2335,7 @@ function lireFormulaire(form) {
   c.cm = (form.querySelector('input[name="cm"]:checked') || {}).value || "1";
   c.tm = (form.querySelector('input[name="tm"]:checked') || {}).value || "1";
   c.types = $$('input[name="types"]:checked', form).map((x) => x.value).join(",");
-  for (const g of $$(".rch-symboles, .rch-bascules", form)) {
+  for (const g of $$(".rch-symboles[data-groupe], .rch-bascules[data-groupe]", form)) {
     const on = $$(".actif", g).map((b) => b.dataset.k);
     c[g.dataset.groupe] = g.dataset.unique ? (on[0] || "") : on.join("");
   }
@@ -2289,8 +2390,9 @@ function resumeCrit(c) {
   if (c.rar) r.push([...c.rar].map((k) => (RCH_RARETES.find((x) => x[0] === k) || [k, k])[1]).join(", "));
   if (c.eds) r.push(`${c.neuves === "1" ? "Nouvelles cartes de " : "Éditions : "}${c.eds.split(",").map((e) => e.toUpperCase()).join(", ")}`);
   if (c.prixmax || c.prixmin) r.push(`Prix ${c.prixmin ? "≥ " + c.prixmin + " € " : ""}${c.prixmax ? "≤ " + c.prixmax + " €" : ""}`.trim());
-  if (c.fn) r.push("Fonction : " + (((rch.fonctions || []).find((f) => f.cle === c.fn) || {}).nom || c.fn));
+  if (c.fn) r.push("Fonctions : " + c.fn.split(",").map((k) => nomFn(k, true)).join(" + "));
   if (c.gc) r.push((RCH_GC.find((g) => g[0] === c.gc) || ["", c.gc])[1]);
+  if (c.cmd) r.push((RCH_CMD.find((g) => g[0] === c.cmd) || ["", c.cmd])[1]);
   if (c.horsdeck === "1") r.push("pas déjà dans le deck");
   if (c.versions === "1") r.push("toutes les versions");
   if (c.fun === "1") r.push("cartes fantaisie");
@@ -2326,6 +2428,7 @@ async function vueRecherche(params) {
   if (neuve && rch.deck && rch.deck.identite) Object.assign(c, critIdentite(rch.deck));    // nouvelle recherche pour un deck : ses couleurs
   rch.crit = c;
   rch.eds = new Set((c.eds || "").split(",").filter(Boolean));
+  rch.fns = (c.fn || "").split(",").filter(Boolean);
   rch.ouvert = c.r !== "1" || rch.ouvrir === true;
   rch.ouvrir = false;
   vue.innerHTML = `
@@ -2395,7 +2498,7 @@ function rendreFormulaire() {
     if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey) && ev.target.name === "texte") { ev.preventDefault(); soumettre(form); }
   });
   form.addEventListener("click", (ev) => {
-    const s = ev.target.closest(".rch-sym, .rch-bascule");
+    const s = ev.target.closest(".rch-sym, .rch-bascule:not([data-fn])");
     if (s) {
       const g = s.closest("[data-groupe]");
       if (["doit", "peut", "mult"].includes(g.dataset.groupe)) return basculeMana(form, g.dataset.groupe, s.dataset.k);
@@ -2421,6 +2524,7 @@ function rendreFormulaire() {
     }
   });
   rendreEditions();
+  fenetreFonctions(form);
 }
 
 function nouvelleRecherche() {
@@ -2428,6 +2532,7 @@ function nouvelleRecherche() {
   if (rch.deck && rch.deck.identite) Object.assign(c, critIdentite(rch.deck));
   rch.crit = c;
   rch.eds = new Set();
+  rch.fns = [];
   rch.ouvert = true;
   rch.res = null;
   history.replaceState(null, "", "#/recherche?" + critVersHash(c));
@@ -2440,6 +2545,73 @@ function soumettre(form) {
   const c = { ...lireFormulaire(form), deck: rch.crit.deck || "", ordre: rch.crit.ordre, sens: rch.crit.sens || "", vue: rch.crit.vue || "", r: "1" };
   if (!rch.deck) delete c.horsdeck;
   location.hash = "#/recherche?" + critVersHash(c);
+}
+
+// ---- fenêtre Fonctions : les étiquettes de Scryfall Tagger (fonctions traduites d'abord, puis toutes les autres)
+function nomFn(k, court = false) {
+  const nom = (rch.fnNoms && rch.fnNoms[k]) || ((rch.fonctions || []).find((f) => f.cle === k) || {}).nom || k.replace(/-/g, " ");
+  return court ? nom.split(" (")[0] : nom;
+}
+
+function fenetreFonctions(form) {
+  const champ = $("#fn-q", form), liste = $("#fn-liste", form);
+  if (!champ) return;
+  rch.fnNoms = rch.fnNoms || {};
+  let items = [], actif = -1, numero = 0, minuteur;
+  const rendreChoix = () => {
+    $("#fn-choisies", form).innerHTML = rch.fns.map((k) => `<span class="puce puce-1"><span class="puce-nom">${esc(nomFn(k, true))}</span>
+      <button type="button" data-fn-ote="${esc(k)}" aria-label="Retirer ${esc(nomFn(k, true))}">✕</button></span>`).join("");
+    $$("[data-fn]", form).forEach((b) => { const on = rch.fns.includes(b.dataset.fn); b.classList.toggle("actif", on); b.setAttribute("aria-pressed", on); });
+  };
+  const fermer = () => { liste.hidden = true; champ.setAttribute("aria-expanded", "false"); actif = -1; };
+  const marque = () => $$(".fn-item", liste).forEach((el, i) => el.classList.toggle("choisi", i === actif));
+  const ajoute = (it) => {
+    rch.fnNoms[it.cle] = it.nom;
+    if (!rch.fns.includes(it.cle)) rch.fns.push(it.cle);
+    champ.value = "";
+    fermer();
+    rendreChoix();
+  };
+  const chercher = async () => {
+    const k = ++numero;
+    let r;
+    try { r = await api("/api/recherche/tags?q=" + enc(champ.value)); } catch (_) { return; }
+    if (k !== numero || document.activeElement !== champ) return;
+    items = r.filter((it) => !rch.fns.includes(it.cle));
+    actif = items.length ? 0 : -1;
+    liste.innerHTML = items.length ? items.map((it, i) => `<button type="button" class="fn-item ${i === actif ? "choisi" : ""}" data-i="${i}" role="option">
+        <span class="fn-nom">${esc(it.nom)}${it.fr ? "" : ` <span class="muet">(${esc(it.cle)})</span>`}</span>
+        <span class="fn-nb">${sepMilliers(it.nb)} carte${it.nb > 1 ? "s" : ""}</span>
+        ${it.desc ? `<span class="fn-desc">${esc(it.desc)}</span>` : ""}</button>`).join("")
+      : `<div class="fn-vide muet petit">Aucune fonction ne correspond. Les fonctions de Scryfall Tagger sont en anglais : pinger, sacrifice, token…</div>`;
+    liste.hidden = false;
+    champ.setAttribute("aria-expanded", "true");
+  };
+  champ.addEventListener("focus", chercher);
+  champ.addEventListener("input", () => { clearTimeout(minuteur); minuteur = setTimeout(chercher, 150); });
+  champ.addEventListener("keydown", (ev) => {
+    if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+      ev.preventDefault();
+      if (items.length) { actif = (actif + (ev.key === "ArrowDown" ? 1 : -1) + items.length) % items.length; marque(); $$(".fn-item", liste)[actif]?.scrollIntoView({ block: "nearest" }); }
+    } else if (ev.key === "Enter" && !liste.hidden && items[actif]) {
+      ev.preventDefault();
+      ajoute(items[actif]);
+    } else if (ev.key === "Escape") fermer();
+  });
+  liste.addEventListener("mousedown", (ev) => ev.preventDefault());          // le champ garde le focus
+  liste.addEventListener("click", (ev) => { const b = ev.target.closest(".fn-item"); if (b) ajoute(items[+b.dataset.i]); });
+  champ.addEventListener("blur", () => setTimeout(fermer, 100));
+  form.addEventListener("click", (ev) => {
+    const o = ev.target.closest("[data-fn-ote]");
+    if (o) { rch.fns = rch.fns.filter((k) => k !== o.dataset.fnOte); return rendreChoix(); }
+    const b = ev.target.closest("[data-fn]");
+    if (b) {
+      const k = b.dataset.fn;
+      rch.fns = rch.fns.includes(k) ? rch.fns.filter((x) => x !== k) : [...rch.fns, k];
+      rendreChoix();
+    }
+  });
+  rendreChoix();
 }
 
 // ---- fenêtre Éditions : une recherche plutôt que 400 cases à cocher
@@ -2506,6 +2678,7 @@ async function lancerRecherche() {
     return;
   }
   if (k !== rch.numero) return;
+  if (c.versions === "1") r.cartes.forEach((x) => { x.versionLigne = true; });
   rch.res = r;
   memoriser();
   rendreResultats(z, r);
@@ -2645,7 +2818,7 @@ async function majBase(zone, lancer) {
 const prixRch = (x) => (x.prix == null ? "—" : euros(x.prix) + (x.foil ? " (foil)" : ""));
 const lienCardmarket = (nom) => `https://www.cardmarket.com/fr/Magic/Products/Search?searchString=${enc(ic_cle(nom))}`;
 const ic_cle = (nom) => nom.split(" // ")[0];
-const horsCouleurs = (x) => !!(rch.deck && rch.deck.identite && x.couleurs.some((k) => !rch.deck.identite.includes(k)));
+const horsCouleurs = (x, d = rch.deck) => !!(d && d.identite && x.couleurs.some((k) => !d.identite.includes(k)));
 
 function etatDeckRch(x) {
   if (!rch.deck) return "";
@@ -2655,11 +2828,11 @@ function etatDeckRch(x) {
     ${x.dans === "maybe" ? "" : `<button type="button" class="btn btn-petit btn-discret" data-act="maybe" title="Ajouter au Maybeboard de ${esc(rch.deck.titre)}">+ Maybe</button>`}`;
 }
 
-function badgesRch(x) {
+function badgesRch(x, d = rch.deck) {
   return [
     x.gc ? `<span class="badge badge-gc" title="Game Changer : compte dans le bracket">Game Changer</span>` : "",
     x.legal ? "" : `<span class="badge badge-alerte" title="Pas légale en Commander">non légale en Commander</span>`,
-    horsCouleurs(x) ? `<span class="badge badge-alerte" title="Hors de l'identité de couleur de ${esc(rch.deck.titre)}">hors couleurs</span>` : "",
+    horsCouleurs(x, d) ? `<span class="badge badge-alerte" title="Hors de l'identité de couleur de ${esc(d.titre)}">hors couleurs</span>` : "",
   ].join("");
 }
 
@@ -2724,9 +2897,9 @@ function survolRecherche(x) {
 }
 
 // ---- ajouter au deck lié
-async function ajouterRecherche(x, { maybe = false, tags = [], n = 1, edition = null } = {}) {
-  const d = rch.deck;
-  if (!d) { toast("Choisis d'abord un deck, en haut de la page."); $("#rch-deck").focus(); return null; }
+async function ajouterRecherche(x, { maybe = false, tags = [], n = 1, edition = null, deck = rch.deck } = {}) {
+  const d = deck;
+  if (!d) { toast("Choisis d'abord un deck, en haut de la page."); $("#rch-deck")?.focus(); return null; }
   try {
     let res;
     if (!maybe && x.dans === "maybe") {                    // déjà au Maybeboard : la carte passe dans le deck
@@ -2735,28 +2908,44 @@ async function ajouterRecherche(x, { maybe = false, tags = [], n = 1, edition = 
       res = c ? await api(`/api/decks/${enc(d.id)}/modifier`, { method: "POST", body: { op: "maybeboard", index: c.index, nom_actuel: c.nom } }) : null;
     }
     if (!res) {
-      const ed = edition || (rch.crit.versions === "1" && x.edition ? { set: x.edition.set, num: x.edition.num, lang: "en", nom_edition: x.edition.nom } : null);
+      const ed = edition || (x.versionLigne && x.edition ? { set: x.edition.set, num: x.edition.num, lang: "en", nom_edition: x.edition.nom } : null);
       res = await api(`/api/decks/${enc(d.id)}/modifier`, { method: "POST", body: { op: "ajouter", nom: x.nom, tags: maybe ? ["Maybeboard", ...tags] : tags, n, edition: ed } });
     }
     if (!maybe || x.dans !== "deck") x.dans = maybe ? (x.dans || "maybe") : "deck";
-    Object.assign(rch.deck, { total: res.total, maybe: res.maybe, modifie: res.modifie });
     const nomJ = x.fr || x.nom, j = (rch.journal[d.id] = (rch.journal[d.id] || []).filter((t) => t !== nomJ + " (Maybeboard)"));
     j.unshift(nomJ + (maybe ? " (Maybeboard)" : ""));
     etat.decks = [];
-    majInfosDeck();
-    remplacerResultat(x);
+    if (rch.deck && rch.deck.id === d.id) {                 // la page Recherche : compteur du deck et ligne du résultat
+      Object.assign(rch.deck, { total: res.total, maybe: res.maybe, modifie: res.modifie });
+      majInfosDeck();
+      remplacerResultat(x);
+    }
+    majDeckOuvert(res);
     toast(`✓ ${x.fr || x.nom} : ${maybe ? "Maybeboard de" : "ajoutée à"} ${d.titre} · ${res.total} carte${res.total > 1 ? "s" : ""}`);
     return res;
   } catch (e) { erreur(e); return null; }
 }
 
 function remplacerResultat(x) {
-  const i = rch.res.cartes.indexOf(x);
+  if (!rch.res) return;
+  const i = rch.res.cartes.findIndex((y) => y === x || y.nom === x.nom);
   const el = $(`#rch-resultats [data-i="${i}"]`);
-  if (!el) return;
+  if (i < 0 || !el) return;
+  rch.res.cartes[i].dans = x.dans;
   const t = document.createElement("div");
-  t.innerHTML = rch.crit.vue === "images" ? carteImageRch(x, i) : ligneRch(x, i);
+  t.innerHTML = rch.crit.vue === "images" ? carteImageRch(rch.res.cartes[i], i) : ligneRch(rch.res.cartes[i], i);
   el.replaceWith(t.firstElementChild);
+}
+
+// le deck affiché sous la fiche : on le redessine avec la carte ajoutée (liste et statistiques)
+function majDeckOuvert(res) {
+  const parts = location.hash.replace(/^#\/?/, "").split("/");
+  if (parts[0] !== "deck" || decodeURIComponent(parts[1] || "") !== res.id) return;
+  const onglet = parts[2] || "liste";
+  if (onglet === "liste" || onglet === "stats") {
+    const y = scrollY;
+    vueDeck(res.id, onglet, null, res).then(() => scrollTo(0, y));
+  } else etat.deck = res;
 }
 
 // une carte peut-elle être en plusieurs exemplaires dans un deck Commander ? (terrains de base, Relentless Rats…)
@@ -2769,8 +2958,9 @@ function blocAjoutRch(x, d) {
   const dans = x.dans === "deck" || x.dans === "commandant";
   const multi = plusieursExemplaires(x);
   if (dans && !multi) {
+    const ici = etat.deck && etat.deck.id === d.id && location.hash.startsWith("#/deck/");
     return `<div class="rf-ajout rf-deja"><span class="ok">✓ ${x.dans === "commandant" ? "Commandant de" : "Déjà dans"} ${esc(d.titre)}</span>
-      <a href="#/deck/${enc(d.id)}">Ouvrir le deck</a></div>`;
+      ${ici ? `<button type="button" class="lien-discret" data-act="fiche-deck">Voir sa fiche dans le deck</button>` : `<a href="#/deck/${enc(d.id)}">Ouvrir le deck</a>`}</div>`;
   }
   const promotion = x.dans === "maybe";
   const dest = promotion ? "deck" : PREF.get("rf-dest", "deck");
@@ -2797,18 +2987,19 @@ function libelleAjout(x, dest) {
 }
 
 // ---- fiche d'une carte trouvée : grande image, textes, prix du jour, versions, ajout au deck
-function ficheRecherche(i) {
-  const liste = rch.res.cartes;
+function ficheRecherche(i, ctx = null) {
+  const liste = ctx ? ctx.liste : rch.res.cartes;
   const x = liste[i];
   if (!x) return;
-  const d = rch.deck;
+  const d = ctx ? ctx.deck : rch.deck;
   const v = x.versionChoisie || null;
   const image = (v && v.image) || x.image;
   const cher = (x.prix || 0) > 5;
   const texte = (t) => (t || "").split("\n").map((l) => l.trim() === "//" ? "<hr>" : l.trim() ? `<p>${texteMana(l)}</p>` : "").join("");
   ouvrirModale(`
     <div class="fiche-carte">
-      <div class="fc-image">${image ? `<img src="${esc(image)}" alt="${esc(x.nom)}">` : `<div class="sans-image">${esc(x.nom)}</div>`}
+      <div class="fc-image">${image ? `<img src="${esc(image)}" alt="${esc(x.nom)}" data-recto="${esc(image)}" data-verso="${esc(v ? "" : x.image_dos || "")}">` : `<div class="sans-image">${esc(x.nom)}</div>`}
+        ${v ? "" : boutonVerso(x.image_dos ? { image: x.image_dos, nom: "", type: "" } : null)}
         <div class="fc-version">
           ${v ? `<span class="petit muet">${esc(v.edition)}${v.annee ? " · " + esc(v.annee) : ""}${v.lang === "fr" ? " · en français" : ""}</span>` : x.edition ? `<span class="petit muet">${esc(x.edition.nom)} · ${esc(x.edition.annee)}</span>` : ""}
           <button type="button" class="lien-discret" data-act="version">${x.versions > 1 ? `Les ${x.versions} versions (visuel)` : "Changer la version (visuel)"}</button>
@@ -2821,21 +3012,22 @@ function ficheRecherche(i) {
         <div class="petit muet">${esc(x.type_fr || x.type)}${x.pt ? " · " + esc(x.pt) : ""}</div>
         <div class="chiffres" id="rf-prix">
           <span class="badge ${cher ? "badge-cher" : ""}" id="rf-prix-badge" title="Le moins cher, toutes éditions (prix Cardmarket du jour)">${prixRch(x)}</span>
-          ${badgesRch(x)}
+          ${badgesRch(x, d)}
           ${x.dans === "maybe" ? `<span class="badge">au Maybeboard</span>` : ""}
         </div>
+        <div id="rf-assemble"></div>
         ${x.texte_fr || x.texte ? `<div class="texte fs-texte">${texte(x.texte_fr || x.texte)}</div>` : ""}
         ${x.texte_fr && x.texte ? `<details class="petit"><summary>Texte anglais (Oracle)</summary><div class="fs-texte" style="margin-top:.4rem">${texte(x.texte)}</div></details>` : ""}
-        ${d ? blocAjoutRch(x, d) : `<p class="note petit">Choisis un deck en haut de la page (« Pour le deck ») pour ajouter cette carte.</p>`}
+        ${d ? blocAjoutRch(x, d) : `<p class="note petit">${ctx ? "Pour ajouter cette carte, ouvre d'abord un deck (ou lie-en un dans la recherche de cartes)." : "Choisis un deck en haut de la page (« Pour le deck ») pour ajouter cette carte."}</p>`}
         <div class="fc-liens">
+          ${d ? `<a href="#/deck/${enc(d.id)}/combos/${enc(x.nom)}">Combos avec cette carte →</a>` : ""}
           <a href="${esc(lienCardmarket(x.nom))}" id="rf-cardmarket" target="_blank" rel="noopener">Cardmarket ↗</a>
           <a href="${esc(lienGatherer(x.nom))}" id="rf-gatherer" target="_blank" rel="noopener" title="La carte sur Gatherer, le site officiel de Wizards">Gatherer ↗</a>
-          ${d ? `<a href="#/deck/${enc(d.id)}/combos/${enc(x.nom)}">Combos avec cette carte →</a>` : ""}
         </div>
         ${liste.length > 1 ? `
           <div class="fc-nav">
             <button class="btn btn-petit" data-act="prec" ${i === 0 ? "disabled" : ""}>← Précédente</button>
-            <span class="muet petit">${i + 1} / ${liste.length} sur cette page · flèches du clavier</span>
+            <span class="muet petit">${i + 1} / ${liste.length} ${ctx ? "suggestions" : "sur cette page"} · flèches du clavier</span>
             <button class="btn btn-petit" data-act="suiv" ${i === liste.length - 1 ? "disabled" : ""}>Suivante →</button>
           </div>` : ""}
       </div>
@@ -2854,23 +3046,25 @@ function ficheRecherche(i) {
       if (!a || a.disabled || a.tagName === "A") return;
       const act = a.dataset.act;
       if (act === "fermer") return fermerModale();
-      if (act === "prec" || act === "suiv") return ficheRecherche(i + (act === "suiv" ? 1 : -1));
-      if (act === "version") return versionsRecherche(i);
+      if (act === "prec" || act === "suiv") return ficheRecherche(i + (act === "suiv" ? 1 : -1), ctx);
+      if (act === "version") return versionsRecherche(i, ctx);
+      if (act === "fiche-deck") return ouvrirCarte(etat.deck.cartes.find((c) => ic_cle(c.nom).toLowerCase() === ic_cle(x.nom).toLowerCase()));
       if (act === "ajouter") {
         const champ = $("#rf-tags", b);
         const tags = champ ? champ.value.split(",").map((t) => t.trim()).filter(Boolean) : [];
         a.disabled = true;
         const res = await ajouterRecherche(x, { maybe: dest === "maybe" && x.dans !== "maybe", tags, n: Math.max(1, +($("#rf-n", b) || {}).value || 1),
-          edition: x.versionChoisie ? editionVersion(x.versionChoisie) : null });
-        if (res) ficheRecherche(i); else a.disabled = false;
+          edition: x.versionChoisie ? editionVersion(x.versionChoisie) : null, deck: d });
+        if (res) ficheRecherche(i, ctx); else a.disabled = false;
       }
     });
     $("#rf-tags", b)?.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); $('[data-act="ajouter"]', b).click(); } });
   }, { focus: false, large: true });
   // prix du jour (le plus bas, avec son édition) et lien Gatherer de la carte
   api("/api/carte?nom=" + enc(x.nom)).then((f) => {
-    if (!$("#modale .fiche-carte") || rch.res.cartes[i] !== x) return;
+    if (!$("#modale .fiche-carte") || liste[i] !== x) return;
     if (f.gatherer) $("#rf-gatherer").href = f.gatherer;
+    if (f.assemble) $("#rf-assemble").innerHTML = assembleHtml(f.assemble);
     if (f.prix_lien) $("#rf-cardmarket").href = f.prix_lien;
     if (f.prix == null) return;
     x.prix = f.prix;
@@ -2881,12 +3075,12 @@ function ficheRecherche(i) {
 }
 
 // « N versions » : la grille des impressions ; la version choisie sert à l'ajout (visuel de la carte dans le deck)
-function versionsRecherche(i) {
-  const x = rch.res.cartes[i];
+function versionsRecherche(i, ctx = null) {
+  const x = (ctx ? ctx.liste : rch.res.cartes)[i];
   ouvrirModale(`<div id="choix-v"></div>`, (b) => {
     choixVersion($("#choix-v", b), {
-      nom: x.nom, titre: x.fr || x.nom, actuelle: x.versionChoisie || null, retour: () => ficheRecherche(i),
-      surChoix: (p) => { x.versionChoisie = p || null; ficheRecherche(i); },
+      nom: x.nom, titre: x.fr || x.nom, actuelle: x.versionChoisie || null, retour: () => ficheRecherche(i, ctx),
+      surChoix: (p) => { x.versionChoisie = p || null; ficheRecherche(i, ctx); },
     });
   }, { focus: false, large: true });
 }

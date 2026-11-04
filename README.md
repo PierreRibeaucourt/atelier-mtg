@@ -7,9 +7,11 @@ Tout tourne sur ton PC, à l'adresse http://127.0.0.1:5000. Rien n'est mis en li
 ## Ce qu'on peut faire
 
 - **Decks.** Créer un deck, vide ou à partir d'une liste Archidekt, Moxfield ou MTG Arena. Le supprimer : il va dans une corbeille d'où on peut le récupérer. Le retrouver parmi des dizaines grâce à la recherche (nom, commandant ou carte contenue), au filtre de couleurs et au raccourci Ctrl+K.
+- **Champ du haut (Ctrl+K).** Taper le nom d'une carte, en français ou en anglais, comme dans le champ Titre de Magic-Ville. Les cartes sont proposées, puis les decks dont le nom correspond. Choisir une carte ouvre sa fiche ; si un deck est ouvert, on peut l'y ajouter. Entrée sans choisir ouvre la recherche de cartes avec tous les résultats.
 - **Liste.** Afficher le deck en texte ou en images étalées, comme sur Magic-Ville. Ranger les cartes par type ou par tags, les trier, les filtrer. Un clic sur une carte ouvre sa fiche : texte en français, prix, tags, actions. On y choisit aussi la version de la carte (son visuel), parmi les impressions anglaises et françaises. On ajoute une carte en la cherchant en français ou en anglais.
 - **Recherche de cartes.** Le moteur de recherche de Magic-Ville, avec ses fenêtres et ses règles : Manas, Couleurs, Types, Recherche texte en français et en anglais, Valeur de mana, Force, Endurance, Format, Rareté, Éditions. Il ajoute le prix, la fonction des cartes (removal, ramp, pioche…), la popularité et le lien avec un deck : on ajoute une carte au deck ou au Maybeboard depuis les résultats (voir plus bas).
-- **Règles du Commander.** Vérifier l'identité de couleur, l'unicité des cartes et les cartes interdites.
+- **Règles du Commander.** Vérifier l'identité de couleur, l'unicité des cartes et les cartes interdites. Vérifier aussi le commandant : il doit pouvoir l'être (liste suivie par Scryfall : créatures légendaires, certains planeswalkers, véhicules et vaisseaux légendaires). Deux commandants doivent aller ensemble : Partner, Partner with, Friends forever, Historique ou compagnon du Docteur.
+- **Cartes spéciales.** Les cartes recto-verso se retournent dans leur fiche, et les sorts dont le verso est un terrain sont signalés dans les statistiques. Les cartes qui s'assemblent (Bruna et Gisela) indiquent leur partenaire. La carte formée (Brisela) n'apparaît pas dans la recherche.
 - **Statistiques.** Consulter la courbe de mana, les couleurs, les types, les tags comparés à un gabarit de deck et la base de mana. Tirer une main de départ.
 - **Prix.** Afficher le prix Cardmarket du jour, celui de l'édition la moins chère, avec un lien vers Cardmarket.
 - **Combos.** Deux vues. « Le deck » montre les combos déjà présentes dans le deck. « Une carte » montre les autres cartes qui combotent avec elle, avec ou sans le filtre des couleurs du commandant, leur prix et un bouton pour les mettre au Maybeboard. Les combos viennent de MTGPics, de Commander Spellbook et, à la demande, d'une analyse des synergies par Claude (voir plus bas).
@@ -53,7 +55,12 @@ La page « Recherche de cartes » (barre du haut, ou bouton « Chercher des cart
 - **Recherche texte** : en français, en anglais ou les deux. Tous les mots doivent y être ; `"…"` cherche une expression exacte, `!mot` exclut un mot.
 - **Valeur de mana, Force, Endurance, Format, Rareté, Éditions** (avec « Nouvelles cartes uniquement »), **Cartes spéciales** et **Types spéciaux**.
 
-En plus de Magic-Ville : le prix (le moins cher, toutes éditions), la fonction des cartes ([Scryfall Tagger](https://tagger.scryfall.com)), les Game Changers, le tri par popularité (EDHREC) ou par nouveauté, et l'ajout direct au deck lié.
+En plus de Magic-Ville :
+- le prix (le moins cher, toutes éditions) ;
+- les Game Changers, et les cartes qui peuvent être commandant ou partenaire ;
+- le tri par popularité (EDHREC) ou par nouveauté ;
+- l'ajout direct au deck lié ;
+- une fenêtre **Fonctions** avec les étiquettes de [Scryfall Tagger](https://tagger.scryfall.com), un classement fait à la main par la communauté de Scryfall. Les plus utiles sont traduites et se cochent d'un clic (ramp, pioche, tuteur, removal…). Les 4 600 autres se cherchent par leur nom anglais (pinger, blood artist ability…), avec leur nombre de cartes. Quand on en choisit plusieurs, la carte doit les avoir toutes.
 
 La recherche est instantanée : elle se fait sur une base locale (`outils/atelier/base_cartes.json.gz`, hors du dépôt), construite à partir des fichiers complets de Scryfall :
 - les cartes et leurs impressions (environ 80 Mo à télécharger) ;

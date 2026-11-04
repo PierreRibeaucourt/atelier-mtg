@@ -46,7 +46,7 @@ FORMATS = {"commander": "commander", "duel": "duel", "modern": "modern", "pionee
            "vintage": "vintage", "legacy": "legacy", "premodern": "premodern", "pauper": "pauper",
            "historic": "historic", "alchemy": "alchemy"}
 SPECIAUX = {"TR", "TK", "DUN", "PN", "SC", "CH", "HE", "CO"}            # « Types spéciaux » de Magic-Ville
-HORS_JEU = SPECIAUX - {"TR"}                                             # écartés sauf si on les demande
+HORS_JEU = (SPECIAUX - {"TR"}) | {"ME"}                                  # écartés sauf si on les demande (ME : carte formée par assemblage)
 RARETES = {"M": "m", "R": "r", "U": "u", "C": "c", "S": "s"}
 # Rareté d'une carte : celle de sa version de base dans chaque édition (le plus petit numéro), et sans choix d'édition,
 # seulement dans les éditions normales. Sol Ring n'est pas « mythique » parce qu'une variante numérotée d'un deck
@@ -224,6 +224,8 @@ def _rang_impression(c):
 
 def _speciale(c):
     lay, t = c.get("layout", ""), c.get("type_line", "")
+    if lay == "meld" and any(x.get("component") == "meld_result" and x.get("name") == c.get("name") for x in c.get("all_parts") or []):
+        return "ME"                                    # Brisela : formée par Bruna + Gisela, elle ne se met pas dans un deck
     if lay in ("token", "double_faced_token", "emblem") or t.startswith("Token"):
         return "TK"
     if lay == "planar":
@@ -300,12 +302,15 @@ def _cartes_et_impressions():
             x["d0"], x["s0"] = d, c["set"]             # première édition (pour « Nouvelles cartes uniquement »)
         r = _rang_impression(c)
         if oid not in meilleure or r < meilleure[oid][0]:
-            meilleure[oid] = (r, c["set"], c["collector_number"])
+            faces = c.get("card_faces") or []
+            dos = (faces[1].get("image_uris") or {}).get("normal", "") if len(faces) > 1 else ""
+            meilleure[oid] = (r, c["set"], c["collector_number"], dos.split("/normal/", 1)[1] if "/normal/" in dos else "")
     for oid, x in cartes.items():
         x["pr"].sort(key=lambda p: p[3], reverse=True)
         if x["pr"] and oid in meilleure:
-            _, s, n = meilleure[oid]
+            _, s, n, dos = meilleure[oid]
             x["im"] = next((i for i, p in enumerate(x["pr"]) if p[0] == s and p[1] == n), 0)
+            x["imd"] = dos
         if not x["d0"] and x["pr"]:
             x["d0"], x["s0"] = min((p[3], p[0]) for p in x["pr"])
     return cartes, dict(comptes), maj
@@ -344,6 +349,21 @@ def _editions(cartes):
                               pa=s.get("parent_set_code") or "", dig=bool(s.get("digital")))
     etat["fait"] = 1
     return res
+
+
+def _commandants(cartes):
+    """Qui peut être commandant (is:commander) et qui peut en accompagner un autre (is:partner : Partner, Historique,
+    compagnon du Docteur…), selon Scryfall, qui suit les règles officielles."""
+    for cle, q in (("cm", "is:commander"), ("pa", "is:partner")):
+        r = get("https://api.scryfall.com/cards/search", {"q": q, "unique": "cards"})
+        etat.update(etape="Commandants possibles et partenaires", fait=0, total=(r or {}).get("total_cards", 0), unite="cartes")
+        while r:
+            for c in r.get("data", []):
+                etat["fait"] += 1
+                oid = c.get("oracle_id") or ((c.get("card_faces") or [{}])[0].get("oracle_id"))
+                if oid in cartes:
+                    cartes[oid][cle] = True
+            r = get(r["next_page"]) if r.get("has_more") else None
 
 
 def _francais(cartes, depuis=None):
@@ -398,6 +418,7 @@ def construire(complet=False):
         cartes, comptes, maj = _cartes_et_impressions()
         tags = _tags(cartes)
         editions = _editions(cartes)
+        _commandants(cartes)
         depuis = None
         if ancienne and not complet and ancienne.get("date_fr"):
             vieux = {x["id"]: x for x in ancienne["cartes"]}
@@ -417,7 +438,7 @@ def construire(complet=False):
             date_fr = _base.get("date_fr") if _base and depuis else None
         etat.update(etape="Enregistrement", fait=0, total=0, unite="")
         base = dict(version=VERSION, date=time.time(), date_fr=date_fr, cartes=list(cartes.values()), tags=tags, editions=editions,
-                    comptes=comptes, bulk=maj)
+                    comptes=comptes, bulk=maj, cmd_v=1)
         tmp = FICHIER + ".tmp"
         with gzip.open(tmp, "wt", encoding="utf-8", compresslevel=6) as f:
             json.dump(base, f, ensure_ascii=False, separators=(",", ":"))
@@ -455,7 +476,7 @@ def verifier(force=False):
     b = _base
     if etat["actif"]:
         return
-    if force or b is None or not b.get("comptes") or not b.get("date_fr"):
+    if force or b is None or not b.get("comptes") or not b.get("date_fr") or not b.get("cmd_v"):
         return construire()
     nouv = nouveautes()
     suivi.update(verifie=time.time(), nouveautes=nouv)
@@ -507,8 +528,14 @@ def _preparer(b):
         x["_lg"] = set(x["lg"])
         x["_cle"] = ic._cle(x["n"]).lower()
     slugs = {t["s"]: i for i, t in enumerate(b["tags"])}
+    par_tag = {}                                        # fonction -> cartes jouables qui l'ont (pour compter les cartes)
+    for k, x in enumerate(cartes):
+        if x["spe"] not in HORS_JEU and not x["dig"] and not x["fun"]:
+            for t in x["_tg"]:
+                par_tag.setdefault(t, []).append(k)
     _base = dict(cartes=cartes, tags=b["tags"], slugs=slugs, editions=b["editions"], date=b["date"], date_fr=b.get("date_fr"),
-                 comptes=b.get("comptes"), bulk=b.get("bulk"), descendants={}, fonctions={})
+                 comptes=b.get("comptes"), bulk=b.get("bulk"), cmd_v=b.get("cmd_v"), descendants={}, fonctions={}, par_tag=par_tag,
+                 par_cle={x["_cle"]: x for x in cartes if x["spe"] != "ME"})
     for cle, _, liste in FONCTIONS:
         _base["fonctions"][cle] = set().union(*[_descendants(s) for s in liste]) if liste else set()
 
@@ -785,10 +812,13 @@ def _filtre(p, b):
         tests.append(lambda x: not x["gc"])
     elif g("gc") == "seul":
         tests.append(lambda x: x["gc"])
-    fn = g("fn")
-    if fn:
+    if g("cmd") == "peut":
+        tests.append(lambda x: x.get("cm", False))
+    elif g("cmd") == "duo":
+        tests.append(lambda x: x.get("pa", False))
+    for fn in [f for f in g("fn").split(",") if f]:      # plusieurs fonctions : la carte doit les avoir toutes
         cibles = b["fonctions"].get(fn) or _descendants(fn)
-        tests.append(lambda x: bool(x["_tg"] & cibles))
+        tests.append(lambda x, cibles=cibles: bool(x["_tg"] & cibles))
     return tests
 
 
@@ -843,6 +873,7 @@ def _sortie(x, b, dans, imp=None, jour=None):
                 pt=x["pt"], couleurs=list(x["ci"]), gc=x["gc"], prix=prix, foil=x["foil"] and imp is None,
                 legal="legal" if "commander" in x["_lg"] else "", rang=x["rk"],
                 image=_image(p[5]) if p else "", petite=_image(p[5], "small") if p else "",
+                image_dos=_image(x.get("imd")) if imp is None and x.get("imd") else "", commandant=x.get("cm", False), partenaire=x.get("pa", False),
                 edition=dict(set=p[0], num=p[1], rarete=p[2], nom=ed.get("fr") or ed.get("n", p[0].upper()), annee=p[3][:4],
                              icone=ed.get("ic", "")) if p else None,
                 versions=len(pr), dans=dans.get(x["_cle"]))
@@ -892,3 +923,73 @@ def editions():
 
 def fonctions():
     return [dict(cle=cle, nom=lib) for cle, lib, _ in FONCTIONS]
+
+
+def _compte(b, tags):
+    return len(set().union(*(b["par_tag"].get(t, ()) for t in tags))) if tags else 0
+
+
+def suggestions(q, n=25):
+    """Fonctions Scryfall Tagger qui correspondent au texte tapé : d'abord les fonctions traduites (« défausse »,
+    « pioche »…), puis toutes les autres par leur nom anglais (« pinger », « sacrifice outlet »…), avec leur nombre de
+    cartes (sous-fonctions comprises). Sans texte : les fonctions traduites."""
+    b = base()
+    if b is None:
+        return []
+    qn = _norm(q).strip().replace("-", " ")
+    mots = qn.split()
+    res, vus = [], set()
+    for cle, lib, slugs in FONCTIONS:
+        h = _norm(lib) + " " + " ".join(s.replace("-", " ") for s in slugs)
+        if all(m in h for m in mots):
+            res.append(dict(cle=cle, nom=lib, desc="", fr=True, nb=_compte(b, b["fonctions"][cle])))
+        vus.update(slugs)
+    if mots:
+        autres = []
+        for i, t in enumerate(b["tags"]):
+            h = t["s"].replace("-", " ")
+            if t["s"] in vus or not all(m in h for m in mots):
+                continue
+            autres.append((not h.startswith(qn), len(h), i))     # celles qui commencent par le texte, puis les plus courtes
+        autres.sort()
+        for _, _, i in autres[:n * 2]:
+            t = b["tags"][i]
+            nb = _compte(b, _descendants(t["s"]))
+            if nb:
+                res.append(dict(cle=t["s"], nom=t["s"].replace("-", " "), desc=t.get("d", ""), fr=False, nb=nb))
+    return res[:n]
+
+
+def eligibilite(nom):
+    """Pour les règles du deck : la carte peut-elle être commandant, et en accompagner un autre ? None si la base n'est pas prête."""
+    b = _base
+    if b is None or not b.get("cmd_v"):
+        return None
+    x = b["par_cle"].get(ic._cle(nom).lower())
+    return dict(commandant=x.get("cm", False), partenaire=x.get("pa", False)) if x else None
+
+
+def noms(q, deck=None, n=8):
+    """Champ du haut (« Chercher une carte ») : les cartes dont le nom français ou anglais correspond, comme le champ
+    Titre de Magic-Ville. Nom exact d'abord, puis début du nom (ou d'un mot), puis le reste ; à égalité, les plus jouées."""
+    b = base()
+    qn = _norm(q).strip()
+    if b is None or len(qn) < 2:
+        return []
+    trouves = []
+    for x in b["cartes"]:
+        if x["spe"] in HORS_JEU or x["dig"] or x["fun"]:
+            continue
+        rang = None
+        for h in (x["_n"], x["_nf"]):
+            if not h or qn not in h:
+                continue
+            faces = h.split(" // ")
+            r = 0 if qn in faces else 1 if any(f.startswith(qn) for f in faces) else 2 if any(m.startswith(qn) for f in faces for m in f.split()) else 3
+            rang = r if rang is None else min(rang, r)
+        if rang is not None:
+            trouves.append((rang, x["rk"] is None, x["rk"] or 0, x["_n"], x))
+    trouves.sort(key=lambda t: t[:4])
+    dans = _deck(deck)
+    jour = ic.aujourdhui()
+    return [_sortie(x, b, dans, None, jour) for *_, x in trouves[:n]]
