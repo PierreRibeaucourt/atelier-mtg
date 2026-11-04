@@ -97,10 +97,24 @@ function cacherApercu() {
 // fiche texte au survol d'une image (vue Visuel), comme sur Magic-Ville : nom, type et texte en français, symboles de mana
 let survolCarte = null;
 
+// textes français de Scryfall : symboles collés ou entre parenthèses (« {2BB} », « {(u/p)} », « {(}b/r)} ») → {2}{B}{B}, {U/P}, {B/R}
+function symbolesTexte(s) {
+  const t = s.toUpperCase().replace(/[()]/g, "");
+  if (/^(\d+|[WUBRGCXYZSTQEPHDL½∞]|[WUBRGC2]\/[WUBRGCP](\/P)?|CHAOS|TK|PW|A)$/.test(t)) return [t];
+  const m = t.match(/\d+|[WUBRGCXYZS]\/[WUBRGCP](?:\/P)?|[WUBRGCXYZS]/g);
+  return m && m.join("") === t ? m : [s];            // forme inconnue : laissée telle quelle
+}
+
+function normaliserSymboles(t) {
+  return String(t ?? "")
+    .replace(/\{\(\}([a-z])\/([a-z])\)\}/gi, "{$1/$2}")
+    .replace(/\{([^}]+)\}/g, (_, s) => symbolesTexte(s).map((y) => `{${y}}`).join(""));
+}
+
 function texteMana(ligne) {
-  return esc(ligne)
+  return esc(normaliserSymboles(ligne))
     .replace(/\(([^)]*)\)/g, '<i class="rappel">($1)</i>')                 // texte de rappel en italique
-    .replace(/\{([^}]+)\}/g, (_, s) => `<img class="sym-t" src="https://svgs.scryfall.io/card-symbols/${enc(s.replace("/", ""))}.svg" alt="{${esc(s)}}">`);
+    .replace(/\{([^}]+)\}/g, (_, s) => `<img class="sym-t" src="https://svgs.scryfall.io/card-symbols/${enc(s.replace(/\//g, ""))}.svg" alt="{${esc(s)}}">`);
 }
 
 function ficheSurvol(c) {
@@ -1757,11 +1771,13 @@ function rendreMtgpics(zone, d, st, apres) {
 
 function rendreClaude(zone, d, st, apres) {
   if (st.actif) {
-    zone.innerHTML = `<span class="pulse">●</span> Claude cherche les synergies…`;
+    const duree = (debut) => { const m = debut ? Math.floor((Date.now() / 1000 - debut) / 60) : 0; return m >= 1 ? ` · ${m} min` : ""; };
+    zone.innerHTML = `<span class="pulse">●</span> Claude cherche les synergies…<span class="muet" data-duree>${duree(st.debut)}</span>`;
     (async () => {
       while (zone.isConnected) {
         await attendre(3000);
         const s = await api(`/api/decks/${enc(d.id)}/synergies`).catch(() => null);
+        if (s && s.actif && $("[data-duree]", zone)) $("[data-duree]", zone).textContent = duree(s.debut);
         if (s && !s.actif) {
           if (s.erreur) toast("Synergies : " + s.erreur, 6000);
           if (zone.isConnected) apres();
@@ -2359,13 +2375,15 @@ function resumeCrit(c) {
 
 // ---- la page
 async function vueRecherche(params) {
-  // la page sans critère (lien du haut, bouton d'un deck) : on reprend la dernière recherche
+  // la page sans critère (lien du haut, bouton d'un deck) : le formulaire, avec les critères de la dernière recherche
   const deckDemande = params.get("deck");
   if ([...params.keys()].every((k) => k === "deck")) {
-    const derniere = PREF.get(cleDerniere(deckDemande || ""), "");
-    if (derniere) {
+    const derniere = new URLSearchParams(PREF.get(cleDerniere(deckDemande || ""), ""));
+    derniere.delete("r");                          // le formulaire, prérempli, sans relancer la recherche
+    derniere.delete("page");
+    if ([...derniere.keys()].length) {
       history.replaceState(null, "", "#/recherche?" + derniere);
-      params = new URLSearchParams(derniere);
+      params = derniere;
     }
   }
   const neuve = [...params.keys()].every((k) => k === "deck");
@@ -3151,7 +3169,7 @@ async function montageChat() {
       <strong id="chat-titre">Discussion</strong>
       <div>
         <select id="chat-modele" class="btn btn-petit" title="Modèle">
-          <option value="">Modèle habituel</option><option value="sonnet">Sonnet</option><option value="haiku">Haiku</option>
+          <option value="opus">Opus</option><option value="sonnet">Sonnet</option><option value="haiku">Haiku</option>
         </select>
         <button class="btn btn-petit btn-discret" id="chat-nouvelle" title="Effacer cette discussion et repartir de zéro">Nouvelle</button>
         <button class="btn btn-petit btn-discret" id="chat-fermer" aria-label="Fermer">✕</button>
@@ -3170,7 +3188,7 @@ async function montageChat() {
         <button class="btn btn-accent" id="chat-envoyer">Envoyer</button>
       </div>
     </div>`;
-  try { $("#chat-modele").value = localStorage.getItem("chat-modele") || ""; } catch (_) {}
+  try { $("#chat-modele").value = localStorage.getItem("chat-modele") || "opus"; } catch (_) { $("#chat-modele").value = "opus"; }
   $("#chat-modele").onchange = (ev) => { try { localStorage.setItem("chat-modele", ev.target.value); } catch (_) {} };
   $("#chat-fermer").onclick = () => basculeChat(false);
   $("#chat-nouvelle").onclick = async () => {
