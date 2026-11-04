@@ -47,10 +47,40 @@ NOMS = {
     "magecraft triggers": "déclenchements de magecraft", "cast triggers": "déclenchements de lancement",
     "+1/+1 counters on a creature": "marqueurs +1/+1 sur une créature", "creature tokens": "jetons de créature",
     "tokens": "jetons", "mill": "meule", "self-mill": "meule de votre bibliothèque", "untap of creatures": "dégagements de créatures",
-    "untap of permanents": "dégagements de permanents", "combat phases": "phases de combat", "landfall triggers": "déclenchements d'atterrissage",
+    "untap of permanents": "dégagements de permanents", "untap of creatures you control": "dégagements de vos créatures",
+    "creature tokens with haste": "jetons de créature avec la célérité", "combat phases": "phases de combat", "landfall triggers": "déclenchements d'atterrissage",
     "attack triggers": "déclenchements d'attaque", "spells cast": "sorts lancés",
 }
-CLASSES = {"victoire": "Victoire", "verrou": "Verrou", "mana": "Mana infini", "pioche": "Pioche", "boucle": "Boucle", "valeur": "Valeur"}
+# un libellé par classe, quelle que soit la source (MTGPics « Infinite (Win) » et « Win » = Victoire, « Lock » = Verrou…)
+CLASSES = {"victoire": "Victoire", "verrou": "Verrou", "mana": "Mana infini", "pioche": "Pioche", "boucle": "Boucle infinie",
+           "valeur": "Valeur", "menace": "Menace", "syn": "Synergie"}
+
+
+CLAUDE = {"Victoire": "victoire", "Pioche": "pioche", "Mana": "mana"}      # mêmes couleurs que les classes des autres sources
+
+
+def _libelles(liste):
+    """MTGPics et Spellbook : le libellé commun de leur classe. Claude garde ses classes (Moteur, Récursion…)."""
+    for c in liste:
+        if c["source"] == "claude":
+            c["classe"] = CLAUDE.get(c["classe_lib"], c["classe"])
+        else:
+            c["classe_lib"] = CLASSES.get(c["classe"], c["classe_lib"])
+    return liste
+
+
+def _cle_combo(cartes):
+    return frozenset(ic._simple(n.split(" // ")[0]) for n in cartes)
+
+
+def _sans_doublons(liste):
+    """Une combo connue des deux sources (mêmes cartes) : on garde Spellbook, qui l'explique pas à pas."""
+    rang = {"spellbook": 0, "mtgpics": 1}
+    garde = {}
+    for c in sorted(liste, key=lambda c: (rang.get(c["source"], 2), -(c.get("popularite") or 0))):
+        garde.setdefault(_cle_combo(c["cartes"]), c)
+    retenues = {id(c) for c in garde.values()}
+    return [c for c in liste if id(c) in retenues]
 
 
 def en_francais(feature):
@@ -69,7 +99,8 @@ def classe(produits):
 
     def a(*mots, sauf=()):
         return any(any(m in x for m in mots) and not any(s in x for s in sauf) for x in p)
-    if a("loses the game", "win the game", "poison") or a("damage", "lifeloss", "mill", sauf=("to creatures", "self-mill")):
+    # phases de combat à l'infini (Aurelia + Helm of the Host) : on attaque sans fin, la partie est gagnée
+    if a("loses the game", "win the game", "poison", "combat phases") or a("damage", "lifeloss", "mill", sauf=("to creatures", "self-mill")):
         return "victoire"
     if a("lock", "control one opponent", "infinite turns"):
         return "verrou"
@@ -139,20 +170,21 @@ def combos_deck(deck, force=False):
         liste += [_spellbook(dict(c)) for c in bracket.spellbook(deck, force)["combos"]]
     except Exception as e:                             # Spellbook injoignable : le reste s'affiche
         erreur = str(e)
+    liste = _sans_doublons(liste)
     st = synergies.etat(deck)
-    vus = {frozenset(c["cartes"]): c for c in liste}
+    vus = {_cle_combo(c["cartes"]): c for c in liste}
     for s in (st["resultat"] or {}).get("synergies", []):
         if not all(n in dans for n in s["cartes"]):
             continue
-        meme = vus.get(frozenset(s["cartes"]))
-        if meme:                                        # déjà connue (Magic-Ville) : on y ajoute l'explication de Claude
+        meme = vus.get(_cle_combo(s["cartes"]))
+        if meme:                                        # déjà connue (MTGPics, Spellbook) : on y ajoute l'explication de Claude
             meme["explication"] = s["explication"]
             continue
         liste.append(dict(source="claude", cartes=s["cartes"], classe="syn", classe_lib=s["classe"], force=s["force"],
                           titre=s["titre"], explication=s["explication"], resultats=[], popularite=None, lien=""))
     ordre = {"mtgpics": 0, "spellbook": 1, "claude": 2}
     liste.sort(key=lambda c: (ordre[c["source"]], -(c.get("popularite") or c.get("force") or 0)))
-    return dict(combos=_fiches(liste, dans), synergies=st, erreur=erreur, mtgpics=mtgpics.etat_deck(deck))
+    return dict(combos=_fiches(_libelles(liste), dans), synergies=st, erreur=erreur, mtgpics=mtgpics.etat_deck(deck))
 
 
 # ---------------------------------------------------------------- 2. une carte : les cartes qui combotent avec elle
@@ -176,7 +208,7 @@ def combos_carte(deck, carte, couleurs=True, force=False):
         liste += _spellbook_carte(carte, filtre)
     except Exception as e:
         erreurs.append(f"Commander Spellbook ne répond pas : {e}")
-    liste = _fiches(liste, dans)
+    liste = _fiches(_libelles(_sans_doublons(liste)), dans)
     if filtre is not None:                             # MTGPics ne filtre pas : on retire ce qui sort des couleurs
         liste = [c for c in liste if all(set(f["couleurs"]) <= filtre for f in c["fiches"])]
     for c in liste:

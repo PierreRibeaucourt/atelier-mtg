@@ -28,7 +28,7 @@ DUREE = 30 * 86400
 MAX_PAGES = 10                                             # 200 combos par carte au plus (les plus fortes d'abord)
 CLASSES = "&class[kill]=1&class[lock]=1&class[infinite]=1&class[threat]=1&class[synergy]=1&class[clone]=1"
 LIBELLES = {"win": ("victoire", "Win"), "lock": ("verrou", "Lock"), "infinite": ("boucle", "Infini"),
-            "threat": ("valeur", "Menace"), "synergy": ("syn", "Synergie"), "synergie": ("syn", "Synergie")}
+            "threat": ("menace", "Menace"), "synergy": ("syn", "Synergie"), "synergie": ("syn", "Synergie")}
 
 _verrou = threading.RLock()
 _reseau = threading.Lock()
