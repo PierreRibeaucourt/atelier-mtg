@@ -91,6 +91,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn-icone { padding-left: .5rem; padding-right: .5rem; }
 .btn-menu .ico { display: block; margin: auto; }
 
+/* onglets du deck, collés sous la barre du haut au défilement, avec « Ajouter des cartes » */
+.onglets-deck { position: sticky; top: var(--haut-barre, 54px); z-index: 15; display: flex; align-items: center; gap: .75rem;
+  margin: 1rem 0 .5rem; background: var(--fond); box-shadow: inset 0 -1px 0 var(--bord); }
+.onglets-deck .onglets { flex: 1; min-width: 0; margin: 0; border-bottom: 0; align-self: stretch; }
+.onglets-deck .onglets a { margin-bottom: 0; }
+.onglets-deck #btn-ajouter { flex: none; }
+@media (max-width: 640px) { .onglets-deck #btn-ajouter .txt { display: none; } }
+
 /* ---- mise en page */
 .cadre { display: flex; min-height: calc(100vh - 54px); }
 .vue { flex: 1; min-width: 0; max-width: 1180px; margin: 0 auto; padding: 1.25rem 1rem 4rem; }

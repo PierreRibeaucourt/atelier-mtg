@@ -86,6 +86,11 @@ const ICONES = {
 const ico = (nom) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${ICONES[nom] || ""}</svg>`;
 $$("[data-ico]").forEach((el) => el.insertAdjacentHTML("afterbegin", ico(el.dataset.ico)));
 
+// hauteur de la barre du haut : les onglets d'un deck se collent juste dessous
+const hauteurBarre = () => document.documentElement.style.setProperty("--haut-barre", $(".barre").offsetHeight + "px");
+hauteurBarre();
+addEventListener("resize", hauteurBarre);
+
 function toast(msg, ms = 2600) {
   const t = $("#toast");
   t.textContent = msg;
@@ -773,7 +778,6 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
           <div class="chiffres" style="margin-top:.5rem">${chiffresDeck(d)}</div>
         </div>
         <div class="actions">
-          <button class="btn btn-accent" id="btn-ajouter">${ico("plus")}Ajouter des cartes</button>
           <a class="btn" href="#/recherche?deck=${enc(id)}">${ico("chercher")}Chercher des cartes</a>
           <button class="btn" id="btn-export">${ico("copier")}Copier pour Archidekt</button>
           <button class="btn btn-icone ouvre-menu" id="btn-deck-menu" aria-label="Autres actions sur le deck" title="Autres actions">${ico("plus_de")}</button>
@@ -781,7 +785,10 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
       </div>
     </div>
     ${d.note ? `<p class="note">${esc(d.note)}</p>` : ""}
-    <nav class="onglets">${ONGLETS.map(([k, l]) => `<a href="#/deck/${enc(id)}/${k}" class="${k === onglet ? "actif" : ""}">${ico(k)}${l}</a>`).join("")}</nav>
+    <div class="onglets-deck">
+      <nav class="onglets">${ONGLETS.map(([k, l]) => `<a href="#/deck/${enc(id)}/${k}" class="${k === onglet ? "actif" : ""}">${ico(k)}${l}</a>`).join("")}</nav>
+      <button class="btn btn-accent" id="btn-ajouter" title="Ajouter des cartes">${ico("plus")}<span class="txt">Ajouter des cartes</span></button>
+    </div>
     <section id="contenu"></section>`;
   $("#btn-ajouter").onclick = () => modaleAjout();
   $("#btn-export").onclick = copierArchidekt;
