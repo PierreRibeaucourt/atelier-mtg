@@ -405,7 +405,6 @@ button.puce-dispo:hover { border-color: var(--accent); color: var(--accent); }
 .msg-outil { align-self: flex-start; font-size: .78rem; color: var(--texte-2); padding: 0 .3rem; }
 .chat-saisie { border-top: 1px solid var(--bord); padding: .6rem; display: grid; gap: .4rem; }
 .chat-saisie textarea { width: 100%; min-height: 64px; resize: vertical; padding: .5rem .6rem; border: 1px solid var(--bord); border-radius: 8px; background: var(--fond); }
-.raccourcis { display: flex; flex-wrap: wrap; gap: .3rem; }
 @media (max-width: 1000px) { .chat { position: fixed; right: 0; top: 54px; z-index: 30; width: min(400px, 100vw); box-shadow: var(--ombre); } }
 
 /* ---- onglet Combos : le deck, ou une carte */

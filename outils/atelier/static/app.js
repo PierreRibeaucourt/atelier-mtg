@@ -3393,11 +3393,6 @@ async function montageChat() {
     </div>
     <div class="chat-fil" id="chat-fil" aria-live="polite"></div>
     <div class="chat-saisie">
-      <div class="raccourcis">
-        <button class="btn btn-petit" data-r="Que penses-tu de ce que je regarde ? Qu'est-ce qui ressort ?">Avis sur la page</button>
-        <button class="btn btn-petit" data-r="Le simulateur joue certaines cartes de ce deck sans leurs effets (badges « sim »). Apprends-lui à les jouer, puis vérifie que les résultats des autres decks ne changent pas.">Modéliser les cartes mal comprises</button>
-        <button class="btn btn-petit" data-r="Règle la façon de jouer de ce deck dans le simulateur : ">Consigne de jeu…</button>
-      </div>
       <textarea id="chat-saisie" placeholder="Ton message…"></textarea>
       <div class="form-ligne" style="margin:0;justify-content:space-between">
         <span class="muet petit" id="chat-etat">${ETAT_CHAT}</span>
@@ -3414,7 +3409,6 @@ async function montageChat() {
       await afficheHistorique();
     } catch (e) { erreur(e); }
   };
-  $$("[data-r]", a).forEach((b) => b.addEventListener("click", () => { const t = $("#chat-saisie"); t.value = b.dataset.r; t.focus(); }));
   $("#chat-envoyer").onclick = () => ($("#chat-envoyer").textContent === "Arrêter" ? arreterChat() : envoyerChat());
   $("#chat-saisie").addEventListener("keydown", (ev) => { if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) envoyerChat(); });
   chat.cle = cleCourante();
