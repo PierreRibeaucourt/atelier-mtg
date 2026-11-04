@@ -13,6 +13,10 @@ const etat = { decks: [], deck: null, filtre: "" };
 // et tout ce qui modifie (classe « ecrit »), la recherche et la discussion sont masqués
 const PARTAGE = window.PARTAGE || null;
 if (PARTAGE) document.documentElement.classList.add("partage");
+// budget par carte (reglages.json, 5 € par défaut, 0 = pas d'alerte) : les cartes plus chères sont signalées
+const REGLAGES = (PARTAGE && PARTAGE.reglages) || window.REGLAGES || {};
+const BUDGET = REGLAGES.budget === undefined ? 5 : REGLAGES.budget > 0 ? REGLAGES.budget : Infinity;
+const BUDGET_TXT = String(BUDGET).replace(".", ",") + " €";
 
 // préférences d'affichage gardées d'une visite à l'autre (si le navigateur le permet)
 const PREF = {
@@ -207,7 +211,7 @@ function ficheSurvol(c) {
   const f = c.info || {};
   const nom = f.fr || c.nom;
   const texte = f.fr_texte || f.texte || "";
-  const cher = (f.prix || 0) > 5;
+  const cher = (f.prix || 0) > BUDGET;
   return `
     <div class="fs-tete"><span class="fs-nom">${esc(nom)}</span>${mana(f.cout)}</div>
     ${nom !== c.nom ? `<div class="fs-en">${esc(c.nom)}</div>` : ""}
@@ -305,7 +309,7 @@ function apercuCite(el) {
     const autre = sansAccent(el.textContent.trim()) === sansAccent(f.fr) ? f.nom : f.fr || f.nom;     // l'autre langue
     el.dataset.image = f.image;
     el.dataset.legende = `${autre} — ${prixRch(f)}`;
-    if ((f.prix || 0) > 5) el.dataset.cher = "1";
+    if ((f.prix || 0) > BUDGET) el.dataset.cher = "1";
   };
   const c = etat.deck && etat.deck.cartes.find((x) => x.nom === nom);        // carte du deck : la version choisie
   if (c && c.info && c.info.image) { remplir({ nom: c.nom, fr: c.info.fr, image: c.info.image, prix: c.info.prix }); return Promise.resolve(); }
@@ -557,7 +561,7 @@ function deckDeLaPage() {
     items = [...cartes.map((c, i) => ({ carte: c, i, cartes })), ...decksTrouves.map((d) => ({ deck: d }))];
     actif = 0;
     const ligneCarte = (it, n) => {
-      const c = it.carte, cher = (c.prix || 0) > 5;
+      const c = it.carte, cher = (c.prix || 0) > BUDGET;
       return `<button type="button" class="aller-item aller-carte ${n === actif ? "choisi" : ""}" data-n="${n}" role="option"
           data-image="${esc(c.image)}" data-legende="${esc(`${c.fr || c.nom} — ${prixRch(c)}`)}" ${cher ? 'data-cher="1"' : ""}>
         <span class="aller-cout">${mana(c.cout)}</span>
@@ -1081,7 +1085,7 @@ function ligneCarte(c, rangement) {
   const f = c.info || {};
   const tags = c.tags.filter((t) => t !== "Maybeboard" && t !== "Commander" && !(rangement === "tags" && t === c.cat));
   const sim = c.sim && LIBELLE_SIM[c.sim.classe];
-  const cher = (f.prix || 0) > 5;
+  const cher = (f.prix || 0) > BUDGET;
   return `<div class="ligne ligne-carte" data-carte="${c.index}">
     <span class="qte">${c.n > 1 ? c.n + "×" : ""}</span>
     <span class="nom"><span class="en" data-image="${esc(f.image)}" data-legende="${esc(legendeCarte(c))}" ${cher ? 'data-cher="1"' : ""}>${esc(c.nom)}</span>${f.fr && f.fr !== c.nom ? `<span class="fr" data-image="${esc(f.image)}" data-legende="${esc(legendeCarte(c))}" ${cher ? 'data-cher="1"' : ""}>${esc(f.fr)}</span>` : ""}
@@ -1090,7 +1094,7 @@ function ligneCarte(c, rangement) {
     <span class="badges">
       ${badgesAlerte(c)}
       ${f.gc ? `<span class="badge badge-gc" title="Game Changer : compte dans le bracket (3 maximum en bracket 3)">Game Changer</span>` : ""}
-      ${cher ? `<span class="badge badge-cher" title="Au-dessus de ton budget de 5 € par carte">&gt; 5 €</span>` : ""}
+      ${cher ? `<span class="badge badge-cher" title="Au-dessus de ton budget de ${BUDGET_TXT} par carte">&gt; ${BUDGET_TXT}</span>` : ""}
       ${sim ? `<span class="badge badge-sim" title="${esc(sim[1] + (c.sim.non_lu.length ? " :\n• " + c.sim.non_lu.join("\n• ") : ""))}">${sim[0]}</span>` : ""}
     </span>
     ${f.prix_lien ? `<a class="prix ${cher ? "cher" : ""}" href="${esc(f.prix_lien)}" target="_blank" rel="noopener" title="${esc(f.prix_edition ? `Le moins cher : ${f.prix_edition}. ` : "")}Voir sur Cardmarket">${euros(f.prix)}</a>` : `<span class="prix muet">${euros(f.prix)}</span>`}
@@ -1109,7 +1113,7 @@ function imageCarte(f, cls, style = "") {
 function carteVisuelle(c) {
   const f = c.info || {};
   const nb = Math.min(c.n, 4);
-  const cher = (f.prix || 0) > 5;
+  const cher = (f.prix || 0) > BUDGET;
   const couches = [];
   for (let k = nb - 1; k >= 1; k--) couches.push(imageCarte(f, "couche", `style="--k:${k}"`));
   const marques = [
@@ -1165,7 +1169,7 @@ function ouvrirCarte(c) {
     : /Legendary Creature|Background/.test(f.type || "") || /can be your commander/i.test(f.texte || "");
   const second = !cmd && (d.commandants || []).length === 1;              // il y a déjà un commandant : celle-ci serait le second
   const sim = c.sim && LIBELLE_SIM[c.sim.classe];
-  const cher = (f.prix || 0) > 5;
+  const cher = (f.prix || 0) > BUDGET;
   const tags = c.tags.filter((t) => t !== "Maybeboard" && t !== "Commander");
   ouvrirModale(`
     <div class="fiche-carte">
@@ -1419,7 +1423,7 @@ function rechercheCarte(zone, { surChoix, surAjout = null, deck = () => etat.dec
     const d = deck();
     const deja = d && d.cartes.some((c) => c.nom === x.nom);
     const hors = d && d.identite && (x.couleurs || []).some((k) => !d.identite.includes(k));
-    const cher = (x.prix || 0) > 5;
+    const cher = (x.prix || 0) > BUDGET;
     const plus = !surAjout ? "" : deja && !/Basic/.test(x.type || "") ? `<span class="res-plus"></span>`
       : `<button type="button" class="res-plus" data-plus="${i}" title="Ajouter au deck" aria-label="Ajouter ${esc(x.nom)} au deck">${ico("plus")}</button>`;
     return `<div class="res-ligne"><button type="button" class="res-carte ${i === actif ? "choisi" : ""}" data-i="${i}" role="option"
@@ -1438,7 +1442,7 @@ function rechercheCarte(zone, { surChoix, surAjout = null, deck = () => etat.dec
       x.prix = q.prix;
       x.prixFait = true;
       x.fr = x.fr || q.fr;
-      const cher = (x.prix || 0) > 5;
+      const cher = (x.prix || 0) > BUDGET;
       el.dataset.legende = legende(x);
       if (cher) el.dataset.cher = "1";
       $(".res-nom", el).innerHTML = nomHtml(x);
@@ -1772,7 +1776,7 @@ function ongletStats(el, d) {
       ${chers.map((c) => `<div class="ligne ligne-3">
         <span class="nom"><span class="en" data-image="${esc(c.info.image)}" data-legende="${esc(legendeCarte(c))}">${esc(c.nom)}</span>${c.info.fr && c.info.fr !== c.nom ? `<span class="fr" data-image="${esc(c.info.image)}" data-legende="${esc(legendeCarte(c))}">${esc(c.info.fr)}</span>` : ""}</span>
         ${mana(c.info.cout)}
-        ${c.info.prix_lien ? `<a class="prix ${c.info.prix > 5 ? "cher" : ""}" href="${esc(c.info.prix_lien)}" target="_blank" rel="noopener">${euros(c.info.prix)}</a>` : `<span class="prix">${euros(c.info.prix)}</span>`}
+        ${c.info.prix_lien ? `<a class="prix ${c.info.prix > BUDGET ? "cher" : ""}" href="${esc(c.info.prix_lien)}" target="_blank" rel="noopener">${euros(c.info.prix)}</a>` : `<span class="prix">${euros(c.info.prix)}</span>`}
       </div>`).join("")}
     </div>`;
   // fonctions ou tags : la même question (ce que font les cartes), un seul panneau avec son sélecteur
@@ -1941,7 +1945,7 @@ async function afficheComparaison(zone, d, fa, fb) {
       return `<div class="ligne" style="grid-template-columns:minmax(0,1fr) auto 4.6rem">
         <span class="nom" data-image="${esc(f.image)}"><span class="en">${esc(n)}</span>${f.fr && f.fr !== n ? `<span class="fr">${esc(f.fr)}</span>` : ""}
           ${f.gc ? `<span class="badge badge-gc">Game Changer</span>` : ""}</span>
-        ${mana(f.cout)}<span class="prix ${(f.prix || 0) > 5 ? "cher" : ""}">${euros(f.prix)}</span></div>`;
+        ${mana(f.cout)}<span class="prix ${(f.prix || 0) > BUDGET ? "cher" : ""}">${euros(f.prix)}</span></div>`;
     };
     const colonne = (v, cartes) => `<div>
       <h3>Seulement dans « ${esc(v.nom)} » <span class="muet">(${cartes.length})</span></h3>
@@ -2044,7 +2048,7 @@ const SOURCES = { mtgpics: "MTGPics", spellbook: "Spellbook", claude: "Claude" }
 function nomCombo(f) {
   const leg = `${f.fr && f.fr !== f.nom ? f.nom + " · " : ""}${f.prix != null ? euros(f.prix) : "prix inconnu"}${f.dans ? " · dans le deck" : ""}`;
   return `<button type="button" class="cc ${f.dans ? "cc-dans" : ""}" data-nom="${esc(f.nom)}" data-image="${esc(f.image)}" data-legende="${esc(leg)}"
-    ${(f.prix || 0) > 5 ? 'data-cher="1"' : ""}>${esc(f.fr || f.nom)}</button>`;
+    ${(f.prix || 0) > BUDGET ? 'data-cher="1"' : ""}>${esc(f.fr || f.nom)}</button>`;
 }
 
 function ligneCombo(c, carte = null) {
@@ -2061,7 +2065,7 @@ function ligneCombo(c, carte = null) {
     else {
       const maybe = manque.length === 1 ? ((c.maybe || []).includes(manque[0].nom) ? ` <span class="badge">au Maybeboard</span>`
         : ` <button type="button" class="btn btn-petit ecrit" data-maybe="${esc(manque[0].nom)}">${ico("maybe")}Maybeboard</button>`) : "";
-      etatCarte = `Pas dans le deck : ${manque.map((f) => `${nc(f.nom, f.fr || f.nom)} <span class="${(f.prix || 0) > 5 ? "cher" : "muet"}">${euros(f.prix)}</span>`).join(" · ")}${maybe}`;
+      etatCarte = `Pas dans le deck : ${manque.map((f) => `${nc(f.nom, f.fr || f.nom)} <span class="${(f.prix || 0) > BUDGET ? "cher" : "muet"}">${euros(f.prix)}</span>`).join(" · ")}${maybe}`;
     }
   }
   return `<div class="combo">
@@ -2648,7 +2652,7 @@ function formulaireRecherche(c) {
         <div class="rch-nombres">
           <label>Prix max ${rchChamp("prixmax", c, 'inputmode="decimal" size="4"')} €</label>
           <label>Prix min ${rchChamp("prixmin", c, 'inputmode="decimal" size="4"')} €</label>
-          <button type="button" class="btn btn-petit" data-act="budget">≤ 5 €</button>
+          ${BUDGET < Infinity ? `<button type="button" class="btn btn-petit" data-act="budget">≤ ${BUDGET_TXT}</button>` : ""}
         </div>
         ${rchSelect("gc", RCH_GC, c)}
         ${rchSelect("cmd", RCH_CMD, c)}
@@ -2841,7 +2845,7 @@ function rendreFormulaire() {
     const a = ev.target.closest("[data-act]");
     if (!a) return;
     if (a.dataset.act === "raz") return nouvelleRecherche();
-    if (a.dataset.act === "budget") { form.elements.prixmax.value = "5"; form.elements.prixmax.focus(); return; }
+    if (a.dataset.act === "budget") { form.elements.prixmax.value = String(BUDGET); form.elements.prixmax.focus(); return; }
     if (a.dataset.act === "identite" && rch.deck) {
       const id = critIdentite(rch.deck);
       $$('.rch-symboles[data-groupe="coul"] .rch-sym', form).forEach((b) => { const on = id.coul.includes(b.dataset.k); b.classList.toggle("actif", on); b.setAttribute("aria-pressed", on); });
@@ -3166,7 +3170,7 @@ function texteCarteRch(x) {
 }
 
 function ligneRch(x, i) {
-  const cher = (x.prix || 0) > 5;
+  const cher = (x.prix || 0) > BUDGET;
   const typeAff = rch.crit.fr !== "" && x.type_fr ? x.type_fr : x.type;
   return `<article class="rch-carte" data-i="${i}">
     <button type="button" class="rch-vignette" data-act="ouvrir" data-image="${esc(x.image)}" data-legende="${esc(`${x.fr || x.nom} — ${prixRch(x)}`)}" ${cher ? 'data-cher="1"' : ""} aria-label="Fiche de ${esc(x.nom)}">
@@ -3188,7 +3192,7 @@ function ligneRch(x, i) {
 }
 
 function carteImageRch(x, i) {
-  const cher = (x.prix || 0) > 5;
+  const cher = (x.prix || 0) > BUDGET;
   const marques = [
     x.gc ? `<span class="marque marque-gc" title="Game Changer">GC</span>` : "",
     horsCouleurs(x) ? `<span class="marque marque-alerte">hors couleurs</span>` : "",
@@ -3302,7 +3306,7 @@ function ficheRecherche(i, ctx = null) {
   const d = ctx ? ctx.deck : rch.deck;
   const v = x.versionChoisie || null;
   const image = (v && v.image) || x.image;
-  const cher = (x.prix || 0) > 5;
+  const cher = (x.prix || 0) > BUDGET;
   const texte = (t) => (t || "").split("\n").map((l) => l.trim() === "//" ? "<hr>" : l.trim() ? `<p>${texteMana(l)}</p>` : "").join("");
   ouvrirModale(`
     <div class="fiche-carte">
@@ -3377,7 +3381,7 @@ function ficheRecherche(i, ctx = null) {
     x.prix = f.prix;
     const el = $("#rf-prix-badge");
     el.textContent = `${euros(f.prix)}${f.prix_edition ? " · " + f.prix_edition : ""}`;
-    el.classList.toggle("badge-cher", f.prix > 5);
+    el.classList.toggle("badge-cher", f.prix > BUDGET);
   }).catch(() => {});
 }
 

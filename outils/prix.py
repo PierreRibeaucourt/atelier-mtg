@@ -13,8 +13,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+import reglages
+
 ENTETES = {"User-Agent": "MTG-assistant-perso/1.0", "Accept": "application/json"}
-BUDGET = 5.0  # seuil habituel par carte
+BUDGET = reglages.budget()  # seuil par carte (reglages.json, 5 € par défaut)
 
 
 def get(url, params=None):
@@ -93,7 +95,7 @@ def main(noms):
             continue
         mini, edition, lien = prix[0]
         total += mini
-        alerte = "  <-- AU-DESSUS DE 5 EUR" if mini > BUDGET else ""
+        alerte = f"  <-- AU-DESSUS DE {BUDGET:g} EUR" if mini > BUDGET else ""
         alerte += "  [GAME CHANGER]" if gc else ""
         print(f"{nom} : {mini:.2f} EUR minimum ({edition}){alerte}")
         if len(prix) > 1:

@@ -44,13 +44,20 @@ def _git(*args, dossier=None, ok=False):
 
 
 def compte():
-    """Le compte GitHub de l'Atelier, lu dans le remote de son dépôt : (dépôt des pages, adresse du site)."""
-    url = _git("remote", "get-url", "origin", dossier=decks.RACINE).stdout.strip()
+    """Le compte GitHub des pages : celui de reglages.json (clé github), sinon celui du dépôt de l'Atelier (remote
+    origin). Renvoie (dépôt des pages, adresse du site). Même compte que l'Atelier : même accès (SSH ou HTTPS)."""
+    import reglages
+    proprio = reglages.github()
+    if not proprio:            # pas de valeur par défaut : un dépôt cloné pointe vers le compte de son auteur, pas le tien
+        raise RuntimeError("Indique ton compte GitHub dans reglages.json, à la racine de l'Atelier : "
+                           '{"github": "TonCompte"} (voir README, « Partager un deck »)')
+    url = _git("remote", "get-url", "origin", dossier=decks.RACINE, ok=True).stdout.strip()
     m = re.match(r"(?:git@([^:]+):|https://([^/]+)/)([^/]+)/[^/]+?(?:\.git)?$", url)
-    if not m:
-        raise RuntimeError("Compte GitHub de l'Atelier introuvable (remote origin)")
-    hote, proprio = m.group(1) or m.group(2), m.group(3)
-    depot = f"git@{hote}:{proprio}/{NOM_DEPOT}.git" if m.group(1) else f"https://{hote}/{proprio}/{NOM_DEPOT}.git"
+    if m and m.group(3).lower() == proprio.lower():          # le compte de l'Atelier : même accès (SSH ou HTTPS)
+        hote, proprio = m.group(1) or m.group(2), m.group(3)
+        depot = f"git@{hote}:{proprio}/{NOM_DEPOT}.git" if m.group(1) else f"https://{hote}/{proprio}/{NOM_DEPOT}.git"
+    else:
+        depot = f"https://github.com/{proprio}/{NOM_DEPOT}.git"
     return depot, f"https://{proprio.lower()}.github.io/{NOM_DEPOT}/"
 
 
@@ -60,9 +67,17 @@ def _preparer():
     os.makedirs(DOSSIER, exist_ok=True)
     if not os.path.isdir(os.path.join(DOSSIER, ".git")):
         _git("init", "-q", "-b", "main")
-        for k in ("user.name", "user.email"):                 # la même identité que l'Atelier (compte perso)
-            _git("config", k, _git("config", k, dossier=decks.RACINE).stdout.strip())
+        for k in ("user.name", "user.email"):                 # la même identité que l'Atelier
+            v = _git("config", k, dossier=decks.RACINE, ok=True).stdout.strip()
+            if not v:
+                raise RuntimeError(f"Identité git manquante : git config --global {k} \"…\"")
+            _git("config", k, v)
         _git("remote", "add", "origin", depot)
+    else:
+        actuel = _git("remote", "get-url", "origin", ok=True).stdout.strip()
+        if actuel and actuel != depot:                        # autre compte : ces pages-là ne partent pas chez lui
+            raise RuntimeError(f"Le dossier « Partage Atelier » publie vers {actuel}, pas vers {depot} : "
+                               "renomme-le pour repartir de zéro")
     r = _git("fetch", "-q", "origin", ok=True)
     if r.returncode:
         if re.search(r"not found|could not read", r.stderr or "", re.I):
@@ -86,7 +101,11 @@ def _publier(message):
     if _git("diff", "--cached", "--quiet", ok=True).returncode:
         _git("commit", "-q", "-m", message)
     if _git("rev-parse", "-q", "--verify", "HEAD", ok=True).returncode == 0:
-        _git("push", "-q", "-u", "origin", "main")
+        r = _git("push", "-q", "-u", "origin", "main", ok=True)
+        if r.returncode:
+            msg = ((r.stderr or "").strip().splitlines() or ["?"])[-1]
+            raise RuntimeError(f"GitHub refuse l'envoi ({msg}) : vérifie le compte de reglages.json et ta connexion "
+                               "à GitHub (gh auth login, puis gh auth setup-git)")
 
 
 # ---------------------------------------------------------------- registre des decks partagés
@@ -241,9 +260,11 @@ def _image_partage(dossier, dessiner):
 def _page(dossier, donnees, entete):
     """index.html, app.js, style.css et donnees.js : une copie de l'interface, figée avec ses données.
     entete : titre, description, url (adresse absolue de la page), image (adresse absolue de partage.jpg ou None), alt."""
+    import reglages
     os.makedirs(dossier, exist_ok=True)
     for f in ("app.js", "style.css"):
         shutil.copyfile(os.path.join(STATIQUE, f), os.path.join(dossier, f))
+    donnees = dict(donnees, reglages=reglages.pour_la_page())         # budget par carte : les cartes chères restent signalées
     js = "window.PARTAGE = " + json.dumps(donnees, ensure_ascii=False, separators=(",", ":")) + ";\n"
     _verifier(js)
     _ecrire(os.path.join(dossier, "donnees.js"), js)
@@ -273,6 +294,7 @@ def _page(dossier, donnees, entete):
         meta.append('<meta name="twitter:card" content="summary">')
     html = (html.replace("<title>Atelier MTG</title>", "\n  ".join(meta))
             .replace('href="/static/style.css"', f'href="style.css?v={v["style.css"]}"')
+            .replace('  <script src="/reglages.js"></script>\n', "")
             .replace('<script src="/static/app.js"></script>',
                      f'<script src="donnees.js?v={v["donnees.js"]}"></script>\n  <script src="app.js?v={v["app.js"]}"></script>'))
     _ecrire(os.path.join(dossier, "index.html"), html)

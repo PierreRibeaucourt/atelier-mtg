@@ -36,14 +36,17 @@ Chaque message commence par [Page : …] : c'est ce que l'utilisateur regarde da
   Une consigne de jeu en français qui ne rentre pas dans ces réglages se code dans outils/simu_moteur.py (vérifie ensuite que
   les résultats par défaut ne changent pas).
 - Rapports de simulation : <dossier du deck>/simulations/*.json. Simulateur : outils/simu.py, simu_cartes.py, simu_moteur.py.
-- Prix : python outils/prix.py "<carte>" (budget 5 € par carte). Respecte la méthode et les préférences gardées en mémoire."""
+- Prix : python outils/prix.py "<carte>" ({budget}). Respecte la méthode et les préférences gardées en mémoire."""
 
 
 def consigne(cle):
+    import reglages
+    b = reglages.budget_texte()
+    base = CONSIGNE.replace("{budget}", f"budget {b} par carte" if b else "pas de budget par carte")
     if cle:
-        return CONSIGNE + (f"\n\nCETTE DISCUSSION PORTE SUR LE DECK DU DOSSIER « {cle} » (liste : {cle}/archidekt.txt). "
+        return base + (f"\n\nCETTE DISCUSSION PORTE SUR LE DECK DU DOSSIER « {cle} » (liste : {cle}/archidekt.txt). "
                            "Chaque deck a sa propre discussion dans l'Atelier : reste sur ce deck, sauf si l'utilisateur en parle d'un autre.")
-    return CONSIGNE + "\n\nDiscussion générale de l'Atelier : pas un deck en particulier."
+    return base + "\n\nDiscussion générale de l'Atelier : pas un deck en particulier."
 
 
 def trouver_claude():

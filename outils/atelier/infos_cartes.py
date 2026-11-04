@@ -18,10 +18,11 @@ from datetime import date
 ICI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(ICI))
 from prix import ENTETES, get, prix_fiable  # noqa: E402
+import reglages  # noqa: E402
 
 CACHE = os.path.join(ICI, "cache_infos.json")
 BASES_FR = {"Mountain": "Montagne", "Swamp": "Marais", "Island": "Île", "Plains": "Plaine", "Forest": "Forêt", "Wastes": "Désolation"}
-BUDGET = 5.0
+BUDGET = reglages.budget()                       # prix maximum par carte (reglages.json)
 _verrou = threading.RLock()
 _cache = None
 etat = dict(tache="", fait=0, total=0)          # avancement de la mise à jour en tâche de fond

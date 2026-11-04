@@ -84,12 +84,12 @@ Les combos viennent de trois sources :
 - Chaque page a son titre, sa description et une image d'aperçu de 1200 × 630 (balises Open Graph) : envoyé sur une messagerie ou un réseau social, le lien s'affiche avec la carte du commandant, les couleurs, le nombre de cartes, le prix et le bracket. La racine montre les commandants de tous les decks partagés.
 - Les données sont figées au moment du partage, prix compris. « Mettre à jour » republie la page à la même adresse ; « Ne plus partager » la retire du site (elle reste dans l'historique du dépôt).
 - Les pages sont publiques pour qui a le lien, et non référencées par les moteurs de recherche. Rien d'autre ne part : ni les discussions, ni les autres decks.
-- Une fois, avant le premier partage : créer sur GitHub un dépôt public `decks`, sur le même compte que l'Atelier, avec un README. Puis activer GitHub Pages : Settings › Pages › Deploy from a branch › `main`, dossier `/ (root)`. Une page publiée est en ligne au bout d'une minute environ.
-- Les pages sont rangées dans le dossier `Partage Atelier` (un dépôt git à part, hors de ce dépôt), et envoyées avec le remote et l'identité git de l'Atelier.
+- Une fois, avant le premier partage : indiquer son compte GitHub dans `reglages.json` (`python installer.py --github <compte>`), puis créer sur ce compte un dépôt public `decks`, avec un README, et activer GitHub Pages : Settings › Pages › Deploy from a branch › `main`, dossier `/ (root)`. AGENTS.md donne les commandes. Une page publiée est en ligne au bout d'une minute environ.
+- Les pages sont rangées dans le dossier `Partage Atelier` (un dépôt git à part, hors de ce dépôt), et envoyées avec l'identité git de l'Atelier.
 
 ## Outils en ligne de commande
 
-- **Prix d'une ou plusieurs cartes** (nom français ou anglais), avec une alerte au-dessus de 5 € :
+- **Prix d'une ou plusieurs cartes** (nom français ou anglais), avec une alerte au-dessus du budget (5 € par défaut, voir `reglages.json`) :
   `python outils/prix.py "Foudre" "Sol Ring"`
 - **Probabilités de pioche** (loi hypergéométrique) :
   `python outils/proba.py --deck 99 --cibles 38 --vues 7 --min 2 --max 4`

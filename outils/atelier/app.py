@@ -228,6 +228,14 @@ def accueil():
     return send_from_directory(app.static_folder, "index.html")
 
 
+@app.get("/reglages.js")
+def reglages_js():
+    """Les réglages de cette installation (reglages.json) pour l'interface : budget par carte."""
+    import json
+    import reglages
+    return Response("window.REGLAGES = " + json.dumps(reglages.pour_la_page()) + ";\n", mimetype="text/javascript")
+
+
 @app.errorhandler(Exception)
 def erreur(e):
     code = getattr(e, "code", 500)

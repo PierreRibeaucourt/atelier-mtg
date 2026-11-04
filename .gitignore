@@ -4,6 +4,8 @@ Corbeille Atelier/
 # pages partagées : leur propre dépôt (decks), publié sur GitHub Pages
 Partage Atelier/
 outils/atelier/discussion.json
+# réglages de cette installation (budget, compte GitHub) : voir outils/reglages.py
+reglages.json
 
 # Articles enregistrés depuis d'autres sites (Magic-Casual, Magic-Ville, Wizards) : pas à republier
 *.mhtml
