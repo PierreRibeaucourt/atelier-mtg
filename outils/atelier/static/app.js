@@ -120,9 +120,10 @@ function ficheSurvol(c) {
 }
 
 document.addEventListener("mouseover", (ev) => {
-  const el = ev.target.closest("[data-survol]");
+  const el = ev.target.closest("[data-survol], [data-survol-r]");
   const fs = $("#fiche-survol");
-  const c = el && etat.deck && etat.deck.cartes[+el.dataset.survol];
+  const c = !el ? null : el.dataset.survolR != null ? (rch.res && rch.res.cartes[+el.dataset.survolR] ? survolRecherche(rch.res.cartes[+el.dataset.survolR]) : null)
+    : etat.deck && etat.deck.cartes[+el.dataset.survol];
   if (!c) { fs.hidden = true; survolCarte = null; return; }
   if (el !== survolCarte || fs.hidden) {
     survolCarte = el;
@@ -218,9 +219,12 @@ async function route() {
   fermerMenu();
   if (!$("#modale").hidden) fermerModale();
   cacherApercu();
-  const parts = location.hash.replace(/^#\/?/, "").split("/");
+  const [chemin, qs] = location.hash.replace(/^#\/?/, "").split(/\?(.*)/s);
+  const parts = chemin.split("/");
+  $("#lien-recherche").classList.toggle("actif", parts[0] === "recherche");
   try {
-    if (parts[0] === "deck" && parts[1]) await vueDeck(decodeURIComponent(parts[1]), parts[2] || "liste", parts[3] ? decodeURIComponent(parts[3]) : null);
+    if (parts[0] === "recherche") await vueRecherche(new URLSearchParams(qs || ""));
+    else if (parts[0] === "deck" && parts[1]) await vueDeck(decodeURIComponent(parts[1]), parts[2] || "liste", parts[3] ? decodeURIComponent(parts[3]) : null);
     else await vueAccueil();
   } catch (e) {
     vue.innerHTML = `<p class="erreur">${esc(e.message || e)}</p>`;
@@ -507,6 +511,7 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
         </div>
         <div class="actions">
           <button class="btn btn-accent" id="btn-ajouter">Ajouter des cartes</button>
+          <a class="btn" href="#/recherche?deck=${enc(id)}" title="Moteur de recherche (comme celui de Magic-Ville), lié à ce deck">Chercher des cartes</a>
           <button class="btn" id="btn-export">Copier pour Archidekt</button>
           <button class="btn ouvre-menu" id="btn-deck-menu" aria-label="Autres actions sur le deck" title="Autres actions">⋯</button>
         </div>
@@ -767,6 +772,7 @@ function ouvrirCarte(c) {
         <div class="chiffres">
           ${f.prix_lien ? `<a class="badge ${cher ? "badge-cher" : ""}" href="${esc(f.prix_lien)}" target="_blank" rel="noopener" title="Voir sur Cardmarket">${euros(f.prix)}${f.prix_edition ? ` · ${esc(f.prix_edition)}` : ""} · Cardmarket ↗</a>`
             : `<span class="badge">${euros(f.prix)}</span>`}
+          <a class="badge" href="${esc(f.gatherer || lienGatherer(c.nom))}" target="_blank" rel="noopener" title="La carte sur Gatherer, le site officiel de Wizards">Gatherer ↗</a>
           ${f.gc ? `<span class="badge badge-gc">Game Changer</span>` : ""}
           ${badgesAlerte(c)}
           ${sim ? `<span class="badge badge-sim" title="${esc(sim[1] + (c.sim.non_lu.length ? " :\n• " + c.sim.non_lu.join("\n• ") : ""))}">${sim[0]}</span>` : ""}
@@ -2076,6 +2082,842 @@ async function suivreSimulation(el, d, id) {
 }
 
 
+// ------------------------------------------------------------------ recherche de cartes (moteur façon Magic-Ville)
+// Mêmes fenêtres et mêmes règles que le moteur de Magic-Ville ; la recherche se fait sur la base locale (recherche.py).
+// Les critères vivent dans l'adresse (#/recherche?…) : précédent / suivant du navigateur, favoris, plusieurs onglets.
+const RCH_DEFAUTS = { fr: "1", en: "1", cm: "1", tm: "1", mvx: "1", fx: "1", ex: "1", img: "1", format: "commander", ordre: "couleur" };
+const RCH_TYPES = [["AR", "Artefact"], ["CR", "Créature"], ["EN", "Enchantement"], ["IN", "Éphémère"],
+  ["SO", "Rituel"], ["BAT", "Bataille"], ["PL", "Planeswalker"], ["LA", "Terrain"]];
+const RCH_SPE = [["", "Cartes spéciales"], ["colorless", "Symbole de mana incolore"], ["split", "Cartes doubles"], ["flip", "Cartes à inversion"],
+  ["dfc", "Cartes recto-verso"], ["adv", "Cartes aventures"], ["hyb", "Coût de mana hybride"], ["phy", "Coût de mana phyrexian"],
+  ["time", "Cartes décalées dans le temps"], ["historic", "Cartes « historiques »"], ["X", "Cartes avec X dans le coût de mana"]];
+const RCH_SPT = [["", "Types spéciaux"], ["TR", "Clan (tribal)"], ["TK", "Jeton"], ["DUN", "Donjon"], ["PN", "Plan"], ["SC", "Machination"],
+  ["CH", "Personnage (Vanguard)"], ["HE", "Héros"], ["CO", "Conspiration"]];
+const RCH_FORMATS = [["commander", "Commander multi"], ["duel", "Commander 1 contre 1"], ["modern", "Modern"], ["pioneer", "Pioneer"],
+  ["standard", "Standard"], ["vintage", "Vintage"], ["legacy", "Legacy"], ["premodern", "Premodern"], ["pauper", "Pauper"],
+  ["historic", "Historic"], ["alchemy", "Alchemy"]];
+const RCH_RARETES = [["M", "Mythique"], ["R", "Rare"], ["U", "Inhabituelle"], ["C", "Commune"]];
+const RCH_TRIS = [["couleur", "Couleur"], ["nom", "Nom VO"], ["nomfr", "Nom VF"], ["type", "Type"], ["cout", "Coût"], ["prix", "Prix"],
+  ["pop", "Popularité"], ["date", "Nouveautés"]];
+const RCH_TRI_DESC = { date: true };                 // sens naturel : les plus récentes d'abord
+const RCH_GC = [["", "Game Changers : indifférent"], ["sans", "Sans Game Changer"], ["seul", "Game Changers seulement"]];
+const RCH_RARETE_NOM = { c: "commune", u: "inhabituelle", r: "rare", m: "mythique", s: "spéciale", b: "bonus" };
+const rch = { crit: null, deck: null, res: null, editions: null, fonctions: null, ouvert: true, numero: 0, journal: {} };
+
+const lettresWUBRG = (s, permis = "WUBRG") => [...permis].filter((k) => (s || "").includes(k)).join("");
+
+function critDepuis(params) {
+  const c = { ...RCH_DEFAUTS };
+  for (const [k, v] of params) c[k] = v;
+  return c;
+}
+
+function critVersHash(c) {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(c)) {
+    if (v == null || k.startsWith("_")) continue;
+    if ((RCH_DEFAUTS[k] ?? "") !== v) p.set(k, v);
+  }
+  return p.toString();
+}
+
+const cleDerniere = (deck) => "rch-derniere" + (deck ? ":" + deck : "");
+
+// ---- fenêtres du formulaire
+function rchSymboles(groupe, valeur, lettres = "WUBRG") {
+  return `<div class="rch-symboles" data-groupe="${groupe}" role="group">${[...lettres].map((k) => {
+    const on = (valeur || "").includes(k);
+    return `<button type="button" class="rch-sym ${on ? "actif" : ""}" data-k="${k}" aria-pressed="${on}" title="${esc(NOMS_COULEURS[k] || k)}">${symbole(k)}</button>`;
+  }).join("")}</div>`;
+}
+
+function rchBascules(groupe, items, valeur, unique = false) {
+  return `<div class="rch-bascules" data-groupe="${groupe}" ${unique ? 'data-unique="1"' : ""} role="group">${items.map(([k, l]) => {
+    const on = unique ? valeur === k : (valeur || "").includes(k);
+    return `<button type="button" class="rch-bascule ${on ? "actif" : ""}" data-k="${k}" aria-pressed="${on}">${esc(l)}</button>`;
+  }).join("")}</div>`;
+}
+
+const rchCase = (nom, lib, c) => `<label class="rch-case"><input type="checkbox" name="${nom}" ${c[nom] === "1" ? "checked" : ""}> ${lib}</label>`;
+const rchRadio = (nom, val, lib, c) => `<label class="rch-case"><input type="radio" name="${nom}" value="${val}" ${c[nom] === val ? "checked" : ""}> ${lib}</label>`;
+const rchChamp = (nom, c, attrs = "") => `<input class="champ champ-petit" name="${nom}" value="${esc(c[nom] || "")}" ${attrs}>`;
+const rchSelect = (nom, items, c) => `<select class="champ champ-petit" name="${nom}">${items.map(([k, l]) =>
+  `<option value="${esc(k)}" ${(c[nom] || "") === k ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
+
+function rchNombres(titre, cle, x, c) {
+  return `<section class="fen fen-nombres"><h3 class="fen-titre">${titre}</h3>
+    <div class="rch-nombres">
+      <label>Égal à ${rchChamp(cle, c, 'inputmode="decimal" size="3"')}</label>
+      <label>Max ${rchChamp(cle + "max", c, 'inputmode="decimal" size="3"')}</label>
+      <label>Min ${rchChamp(cle + "min", c, 'inputmode="decimal" size="3"')}</label>
+    </div>
+    <div class="rch-cases">${rchCase(x, cle === "mv" ? "X inclus" : "* inclus", c)}${cle === "mv" ? rchCase("pair", "pair", c) + rchCase("impair", "impair", c) : ""}</div>
+  </section>`;
+}
+
+function formulaireRecherche(c) {
+  const d = rch.deck;
+  const fonctions = [["", "Fonction : toutes"], ...(rch.fonctions || []).map((f) => [f.cle, f.nom])];
+  return `<form id="moteur" class="moteur" autocomplete="off">
+    <div class="mt-nom">
+      <input class="champ" name="nom" type="search" value="${esc(c.nom || "")}" placeholder="Titre : nom de la carte, en français ou en anglais…" aria-label="Titre de la carte">
+      <button class="btn btn-accent" type="submit">Rechercher</button>
+      <button class="btn" type="button" data-act="raz" title="Remettre toutes les fenêtres à zéro">Tout effacer</button>
+    </div>
+    <div class="fenetres">
+      <section class="fen fen-manas"><h3 class="fen-titre">Manas</h3>
+        <div class="rch-rangee"><span>Doivent faire partie du coût</span>${rchSymboles("doit", c.doit)}</div>
+        <div class="rch-rangee"><span>Peuvent faire partie du coût</span>${rchSymboles("peut", c.peut)}</div>
+        <div class="rch-rangee"><span>Peuvent être multiples</span>${rchSymboles("mult", c.mult)}</div>
+        <label class="rch-ligne-champ">Ou saisissez un coût ${rchChamp("cout", c, 'placeholder="2BR, U?, 1**" size="9" title="Chiffres = mana générique ; ? = un mana générique quelconque ; * = un mana coloré quelconque ; l\'hybride compte pour ses deux couleurs. Prioritaire sur les trois rangées."')}</label>
+        ${rchSelect("spe", RCH_SPE, c)}
+      </section>
+      <section class="fen fen-couleurs"><h3 class="fen-titre">Couleurs</h3>
+        ${rchSymboles("coul", c.coul, "WUBRGC")}
+        <div class="rch-cases">${rchRadio("cm", "1", "Au moins une", c)}${rchRadio("cm", "2", "Toutes", c)}</div>
+        <div class="rch-cases">${rchCase("seules", "Uniquement celle(s) choisie(s)", c)}${rchCase("id", "Id. couleur", c)}</div>
+        ${d && d.identite ? `<button type="button" class="lien-discret" data-act="identite" title="Cartes jouables dans ce deck : couleurs du commandant et incolores">Couleurs de ${esc(d.titre)} ${identiteHtml(d.identite)}</button>` : ""}
+      </section>
+      <section class="fen fen-types"><h3 class="fen-titre">Types</h3>
+        <div class="rch-types">${RCH_TYPES.map(([k, l]) => `<label class="rch-case"><input type="checkbox" name="types" value="${k}" ${(c.types || "").split(",").includes(k) ? "checked" : ""}> ${l}</label>`).join("")}</div>
+        <div class="rch-cases">${rchRadio("tm", "1", "Au moins un", c)}${rchRadio("tm", "2", "Tous", c)}</div>
+        ${rchSelect("spt", RCH_SPT, c)}
+      </section>
+      <section class="fen fen-texte"><h3 class="fen-titre">Recherche texte</h3>
+        <div class="rch-cases">${rchCase("fr", "français", c)}${rchCase("en", "anglais", c)}</div>
+        <label class="rch-bloc">Type <input class="champ champ-petit" name="type" value="${esc(c.type || "")}" placeholder="gobelin, légendaire, equipment…"></label>
+        <div class="rch-bloc"><span class="rch-texte-tete">Texte ${rchCase("vanilla", "sans texte", c)}</span>
+          <textarea class="champ" name="texte" rows="2" placeholder="défaussez, &quot;chaque adversaire&quot;, !additio…">${esc(c.texte || "")}</textarea></div>
+        <p class="petit muet rch-aide">Tous les mots doivent y être, dans n'importe quel ordre. « "…" » : expression exacte ; « !mot » : sans ce mot.</p>
+      </section>
+      <section class="fen fen-options"><h3 class="fen-titre">Options</h3>
+        <div class="rch-cases rch-colonne">${rchCase("img", "Affichage graphique", c)}${rchCase("versions", "Toutes les versions", c)}${rchCase("fun", "Cartes fantaisie (Un-sets)", c)}</div>
+      </section>
+      ${rchNombres("Valeur de mana", "mv", "mvx", c)}
+      ${rchNombres("Force", "f", "fx", c)}
+      ${rchNombres("Endurance", "e", "ex", c)}
+      <section class="fen fen-format"><h3 class="fen-titre">Format</h3>${rchBascules("format", RCH_FORMATS, c.format || "", true)}</section>
+      <section class="fen fen-rarete"><h3 class="fen-titre">Rareté</h3>${rchBascules("rar", RCH_RARETES, c.rar || "")}</section>
+      <section class="fen fen-atelier"><h3 class="fen-titre">En plus de Magic-Ville</h3>
+        <div class="rch-nombres">
+          <label>Prix max ${rchChamp("prixmax", c, 'inputmode="decimal" size="4"')} €</label>
+          <label>Prix min ${rchChamp("prixmin", c, 'inputmode="decimal" size="4"')} €</label>
+          <button type="button" class="btn btn-petit" data-act="budget" title="Ton budget habituel">≤ 5 €</button>
+        </div>
+        ${rchSelect("fn", fonctions, c)}
+        ${rchSelect("gc", RCH_GC, c)}
+        ${d ? rchCase("horsdeck", `Pas déjà dans ${esc(d.titre)}`, c) : ""}
+        <p class="petit muet rch-aide">Fonctions : classement Scryfall Tagger (removal, ramp, pioche…). Prix : le moins cher, toutes éditions.</p>
+      </section>
+      <section class="fen fen-editions"><h3 class="fen-titre">Éditions</h3>
+        <div class="eds-tete">
+          <input class="champ champ-petit" type="search" id="eds-filtre" placeholder="Chercher une édition (nom ou code)…" aria-label="Chercher une édition">
+          ${rchCase("neuves", "Nouvelles cartes uniquement", c)}
+        </div>
+        <div id="eds-choisies" class="puces"></div>
+        <div id="eds-groupes" class="eds-groupes"><p class="muet petit">Éditions…</p></div>
+      </section>
+    </div>
+    <div class="mt-pied"><button class="btn btn-accent" type="submit">Rechercher</button></div>
+  </form>`;
+}
+
+// ---- lire le formulaire
+function lireFormulaire(form) {
+  const c = {};
+  const val = (n) => (form.elements[n] ? form.elements[n].value.trim() : "");
+  for (const n of ["nom", "type", "texte", "cout", "mv", "mvmax", "mvmin", "f", "fmax", "fmin", "e", "emax", "emin", "prixmax", "prixmin", "spe", "spt", "fn", "gc"]) c[n] = val(n);
+  for (const n of ["fr", "en", "vanilla", "seules", "id", "mvx", "pair", "impair", "fx", "ex", "img", "versions", "fun", "neuves", "horsdeck"]) {
+    const el = form.elements[n];
+    c[n] = el && el.checked ? "1" : "";
+  }
+  c.cm = (form.querySelector('input[name="cm"]:checked') || {}).value || "1";
+  c.tm = (form.querySelector('input[name="tm"]:checked') || {}).value || "1";
+  c.types = $$('input[name="types"]:checked', form).map((x) => x.value).join(",");
+  for (const g of $$(".rch-symboles, .rch-bascules", form)) {
+    const on = $$(".actif", g).map((b) => b.dataset.k);
+    c[g.dataset.groupe] = g.dataset.unique ? (on[0] || "") : on.join("");
+  }
+  c.eds = [...(rch.eds || [])].join(",");
+  return c;
+}
+
+// les trois rangées de la fenêtre Manas, comme sur Magic-Ville : « Doivent » et « Peuvent » s'excluent,
+// et « Multiples » suit la rangée qu'on coche (on peut ensuite le décocher : un seul symbole de cette couleur)
+function basculeMana(form, rangee, k) {
+  const ligne = (r) => $(`.rch-symboles[data-groupe="${r}"] [data-k="${k}"]`, form);
+  const on = (r) => ligne(r).classList.contains("actif");
+  const flip = (r) => { const b = ligne(r); const v = !b.classList.contains("actif"); b.classList.toggle("actif", v); b.setAttribute("aria-pressed", v); };
+  if (rangee === "doit" || rangee === "peut") {
+    const autre = rangee === "doit" ? "peut" : "doit";
+    if (on(autre)) flip(autre);
+    if (on(rangee) === on("mult")) flip("mult");
+    flip(rangee);
+  } else {
+    if (!on("doit") && !on("peut") && !on("mult")) flip("peut");
+    flip("mult");
+  }
+}
+
+// ---- résumé des critères (formulaire replié)
+function resumeCrit(c) {
+  const r = [];
+  const nb = (cle, lib) => {
+    const p = [];
+    if (c[cle]) p.push("= " + c[cle]);
+    if (c[cle + "min"]) p.push("≥ " + c[cle + "min"]);
+    if (c[cle + "max"]) p.push("≤ " + c[cle + "max"]);
+    if (p.length) r.push(`${lib} ${p.join(" et ")}`);
+  };
+  if (c.nom) r.push(`Titre : ${c.nom}`);
+  if (c.type) r.push(`Type : ${c.type}`);
+  if (c.texte) r.push(`Texte : ${c.texte}`);
+  if (c.vanilla === "1") r.push("Sans texte");
+  if (c.cout) r.push(`Coût : ${c.cout}`);
+  else {
+    if (c.doit) r.push(`Coût avec ${[...c.doit].join(" ")}`);
+    if (c.peut) r.push(`Coût parmi ${[...lettresWUBRG((c.doit || "") + c.peut)].join(" ")}`);
+  }
+  if (c.coul) r.push(`Couleurs ${[...c.coul].join(" ")}${c.id === "1" ? " (identité)" : ""}${c.seules === "1" ? ", uniquement" : ""}${c.cm === "2" ? ", toutes" : ""}`);
+  if (c.types) r.push(c.types.split(",").map((k) => (RCH_TYPES.find((t) => t[0] === k) || [k, k])[1]).join(c.tm === "2" ? " et " : " ou "));
+  if (c.spt) r.push((RCH_SPT.find((t) => t[0] === c.spt) || ["", c.spt])[1]);
+  if (c.spe) r.push((RCH_SPE.find((t) => t[0] === c.spe) || ["", c.spe])[1]);
+  nb("mv", "Valeur de mana"); nb("f", "Force"); nb("e", "Endurance");
+  if (c.pair === "1") r.push("valeur paire");
+  if (c.impair === "1") r.push("valeur impaire");
+  if (c.format) r.push((RCH_FORMATS.find((f) => f[0] === c.format) || ["", c.format])[1]);
+  if (c.rar) r.push([...c.rar].map((k) => (RCH_RARETES.find((x) => x[0] === k) || [k, k])[1]).join(", "));
+  if (c.eds) r.push(`${c.neuves === "1" ? "Nouvelles cartes de " : "Éditions : "}${c.eds.split(",").map((e) => e.toUpperCase()).join(", ")}`);
+  if (c.prixmax || c.prixmin) r.push(`Prix ${c.prixmin ? "≥ " + c.prixmin + " € " : ""}${c.prixmax ? "≤ " + c.prixmax + " €" : ""}`.trim());
+  if (c.fn) r.push("Fonction : " + (((rch.fonctions || []).find((f) => f.cle === c.fn) || {}).nom || c.fn));
+  if (c.gc) r.push((RCH_GC.find((g) => g[0] === c.gc) || ["", c.gc])[1]);
+  if (c.horsdeck === "1") r.push("pas déjà dans le deck");
+  if (c.versions === "1") r.push("toutes les versions");
+  if (c.fun === "1") r.push("cartes fantaisie");
+  return r;
+}
+
+// ---- la page
+async function vueRecherche(params) {
+  // la page sans critère (lien du haut, bouton d'un deck) : on reprend la dernière recherche
+  const deckDemande = params.get("deck");
+  if ([...params.keys()].every((k) => k === "deck")) {
+    const derniere = PREF.get(cleDerniere(deckDemande || ""), "");
+    if (derniere) {
+      history.replaceState(null, "", "#/recherche?" + derniere);
+      params = new URLSearchParams(derniere);
+    }
+  }
+  const neuve = [...params.keys()].every((k) => k === "deck");
+  scrollTo(0, 0);
+  const c = critDepuis(params);
+  if (!params.has("deck")) c.deck = PREF.get("rch-deck", "");
+  etat.deck = null;
+  let [ds, fonctions] = await Promise.all([listeDecks(), rch.fonctions ? rch.fonctions : api("/api/recherche/fonctions").catch(() => [])]);
+  rch.fonctions = fonctions;
+  if (c.deck && !ds.some((d) => d.id === c.deck)) {        // deck créé dans un autre onglet : on relit la liste
+    etat.decks = [];
+    ds = await listeDecks();
+  }
+  if (c.deck && !ds.some((d) => d.id === c.deck)) c.deck = "";
+  rch.deck = c.deck ? await api(`/api/decks/${enc(c.deck)}/apercu`).catch(() => null) : null;
+  if (!rch.deck) c.deck = "";
+  if (deckDemande) PREF.set("rch-deck", c.deck);
+  if (neuve && rch.deck && rch.deck.identite) Object.assign(c, critIdentite(rch.deck));    // nouvelle recherche pour un deck : ses couleurs
+  rch.crit = c;
+  rch.eds = new Set((c.eds || "").split(",").filter(Boolean));
+  rch.ouvert = c.r !== "1" || rch.ouvrir === true;
+  rch.ouvrir = false;
+  vue.innerHTML = `
+    <nav class="fil" aria-label="Fil d'Ariane"><a href="#/">Mes decks</a><span aria-hidden="true">›</span>${rch.deck ? `<a href="#/deck/${enc(rch.deck.id)}">${esc(rch.deck.titre)}</a><span aria-hidden="true">›</span>` : ""}<span aria-current="page">Recherche de cartes</span></nav>
+    <div class="titre-page rch-titre">
+      <h1>Recherche de cartes</h1>
+      <div class="rch-deck">
+        <label class="petit muet" for="rch-deck">Pour le deck</label>
+        <select class="champ champ-petit" id="rch-deck">
+          <option value="">— aucun —</option>
+          ${[...ds].sort((a, b) => recence(b) - recence(a) || a.titre.localeCompare(b.titre)).map((d) =>
+            `<option value="${esc(d.id)}" ${d.id === c.deck ? "selected" : ""}>${esc(d.titre)}</option>`).join("")}
+        </select>
+        <span id="rch-deck-info" class="petit muet"></span>
+      </div>
+    </div>
+    <div id="rch-form"></div>
+    <div id="rch-resultats"></div>`;
+  majInfosDeck();
+  $("#rch-deck").onchange = async (ev) => {
+    const id = ev.target.value;
+    PREF.set("rch-deck", id);
+    const nc = { ...rch.crit, deck: id };
+    if (!id) delete nc.horsdeck;
+    const form = $("#moteur");
+    if (form && rch.ouvert) Object.assign(nc, lireFormulaire(form), { deck: id, r: rch.crit.r, ordre: rch.crit.ordre, sens: rch.crit.sens, vue: rch.crit.vue });
+    rch.ouvrir = rch.ouvert;
+    location.hash = "#/recherche?" + critVersHash(nc);
+  };
+  rendreFormulaire();
+  if (c.r === "1") await lancerRecherche();
+}
+
+function critIdentite(d) {
+  return { coul: lettresWUBRG(d.identite.join(""), "WUBRG") + "C", cm: "1", seules: "1", id: "1", format: "commander" };
+}
+
+function majInfosDeck() {
+  const z = $("#rch-deck-info");
+  if (!z) return;
+  const d = rch.deck;
+  const j = d ? (rch.journal[d.id] || []) : [];
+  z.innerHTML = d ? `${identiteHtml(d.identite)} ${d.total} carte${d.total > 1 ? "s" : ""}${d.maybe ? ` · ${d.maybe} en Maybeboard` : ""} · <a href="#/deck/${enc(d.id)}">ouvrir le deck</a>
+      ${j.length ? `<span class="rch-journal" title="${esc(j.join(", "))}">· ajoutées ici : ${esc(j.slice(0, 4).join(", "))}${j.length > 4 ? ` et ${j.length - 4} autres` : ""}</span>` : ""}`
+    : "Choisis un deck pour ajouter les cartes trouvées et voir celles qu'il contient déjà.";
+}
+
+function rendreFormulaire() {
+  const z = $("#rch-form");
+  const c = rch.crit;
+  if (!rch.ouvert) {
+    const r = resumeCrit(c);
+    z.innerHTML = `<div class="moteur-resume panneau">
+      <div class="puces">${r.length ? r.map((t) => `<span class="puce puce-crit">${esc(t)}</span>`).join("") : `<span class="muet petit">Toutes les cartes</span>`}</div>
+      <div class="moteur-resume-actions">
+        <button class="btn btn-petit" data-act="modifier">Modifier la recherche</button>
+        <button class="btn btn-petit btn-discret" data-act="nouvelle">Nouvelle recherche</button>
+      </div></div>`;
+    $('[data-act="modifier"]', z).onclick = () => { rch.ouvert = true; rendreFormulaire(); $("#moteur [name=nom]").focus(); };
+    $('[data-act="nouvelle"]', z).onclick = nouvelleRecherche;
+    return;
+  }
+  z.innerHTML = formulaireRecherche(c);
+  const form = $("#moteur", z);
+  form.addEventListener("submit", (ev) => { ev.preventDefault(); soumettre(form); });
+  form.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey) && ev.target.name === "texte") { ev.preventDefault(); soumettre(form); }
+  });
+  form.addEventListener("click", (ev) => {
+    const s = ev.target.closest(".rch-sym, .rch-bascule");
+    if (s) {
+      const g = s.closest("[data-groupe]");
+      if (["doit", "peut", "mult"].includes(g.dataset.groupe)) return basculeMana(form, g.dataset.groupe, s.dataset.k);
+      const v = !s.classList.contains("actif");
+      if (g.dataset.unique) $$(".actif", g).forEach((b) => { b.classList.remove("actif"); b.setAttribute("aria-pressed", "false"); });
+      s.classList.toggle("actif", v);
+      s.setAttribute("aria-pressed", v);
+      return;
+    }
+    const a = ev.target.closest("[data-act]");
+    if (!a) return;
+    if (a.dataset.act === "raz") return nouvelleRecherche();
+    if (a.dataset.act === "budget") { form.elements.prixmax.value = "5"; form.elements.prixmax.focus(); return; }
+    if (a.dataset.act === "identite" && rch.deck) {
+      const id = critIdentite(rch.deck);
+      $$('.rch-symboles[data-groupe="coul"] .rch-sym', form).forEach((b) => { const on = id.coul.includes(b.dataset.k); b.classList.toggle("actif", on); b.setAttribute("aria-pressed", on); });
+      form.querySelector('input[name="cm"][value="1"]').checked = true;
+      form.elements.seules.checked = true;
+      form.elements.id.checked = true;
+      const f = $('.rch-bascules[data-groupe="format"]', form);
+      $$(".rch-bascule", f).forEach((b) => { const on = b.dataset.k === "commander"; b.classList.toggle("actif", on); b.setAttribute("aria-pressed", on); });
+      toast(`Couleurs de ${rch.deck.titre} : cartes jouables dans ce deck.`);
+    }
+  });
+  rendreEditions();
+}
+
+function nouvelleRecherche() {
+  const c = { ...RCH_DEFAUTS, deck: rch.crit.deck || "", img: rch.crit.img, vue: rch.crit.vue || "", ordre: rch.crit.ordre, sens: rch.crit.sens || "" };
+  if (rch.deck && rch.deck.identite) Object.assign(c, critIdentite(rch.deck));
+  rch.crit = c;
+  rch.eds = new Set();
+  rch.ouvert = true;
+  rch.res = null;
+  history.replaceState(null, "", "#/recherche?" + critVersHash(c));
+  rendreFormulaire();
+  $("#rch-resultats").innerHTML = "";
+  $("#moteur [name=nom]").focus();
+}
+
+function soumettre(form) {
+  const c = { ...lireFormulaire(form), deck: rch.crit.deck || "", ordre: rch.crit.ordre, sens: rch.crit.sens || "", vue: rch.crit.vue || "", r: "1" };
+  if (!rch.deck) delete c.horsdeck;
+  location.hash = "#/recherche?" + critVersHash(c);
+}
+
+// ---- fenêtre Éditions : une recherche plutôt que 400 cases à cocher
+async function rendreEditions() {
+  const z = $("#eds-groupes");
+  if (!z) return;
+  if (!rch.editions) {
+    try { rch.editions = await api("/api/recherche/editions"); }
+    catch (e) { z.innerHTML = `<p class="erreur petit">${esc(e.message)}</p>`; return; }
+  }
+  const tous = new Map(rch.editions.flatMap((g) => g.editions.map((e) => [e.code, e])));
+  const choisies = () => {
+    $("#eds-choisies").innerHTML = [...rch.eds].map((code) => {
+      const e = tous.get(code) || { nom: code.toUpperCase(), code };
+      return `<span class="puce puce-1"><span class="puce-nom">${esc(e.nom)} <span class="muet">${esc(code.toUpperCase())}</span></span><button type="button" data-ote="${esc(code)}" aria-label="Retirer ${esc(e.nom)}">✕</button></span>`;
+    }).join("");
+  };
+  const icone = (e) => `<span class="ed-icone" ${e.icone ? `style="--ic:url('${esc(e.icone)}')"` : ""} aria-hidden="true"></span>`;
+  const ligne = (e) => `<label class="ed" title="${esc(e.en)} · ${esc(e.code.toUpperCase())} · ${esc(e.date)}">
+      <input type="checkbox" value="${esc(e.code)}" ${rch.eds.has(e.code) ? "checked" : ""}>${icone(e)}<span class="ed-nom">${esc(e.nom)}</span><span class="ed-an">${esc((e.date || "").slice(0, 4))}</span></label>`;
+  const rendre = () => {
+    const q = sansAccent($("#eds-filtre").value.trim());
+    const ok = (e) => !q || sansAccent(`${e.nom} ${e.en} ${e.code}`).includes(q);
+    z.innerHTML = rch.editions.map((g, i) => {
+      const liste = g.editions.filter(ok);
+      if (!liste.length) return "";
+      const n = g.editions.filter((e) => rch.eds.has(e.code)).length;
+      return `<details class="eds-groupe" ${q || (i === 0 && !rch.eds.size) || n ? "open" : ""}>
+        <summary>${esc(g.groupe)} <span class="muet petit">${liste.length}${n ? ` · ${n} choisie${n > 1 ? "s" : ""}` : ""}</span></summary>
+        <div class="eds-liste">${liste.slice(0, q ? 400 : 1000).map(ligne).join("")}</div></details>`;
+    }).join("") || `<p class="muet petit">Aucune édition ne correspond.</p>`;
+  };
+  choisies();
+  rendre();
+  $("#eds-filtre").oninput = rendre;
+  z.onchange = (ev) => {
+    const x = ev.target.closest('input[type="checkbox"]');
+    if (!x) return;
+    if (x.checked) rch.eds.add(x.value); else rch.eds.delete(x.value);
+    choisies();
+  };
+  $("#eds-choisies").onclick = (ev) => {
+    const b = ev.target.closest("[data-ote]");
+    if (!b) return;
+    rch.eds.delete(b.dataset.ote);
+    choisies();
+    rendre();
+  };
+}
+
+// ---- résultats
+async function lancerRecherche() {
+  const z = $("#rch-resultats");
+  const k = ++rch.numero;
+  const c = rch.crit;
+  z.innerHTML = `<p class="chargement">Recherche…</p>`;
+  let r;
+  const tout = new URLSearchParams(Object.entries(c).filter(([key, v]) => v != null && !key.startsWith("_")));     // valeurs par défaut comprises
+  try { r = await api("/api/recherche?" + tout); }
+  catch (e) {
+    if (k !== rch.numero) return;
+    if (/pas encore prête/.test(e.message)) return attendreBase(z);
+    z.innerHTML = `<p class="erreur">${esc(e.message)}</p>`;
+    return;
+  }
+  if (k !== rch.numero) return;
+  rch.res = r;
+  memoriser();
+  rendreResultats(z, r);
+}
+
+// la dernière recherche : celle du lien du haut, et celle de chaque deck (bouton « Chercher des cartes » du deck)
+function memoriser() {
+  const qs = critVersHash(rch.crit);
+  PREF.set(cleDerniere(""), qs);
+  if (rch.crit.deck) PREF.set(cleDerniere(rch.crit.deck), qs);
+}
+
+async function attendreBase(z) {
+  const k = rch.numero;
+  for (;;) {
+    let b;
+    try { b = await api("/api/recherche/base"); } catch (_) { b = null; }
+    if (k !== rch.numero || !$("#rch-resultats")) return;
+    if (b && b.prete) return lancerRecherche();
+    const e = (b && b.construction) || {};
+    const pc = e.total ? Math.round((100 * e.fait) / e.total) : 0;
+    z.innerHTML = `<div class="panneau">
+      <h3>La base de cartes se construit</h3>
+      <p class="muet petit">La première fois, l'Atelier télécharge toutes les cartes depuis Scryfall et leurs textes en français (quelques minutes). Ensuite la recherche est instantanée, et la base se met à jour toute seule chaque semaine.</p>
+      <p>${esc(e.etape || (e.erreur ? "Arrêtée" : "En attente…"))}${e.total ? ` · ${pc} %` : ""}</p>
+      ${e.total ? `<div class="barre-prog"><div style="width:${pc}%"></div></div>` : ""}
+      ${e.erreur ? `<p class="erreur petit">${esc(e.erreur)}</p><button class="btn" id="rch-relancer">Relancer</button>` : ""}
+    </div>`;
+    const bt = $("#rch-relancer", z);
+    if (bt) bt.onclick = () => api("/api/recherche/base", { method: "POST", body: {} }).catch(erreur);
+    await attendre(3000);
+  }
+}
+
+function lienPage(n) { return "#/recherche?" + critVersHash({ ...rch.crit, page: n > 1 ? String(n) : "" }); }
+
+function paginationRch(r) {
+  if (r.pages <= 1) return "";
+  return `<div class="rch-pages">
+    <button type="button" class="btn btn-petit" data-page="${r.page - 1}" ${r.page <= 1 ? "disabled" : ""} aria-label="Page précédente">‹</button>
+    <label class="petit">Page <input class="champ champ-petit rch-page" type="number" min="1" max="${r.pages}" value="${r.page}" aria-label="Numéro de page"> / ${r.pages}</label>
+    <button type="button" class="btn btn-petit" data-page="${r.page + 1}" ${r.page >= r.pages ? "disabled" : ""} aria-label="Page suivante">›</button>
+  </div>`;
+}
+
+function rendreResultats(z, r) {
+  const c = rch.crit;
+  const vueImages = c.vue === "images";
+  const sens = c.sens || (RCH_TRI_DESC[c.ordre] ? "desc" : "asc");
+  const lignes = c.versions === "1" && r.lignes !== r.total ? ` · ${sepMilliers(r.lignes)} versions` : "";
+  z.innerHTML = `
+    <div class="rch-entete">
+      <div class="rch-compte"><strong>${sepMilliers(r.total)} carte${r.total > 1 ? "s" : ""} trouvée${r.total > 1 ? "s" : ""}</strong>${lignes}</div>
+      ${paginationRch(r)}
+      <div class="rch-outils">
+        <div class="segments" role="group" aria-label="Affichage">${[["liste", "Liste"], ["images", "Images"]].map(([k, l]) =>
+          `<button type="button" data-vue="${k}" class="${(k === "images") === vueImages ? "actif" : ""}" aria-pressed="${(k === "images") === vueImages}">${l}</button>`).join("")}</div>
+        <label class="petit muet">Trier par <select class="champ champ-petit" id="rch-tri">${RCH_TRIS.map(([k, l]) => `<option value="${k}" ${c.ordre === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+        <button class="btn btn-petit" id="rch-sens" title="Inverser l'ordre">${sens === "desc" ? "↓ décroissant" : "↑ croissant"}</button>
+      </div>
+    </div>
+    ${r.total ? `<div class="rch-liste ${vueImages ? "etale" : ""} ${c.img === "1" ? "avec-images" : ""}">${r.cartes.map((x, i) => (vueImages ? carteImageRch(x, i) : ligneRch(x, i))).join("")}</div>`
+      : `<div class="panneau vide"><p>Aucune carte ne correspond.</p><p class="muet petit">Élargis un critère : couleurs, format, prix, fonction…</p></div>`}
+    <div class="rch-bas">${paginationRch(r)}</div>
+    <p class="muet petit rch-base">${baseTexte(r.base)}</p>`;
+  if (r.base) {                                          // base refaite depuis : la liste des éditions peut avoir changé
+    if (rch.dateBase && r.base.date !== rch.dateBase) rch.editions = null;
+    rch.dateBase = r.base.date;
+  }
+  const pied = $(".rch-base", z);
+  pied.addEventListener("click", (ev) => { if (ev.target.closest('[data-act="maj-base"]')) majBase(pied, true); });
+  if (r.base && r.base.construction && r.base.construction.actif) majBase(pied, false);
+  $$("[data-vue]", z).forEach((b) => b.addEventListener("click", () => {
+    rch.crit.vue = b.dataset.vue === "images" ? "images" : "";
+    history.replaceState(null, "", "#/recherche?" + critVersHash(rch.crit));
+    memoriser();
+    rendreResultats(z, r);
+  }));
+  $("#rch-tri", z).onchange = (ev) => { location.hash = "#/recherche?" + critVersHash({ ...rch.crit, ordre: ev.target.value, sens: "", page: "" }); };
+  $("#rch-sens", z).onclick = () => {
+    const def = RCH_TRI_DESC[rch.crit.ordre] ? "desc" : "asc";
+    const nouveau = sens === "desc" ? "asc" : "desc";
+    location.hash = "#/recherche?" + critVersHash({ ...rch.crit, sens: nouveau === def ? "" : nouveau, page: "" });
+  };
+  $$(".rch-page", z).forEach((p) => p.addEventListener("change", () => {
+    const n = Math.max(1, Math.min(r.pages, Math.round(+p.value) || 1));
+    location.hash = lienPage(n);
+  }));
+  $$("[data-page]", z).forEach((b) => b.addEventListener("click", () => { location.hash = lienPage(+b.dataset.page); }));
+  const liste = $(".rch-liste", z);
+  if (liste) liste.addEventListener("click", (ev) => {
+    const a = ev.target.closest("[data-act]");
+    if (!a || a.tagName === "A") return;
+    const i = +a.closest("[data-i]").dataset.i;
+    const x = rch.res.cartes[i];
+    if (a.dataset.act === "ouvrir") return ficheRecherche(i);
+    if (a.dataset.act === "ajouter" || a.dataset.act === "maybe") return ajouterRecherche(x, { maybe: a.dataset.act === "maybe" });
+  });
+}
+
+// le pied de page : date de la base, dernière vérification auprès de Scryfall, mise à jour à la demande
+const heureCourte = (t) => new Date(t * 1000).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+function baseTexte(b) {
+  if (!b || !b.prete) return "";
+  const e = b.construction || {};
+  if (e.actif) {
+    const pc = e.total ? ` · ${Math.round((100 * e.fait) / e.total)} %` : "";
+    return `<span class="pulse">Mise à jour de la base : ${esc(e.etape || "en cours")}${pc}</span> · la recherche reste utilisable`;
+  }
+  return `Base Scryfall du ${heureCourte(b.date)} · ${sepMilliers(b.nb)} cartes
+    ${b.verifie ? ` · nouveautés vérifiées le ${heureCourte(b.verifie)}` : ""}
+    <span class="rch-base-aide" data-bulle="L'Atelier vérifie toutes les 6 heures si Scryfall a de nouvelles cartes (nouvelle extension, spoilers) et refait alors la base. Il la refait aussi chaque semaine pour les prix.">ⓘ</span>
+    · <button type="button" class="lien-discret" data-act="maj-base">Mettre à jour maintenant</button>
+    ${e.erreur ? `<br><span class="erreur-texte">Dernière mise à jour incomplète : ${esc(e.erreur)}</span>` : ""}`;
+}
+
+async function majBase(zone, lancer) {
+  if (lancer) {
+    try { await api("/api/recherche/base", { method: "POST", body: {} }); } catch (e) { return erreur(e); }
+  }
+  for (;;) {
+    await attendre(2500);
+    let b;
+    try { b = await api("/api/recherche/base"); } catch (_) { continue; }
+    if (!zone.isConnected) return;
+    zone.innerHTML = baseTexte(b);
+    if (!b.construction.actif) {
+      rch.editions = null;
+      toast(b.construction.erreur ? "Mise à jour incomplète : " + b.construction.erreur : `Base à jour : ${sepMilliers(b.nb)} cartes.`, 4000);
+      if (rch.crit && rch.crit.r === "1") lancerRecherche();
+      return;
+    }
+  }
+}
+
+const prixRch = (x) => (x.prix == null ? "—" : euros(x.prix) + (x.foil ? " (foil)" : ""));
+const lienCardmarket = (nom) => `https://www.cardmarket.com/fr/Magic/Products/Search?searchString=${enc(ic_cle(nom))}`;
+const ic_cle = (nom) => nom.split(" // ")[0];
+const horsCouleurs = (x) => !!(rch.deck && rch.deck.identite && x.couleurs.some((k) => !rch.deck.identite.includes(k)));
+
+function etatDeckRch(x) {
+  if (!rch.deck) return "";
+  if (x.dans === "deck" || x.dans === "commandant") return `<span class="badge badge-ok">✓ ${x.dans === "commandant" ? "commandant" : "dans le deck"}</span>`;
+  return `${x.dans === "maybe" ? `<span class="badge">Maybeboard</span>` : ""}
+    <button type="button" class="btn btn-petit" data-act="ajouter" title="Ajouter à ${esc(rch.deck.titre)}">+ Deck</button>
+    ${x.dans === "maybe" ? "" : `<button type="button" class="btn btn-petit btn-discret" data-act="maybe" title="Ajouter au Maybeboard de ${esc(rch.deck.titre)}">+ Maybe</button>`}`;
+}
+
+function badgesRch(x) {
+  return [
+    x.gc ? `<span class="badge badge-gc" title="Game Changer : compte dans le bracket">Game Changer</span>` : "",
+    x.legal ? "" : `<span class="badge badge-alerte" title="Pas légale en Commander">non légale en Commander</span>`,
+    horsCouleurs(x) ? `<span class="badge badge-alerte" title="Hors de l'identité de couleur de ${esc(rch.deck.titre)}">hors couleurs</span>` : "",
+  ].join("");
+}
+
+function texteCarteRch(x) {
+  const fr = rch.crit.fr !== "" && x.texte_fr;
+  const t = fr ? x.texte_fr : x.texte;
+  return (t || "").split("\n").map((l) => l.trim() === "//" ? "<hr>" : l.trim() ? `<p>${texteMana(l)}</p>` : "").join("");
+}
+
+// l'édition n'apparaît que dans « Toutes les versions » (une ligne par impression) : c'est ce qui distingue les lignes
+function editionRch(x) {
+  const e = x.edition;
+  if (!e || rch.crit.versions !== "1") return "";
+  return `<span class="rch-ed" title="${esc(`${e.nom} · ${e.set.toUpperCase()} ${e.num} · ${RCH_RARETE_NOM[e.rarete] || e.rarete}`)}">
+    ${e.icone ? `<span class="ed-icone rarete-${esc(e.rarete)}" style="--ic:url('${esc(e.icone)}')" aria-hidden="true"></span>` : ""}<span class="rch-ed-nom">${esc(e.nom)}</span>
+    <span class="muet">${esc(e.annee)}</span>
+  </span>`;
+}
+
+function ligneRch(x, i) {
+  const cher = (x.prix || 0) > 5;
+  const typeAff = rch.crit.fr !== "" && x.type_fr ? x.type_fr : x.type;
+  return `<article class="rch-carte" data-i="${i}">
+    ${rch.crit.img === "1" ? `<button type="button" class="rch-vignette" data-act="ouvrir" data-image="${esc(x.image)}" data-legende="${esc(`${x.fr || x.nom} — ${prixRch(x)}`)}" ${cher ? 'data-cher="1"' : ""} aria-label="Fiche de ${esc(x.nom)}">
+      ${x.petite ? `<img src="${esc(x.petite)}" alt="" loading="lazy">` : `<span class="sans-image">${esc(x.nom)}</span>`}</button>` : ""}
+    <div class="rch-corps">
+      <div class="rch-haut">
+        <div class="rch-noms"><button type="button" class="rch-nom" data-act="ouvrir">${esc(x.nom)}</button>${x.fr && x.fr !== x.nom ? `<span class="rch-vf">${esc(x.fr)}</span>` : ""}</div>
+        ${mana(x.cout)}
+      </div>
+      <div class="rch-type">${esc(typeAff)}${x.pt ? ` <span class="rch-pt">${esc(x.pt)}</span>` : ""}</div>
+      ${x.texte || x.texte_fr ? `<div class="rch-texte fs-texte">${texteCarteRch(x)}</div>` : ""}
+      <div class="rch-pied">
+        ${editionRch(x)}
+        <a class="prix ${cher ? "cher" : ""}" href="${esc(lienCardmarket(x.nom))}" target="_blank" rel="noopener" title="Le moins cher, toutes éditions (prix Cardmarket du jour). Ouvrir Cardmarket">${prixRch(x)}</a>
+        <span class="rch-badges">${badgesRch(x)}</span>
+        <span class="rch-actions">${etatDeckRch(x)}</span>
+      </div>
+    </div>
+  </article>`;
+}
+
+function carteImageRch(x, i) {
+  const cher = (x.prix || 0) > 5;
+  const marques = [
+    x.gc ? `<span class="marque marque-gc" title="Game Changer">GC</span>` : "",
+    horsCouleurs(x) ? `<span class="marque marque-alerte">hors couleurs</span>` : "",
+    x.dans === "deck" || x.dans === "commandant" ? `<span class="marque marque-ok">✓ deck</span>` : x.dans === "maybe" ? `<span class="marque marque-maybe">maybe</span>` : "",
+  ].join("");
+  return `<div class="carte-v rch-carte-v" data-i="${i}">
+    <button type="button" class="pile" data-act="ouvrir" data-survol-r="${i}" aria-label="${esc(x.nom)} : fiche">${imageCarte({ petite: x.petite, image: x.image, nom: x.nom }, "recto")}${marques ? `<span class="marques">${marques}</span>` : ""}</button>
+    <div class="legende-v"><span class="nom-v" title="${esc(x.nom + (x.fr && x.fr !== x.nom ? " — " + x.fr : ""))}">${esc(x.fr || x.nom)}</span><span class="prix-v ${cher ? "cher" : ""}">${prixRch(x)}</span></div>
+    ${rch.deck && !(x.dans === "deck" || x.dans === "commandant") ? `<div class="rch-actions-v">${etatDeckRch(x)}</div>` : ""}
+  </div>`;
+}
+
+// la fiche au survol (vue Images) : même présentation que dans un deck
+function survolRecherche(x) {
+  return { nom: x.nom, alertes: horsCouleurs(x) ? ["hors couleurs"] : [],
+    info: { fr: x.fr, cout: x.cout, type: x.type, fr_type: x.type_fr, pt: x.pt, texte: x.texte, fr_texte: x.texte_fr, prix: x.prix, gc: x.gc,
+      prix_edition: x.edition ? x.edition.nom : "" } };
+}
+
+// ---- ajouter au deck lié
+async function ajouterRecherche(x, { maybe = false, tags = [], n = 1, edition = null } = {}) {
+  const d = rch.deck;
+  if (!d) { toast("Choisis d'abord un deck, en haut de la page."); $("#rch-deck").focus(); return null; }
+  try {
+    let res;
+    if (!maybe && x.dans === "maybe") {                    // déjà au Maybeboard : la carte passe dans le deck
+      const plein = await api("/api/decks/" + enc(d.id));
+      const c = plein.cartes.find((y) => y.cat === "Maybeboard" && ic_cle(y.nom).toLowerCase() === ic_cle(x.nom).toLowerCase());
+      res = c ? await api(`/api/decks/${enc(d.id)}/modifier`, { method: "POST", body: { op: "maybeboard", index: c.index, nom_actuel: c.nom } }) : null;
+    }
+    if (!res) {
+      const ed = edition || (rch.crit.versions === "1" && x.edition ? { set: x.edition.set, num: x.edition.num, lang: "en", nom_edition: x.edition.nom } : null);
+      res = await api(`/api/decks/${enc(d.id)}/modifier`, { method: "POST", body: { op: "ajouter", nom: x.nom, tags: maybe ? ["Maybeboard", ...tags] : tags, n, edition: ed } });
+    }
+    if (!maybe || x.dans !== "deck") x.dans = maybe ? (x.dans || "maybe") : "deck";
+    Object.assign(rch.deck, { total: res.total, maybe: res.maybe, modifie: res.modifie });
+    const nomJ = x.fr || x.nom, j = (rch.journal[d.id] = (rch.journal[d.id] || []).filter((t) => t !== nomJ + " (Maybeboard)"));
+    j.unshift(nomJ + (maybe ? " (Maybeboard)" : ""));
+    etat.decks = [];
+    majInfosDeck();
+    remplacerResultat(x);
+    toast(`✓ ${x.fr || x.nom} : ${maybe ? "Maybeboard de" : "ajoutée à"} ${d.titre} · ${res.total} carte${res.total > 1 ? "s" : ""}`);
+    return res;
+  } catch (e) { erreur(e); return null; }
+}
+
+function remplacerResultat(x) {
+  const i = rch.res.cartes.indexOf(x);
+  const el = $(`#rch-resultats [data-i="${i}"]`);
+  if (!el) return;
+  const t = document.createElement("div");
+  t.innerHTML = rch.crit.vue === "images" ? carteImageRch(x, i) : ligneRch(x, i);
+  el.replaceWith(t.firstElementChild);
+}
+
+// une carte peut-elle être en plusieurs exemplaires dans un deck Commander ? (terrains de base, Relentless Rats…)
+const PLUSIEURS_COPIES = /deck can have (?:any number|up to \w+) of cards named/i;
+const plusieursExemplaires = (x) => /\bBasic\b/.test(x.type || "") || PLUSIEURS_COPIES.test(x.texte || "");
+const lienGatherer = (nom) => `https://gatherer.wizards.com/search?searchTerm=${enc(ic_cle(nom))}`;
+
+// le bloc « Ajouter à … » de la fiche : où (deck ou Maybeboard), tags, et un seul bouton
+function blocAjoutRch(x, d) {
+  const dans = x.dans === "deck" || x.dans === "commandant";
+  const multi = plusieursExemplaires(x);
+  if (dans && !multi) {
+    return `<div class="rf-ajout rf-deja"><span class="ok">✓ ${x.dans === "commandant" ? "Commandant de" : "Déjà dans"} ${esc(d.titre)}</span>
+      <a href="#/deck/${enc(d.id)}">Ouvrir le deck</a></div>`;
+  }
+  const promotion = x.dans === "maybe";
+  const dest = promotion ? "deck" : PREF.get("rf-dest", "deck");
+  return `<div class="rf-ajout">
+    <div class="rf-ajout-tete">
+      <span>${promotion ? `Au Maybeboard de <strong>${esc(d.titre)}</strong>` : `Ajouter à <strong>${esc(d.titre)}</strong>`}</span>
+      ${promotion ? "" : `<div class="segments" role="group" aria-label="Où ajouter la carte">${[["deck", "Deck"], ["maybe", "Maybeboard"]].map(([k, l]) =>
+        `<button type="button" data-dest="${k}" class="${k === dest ? "actif" : ""}" aria-pressed="${k === dest}">${l}</button>`).join("")}</div>`}
+    </div>
+    <div class="rf-ajout-ligne">
+      ${promotion ? `<span class="petit muet rf-aide">La carte quitte le Maybeboard et garde ses tags.</span>` : `
+        <input class="champ champ-petit" id="rf-tags" list="rf-cats" placeholder="Tags (facultatif) : Ramp, Draw…" aria-label="Tags, séparés par des virgules">
+        <datalist id="rf-cats">${(d.categories || []).map((t) => `<option value="${esc(t)}">`).join("")}</datalist>`}
+      ${multi && !promotion ? `<label class="petit muet rf-n">Exemplaires <input class="champ champ-petit" type="number" id="rf-n" min="1" max="99" value="1"></label>` : ""}
+      <button class="btn btn-accent" data-act="ajouter">${libelleAjout(x, dest)}</button>
+    </div>
+  </div>`;
+}
+
+function libelleAjout(x, dest) {
+  if (x.dans === "maybe") return "Passer dans le deck";
+  if (dest === "maybe") return "Ajouter au Maybeboard";
+  return x.dans === "deck" ? "Ajouter un exemplaire" : "Ajouter au deck";
+}
+
+// ---- fiche d'une carte trouvée : grande image, textes, prix du jour, versions, ajout au deck
+function ficheRecherche(i) {
+  const liste = rch.res.cartes;
+  const x = liste[i];
+  if (!x) return;
+  const d = rch.deck;
+  const v = x.versionChoisie || null;
+  const image = (v && v.image) || x.image;
+  const cher = (x.prix || 0) > 5;
+  const texte = (t) => (t || "").split("\n").map((l) => l.trim() === "//" ? "<hr>" : l.trim() ? `<p>${texteMana(l)}</p>` : "").join("");
+  ouvrirModale(`
+    <div class="fiche-carte">
+      <div class="fc-image">${image ? `<img src="${esc(image)}" alt="${esc(x.nom)}">` : `<div class="sans-image">${esc(x.nom)}</div>`}
+        <div class="fc-version">
+          ${v ? `<span class="petit muet">${esc(v.edition)}${v.annee ? " · " + esc(v.annee) : ""}${v.lang === "fr" ? " · en français" : ""}</span>` : x.edition ? `<span class="petit muet">${esc(x.edition.nom)} · ${esc(x.edition.annee)}</span>` : ""}
+          <button type="button" class="lien-discret" data-act="version">${x.versions > 1 ? `Les ${x.versions} versions (visuel)` : "Changer la version (visuel)"}</button>
+        </div></div>
+      <div class="fc-infos">
+        <div class="fc-tete">
+          <div><h2>${esc(x.fr || x.nom)} ${mana(x.cout)}</h2>${x.fr && x.fr !== x.nom ? `<div class="muet">${esc(x.nom)}</div>` : ""}</div>
+          <button class="btn btn-discret" data-act="fermer" aria-label="Fermer">✕</button>
+        </div>
+        <div class="petit muet">${esc(x.type_fr || x.type)}${x.pt ? " · " + esc(x.pt) : ""}</div>
+        <div class="chiffres" id="rf-prix">
+          <span class="badge ${cher ? "badge-cher" : ""}" id="rf-prix-badge" title="Le moins cher, toutes éditions (prix Cardmarket du jour)">${prixRch(x)}</span>
+          ${badgesRch(x)}
+          ${x.dans === "maybe" ? `<span class="badge">au Maybeboard</span>` : ""}
+        </div>
+        ${x.texte_fr || x.texte ? `<div class="texte fs-texte">${texte(x.texte_fr || x.texte)}</div>` : ""}
+        ${x.texte_fr && x.texte ? `<details class="petit"><summary>Texte anglais (Oracle)</summary><div class="fs-texte" style="margin-top:.4rem">${texte(x.texte)}</div></details>` : ""}
+        ${d ? blocAjoutRch(x, d) : `<p class="note petit">Choisis un deck en haut de la page (« Pour le deck ») pour ajouter cette carte.</p>`}
+        <div class="fc-liens">
+          <a href="${esc(lienCardmarket(x.nom))}" id="rf-cardmarket" target="_blank" rel="noopener">Cardmarket ↗</a>
+          <a href="${esc(lienGatherer(x.nom))}" id="rf-gatherer" target="_blank" rel="noopener" title="La carte sur Gatherer, le site officiel de Wizards">Gatherer ↗</a>
+          ${d ? `<a href="#/deck/${enc(d.id)}/combos/${enc(x.nom)}">Combos avec cette carte →</a>` : ""}
+        </div>
+        ${liste.length > 1 ? `
+          <div class="fc-nav">
+            <button class="btn btn-petit" data-act="prec" ${i === 0 ? "disabled" : ""}>← Précédente</button>
+            <span class="muet petit">${i + 1} / ${liste.length} sur cette page · flèches du clavier</span>
+            <button class="btn btn-petit" data-act="suiv" ${i === liste.length - 1 ? "disabled" : ""}>Suivante →</button>
+          </div>` : ""}
+      </div>
+    </div>`, (b) => {
+    let dest = x.dans === "maybe" ? "deck" : PREF.get("rf-dest", "deck");
+    b.addEventListener("click", async (ev) => {
+      const s = ev.target.closest("[data-dest]");
+      if (s) {
+        dest = s.dataset.dest;
+        PREF.set("rf-dest", dest);
+        $$("[data-dest]", b).forEach((y) => { y.classList.toggle("actif", y === s); y.setAttribute("aria-pressed", y === s); });
+        $('[data-act="ajouter"]', b).textContent = libelleAjout(x, dest);
+        return;
+      }
+      const a = ev.target.closest("[data-act]");
+      if (!a || a.disabled || a.tagName === "A") return;
+      const act = a.dataset.act;
+      if (act === "fermer") return fermerModale();
+      if (act === "prec" || act === "suiv") return ficheRecherche(i + (act === "suiv" ? 1 : -1));
+      if (act === "version") return versionsRecherche(i);
+      if (act === "ajouter") {
+        const champ = $("#rf-tags", b);
+        const tags = champ ? champ.value.split(",").map((t) => t.trim()).filter(Boolean) : [];
+        a.disabled = true;
+        const res = await ajouterRecherche(x, { maybe: dest === "maybe" && x.dans !== "maybe", tags, n: Math.max(1, +($("#rf-n", b) || {}).value || 1),
+          edition: x.versionChoisie ? editionVersion(x.versionChoisie) : null });
+        if (res) ficheRecherche(i); else a.disabled = false;
+      }
+    });
+    $("#rf-tags", b)?.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); $('[data-act="ajouter"]', b).click(); } });
+  }, { focus: false, large: true });
+  // prix du jour (le plus bas, avec son édition) et lien Gatherer de la carte
+  api("/api/carte?nom=" + enc(x.nom)).then((f) => {
+    if (!$("#modale .fiche-carte") || rch.res.cartes[i] !== x) return;
+    if (f.gatherer) $("#rf-gatherer").href = f.gatherer;
+    if (f.prix_lien) $("#rf-cardmarket").href = f.prix_lien;
+    if (f.prix == null) return;
+    x.prix = f.prix;
+    const el = $("#rf-prix-badge");
+    el.textContent = `${euros(f.prix)}${f.prix_edition ? " · " + f.prix_edition : ""}`;
+    el.classList.toggle("badge-cher", f.prix > 5);
+  }).catch(() => {});
+}
+
+// « N versions » : la grille des impressions ; la version choisie sert à l'ajout (visuel de la carte dans le deck)
+function versionsRecherche(i) {
+  const x = rch.res.cartes[i];
+  ouvrirModale(`<div id="choix-v"></div>`, (b) => {
+    choixVersion($("#choix-v", b), {
+      nom: x.nom, titre: x.fr || x.nom, actuelle: x.versionChoisie || null, retour: () => ficheRecherche(i),
+      surChoix: (p) => { x.versionChoisie = p || null; ficheRecherche(i); },
+    });
+  }, { focus: false, large: true });
+}
+
+// ---- un onglet pour le deck, un autre pour la recherche : chaque page se remet à jour quand on y revient
+document.addEventListener("visibilitychange", async () => {
+  if (document.hidden) return;
+  try {
+    if (location.hash.startsWith("#/recherche") && rch.deck) {
+      const a = await api(`/api/decks/${enc(rch.deck.id)}/apercu`);
+      if (a.modifie !== rch.deck.modifie) {
+        rch.deck = a;
+        majInfosDeck();
+        if (rch.crit && rch.crit.r === "1" && $("#modale").hidden) lancerRecherche();
+      }
+    } else if (location.hash.startsWith("#/deck/") && etat.deck && $("#modale").hidden) {
+      const a = await api(`/api/decks/${enc(etat.deck.id)}/apercu`);
+      if (a.modifie !== etat.deck.modifie) {
+        etat.decks = [];
+        const onglet = location.hash.split("/")[3] || "liste";
+        if (["liste", "stats", "versions", "historique"].includes(onglet.split("?")[0])) {
+          const y = scrollY;
+          await route();
+          scrollTo(0, y);
+          toast("Deck mis à jour : il a changé dans un autre onglet.");
+        } else toast("Le deck a changé dans un autre onglet : recharge la page pour le voir ici.", 4500);
+      }
+    }
+  } catch (_) {}
+});
+
 // ------------------------------------------------------------------ état de la mise à jour (prix, Game Changers)
 async function suivreMaj() {
   try {
@@ -2107,6 +2949,11 @@ function texteRiche(t) {
 }
 
 function pageCourante() {
+  if (location.hash.startsWith("#/recherche")) {
+    const crit = rch.crit ? resumeCrit(rch.crit) : [];
+    return `recherche de cartes${rch.deck ? ` pour le deck « ${rch.deck.id} »` : ""}${crit.length ? " ; critères : " + crit.join(", ") : ""}`
+      + (rch.res && rch.res.cartes.length ? ` ; résultats affichés : ${rch.res.cartes.slice(0, 30).map((x) => x.nom).join(", ")}` : "");
+  }
   const parts = location.hash.replace(/^#\/?/, "").split("/");
   if (parts[0] === "deck" && parts[1]) return `deck « ${decodeURIComponent(parts[1])} », onglet ${parts[2] || "liste"}`;
   return "accueil (liste des decks)";
@@ -2114,6 +2961,7 @@ function pageCourante() {
 
 // discussion de la page affichée : le deck ouvert, sinon la discussion générale ("")
 function cleCourante() {
+  if (location.hash.startsWith("#/recherche")) return rch.deck ? rch.deck.id : "";
   const parts = location.hash.replace(/^#\/?/, "").split("/");
   return parts[0] === "deck" && parts[1] ? decodeURIComponent(parts[1]) : "";
 }

@@ -10,6 +10,8 @@ outils/atelier/discussion.json
 outils/cache_cartes.json
 outils/atelier/cache_infos.json
 outils/atelier/cache_spellbook.json
+outils/atelier/base_cartes.json.gz
+outils/atelier/base_cartes.json.gz.tmp
 
 # Divers
 __pycache__/

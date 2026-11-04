@@ -375,6 +375,52 @@ def api_impressions():
     return jsonify(ic.impressions_carte(nom))
 
 
+# ---------------------------------------------------------------- recherche de cartes (moteur façon Magic-Ville)
+@app.get("/api/recherche")
+def api_recherche():
+    """Une page de résultats ; les critères sont ceux de la page (#/recherche?…), deck= pour marquer ses cartes."""
+    import recherche
+    return jsonify(recherche.chercher(request.args.to_dict(), request.args.get("deck") or None))
+
+
+@app.get("/api/recherche/base")
+def api_recherche_base():
+    import recherche
+    return jsonify(recherche.etat_base())
+
+
+@app.post("/api/recherche/base")
+def api_recherche_maj():
+    """Refait la base de cartes en tâche de fond (complet=true : relit aussi tous les textes français)."""
+    import recherche
+    en_fond(recherche.construire, bool((request.get_json(silent=True) or {}).get("complet")))
+    return jsonify(recherche.etat_base())
+
+
+@app.get("/api/recherche/editions")
+def api_recherche_editions():
+    import recherche
+    return jsonify(recherche.editions())
+
+
+@app.get("/api/recherche/fonctions")
+def api_recherche_fonctions():
+    import recherche
+    return jsonify(recherche.fonctions())
+
+
+@app.get("/api/decks/<path:deck>/apercu")
+def api_apercu(deck):
+    """L'essentiel d'un deck pour la page Recherche (et pour voir s'il a changé dans un autre onglet)."""
+    entrees = decks.lire(decks.chemin(deck))
+    cpt = decks.comptes(entrees)
+    cmds = [e["nom"] for e in entrees if decks.categorie(e) == "Commander"]
+    I = ic.infos(cmds) if cmds else {}
+    ident = sorted(set().union(*[set(I[c].get("couleurs") or []) for c in cmds])) if cmds and all(I.get(c) for c in cmds) else None
+    return jsonify(dict(id=deck, titre=deck.removeprefix("Deck "), identite=ident, **cpt, categories=decks.categories(entrees),
+                        modifie=os.path.getmtime(decks.chemin(deck))))
+
+
 @app.get("/api/decks/<path:deck>/combos")
 def api_combos(deck):
     """Vue « deck » : combos présentes (Magic-Ville, Commander Spellbook, synergies de Claude)."""
@@ -489,6 +535,8 @@ if __name__ == "__main__":
         webbrowser.open(url)
         sys.exit(0)
     en_fond(ic.mise_a_jour, tous_les_noms())
+    import recherche
+    en_fond(recherche.demarrer)                    # base de la recherche de cartes : chargée, puis surveillée (nouvelles cartes, prix)
     if "--sans-navigateur" not in sys.argv:
         threading.Timer(1.5, lambda: webbrowser.open(url)).start()
     print(f"Atelier MTG : {url}  (ferme cette fenêtre pour arrêter l'Atelier)")

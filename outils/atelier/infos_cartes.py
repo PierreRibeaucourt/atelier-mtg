@@ -58,7 +58,8 @@ def _fiche(c):
                 type=faces[0].get("type_line") or c.get("type_line", ""), texte=texte, couleurs=c.get("color_identity", []),
                 image=img.get("normal", ""), petite=img.get("small", ""), art=img.get("art_crop", ""),
                 gc=bool(c.get("game_changer")), prix=_eur(c), prix_lien=_lien(lien), prix_date=None, fr=None,
-                legal=(c.get("legalities") or {}).get("commander", ""), produit=c.get("produced_mana") or [], pt=_pt(c))
+                legal=(c.get("legalities") or {}).get("commander", ""), produit=c.get("produced_mana") or [], pt=_pt(c),
+                gatherer=(c.get("related_uris") or {}).get("gatherer", ""))
 
 
 def _pt(c):
@@ -105,8 +106,8 @@ def _cle(nom):
 def infos(noms):
     """Fiches des cartes demandées ; celles qu'on n'a pas encore sont demandées à Scryfall (75 par requête)."""
     cache = _charge()
-    with _verrou:      # absentes, ou fiches d'avant l'ajout de la légalité, du mana produit, de la force/endurance
-        manquants = sorted({n for n in noms if n and (n not in cache["cartes"] or "pt" not in cache["cartes"][n])})
+    with _verrou:      # absentes, ou fiches d'avant l'ajout de la force/endurance ou du lien Gatherer
+        manquants = sorted({n for n in noms if n and (n not in cache["cartes"] or "gatherer" not in cache["cartes"][n])})
     for i in range(0, len(manquants), 75):
         bloc = manquants[i:i + 75]
         corps = json.dumps({"identifiers": [{"name": _cle(n)} for n in bloc]}).encode()
