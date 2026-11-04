@@ -263,6 +263,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .resultats { margin: .5rem 0; display: grid; gap: 2px; max-height: 320px; overflow: auto; }
 .resultats button { text-align: left; border: 0; background: transparent; padding: .4rem .55rem; border-radius: 6px; cursor: pointer; }
 .resultats button:hover, .resultats button.choisi { background: var(--accent-doux); }
+.res-ligne { display: flex; align-items: center; gap: .3rem; }
+.res-ligne .res-carte { flex: 1; min-width: 0; }
+.resultats .res-plus { flex: none; width: 2rem; height: 2rem; padding: 0; display: grid; place-items: center; border-radius: 8px;
+  color: var(--accent); border: 1px solid var(--bord); background: var(--surface); }
+.resultats button.res-plus:hover { background: var(--accent); border-color: var(--accent); color: var(--accent-texte); }
+.resultats span.res-plus { border-color: transparent; background: none; }
 .res-carte { display: grid; grid-template-columns: minmax(0, 1fr) auto auto 4.4rem; gap: .6rem; align-items: center; width: 100%; }
 .res-nom { min-width: 0; }
 .res-nom .en { font-weight: 550; }

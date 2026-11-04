@@ -1289,7 +1289,8 @@ function modaleVersion(c) {
 
 // ------------------------------------------------------------------ recherche d'une carte (ajout, remplacement, commandant)
 // Liste de résultats avec coût, prix (le plus bas du jour, chargé juste après) et image + prix au survol.
-function rechercheCarte(zone, { surChoix, deck = () => etat.deck, placeholder = "Nom de la carte…" }) {
+// surAjout : un bouton + sur chaque suggestion ajoute la carte sans ouvrir sa fiche (renvoie vrai si c'est fait)
+function rechercheCarte(zone, { surChoix, surAjout = null, deck = () => etat.deck, placeholder = "Nom de la carte…" }) {
   zone.innerHTML = `<input class="champ" type="search" placeholder="${esc(placeholder)}" autocomplete="off" aria-label="Chercher une carte">
     <div class="resultats" role="listbox"></div>`;
   const champ = $("input", zone), res = $(".resultats", zone);
@@ -1304,13 +1305,15 @@ function rechercheCarte(zone, { surChoix, deck = () => etat.deck, placeholder = 
     const deja = d && d.cartes.some((c) => c.nom === x.nom);
     const hors = d && d.identite && (x.couleurs || []).some((k) => !d.identite.includes(k));
     const cher = (x.prix || 0) > 5;
-    return `<button type="button" class="res-carte ${i === actif ? "choisi" : ""}" data-i="${i}" role="option"
+    const plus = !surAjout ? "" : deja && !/Basic/.test(x.type || "") ? `<span class="res-plus"></span>`
+      : `<button type="button" class="res-plus" data-plus="${i}" title="Ajouter au deck" aria-label="Ajouter ${esc(x.nom)} au deck">${ico("plus")}</button>`;
+    return `<div class="res-ligne"><button type="button" class="res-carte ${i === actif ? "choisi" : ""}" data-i="${i}" role="option"
         data-image="${esc(x.image)}" data-legende="${esc(legende(x))}" ${cher ? 'data-cher="1"' : ""}>
       <span class="res-nom">${nomHtml(x)}</span>
       <span class="res-badges">${x.gc ? `<span class="badge badge-gc">Game Changer</span>` : ""}${x.legal === "banned" ? `<span class="badge badge-alerte">interdite</span>` : ""}${hors ? `<span class="badge badge-alerte">hors couleurs</span>` : ""}${deja ? `<span class="badge">déjà dans le deck</span>` : ""}</span>
       ${mana(x.cout)}
       <span class="prix ${cher ? "cher" : ""}">${prixHtml(x)}</span>
-    </button>`;
+    </button>${plus}</div>`;
   };
   const majPrix = (p) => {
     $$(".res-carte", res).forEach((el) => {
@@ -1364,7 +1367,18 @@ function rechercheCarte(zone, { surChoix, deck = () => etat.deck, placeholder = 
       choisir(Math.max(0, actif));
     }
   });
-  res.addEventListener("click", (ev) => { const b = ev.target.closest(".res-carte"); if (b) choisir(+b.dataset.i); });
+  res.addEventListener("click", async (ev) => {
+    const p = ev.target.closest("button.res-plus");
+    if (p) {
+      p.disabled = true;
+      if (await surAjout(liste[+p.dataset.plus])) res.innerHTML = liste.map(ligne).join("");     // « déjà dans le deck »
+      else p.disabled = false;
+      champ.focus();
+      return;
+    }
+    const b = ev.target.closest(".res-carte");
+    if (b) choisir(+b.dataset.i);
+  });
   return { champ, vider() { numero++; champ.value = ""; liste = []; res.innerHTML = ""; champ.focus(); } };
 }
 
@@ -1412,7 +1426,7 @@ function modaleAjout() {
     <h2>Ajouter des cartes à ${esc(d.titre)}</h2>
     <div id="rech"></div>
     <div id="fiche"></div>
-    <div id="ajout-form" hidden>
+    <div id="ajout-form">
       <div class="form-ligne">
         <label for="cat-ajout" class="petit">Tags</label>
         <input class="champ" style="flex:1;min-width:180px" id="cat-ajout" list="liste-cat" placeholder="Ramp, Draw…" value="${esc(etat.dernierTags || "")}">
@@ -1422,17 +1436,28 @@ function modaleAjout() {
       </div>
     </div>
     <div id="journal" class="journal petit"></div>
-    <div class="boutons"><button class="btn" id="fermer">Fermer</button><button class="btn btn-accent" id="ok" disabled>Ajouter au deck</button></div>`, (b) => {
+    <div class="boutons"><button class="btn" id="fermer">Fermer</button><button class="btn btn-accent" id="ok" disabled>${ico("plus")}<span>Ajouter au deck</span></button></div>`, (b) => {
     let choix = null;
+    const ajouter = async (nom, edition) => {
+      const tags = $("#cat-ajout", b).value.split(",").map((t) => t.trim()).filter(Boolean);
+      etat.dernierTags = $("#cat-ajout", b).value;
+      etat.dernierMaybe = $("#maybe", b).checked;
+      if (etat.dernierMaybe) tags.unshift("Maybeboard");
+      const n = Math.max(1, +$("#qte-ajout", b).value || 1);
+      const res = await modifier("ajouter", null, { nom, tags, n, edition }, "");
+      if (res) $("#journal", b).insertAdjacentHTML("afterbegin",
+        `<div>✓ ${n > 1 ? n + "× " : ""}${esc(nom)}${etat.dernierMaybe ? " (Maybeboard)" : ""} · ${res.total} cartes</div>`);
+      return res;
+    };
     const rech = rechercheCarte($("#rech", b), {
+      surAjout: (x) => ajouter(x.nom, null),
       surChoix: async (x) => {
         choix = null;
         $("#ok", b).disabled = true;
         try {
           choix = await chargerFiche($("#fiche", b), x.nom, { surVersion: (g) => { choix = g; } });
-          $("#ajout-form", b).hidden = false;
           $("#ok", b).disabled = false;
-          $("#ok", b).textContent = `Ajouter ${choix.nom}`;
+          $("#ok span", b).textContent = `Ajouter ${choix.nom}`;
           $("#ok", b).focus();
         } catch (e) { $("#fiche", b).innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
       },
@@ -1440,21 +1465,12 @@ function modaleAjout() {
     $("#fermer", b).onclick = fermerModale;
     $("#ok", b).onclick = async () => {
       if (!choix) return;
-      const tags = $("#cat-ajout", b).value.split(",").map((t) => t.trim()).filter(Boolean);
-      etat.dernierTags = $("#cat-ajout", b).value;
-      etat.dernierMaybe = $("#maybe", b).checked;
-      if (etat.dernierMaybe) tags.unshift("Maybeboard");
-      const n = Math.max(1, +$("#qte-ajout", b).value || 1);
       $("#ok", b).disabled = true;
-      const res = await modifier("ajouter", null, { nom: choix.nom, tags, n, edition: editionVersion(choix.version) }, "");
-      if (!res) { $("#ok", b).disabled = false; return; }
-      $("#journal", b).insertAdjacentHTML("afterbegin",
-        `<div>✓ ${n > 1 ? n + "× " : ""}${esc(choix.nom)}${etat.dernierMaybe ? " (Maybeboard)" : ""} · ${res.total} cartes</div>`);
+      if (!await ajouter(choix.nom, editionVersion(choix.version))) { $("#ok", b).disabled = false; return; }
       choix = null;
       $("#fiche", b).innerHTML = "";
-      $("#ajout-form", b).hidden = true;
       $("#qte-ajout", b).value = 1;
-      $("#ok", b).textContent = "Ajouter au deck";
+      $("#ok span", b).textContent = "Ajouter au deck";
       rech.vider();
     };
   });
