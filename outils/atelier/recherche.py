@@ -100,6 +100,22 @@ FONCTIONS = [
     ("group-hug", "Group hug", ["group-hug"]),
 ]
 
+# Fonctions d'une carte dans un deck (onglet Liste « ranger par fonction », statistiques) : les familles du gabarit d'un deck
+# Commander, dans l'ordre qui choisit la famille principale d'une carte qui en a plusieurs (Cyclonic Rift : Balayages).
+# (libellé, fonctions ci-dessus, fonctions Tagger exclues) : chercher un terrain (Cultivate, Solemn Simulacrum) est du ramp.
+FAMILLES = [
+    ("Balayages", ["balayage"], []),
+    ("Contresorts", ["contresort"], []),
+    ("Removal", ["removal"], []),
+    ("Ramp", ["ramp", "mana-rock", "mana-dork", "reducteur", "tresors"], []),
+    ("Tuteurs", ["tuteur"], ["tutor-land"]),
+    ("Pioche", ["pioche", "avantage", "wheel"], []),
+    ("Recursion", ["recursion", "reanimation"], []),
+    ("Protection", ["protection"], []),
+]
+# dans la fiche, la fonction générale disparaît quand une plus précise est là (« Mana rock » plutôt que « Ramp, Mana rock »)
+GENERALES = {"removal": ["spot", "removal-creature", "balayage"], "ramp": ["mana-rock", "mana-dork"], "avantage": ["pioche", "wheel"]}
+
 GROUPES_EDITIONS = [
     ("expansion", "Extensions"), ("core", "Éditions de base"), ("commander", "Commander"),
     ("masters", "Rééditions (Masters)"), ("eternal", "Rééditions (Masters)"), ("draft_innovation", "Draft spécial (Horizons, Jumpstart…)"),
@@ -1008,6 +1024,26 @@ def noms_cites():
                 courants.update(m.lower() for m in re.findall(r"[^\W_][\w'’-]*", src.replace("’", "'")))
             _citees.update(date=b["date"], donnees=dict(noms=noms, communs=sorted(seuls & courants)))
         return _citees["donnees"]
+
+
+def fonctions_cartes(noms):
+    """{nom: (familles, fonctions)} pour les cartes d'un deck : familles du gabarit (la principale d'abord) et fonctions
+    traduites, sans parenthèses (« Mana rock », « Removal ciblé »). None tant que la base se charge."""
+    b = _base
+    if b is None:
+        return None
+    court = {cle: re.sub(r"\s*\(.*\)$", "", lib) for cle, lib, _ in FONCTIONS}
+    if "familles" not in b:                             # étiquettes Tagger de chaque famille, une fois par base
+        b["familles"] = [(lib, set().union(*(b["fonctions"][c] for c in cles)) - set().union(set(), *(_descendants(s) for s in sauf)))
+                         for lib, cles, sauf in FAMILLES]
+    res = {}
+    for n in noms:
+        x = b["par_cle"].get(ic._cle(n).lower())
+        fns = [cle for cle, _, _ in FONCTIONS if x and x["_tg"] & b["fonctions"][cle]]
+        fam = [lib for lib, tags in b["familles"] if x and x["_tg"] & tags]
+        precises = [c for c in fns if not any(p in fns for p in GENERALES.get(c, []))]
+        res[n] = (fam, [court[c] for c in precises])
+    return res
 
 
 def apercu(nom):

@@ -203,13 +203,20 @@ def resume_deck(deck, avec_cartes=False):
              modifie=os.path.getmtime(decks.chemin(deck)))
     if avec_cartes:
         cov = couverture_sim(entrees, cmd) if cmd else {}
+        try:
+            import recherche
+            F = recherche.fonctions_cartes(decks.noms(entrees)) or {}      # vide tant que la base se charge
+        except Exception:
+            F = {}
         cartes = []
         for i, e in enumerate(entrees):
             f = avec_visuel(I.get(e["nom"]), V.get(i))
             f["gc"] = ic.est_gc(e["nom"])
             el = eligibilite(e["nom"])
             f["peut_commander"], f["partenaire"] = (el["commandant"], el["partenaire"]) if el else (None, None)
+            fam, fns = F.get(e["nom"], ([], []))
             cartes.append(dict(index=i, n=e["n"], nom=e["nom"], tags=e["tags"], cat=decks.categorie(e), info=f, sim=cov.get(e["nom"]),
+                               fonctions=fam, fonctions_detail=fns,
                                alertes=alertes.get(e["nom"], []), version=version_courte(V.get(i))))
         r.update(cartes=cartes, categories=decks.categories(entrees), erreur_sim=cov.get("_erreur"))
     return r

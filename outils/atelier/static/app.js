@@ -855,6 +855,9 @@ const TITRE_ALERTE = {
   "non légale": "Carte non légale en Commander (carte Un-, Alchimie…)",
 };
 const ORDRE_TYPES = ["Créatures", "Planeswalkers", "Batailles", "Éphémères", "Rituels", "Artefacts", "Enchantements", "Terrains", "Autres"];
+// fonctions (Scryfall Tagger, familles calculées par recherche.fonctions_cartes) : une carte est rangée sous la première des siennes
+const ORDRE_FONCTIONS = ["Ramp", "Pioche", "Tuteurs", "Removal", "Balayages", "Contresorts", "Recursion", "Protection", "Autres", "Terrains"];
+const fonctionPrincipale = (c) => (estTerrain(c) ? "Terrains" : (c.fonctions || [])[0] || "Autres");
 const ABREV = { "Créatures": "Cré", "Planeswalkers": "PW", "Batailles": "Bat", "Éphémères": "Éph", "Rituels": "Rit", "Artefacts": "Art",
   "Enchantements": "Ench", "Terrains": "Ter", "Autres": "?" };
 
@@ -886,7 +889,7 @@ function correspond(c, q) {
     const t = sansAccent(q.slice(1));
     return c.tags.some((x) => sansAccent(x) === t);
   }
-  const h = sansAccent([c.nom, c.info.fr, c.info.type, typeCarte(c.info.type), ...c.tags].join(" | "));
+  const h = sansAccent([c.nom, c.info.fr, c.info.type, typeCarte(c.info.type), ...c.tags, ...(c.fonctions || []), ...(c.fonctions_detail || [])].join(" | "));
   return sansAccent(q).split(/\s+/).every((m) => h.includes(m));
 }
 
@@ -896,10 +899,11 @@ function grouper(cartes, rangement) {
   for (const c of cartes) {
     if (c.cat === "Commander") ajoute("Commandant", c);
     else if (c.cat === "Maybeboard") ajoute("Maybeboard", c);
-    else ajoute(rangement === "tags" ? c.cat : typeCarte(c.info.type), c);
+    else ajoute(rangement === "tags" ? c.cat : rangement === "fonction" ? fonctionPrincipale(c) : typeCarte(c.info.type), c);
   }
   const rang = (k) => k === "Commandant" ? -1 : k === "Maybeboard" ? 999
-    : rangement === "tags" ? (k === "Sans catégorie" ? 998 : 0) : ORDRE_TYPES.indexOf(k);
+    : rangement === "tags" ? (k === "Sans catégorie" ? 998 : 0)
+    : (rangement === "fonction" ? ORDRE_FONCTIONS : ORDRE_TYPES).indexOf(k);
   return [...g.keys()].sort((a, b) => rang(a) - rang(b)).map((k) => ({ cat: k, cartes: g.get(k) }));
 }
 
@@ -920,7 +924,7 @@ function ongletListe(el, d) {
     ${!d.cartes.length ? `<div class="panneau vide"><p>Ce deck est vide.</p><button class="btn btn-accent" id="vide-ajouter">${ico("plus")}Ajouter des cartes</button></div>` : `
     <div class="barre-outils">
       ${segments("affichage", [["liste", "Liste", "liste"], ["visuel", "Visuel", "cartes"]], "liste")}
-      <span class="outil"><span class="petit muet">Ranger par</span>${segments("rangement", [["type", "type"], ["tags", "tags"]], "type")}</span>
+      <span class="outil"><span class="petit muet">Ranger par</span>${segments("rangement", [["type", "type"], ["tags", "tags"], ["fonction", "fonction"]], "type")}</span>
       <label class="outil petit muet">Trier par
         <select class="champ champ-petit" id="tri">${[["cout", "coût"], ["nom", "nom"], ["prix", "prix"]].map(([v, l]) =>
           `<option value="${v}" ${PREF.get("tri", "cout") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
@@ -1093,6 +1097,8 @@ function ouvrirCarte(c) {
         ${assembleHtml(f.assemble)}
         ${f.fr_texte || f.texte ? `<div class="texte fs-texte">${(f.fr_texte || f.texte).split("\n").map((l) => l.trim() === "//" ? "<hr>" : l.trim() ? `<p>${texteMana(l)}</p>` : "").join("")}</div>` : ""}
         ${f.fr_texte && f.texte ? `<details class="petit"><summary>Texte anglais</summary><div class="fs-texte" style="margin-top:.4rem">${f.texte.split("\n").map((l) => l.trim() === "//" ? "<hr>" : `<p>${texteMana(l)}</p>`).join("")}</div></details>` : ""}
+        ${(c.fonctions_detail || []).length ? `<div class="fc-ligne"><span class="petit muet">Fonctions</span>
+          ${c.fonctions_detail.map((x) => `<span class="puce">${esc(x)}</span>`).join("")}</div>` : ""}
         ${cmd ? "" : `
           <div class="fc-ligne"><span class="petit muet">Tags</span>
             ${tags.length ? tags.map((t, i) => `<span class="puce ${i === 0 ? "puce-1" : ""}">${i === 0 ? "★ " : ""}${esc(t)}</span>`).join("") : `<span class="muet petit">aucun</span>`}
