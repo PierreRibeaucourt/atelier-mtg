@@ -47,6 +47,45 @@ function mana(cout) {
 
 const symbole = (s) => `<img class="sym" src="https://svgs.scryfall.io/card-symbols/${s}.svg" alt="{${s}}" title="{${s}}">`;
 
+// icônes au trait (24 × 24), couleur du texte ; dans le HTML fixe : data-ico="nom"
+const POINT = (x, y) => `<circle cx="${x}" cy="${y}" r="1.25" fill="currentColor" stroke="none"/>`;
+const ICONES = {
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  chercher: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  copier: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5"/>',
+  plus_de: POINT(5, 12) + POINT(12, 12) + POINT(19, 12),
+  liste: '<path d="M9 6h11M9 12h11M9 18h11"/>' + POINT(4.5, 6) + POINT(4.5, 12) + POINT(4.5, 18),
+  stats: '<path d="M3 3v18h18"/><path d="M8 17v-4M13 17V8M18 17v-6"/>',
+  combos: '<path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1-1"/>',
+  versions: '<path d="M3.5 12a8.5 8.5 0 1 0 2.5-6L3.5 8.5"/><path d="M3.5 3.5v5h5"/><path d="M12 7.5V12l3 2"/>',
+  bracket: '<path d="M12 21s7-3.3 7-9.2V5.6L12 3 5 5.6v6.2C5 17.7 12 21 12 21z"/>',
+  simulation: '<rect x="3.5" y="3.5" width="17" height="17" rx="3"/>' + POINT(8.5, 8.5) + POINT(12, 12) + POINT(15.5, 15.5),
+  rafraichir: '<path d="M20 12a8 8 0 1 1-2.3-5.7L20 8.5"/><path d="M20 3.5v5h-5"/>',
+  theme: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/>',
+  discussion: '<path d="M20 15a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"/>',
+  fermer: '<path d="M18 6 6 18M6 6l12 12"/>',
+  maybe: '<path d="M3 13h5l1.5 2.5h5L16 13h5"/><path d="M5.6 5h12.8L21 13v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z"/>',
+  annuler: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  couronne: '<path d="M3 7.5 7.5 12 12 5l4.5 7L21 7.5 19 19H5z"/>',
+  corbeille: '<path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  tag: '<path d="M3 4v7l9.5 9.5a1.5 1.5 0 0 0 2.1 0l5.9-5.9a1.5 1.5 0 0 0 0-2.1L11 3H4a1 1 0 0 0-1 1z"/>' + POINT(7.5, 7.5),
+  panier: '<path d="M2.5 3h3l2.6 12.4a1.5 1.5 0 0 0 1.5 1.1h8.3a1.5 1.5 0 0 0 1.4-1.1L21.5 7H6.3"/><circle cx="9.5" cy="20" r="1.2"/><circle cx="17.5" cy="20" r="1.2"/>',
+  livre: '<path d="M4 18V5a2 2 0 0 1 2-2h14v14H6a2 2 0 0 0-2 2 2 2 0 0 0 2 2h14"/>',
+  precedent: '<path d="m15 18-6-6 6-6"/>',
+  suivant: '<path d="m9 18 6-6-6-6"/>',
+  envoyer: '<path d="M21 3 10 14"/><path d="M21 3l-7 18-4-7-7-4z"/>',
+  lancer: '<path d="M7 4.5v15l12.5-7.5z"/>',
+  arreter: '<rect x="6" y="6" width="12" height="12" rx="1.5"/>',
+  enregistrer: '<path d="M6 3.5h12v17l-6-4-6 4z"/>',
+  comparer: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/>',
+  grille: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
+  cartes: '<rect x="8" y="3" width="12" height="16.5" rx="2"/><path d="M4.5 7v11.5a2.5 2.5 0 0 0 2.5 2.5h8"/>',
+  crayon: '<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
+  effacer: '<path d="M20 20H9L4 15a2 2 0 0 1 0-2.8L13.2 3a2 2 0 0 1 2.8 0l4 4a2 2 0 0 1 0 2.8L11 19"/><path d="m8 9 7 7"/>',
+};
+const ico = (nom) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${ICONES[nom] || ""}</svg>`;
+$$("[data-ico]").forEach((el) => el.insertAdjacentHTML("afterbegin", ico(el.dataset.ico)));
+
 function toast(msg, ms = 2600) {
   const t = $("#toast");
   t.textContent = msg;
@@ -539,7 +578,7 @@ async function vueAccueil() {
   vue.innerHTML = `
     <div class="titre-page">
       <h1>Mes decks</h1>
-      <button class="btn btn-accent" id="btn-nouveau">+ Nouveau deck</button>
+      <button class="btn btn-accent" id="btn-nouveau">${ico("plus")}Nouveau deck</button>
     </div>
     <div class="barre-outils">
       <input class="champ filtre" id="d-filtre" type="search" placeholder="Chercher un deck, un commandant ou une carte…" value="${esc(etat.filtreDecks || "")}" aria-label="Chercher un deck">
@@ -549,14 +588,14 @@ async function vueAccueil() {
       <label class="outil petit muet">Trier par
         <select class="champ champ-petit" id="d-tri">${[["recent", "récents"], ["nom", "nom"], ["prix", "prix"], ["gc", "Game Changers"]].map(([v, l]) =>
           `<option value="${v}" ${PREF.get("tri-decks", "recent") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
-      ${segments("vue-decks", [["grille", "Grille"], ["liste", "Liste"]], "grille")}
+      ${segments("vue-decks", [["grille", "Grille", "grille"], ["liste", "Liste", "liste"]], "grille")}
     </div>
     <div id="d-resultats"></div>
     ${corbeille.length ? `
       <details class="panneau"><summary>Decks supprimés (${corbeille.length})</summary>
         <table class="tableau" style="margin-top:.6rem"><tbody>
           ${corbeille.map((c, i) => `<tr><td><strong>${esc(c.nom.replace(/^Deck /, ""))}</strong> <span class="muet petit">supprimé le ${esc(c.date)}</span></td>
-            <td class="num"><button class="btn btn-petit" data-recup="${i}">Récupérer</button></td></tr>`).join("")}
+            <td class="num"><button class="btn btn-petit" data-recup="${i}">${ico("annuler")}Récupérer</button></td></tr>`).join("")}
         </tbody></table>
       </details>` : ""}`;
   $("#btn-nouveau").onclick = modaleNouveauDeck;
@@ -734,15 +773,15 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
           <div class="chiffres" style="margin-top:.5rem">${chiffresDeck(d)}</div>
         </div>
         <div class="actions">
-          <button class="btn btn-accent" id="btn-ajouter">Ajouter des cartes</button>
-          <a class="btn" href="#/recherche?deck=${enc(id)}">Chercher des cartes</a>
-          <button class="btn" id="btn-export">Copier pour Archidekt</button>
-          <button class="btn ouvre-menu" id="btn-deck-menu" aria-label="Autres actions sur le deck" title="Autres actions">⋯</button>
+          <button class="btn btn-accent" id="btn-ajouter">${ico("plus")}Ajouter des cartes</button>
+          <a class="btn" href="#/recherche?deck=${enc(id)}">${ico("chercher")}Chercher des cartes</a>
+          <button class="btn" id="btn-export">${ico("copier")}Copier pour Archidekt</button>
+          <button class="btn btn-icone ouvre-menu" id="btn-deck-menu" aria-label="Autres actions sur le deck" title="Autres actions">${ico("plus_de")}</button>
         </div>
       </div>
     </div>
     ${d.note ? `<p class="note">${esc(d.note)}</p>` : ""}
-    <nav class="onglets">${ONGLETS.map(([k, l]) => `<a href="#/deck/${enc(id)}/${k}" class="${k === onglet ? "actif" : ""}">${l}</a>`).join("")}</nav>
+    <nav class="onglets">${ONGLETS.map(([k, l]) => `<a href="#/deck/${enc(id)}/${k}" class="${k === onglet ? "actif" : ""}">${ico(k)}${l}</a>`).join("")}</nav>
     <section id="contenu"></section>`;
   $("#btn-ajouter").onclick = () => modaleAjout();
   $("#btn-export").onclick = copierArchidekt;
@@ -848,16 +887,16 @@ function legendeCarte(c) {
 
 function segments(pref, valeurs, def) {
   const v = PREF.get(pref, def);
-  return `<div class="segments" role="group">${valeurs.map(([k, l]) =>
-    `<button type="button" data-pref="${pref}" data-val="${k}" class="${k === v ? "actif" : ""}" aria-pressed="${k === v}">${l}</button>`).join("")}</div>`;
+  return `<div class="segments" role="group">${valeurs.map(([k, l, i]) =>
+    `<button type="button" data-pref="${pref}" data-val="${k}" class="${k === v ? "actif" : ""}" aria-pressed="${k === v}">${i ? ico(i) : ""}${l}</button>`).join("")}</div>`;
 }
 
 function ongletListe(el, d) {
   el.innerHTML = `
     ${d.erreur_sim ? `<p class="erreur petit">Le simulateur n'a pas pu lire ce deck : ${esc(d.erreur_sim.non_lu[0])}</p>` : ""}
-    ${!d.cartes.length ? `<div class="panneau vide"><p>Ce deck est vide.</p><button class="btn btn-accent" id="vide-ajouter">Ajouter des cartes</button></div>` : `
+    ${!d.cartes.length ? `<div class="panneau vide"><p>Ce deck est vide.</p><button class="btn btn-accent" id="vide-ajouter">${ico("plus")}Ajouter des cartes</button></div>` : `
     <div class="barre-outils">
-      ${segments("affichage", [["liste", "Liste"], ["visuel", "Visuel"]], "liste")}
+      ${segments("affichage", [["liste", "Liste", "liste"], ["visuel", "Visuel", "cartes"]], "liste")}
       <span class="outil"><span class="petit muet">Ranger par</span>${segments("rangement", [["type", "type"], ["tags", "tags"]], "type")}</span>
       <label class="outil petit muet">Trier par
         <select class="champ champ-petit" id="tri">${[["cout", "coût"], ["nom", "nom"], ["prix", "prix"]].map(([v, l]) =>
@@ -936,7 +975,7 @@ function ligneCarte(c, rangement) {
       ${sim ? `<span class="badge badge-sim" title="${esc(sim[1] + (c.sim.non_lu.length ? " :\n• " + c.sim.non_lu.join("\n• ") : ""))}">${sim[0]}</span>` : ""}
     </span>
     ${f.prix_lien ? `<a class="prix ${cher ? "cher" : ""}" href="${esc(f.prix_lien)}" target="_blank" rel="noopener" title="${esc(f.prix_edition ? `Le moins cher : ${f.prix_edition}. ` : "")}Voir sur Cardmarket">${euros(f.prix)}</a>` : `<span class="prix muet">${euros(f.prix)}</span>`}
-    <button class="btn-menu" aria-label="Fiche et actions : ${esc(c.nom)}" title="Fiche et actions">⋯</button>
+    <button class="btn-menu" aria-label="Fiche et actions : ${esc(c.nom)}" title="Fiche et actions">${ico("plus_de")}</button>
   </div>`;
 }
 
@@ -970,7 +1009,7 @@ function carteVisuelle(c) {
 // recto-verso : un bouton sous l'image pour retourner la carte (Delver, Valakut Awakening…)
 function boutonVerso(dos) {
   if (!dos || !dos.image) return "";
-  return `<button type="button" class="lien-discret fc-retourner" data-act="retourner" title="${esc(dos.nom)} · ${esc(dos.type || "")}">↻ Voir le verso</button>`;
+  return `<button type="button" class="lien-discret fc-retourner" data-act="retourner" title="${esc(dos.nom)} · ${esc(dos.type || "")}">${ico("rafraichir")}Voir le verso</button>`;
 }
 
 function retournerCarte(boite) {
@@ -978,7 +1017,7 @@ function retournerCarte(boite) {
   if (!img || !img.dataset.verso) return;
   const verso = img.src !== img.dataset.verso;
   img.src = verso ? img.dataset.verso : img.dataset.recto;
-  b.textContent = verso ? "↻ Voir le recto" : "↻ Voir le verso";
+  b.innerHTML = ico("rafraichir") + (verso ? "Voir le recto" : "Voir le verso");
 }
 
 // cartes qui s'assemblent (Bruna + Gisela = Brisela)
@@ -1016,7 +1055,7 @@ function ouvrirCarte(c) {
       <div class="fc-infos">
         <div class="fc-tete">
           <div><h2>${esc(c.nom)} ${mana(f.cout)}</h2>${f.fr && f.fr !== c.nom ? `<div class="muet">${esc(f.fr)}</div>` : ""}</div>
-          <button class="btn btn-discret" id="fc-fermer" aria-label="Fermer">✕</button>
+          <button class="btn btn-discret btn-icone" id="fc-fermer" aria-label="Fermer">${ico("fermer")}</button>
         </div>
         <div class="petit muet">${esc(f.fr_type || f.type || "")}${f.pt ? " · " + esc(f.pt) : ""}${cmd ? " · commandant" : maybe ? " · Maybeboard" : ""}</div>
         <div class="chiffres">
@@ -1031,29 +1070,29 @@ function ouvrirCarte(c) {
         ${cmd ? "" : `
           <div class="fc-ligne"><span class="petit muet">Tags</span>
             ${tags.length ? tags.map((t, i) => `<span class="puce ${i === 0 ? "puce-1" : ""}">${i === 0 ? "★ " : ""}${esc(t)}</span>`).join("") : `<span class="muet petit">aucun</span>`}
-            <button class="btn btn-petit" data-act="tags">Modifier</button></div>
+            <button class="btn btn-petit" data-act="tags">${ico("crayon")}Modifier</button></div>
           ${c.n > 1 || plusieursExemplaires({ type: f.type, texte: f.texte }) ? `
           <div class="fc-ligne"><label class="petit muet" for="fc-n">Exemplaires</label>
             <input class="champ champ-petit" type="number" id="fc-n" min="1" max="99" value="${c.n}" style="width:4.5rem"></div>` : ""}`}
         <div class="fc-bloc-actions" role="group" aria-label="Actions sur la carte">
           <div class="fc-actions">
-            ${cmd ? "" : `<button class="btn btn-petit" data-act="maybe">${maybe ? "Remettre dans le deck" : "Passer en Maybeboard"}</button>`}
+            ${cmd ? "" : `<button class="btn btn-petit" data-act="maybe">${maybe ? ico("annuler") + "Remettre dans le deck" : ico("maybe") + "Passer en Maybeboard"}</button>`}
             <button class="btn btn-petit" data-act="remplacer">Remplacer…</button>
-            ${cmd ? `<button class="btn btn-petit" data-act="cmd">Ne plus en faire le commandant</button>`
-              : !maybe && legendaire && (d.commandants || []).length < 2 && (!second || f.partenaire !== false) ? `<button class="btn btn-petit" data-act="cmd">${second ? "Ajouter comme second commandant" : "Définir comme commandant"}</button>` : ""}
-            <button class="btn btn-petit btn-danger fc-retirer" data-act="retirer">Retirer du deck</button>
+            ${cmd ? `<button class="btn btn-petit" data-act="cmd">${ico("couronne")}Ne plus en faire le commandant</button>`
+              : !maybe && legendaire && (d.commandants || []).length < 2 && (!second || f.partenaire !== false) ? `<button class="btn btn-petit" data-act="cmd">${ico("couronne")}${second ? "Ajouter comme second commandant" : "Définir comme commandant"}</button>` : ""}
+            <button class="btn btn-petit btn-danger fc-retirer" data-act="retirer">${ico("corbeille")}Retirer du deck</button>
           </div>
         </div>
         <div class="fc-liens">
-          <a href="#/deck/${enc(d.id)}/combos/${enc(c.nom)}">Combos avec cette carte →</a>
-          <a href="${esc(f.prix_lien || lienCardmarket(c.nom))}" target="_blank" rel="noopener">Cardmarket ↗</a>
-          <a href="${esc(f.gatherer || lienGatherer(c.nom))}" target="_blank" rel="noopener">Gatherer ↗</a>
+          <a href="#/deck/${enc(d.id)}/combos/${enc(c.nom)}">${ico("combos")}Combos avec cette carte</a>
+          <a href="${esc(f.prix_lien || lienCardmarket(c.nom))}" target="_blank" rel="noopener">${ico("panier")}Cardmarket ↗</a>
+          <a href="${esc(f.gatherer || lienGatherer(c.nom))}" target="_blank" rel="noopener">${ico("livre")}Gatherer ↗</a>
         </div>
         ${pos >= 0 && ordre.length > 1 ? `
           <div class="fc-nav">
-            <button class="btn btn-petit" data-act="prec" ${pos === 0 ? "disabled" : ""}>← Précédente</button>
+            <button class="btn btn-petit" data-act="prec" ${pos === 0 ? "disabled" : ""}>${ico("precedent")}Précédente</button>
             <span class="muet petit">${pos + 1} / ${ordre.length}</span>
-            <button class="btn btn-petit" data-act="suiv" ${pos === ordre.length - 1 ? "disabled" : ""}>Suivante →</button>
+            <button class="btn btn-petit" data-act="suiv" ${pos === ordre.length - 1 ? "disabled" : ""}>Suivante${ico("suivant")}</button>
           </div>` : ""}
       </div>
     </div>`, (b) => {
@@ -1197,7 +1236,7 @@ async function choixVersion(zone, { nom, titre = nom, actuelle = null, surChoix,
   zone.innerHTML = `<div class="choix-versions">
     <div class="versions-tete">
       <div class="versions-titre">Changer la version de ${esc(titre)}</div>
-      ${retour ? `<button type="button" class="btn btn-petit" data-retour>← Retour à la fiche</button>` : ""}
+      ${retour ? `<button type="button" class="btn btn-petit" data-retour>${ico("precedent")}Retour à la fiche</button>` : ""}
     </div>
     <div class="barre-outils">
       <div class="segments" role="group">${[["toutes", `Toutes (${liste.length})`], ["en", `Anglais (${nb("en")})`], ["fr", `Français (${nb("fr")})`]]
@@ -1585,9 +1624,9 @@ function ongletStats(el, d) {
     <div class="panneau">
       <h3 style="margin-top:0">Main de départ</h3>
       <div class="form-ligne" style="margin-top:0">
-        <button class="btn btn-accent" id="m-tirer">Nouvelle main</button>
-        <button class="btn" id="m-mull">Mulligan</button>
-        <button class="btn" id="m-piocher">Piocher une carte</button>
+        <button class="btn btn-accent" id="m-tirer">${ico("cartes")}Nouvelle main</button>
+        <button class="btn" id="m-mull">${ico("rafraichir")}Mulligan</button>
+        <button class="btn" id="m-piocher">${ico("plus")}Piocher une carte</button>
         <span class="muet petit" id="m-info"></span>
       </div>
       <div class="etale etale-main" id="m-cartes"></div>
@@ -1662,10 +1701,10 @@ function ligneVersion(v, i) {
       ${v.note ? `<div class="petit">${esc(v.note)}</div>` : ""}</td>
     <td class="petit">${diffCourt(v)}</td>
     <td class="num">
-      <button class="btn btn-petit" data-act="comparer" data-i="${i}">Comparer</button>
-      <button class="btn btn-petit" data-act="simuler" data-i="${i}">Simuler</button>
-      <button class="btn btn-petit" data-act="restaurer" data-i="${i}">Restaurer</button>
-      ${v.type === "nommee" ? `<button class="btn btn-petit btn-danger" data-act="supprimer" data-i="${i}">Supprimer</button>` : ""}
+      <button class="btn btn-petit" data-act="comparer" data-i="${i}">${ico("comparer")}Comparer</button>
+      <button class="btn btn-petit" data-act="simuler" data-i="${i}">${ico("simulation")}Simuler</button>
+      <button class="btn btn-petit" data-act="restaurer" data-i="${i}">${ico("annuler")}Restaurer</button>
+      ${v.type === "nommee" ? `<button class="btn btn-petit btn-danger" data-act="supprimer" data-i="${i}">${ico("corbeille")}Supprimer</button>` : ""}
     </td></tr>`;
 }
 
@@ -1677,7 +1716,7 @@ async function ongletVersions(el, d) {
   const defautB = (nommees[0] || auto[0] || {}).fichier ?? "";
   el.innerHTML = `
     <div class="form-ligne">
-      <button class="btn btn-accent" id="btn-version">Enregistrer une version…</button>
+      <button class="btn btn-accent" id="btn-version">${ico("enregistrer")}Enregistrer une version…</button>
     </div>
 
     <div class="panneau">
@@ -1686,7 +1725,7 @@ async function ongletVersions(el, d) {
         <select class="champ" style="flex:1;min-width:200px" id="cmp-a">${optionsVersions(vs, "")}</select>
         <span class="muet">et</span>
         <select class="champ" style="flex:1;min-width:200px" id="cmp-b">${optionsVersions(vs, defautB)}</select>
-        <button class="btn" id="btn-cmp">Comparer</button>
+        <button class="btn" id="btn-cmp">${ico("comparer")}Comparer</button>
       </div>
       <div id="cmp-res"></div>
     </div>
@@ -1773,7 +1812,7 @@ async function afficheComparaison(zone, d, fa, fb) {
       </table>
       ${!c.seulement_a.length && !c.seulement_b.length ? `<p class="muet">Mêmes cartes.</p>` :
         `<div class="grille-2">${colonne(c.a, c.seulement_a)}${colonne(c.b, c.seulement_b)}</div>
-         <div class="boutons"><button class="btn btn-accent" id="cmp-sim">Simuler « ${esc(c.a.nom)} » contre « ${esc(c.b.nom)} »</button></div>`}`;
+         <div class="boutons"><button class="btn btn-accent" id="cmp-sim">${ico("simulation")}Simuler « ${esc(c.a.nom)} » contre « ${esc(c.b.nom)} »</button></div>`}`;
     const b = $("#cmp-sim", zone);
     if (b) b.onclick = () => { etat.simA = fa; etat.simB = fb; location.hash = `#/deck/${enc(d.id)}/simulation`; };
   } catch (e) { zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
@@ -1875,7 +1914,7 @@ function ligneCombo(c, carte = null) {
     if (!manque.length) etatCarte = `<span class="ok">✓ tout est dans le deck</span>`;
     else {
       const maybe = manque.length === 1 ? ((c.maybe || []).includes(manque[0].nom) ? ` <span class="badge">au Maybeboard</span>`
-        : ` <button type="button" class="btn btn-petit" data-maybe="${esc(manque[0].nom)}">+ Maybeboard</button>`) : "";
+        : ` <button type="button" class="btn btn-petit" data-maybe="${esc(manque[0].nom)}">${ico("maybe")}Maybeboard</button>`) : "";
       etatCarte = `Pas dans le deck : ${manque.map((f) => `${nc(f.nom, f.fr || f.nom)} <span class="${(f.prix || 0) > 5 ? "cher" : "muet"}">${euros(f.prix)}</span>`).join(" · ")}${maybe}`;
     }
   }
@@ -1961,7 +2000,7 @@ function rendreClaude(zone, d, st, apres) {
   const r = st.resultat;
   zone.innerHTML = `${st.erreur ? `<span class="erreur">${esc(st.erreur)}</span> ` : ""}
     ${r ? `Synergies Claude du ${new Date(r.date * 1000).toLocaleDateString("fr-FR")}${st.a_jour ? "" : " · la liste a changé"}` : ""}
-    <button class="btn btn-petit" id="btn-claude">${r ? "Relancer" : "Chercher les synergies avec Claude"}</button>`;
+    <button class="btn btn-petit" id="btn-claude">${ico("discussion")}${r ? "Relancer" : "Chercher les synergies avec Claude"}</button>`;
   $("#btn-claude", zone).onclick = async () => {
     try { rendreClaude(zone, d, await api(`/api/decks/${enc(d.id)}/synergies`, { method: "POST", body: {} }), apres); }
     catch (e) { erreur(e); }
@@ -2030,8 +2069,8 @@ async function vueCombosCarte(zone, d, carte = null) {
 async function ongletCombos(el, d, carte = null) {
   el.innerHTML = `
     <div class="segments" role="group" style="margin-bottom:1rem">
-      <button type="button" data-vue="deck">Le deck</button>
-      <button type="button" data-vue="carte">Une carte</button>
+      <button type="button" data-vue="deck">${ico("liste")}Le deck</button>
+      <button type="button" data-vue="carte">${ico("cartes")}Une carte</button>
     </div>
     <div id="cb-vue"></div>`;
   const zone = $("#cb-vue", el);
@@ -2139,7 +2178,7 @@ function afficheRapport(zone, r) {
         <tbody>${lignes}</tbody>
       </table>
       ${details}
-      <div class="boutons"><button class="btn" id="rap-claude">Expliquer avec Claude</button></div>
+      <div class="boutons"><button class="btn" id="rap-claude">${ico("discussion")}Expliquer avec Claude</button></div>
     </div>`;
   $("#rap-claude", zone).onclick = () => ouvrirChat(`Explique-moi le rapport de simulation ${r.deck}/simulations/${zone.dataset.fichier || ""} (${A.nom}${B ? " contre " + B.nom : ""}) : qu'est-ce qui ressort, et que me conseilles-tu ?`);
 }
@@ -2199,7 +2238,7 @@ async function ongletSimulation(conteneur, d, rapportInitial = null) {
             <button class="btn btn-petit" id="r-defaut">Revenir aux réglages par défaut</button></div>
         </details>
       </fieldset>
-      <div class="boutons"><button class="btn btn-accent" id="s-lancer">Lancer la simulation</button></div>
+      <div class="boutons"><button class="btn btn-accent" id="s-lancer">${ico("lancer")}Lancer la simulation</button></div>
       <div id="s-prog"></div>
     </div>
     <div id="s-rapport"></div>
@@ -2291,7 +2330,7 @@ async function suivreSimulation(el, d, id) {
     if (j.statut === "en_cours") {
       prog.innerHTML = `<div class="barre-prog"><div style="width:${(100 * j.fait / j.total).toFixed(1)}%"></div></div>
         <div class="form-ligne" style="justify-content:space-between;margin:0"><span class="petit muet">${j.fait} / ${j.total} parties${j.reste != null ? ` · encore ${j.reste < 90 ? j.reste + " s" : Math.round(j.reste / 60) + " min"}` : ""}</span>
-        <button class="btn btn-petit" id="s-stop">Arrêter</button></div>`;
+        <button class="btn btn-petit" id="s-stop">${ico("arreter")}Arrêter</button></div>`;
       $("#s-stop", prog).onclick = () => api(`/api/jobs/${id}/annuler`, { method: "POST" });
       return setTimeout(tour, 700);
     }
@@ -2450,8 +2489,8 @@ function formulaireRecherche(c) {
       ${rchNombres("Force", "f", "fx", c)}
       ${rchNombres("Endurance", "e", "ex", c)}
       <div class="mt-go">
-        <button class="rch-go" type="submit">Rechercher</button>
-        <button class="lien-discret" type="button" data-act="raz">Tout effacer</button>
+        <button class="rch-go" type="submit">${ico("chercher")}Rechercher</button>
+        <button class="lien-discret" type="button" data-act="raz">${ico("effacer")}Tout effacer</button>
       </div>
       <section class="fen fen-format"><h3 class="fen-titre">Format</h3>${rchFormats(c.format || "")}</section>
       <section class="fen fen-rarete"><h3 class="fen-titre">Rareté</h3>${rchRaretes(c.rar || "")}</section>
@@ -2485,7 +2524,7 @@ function formulaireRecherche(c) {
       <div id="eds-choisies" class="puces"></div>
       <div id="eds-groupes" class="eds-groupes"><p class="muet petit">Éditions…</p></div>
     </section>
-    <div class="mt-pied"><button class="btn btn-accent" type="submit">Rechercher</button></div>
+    <div class="mt-pied"><button class="btn btn-accent" type="submit">${ico("chercher")}Rechercher</button></div>
   </form>`;
 }
 
@@ -2627,8 +2666,8 @@ function rendreFormulaire() {
     z.innerHTML = `<div class="moteur-resume panneau">
       <div class="puces">${r.length ? r.map((t) => `<span class="puce puce-crit">${esc(t)}</span>`).join("") : `<span class="muet petit">Toutes les cartes</span>`}</div>
       <div class="moteur-resume-actions">
-        <button class="btn btn-petit" data-act="modifier">Modifier la recherche</button>
-        <button class="btn btn-petit btn-discret" data-act="nouvelle">Nouvelle recherche</button>
+        <button class="btn btn-petit" data-act="modifier">${ico("crayon")}Modifier la recherche</button>
+        <button class="btn btn-petit btn-discret" data-act="nouvelle">${ico("effacer")}Nouvelle recherche</button>
       </div></div>`;
     $('[data-act="modifier"]', z).onclick = () => { rch.ouvert = true; rendreFormulaire(); $("#moteur [name=nom]").focus(); };
     $('[data-act="nouvelle"]', z).onclick = nouvelleRecherche;
@@ -2959,8 +2998,8 @@ function etatDeckRch(x) {
   if (!rch.deck) return "";
   if (x.dans === "deck" || x.dans === "commandant") return `<span class="badge badge-ok">✓ ${x.dans === "commandant" ? "commandant" : "dans le deck"}</span>`;
   return `${x.dans === "maybe" ? `<span class="badge">Maybeboard</span>` : ""}
-    <button type="button" class="btn btn-petit" data-act="ajouter" title="Ajouter à ${esc(rch.deck.titre)}">+ Deck</button>
-    ${x.dans === "maybe" ? "" : `<button type="button" class="btn btn-petit btn-discret" data-act="maybe" title="Ajouter au Maybeboard de ${esc(rch.deck.titre)}">+ Maybe</button>`}`;
+    <button type="button" class="btn btn-petit" data-act="ajouter" title="Ajouter à ${esc(rch.deck.titre)}">${ico("plus")}Deck</button>
+    ${x.dans === "maybe" ? "" : `<button type="button" class="btn btn-petit btn-discret" data-act="maybe" title="Ajouter au Maybeboard de ${esc(rch.deck.titre)}">${ico("maybe")}Maybe</button>`}`;
 }
 
 function badgesRch(x, d = rch.deck) {
@@ -3102,8 +3141,8 @@ function blocAjoutRch(x, d) {
 }
 
 function libelleAjout(x, dest) {
-  if (x.dans === "maybe") return "Passer dans le deck";
-  return x.dans === "deck" && dest !== "maybe" ? "Ajouter un exemplaire" : "Ajouter";
+  if (x.dans === "maybe") return ico("annuler") + "Passer dans le deck";
+  return ico("plus") + (x.dans === "deck" && dest !== "maybe" ? "Ajouter un exemplaire" : "Ajouter");
 }
 
 // ---- fiche d'une carte trouvée : grande image, textes, prix du jour, versions, ajout au deck
@@ -3127,7 +3166,7 @@ function ficheRecherche(i, ctx = null) {
       <div class="fc-infos">
         <div class="fc-tete">
           <div><h2>${esc(x.fr || x.nom)} ${mana(x.cout)}</h2>${x.fr && x.fr !== x.nom ? `<div class="muet">${esc(x.nom)}</div>` : ""}</div>
-          <button class="btn btn-discret" data-act="fermer" aria-label="Fermer">✕</button>
+          <button class="btn btn-discret btn-icone" data-act="fermer" aria-label="Fermer">${ico("fermer")}</button>
         </div>
         <div class="petit muet">${esc(x.type_fr || x.type)}${x.pt ? " · " + esc(x.pt) : ""}</div>
         <div class="chiffres" id="rf-prix">
@@ -3139,15 +3178,15 @@ function ficheRecherche(i, ctx = null) {
         ${x.texte_fr && x.texte ? `<details class="petit"><summary>Texte anglais</summary><div class="fs-texte" style="margin-top:.4rem">${texte(x.texte)}</div></details>` : ""}
         ${d ? blocAjoutRch(x, d) : ""}
         <div class="fc-liens">
-          ${d ? `<a href="#/deck/${enc(d.id)}/combos/${enc(x.nom)}">Combos avec cette carte →</a>` : ""}
-          <a href="${esc(lienCardmarket(x.nom))}" id="rf-cardmarket" target="_blank" rel="noopener">Cardmarket ↗</a>
-          <a href="${esc(lienGatherer(x.nom))}" id="rf-gatherer" target="_blank" rel="noopener">Gatherer ↗</a>
+          ${d ? `<a href="#/deck/${enc(d.id)}/combos/${enc(x.nom)}">${ico("combos")}Combos avec cette carte</a>` : ""}
+          <a href="${esc(lienCardmarket(x.nom))}" id="rf-cardmarket" target="_blank" rel="noopener">${ico("panier")}Cardmarket ↗</a>
+          <a href="${esc(lienGatherer(x.nom))}" id="rf-gatherer" target="_blank" rel="noopener">${ico("livre")}Gatherer ↗</a>
         </div>
         ${liste.length > 1 ? `
           <div class="fc-nav">
-            <button class="btn btn-petit" data-act="prec" ${i === 0 ? "disabled" : ""}>← Précédente</button>
+            <button class="btn btn-petit" data-act="prec" ${i === 0 ? "disabled" : ""}>${ico("precedent")}Précédente</button>
             <span class="muet petit">${i + 1} / ${liste.length}</span>
-            <button class="btn btn-petit" data-act="suiv" ${i === liste.length - 1 ? "disabled" : ""}>Suivante →</button>
+            <button class="btn btn-petit" data-act="suiv" ${i === liste.length - 1 ? "disabled" : ""}>Suivante${ico("suivant")}</button>
           </div>` : ""}
       </div>
     </div>`, (b) => {
@@ -3158,7 +3197,7 @@ function ficheRecherche(i, ctx = null) {
         dest = s.dataset.dest;
         PREF.set("rf-dest", dest);
         $$("[data-dest]", b).forEach((y) => { y.classList.toggle("actif", y === s); y.setAttribute("aria-pressed", y === s); });
-        $('[data-act="ajouter"]', b).textContent = libelleAjout(x, dest);
+        $('[data-act="ajouter"]', b).innerHTML = libelleAjout(x, dest);
         return;
       }
       const a = ev.target.closest("[data-act]");
@@ -3301,7 +3340,7 @@ function ajouteOutil(texte, avant = null) {
 function boutonEnvoyer(enCours) {
   const b = $("#chat-envoyer");
   if (!b) return;
-  b.textContent = enCours ? "Arrêter" : "Envoyer";
+  b.innerHTML = enCours ? ico("arreter") + "Arrêter" : ico("envoyer") + "Envoyer";
   b.classList.toggle("btn-accent", !enCours);
   if (!enCours) $("#chat-etat").textContent = ETAT_CHAT;
 }
@@ -3342,8 +3381,8 @@ async function montageChat() {
         <select id="chat-modele" class="btn btn-petit" title="Modèle">
           <option value="opus">Opus</option><option value="sonnet">Sonnet</option><option value="haiku">Haiku</option>
         </select>
-        <button class="btn btn-petit btn-discret" id="chat-nouvelle" title="Effacer cette discussion et repartir de zéro">Nouvelle</button>
-        <button class="btn btn-petit btn-discret" id="chat-fermer" aria-label="Fermer">✕</button>
+        <button class="btn btn-petit btn-discret" id="chat-nouvelle" title="Effacer cette discussion et repartir de zéro">${ico("crayon")}Nouvelle</button>
+        <button class="btn btn-petit btn-discret btn-icone" id="chat-fermer" aria-label="Fermer">${ico("fermer")}</button>
       </div>
     </div>
     <div class="chat-fil" id="chat-fil" aria-live="polite"></div>
@@ -3356,7 +3395,7 @@ async function montageChat() {
       <textarea id="chat-saisie" placeholder="Ton message…"></textarea>
       <div class="form-ligne" style="margin:0;justify-content:space-between">
         <span class="muet petit" id="chat-etat">${ETAT_CHAT}</span>
-        <button class="btn btn-accent" id="chat-envoyer">Envoyer</button>
+        <button class="btn btn-accent" id="chat-envoyer">${ico("envoyer")}Envoyer</button>
       </div>
     </div>`;
   try { $("#chat-modele").value = localStorage.getItem("chat-modele") || "opus"; } catch (_) { $("#chat-modele").value = "opus"; }
@@ -3396,8 +3435,8 @@ function afficheEnCours(s) {
 function boutonDiscussion(actives) {
   const b = $("#btn-chat");
   b.classList.toggle("travaille", actives.length > 0);
-  b.textContent = !actives.length ? "Discussion"
-    : actives.length > 1 ? `Claude répond (${actives.length})…` : `Claude répond${actives[0] ? " · " + nomDiscussion(actives[0]) : ""}…`;
+  b.innerHTML = ico("discussion") + `<span class="txt">${esc(!actives.length ? "Discussion"
+    : actives.length > 1 ? `Claude répond (${actives.length})…` : `Claude répond${actives[0] ? " · " + nomDiscussion(actives[0]) : ""}…`)}</span>`;
 }
 
 // une réponse vient de se terminer dans la discussion « cle »
