@@ -771,10 +771,13 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
   const d = donnees || await api("/api/decks/" + enc(id));
   etat.deck = d;
   RECENTS.noter(id);
+  const cmdsEntete = d.cartes.filter((c) => c.cat === "Commander" && c.info.image);      // deux partenaires : en éventail
   vue.innerHTML = `
     <nav class="fil" aria-label="Fil d'Ariane"><a href="#/">Mes decks</a><span aria-hidden="true">›</span><span aria-current="page">${esc(d.titre)}</span></nav>
-    <div class="entete-deck">
+    <div class="entete-deck ${cmdsEntete.length ? "avec-cmd" : ""} ${cmdsEntete.length > 1 ? "duo" : ""}">
       <div class="bandeau" style="background-image:url('${esc(d.art)}')"></div>
+      ${cmdsEntete.length ? `<div class="cmds-entete">${cmdsEntete.map((c) =>
+        `<button type="button" class="cmd-entete" data-carte="${c.index}" aria-label="${esc(c.nom)} : fiche et actions"><img src="${esc(c.info.image)}" alt=""></button>`).join("")}</div>` : ""}
       <div class="infos">
         <div>
           <h1>${esc(d.titre)}</h1>
@@ -795,6 +798,7 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
     </div>
     <section id="contenu"></section>`;
   $("#btn-ajouter").onclick = () => modaleAjout();
+  $$(".cmd-entete").forEach((x) => { x.onclick = () => ouvrirCarte(d.cartes[+x.dataset.carte]); });
   $("#btn-deck-menu").onclick = (ev) => ouvrirMenu(ev.currentTarget, [
     "Copier la liste pour",
     ...EXPORTS.map(([fmt, lib]) => [lib, () => copierListe(fmt, lib), "", "copier"]),
@@ -960,12 +964,15 @@ function rendreGroupes(zone, d) {
   groupes.forEach((g) => g.cartes.sort(tri));
   etat.ordre = groupes.flatMap((g) => g.cartes.map((c) => c.index));     // pour « carte précédente / suivante » dans la fiche
   zone.innerHTML = groupes.map((g) => {
-    const n = g.cartes.reduce((s, c) => s + c.n, 0);
-    const prix = g.cartes.reduce((s, c) => s + (c.info.prix || 0) * c.n, 0);
+    // vue Visuel : les commandants sont dans l'en-tête du deck (sauf s'ils n'ont pas d'image)
+    const cartes = visuel && g.cat === "Commandant" ? g.cartes.filter((c) => !c.info.image) : g.cartes;
+    if (!cartes.length) return "";
+    const n = cartes.reduce((s, c) => s + c.n, 0);
+    const prix = cartes.reduce((s, c) => s + (c.info.prix || 0) * c.n, 0);
     return `<div class="groupe">
       <div class="groupe-titre"><span class="nb-groupe">${n}</span> ${esc(g.cat)} <span class="muet petit">${euros(prix)}</span></div>
-      ${visuel ? `<div class="etale ${g.cartes.some((c) => c.n > 1) ? "avec-piles" : ""}">${g.cartes.map(carteVisuelle).join("")}</div>`
-        : g.cartes.map((c) => ligneCarte(c, rangement)).join("")}
+      ${visuel ? `<div class="etale ${cartes.some((c) => c.n > 1) ? "avec-piles" : ""}">${cartes.map(carteVisuelle).join("")}</div>`
+        : cartes.map((c) => ligneCarte(c, rangement)).join("")}
     </div>`;
   }).join("");
 }

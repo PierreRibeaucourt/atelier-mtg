@@ -193,6 +193,26 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .prix-v { flex-shrink: 0; color: var(--texte-2); font-size: .78rem; font-variant-numeric: tabular-nums; }
 .prix-v.cher { color: var(--alerte); font-weight: 600; }
 .etale-main { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+
+/* commandant dans l'en-tête du deck, à cheval sur le bandeau ; deux partenaires en éventail */
+.cmds-entete { position: absolute; z-index: 1; left: 1.1rem; top: 44px; display: flex; --l: 150px; }
+.cmd-entete { display: block; width: var(--l); padding: 0; border: 0; background: none; cursor: pointer; border-radius: 4.75% / 3.5%;
+  transition: transform .15s; }
+.cmd-entete img { display: block; width: 100%; aspect-ratio: 488 / 680; border-radius: 4.75% / 3.5%; box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+.cmd-entete:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.entete-deck.avec-cmd .infos { padding-left: calc(150px + 2.3rem); min-height: 120px; }
+.duo .cmds-entete { left: 1.8rem; }
+.duo .cmd-entete:first-child { transform: rotate(-5deg); transform-origin: bottom center; }
+.duo .cmd-entete + .cmd-entete { margin-left: -78px; transform: rotate(5deg) translateY(6px); transform-origin: bottom center; }
+.duo .cmd-entete:hover, .duo .cmd-entete:focus-visible { position: relative; z-index: 2; transform: translateY(-4px); }
+.entete-deck.duo .infos { padding-left: calc(2 * 150px - 78px + 3.5rem); }
+@media (max-width: 700px) {
+  .cmds-entete, .duo .cmds-entete { position: relative; left: auto; top: auto; margin: -80px 0 0 1.1rem; --l: 110px; }
+  .duo .cmds-entete { margin-left: 1.6rem; }
+  .duo .cmd-entete + .cmd-entete { margin-left: -50px; }
+  .entete-deck.avec-cmd .infos, .entete-deck.duo .infos { padding-left: 1.1rem; min-height: 0; }
+}
+}
 @media (max-width: 560px) { .etale { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); } }
 .ligne { display: grid; grid-template-columns: 2.4rem minmax(0, 1fr) auto auto 4.6rem 2rem; align-items: center; gap: .6rem;
   padding: .32rem .25rem; border-bottom: 1px solid var(--bord); }
