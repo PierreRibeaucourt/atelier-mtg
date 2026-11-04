@@ -20,6 +20,7 @@ Tout tourne sur ton PC, à l'adresse http://127.0.0.1:5000. Rien n'est mis en li
 - **Versions.** Enregistrer des versions nommées, consulter l'historique automatique, comparer deux versions.
 - **Simulation.** Jouer des parties à 4 joueurs contre des archétypes d'adversaires (méthode de Monte-Carlo). Comparer deux versions d'un deck, avec la marge d'erreur.
 - **Discussion avec Claude.** Une discussion par deck, avec son propre contexte, via Claude Code.
+- **Partage.** Publier la page d'un deck sur GitHub Pages et envoyer le lien (voir plus bas).
 
 ## Installation
 
@@ -75,6 +76,16 @@ Les combos viennent de trois sources :
 - [MTGPics](https://www.mtgpics.com), la version internationale de Magic-Ville, avec la même base de combos. L'Atelier l'interroge poliment (une requête toutes les 1,5 seconde) et garde les résultats 30 jours. Il ne retient que les vraies combos : Win, Lock, Infinite, Threat, Synergy et clones.
 - [Commander Spellbook](https://commanderspellbook.com), la base ouverte des combos de Commander.
 - Claude, à la demande, pour les synergies du deck.
+
+## Partager un deck
+
+« Partager le deck… », dans le menu « … » d'un deck, publie une copie de sa page sur GitHub Pages et donne son lien : `https://<compte>.github.io/decks/<deck>/`. La personne qui l'ouvre voit le deck comme dans l'Atelier, sans rien installer : liste et visuel, aperçu des cartes au survol, fiches, statistiques, combos du deck, versions, bracket, rapports de simulation et copie de la liste pour Archidekt, Moxfield, etc. Elle ne peut rien modifier. La recherche de cartes et la discussion ne sont pas sur la page. La racine du site liste les decks partagés.
+
+- Chaque page a son titre, sa description et une image d'aperçu de 1200 × 630 (balises Open Graph) : envoyé sur une messagerie ou un réseau social, le lien s'affiche avec la carte du commandant, les couleurs, le nombre de cartes, le prix et le bracket. La racine montre les commandants de tous les decks partagés.
+- Les données sont figées au moment du partage, prix compris. « Mettre à jour » republie la page à la même adresse ; « Ne plus partager » la retire du site (elle reste dans l'historique du dépôt).
+- Les pages sont publiques pour qui a le lien, et non référencées par les moteurs de recherche. Rien d'autre ne part : ni les discussions, ni les autres decks.
+- Une fois, avant le premier partage : créer sur GitHub un dépôt public `decks`, sur le même compte que l'Atelier, avec un README. Puis activer GitHub Pages : Settings › Pages › Deploy from a branch › `main`, dossier `/ (root)`. Une page publiée est en ligne au bout d'une minute environ.
+- Les pages sont rangées dans le dossier `Partage Atelier` (un dépôt git à part, hors de ce dépôt), et envoyées avec le remote et l'identité git de l'Atelier.
 
 ## Outils en ligne de commande
 

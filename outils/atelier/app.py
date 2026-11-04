@@ -342,6 +342,26 @@ def api_export(deck):
     return Response(decks.exporter(decks.lire(decks.chemin(deck)), fmt, nom_export), mimetype="text/plain; charset=utf-8")
 
 
+@app.get("/api/decks/<path:deck>/partage")
+def api_partage(deck):
+    """Page partagée du deck sur GitHub Pages : {url, date}, ou {} s'il n'est pas partagé."""
+    import partage
+    return jsonify(partage.etat(deck))
+
+
+@app.post("/api/decks/<path:deck>/partage")
+def api_partager(deck):
+    """Publie ou met à jour la page partagée : les réponses de l'API sont figées par le client de test de Flask."""
+    import partage
+    return jsonify(partage.partager(deck, app.test_client().get))
+
+
+@app.post("/api/decks/<path:deck>/partage/retirer")
+def api_partage_retirer(deck):
+    import partage
+    return jsonify(partage.retirer(deck))
+
+
 @app.get("/api/decks/<path:deck>/versions")
 def api_versions(deck):
     return jsonify(decks.versions(deck))

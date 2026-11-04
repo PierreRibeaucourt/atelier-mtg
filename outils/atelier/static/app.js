@@ -9,6 +9,10 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const sansAccent = (s) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const vue = $("#vue");
 const etat = { decks: [], deck: null, filtre: "" };
+// page partagée (publiée sur GitHub Pages par partage.py) : les réponses de l'API sont figées dans donnees.js,
+// et tout ce qui modifie (classe « ecrit »), la recherche et la discussion sont masqués
+const PARTAGE = window.PARTAGE || null;
+if (PARTAGE) document.documentElement.classList.add("partage");
 
 // préférences d'affichage gardées d'une visite à l'autre (si le navigateur le permet)
 const PREF = {
@@ -17,6 +21,7 @@ const PREF = {
 };
 
 async function api(chemin, opts = {}) {
+  if (PARTAGE) return apiPartage(chemin, opts);
   const init = { ...opts, headers: { "Content-Type": "application/json" } };
   if (opts.body !== undefined) init.body = JSON.stringify(opts.body);
   const r = await fetch(chemin, init);
@@ -25,6 +30,40 @@ async function api(chemin, opts = {}) {
   if (!r.ok) throw new Error((data && data.erreur) || data || r.statusText);
   return data;
 }
+
+// même clé que partage.py : chemin décodé, paramètres triés
+function apiPartage(chemin, opts) {
+  if ((opts.method || "GET") !== "GET") throw new Error("Page en lecture seule.");
+  const u = new URL(chemin, "http://atelier");
+  const p = [...u.searchParams].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const cle = decodeURIComponent(u.pathname) + (p.length ? "?" + p.map(([k, v]) => `${k}=${v}`).join("&") : "");
+  if (u.pathname.endsWith("/comparer") && PARTAGE.comparer) return comparerPartage(u.searchParams.get("a") || "", u.searchParams.get("b") || "");
+  if (u.pathname === "/api/recherche-cartes" && PARTAGE.cartes) {          // comme l'Atelier : {deck: 4 noms au plus}
+    const q = sansAccent((u.searchParams.get("q") || "").trim()), res = {};
+    if (q.length >= 3) for (const [id, l] of Object.entries(PARTAGE.cartes)) {
+      const t = l.filter(([en, fr]) => sansAccent(en).includes(q) || sansAccent(fr).includes(q)).map(([en]) => en);
+      if (t.length) res[id] = [...t.slice(0, 4), ...(t.length > 4 ? [`et ${t.length - 4} autres`] : [])];
+    }
+    return res;
+  }
+  if (!(cle in PARTAGE.api)) throw new Error("Indisponible sur cette page.");
+  return structuredClone(PARTAGE.api[cle]);
+}
+
+// comparaison de deux versions, comme /api/decks/…/comparer, à partir des listes figées
+function comparerPartage(fa, fb) {
+  const { listes, infos } = PARTAGE.comparer, A = listes[fa], B = listes[fb];
+  if (!A || !B) throw new Error("Version introuvable.");
+  const reste = (x, y) => Object.entries(x.cartes).flatMap(([n, k]) => Array(Math.max(0, k - (y.cartes[n] || 0))).fill(n)).sort();
+  const sa = reste(A, B), sb = reste(B, A);
+  const v = (x, f) => ({ fichier: f, nom: x.nom, total: x.total, prix: x.prix, gc: x.gc });
+  return { a: v(A, fa), b: v(B, fb), seulement_a: sa, seulement_b: sb,
+    communes: Object.entries(A.cartes).reduce((s, [n, k]) => s + Math.min(k, B.cartes[n] || 0), 0),
+    infos: Object.fromEntries([...sa, ...sb].map((n) => [n, infos[n] || {}])) };
+}
+
+// lien vers un deck : sa page dans l'Atelier, ou sa page partagée depuis la racine du site
+const lienDeck = (id) => (PARTAGE && PARTAGE.liens && PARTAGE.liens[id]) || `#/deck/${enc(id)}`;
 
 function euros(p) {
   return p == null ? "—" : p.toFixed(2).replace(".", ",") + " €";
@@ -82,7 +121,10 @@ const ICONES = {
   cartes: '<rect x="8" y="3" width="12" height="16.5" rx="2"/><path d="M4.5 7v11.5a2.5 2.5 0 0 0 2.5 2.5h8"/>',
   crayon: '<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
   effacer: '<path d="M20 20H9L4 15a2 2 0 0 1 0-2.8L13.2 3a2 2 0 0 1 2.8 0l4 4a2 2 0 0 1 0 2.8L11 19"/><path d="m8 9 7 7"/>',
+  partager: '<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 13.3 7.6 4.4M15.8 6.3l-7.6 4.4"/>',
+  ouvrir: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>',
 };
+if (PARTAGE) $(".logo").href = PARTAGE.accueil === true ? "#/" : PARTAGE.accueil;
 const ico = (nom) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${ICONES[nom] || ""}</svg>`;
 $$("[data-ico]").forEach((el) => el.insertAdjacentHTML("afterbegin", ico(el.dataset.ico)));
 
@@ -386,7 +428,7 @@ function passeCites() {
 
 async function chargerCites() {
   const r = await api("/api/noms-cartes").catch(() => null);
-  if (!r || !r.noms.length) { setTimeout(chargerCites, 10000); return; }      // base de cartes en cours de chargement
+  if (!r || !r.noms.length) { if (!PARTAGE) setTimeout(chargerCites, 10000); return; }      // base de cartes en cours de chargement
   const cles = new Map(), index = new Map();
   for (const [en] of r.noms) indexerNom(cles, index, en, en);
   for (const [en, fr] of r.noms) if (fr) indexerNom(cles, index, fr, en);
@@ -458,7 +500,9 @@ async function route() {
   $("#lien-recherche").classList.toggle("actif", parts[0] === "recherche");
   vue.classList.toggle("vue-large", parts[0] === "recherche");
   try {
-    if (parts[0] === "recherche") await vueRecherche(new URLSearchParams(qs || ""));
+    if (PARTAGE && PARTAGE.deck) await vueDeck(PARTAGE.deck, (parts[0] === "deck" && parts[2]) || "liste");
+    else if (PARTAGE && parts[0] === "deck" && parts[1]) location.replace(lienDeck(decodeURIComponent(parts[1])));
+    else if (parts[0] === "recherche") await vueRecherche(new URLSearchParams(qs || ""));
     else if (parts[0] === "deck" && parts[1]) await vueDeck(decodeURIComponent(parts[1]), parts[2] || "liste", parts[3] ? decodeURIComponent(parts[3]) : null);
     else await vueAccueil();
   } catch (e) {
@@ -588,7 +632,7 @@ async function vueAccueil() {
   vue.innerHTML = `
     <div class="titre-page">
       <h1>Mes decks</h1>
-      <button class="btn btn-accent" id="btn-nouveau">${ico("plus")}Nouveau deck</button>
+      <button class="btn btn-accent ecrit" id="btn-nouveau">${ico("plus")}Nouveau deck</button>
     </div>
     <div class="barre-outils">
       <input class="champ filtre" id="d-filtre" type="search" placeholder="Chercher un deck, un commandant ou une carte…" value="${esc(etat.filtreDecks || "")}" aria-label="Chercher un deck">
@@ -644,7 +688,7 @@ async function vueAccueil() {
   }));
   zone.addEventListener("click", (ev) => {        // une ligne du tableau entière ouvre le deck
     const tr = ev.target.closest("tr[data-deck]");
-    if (tr && !ev.target.closest("a")) location.hash = `#/deck/${enc(tr.dataset.deck)}`;
+    if (tr && !ev.target.closest("a")) location.href = lienDeck(tr.dataset.deck);
   });
   $$("[data-recup]").forEach((b) => b.addEventListener("click", async () => {
     try {
@@ -675,7 +719,7 @@ function contientHtml(noms) {
 
 function carteDeck(d, noms) {
   return `
-    <a class="carte-deck" href="#/deck/${enc(d.id)}">
+    <a class="carte-deck" href="${esc(lienDeck(d.id))}">
       ${d.art ? `<img class="art" src="${esc(d.art)}" alt="" loading="lazy">` : `<div class="art"></div>`}
       <div class="corps">
         <div class="titre">${esc(d.titre)} <span class="identite">${identiteHtml(d.identite)}</span></div>
@@ -707,7 +751,7 @@ function rendreDecks(zone, cartes) {
     zone.innerHTML = `<table class="tableau tableau-decks">
       <thead><tr><th>Deck</th><th>Couleurs</th><th class="num">Cartes</th><th class="num">Prix</th><th class="num">Bracket</th><th class="num">Game Changers</th><th class="num">Modifié</th></tr></thead>
       <tbody>${ds.map((d) => `<tr data-deck="${esc(d.id)}">
-        <td><a href="#/deck/${enc(d.id)}"><strong>${esc(d.titre)}</strong></a><div class="muet petit">${esc(nomsCommandants(d) || "pas encore de commandant")}</div>${contientHtml(noms(d))}</td>
+        <td><a href="${esc(lienDeck(d.id))}"><strong>${esc(d.titre)}</strong></a><div class="muet petit">${esc(nomsCommandants(d) || "pas encore de commandant")}</div>${contientHtml(noms(d))}</td>
         <td><span class="identite">${identiteHtml(d.identite)}</span></td>
         <td class="num ${d.total === 100 ? "" : "alerte-texte"}">${d.total}</td>
         <td class="num">${euros(d.prix_total)}</td>
@@ -776,7 +820,7 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
   RECENTS.noter(id);
   const cmdsEntete = d.cartes.filter((c) => c.cat === "Commander" && c.info.image);      // deux partenaires : en éventail
   vue.innerHTML = `
-    <nav class="fil" aria-label="Fil d'Ariane"><a href="#/">Mes decks</a><span aria-hidden="true">›</span><span aria-current="page">${esc(d.titre)}</span></nav>
+    <nav class="fil" aria-label="Fil d'Ariane"><a href="${PARTAGE ? esc(PARTAGE.accueil) : "#/"}">Mes decks</a><span aria-hidden="true">›</span><span aria-current="page">${esc(d.titre)}</span></nav>
     <div class="entete-deck ${cmdsEntete.length ? "avec-cmd" : ""} ${cmdsEntete.length > 1 ? "duo" : ""}">
       <div class="bandeau" style="background-image:url('${esc(d.art)}')"></div>
       ${cmdsEntete.length ? `<div class="cmds-entete">${cmdsEntete.map((c) =>
@@ -789,7 +833,7 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
           <div class="chiffres" style="margin-top:.5rem">${chiffresDeck(d)}</div>
         </div>
         <div class="actions">
-          <a class="btn" href="#/recherche?deck=${enc(id)}">${ico("chercher")}Chercher des cartes</a>
+          <a class="btn ecrit" href="#/recherche?deck=${enc(id)}">${ico("chercher")}Chercher des cartes</a>
           <button class="btn btn-icone ouvre-menu" id="btn-deck-menu" aria-label="Autres actions sur le deck" title="Autres actions">${ico("plus_de")}</button>
         </div>
       </div>
@@ -797,16 +841,16 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
     ${d.note ? `<p class="note">${esc(d.note)}</p>` : ""}
     <div class="onglets-deck">
       <nav class="onglets">${ONGLETS.map(([k, l]) => `<a href="#/deck/${enc(id)}/${k}" class="${k === onglet ? "actif" : ""}">${ico(k)}${l}</a>`).join("")}</nav>
-      <button class="btn btn-accent" id="btn-ajouter" title="Ajouter des cartes">${ico("plus")}<span class="txt">Ajouter des cartes</span></button>
+      <button class="btn btn-accent ecrit" id="btn-ajouter" title="Ajouter des cartes">${ico("plus")}<span class="txt">Ajouter des cartes</span></button>
     </div>
     <section id="contenu"></section>`;
   $("#btn-ajouter").onclick = () => modaleAjout();
   $$(".cmd-entete").forEach((x) => { x.onclick = () => ouvrirCarte(d.cartes[+x.dataset.carte]); });
   $("#btn-deck-menu").onclick = (ev) => ouvrirMenu(ev.currentTarget, [
+    ...(PARTAGE ? [] : [["Partager le deck…", () => modalePartage(d), "", "partager"], null]),
     "Copier la liste pour",
     ...EXPORTS.map(([fmt, lib]) => [lib, () => copierListe(fmt, lib), "", "copier"]),
-    null,
-    ["Supprimer ce deck…", () => supprimerDeck(d), "btn-danger", "corbeille"],
+    ...(PARTAGE ? [] : [null, ["Supprimer ce deck…", () => supprimerDeck(d), "btn-danger", "corbeille"]]),
   ]);
   const contenu = $("#contenu");
   if (onglet === "stats") return ongletStats(contenu, d);
@@ -826,6 +870,47 @@ async function copierListe(fmt, lib) {
     await navigator.clipboard.writeText(txt);
     toast(`Liste copiée : ${lib}.`);
   } catch (e) { erreur(e); }
+}
+
+// page du deck publiée sur GitHub Pages (partage.py) : lien, mise à jour, retrait
+function modalePartage(d) {
+  ouvrirModale(`<div class="fc-tete"><h2>Partager ${esc(d.titre)}</h2>
+      <button class="btn btn-discret btn-icone" id="pt-fermer" aria-label="Fermer">${ico("fermer")}</button></div>
+    <div id="pt-zone"><p class="chargement">Chargement…</p></div>`, async (b) => {
+    $("#pt-fermer", b).onclick = fermerModale;
+    const zone = $("#pt-zone", b);
+    const rendre = (s) => {
+      zone.innerHTML = `
+        <div class="form-ligne">
+          <input class="champ" id="pt-url" readonly value="${esc(s.url)}" style="flex:1;min-width:240px" aria-label="Lien de la page">
+          <button class="btn btn-accent" id="pt-copier">${ico("copier")}Copier le lien</button>
+          <a class="btn" href="${esc(s.url)}" target="_blank" rel="noopener">${ico("ouvrir")}Ouvrir</a>
+        </div>
+        <p class="muet petit">Mise à jour le ${esc(new Date(s.date * 1000).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" }))}</p>
+        <div class="boutons">
+          <button class="btn btn-danger" id="pt-retirer">${ico("corbeille")}Ne plus partager</button>
+          <button class="btn" id="pt-maj">${ico("rafraichir")}Mettre à jour</button>
+        </div>`;
+      $("#pt-url", zone).onclick = (ev) => ev.target.select();
+      $("#pt-copier", zone).onclick = async () => {
+        try { await navigator.clipboard.writeText(s.url); toast("Lien copié."); } catch (e) { erreur(e); }
+      };
+      $("#pt-maj", zone).onclick = publier;
+      $("#pt-retirer", zone).onclick = async () => {
+        if (!confirm(`Retirer la page partagée de « ${d.titre} » ?`)) return;
+        zone.innerHTML = `<p class="chargement">Retrait…</p>`;
+        try { await api(`/api/decks/${enc(d.id)}/partage/retirer`, { method: "POST" }); fermerModale(); toast("Page retirée."); }
+        catch (e) { zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
+      };
+    };
+    const publier = async () => {
+      zone.innerHTML = `<p class="chargement">Publication…</p>`;
+      try { rendre(await api(`/api/decks/${enc(d.id)}/partage`, { method: "POST" })); toast("Publié : en ligne d'ici une minute.", 4000); }
+      catch (e) { zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
+    };
+    const s = await api(`/api/decks/${enc(d.id)}/partage`).catch(() => ({}));
+    if (s.url) rendre(s); else publier();
+  }, { focus: false });
 }
 
 async function supprimerDeck(d) {
@@ -854,6 +939,7 @@ const TITRE_ALERTE = {
   "interdite": "Carte bannie en Commander",
   "non légale": "Carte non légale en Commander (carte Un-, Alchimie…)",
 };
+const AFFICHAGE = PARTAGE ? "visuel" : "liste";          // affichage par défaut d'un deck : les images sur une page partagée
 const ORDRE_TYPES = ["Créatures", "Planeswalkers", "Batailles", "Éphémères", "Rituels", "Artefacts", "Enchantements", "Terrains", "Autres"];
 // fonctions (Scryfall Tagger, familles calculées par recherche.fonctions_cartes) : une carte est rangée sous la première des siennes
 const ORDRE_FONCTIONS = ["Ramp", "Pioche", "Tuteurs", "Removal", "Balayages", "Contresorts", "Recursion", "Protection", "Autres", "Terrains"];
@@ -921,9 +1007,9 @@ function segments(pref, valeurs, def) {
 function ongletListe(el, d) {
   el.innerHTML = `
     ${d.erreur_sim ? `<p class="erreur petit">Le simulateur n'a pas pu lire ce deck : ${esc(d.erreur_sim.non_lu[0])}</p>` : ""}
-    ${!d.cartes.length ? `<div class="panneau vide"><p>Ce deck est vide.</p><button class="btn btn-accent" id="vide-ajouter">${ico("plus")}Ajouter des cartes</button></div>` : `
+    ${!d.cartes.length ? `<div class="panneau vide"><p>Ce deck est vide.</p><button class="btn btn-accent ecrit" id="vide-ajouter">${ico("plus")}Ajouter des cartes</button></div>` : `
     <div class="barre-outils">
-      ${segments("affichage", [["liste", "Liste", "liste"], ["visuel", "Visuel", "cartes"]], "liste")}
+      ${segments("affichage", [["liste", "Liste", "liste"], ["visuel", "Visuel", "cartes"]], AFFICHAGE)}
       <span class="outil"><span class="petit muet">Ranger par</span>${segments("rangement", [["type", "type"], ["tags", "tags"], ["fonction", "fonction"]], "type")}</span>
       <label class="outil petit muet">Trier par
         <select class="champ champ-petit" id="tri">${[["cout", "coût"], ["nom", "nom"], ["prix", "prix"]].map(([v, l]) =>
@@ -963,7 +1049,7 @@ function ongletListe(el, d) {
 }
 
 function rendreGroupes(zone, d) {
-  const visuel = PREF.get("affichage", "liste") === "visuel";
+  const visuel = PREF.get("affichage", AFFICHAGE) === "visuel";
   const rangement = PREF.get("rangement", "type");
   const tri = TRIS[PREF.get("tri", "cout")] || TRIS.cout;
   const groupes = grouper(d.cartes.filter((c) => correspond(c, etat.filtre)), rangement);
@@ -1102,11 +1188,11 @@ function ouvrirCarte(c) {
         ${cmd ? "" : `
           <div class="fc-ligne"><span class="petit muet">Tags</span>
             ${tags.length ? tags.map((t, i) => `<span class="puce ${i === 0 ? "puce-1" : ""}">${i === 0 ? "★ " : ""}${esc(t)}</span>`).join("") : `<span class="muet petit">aucun</span>`}
-            <button class="btn btn-petit" data-act="tags">${ico("crayon")}Modifier</button></div>
+            <button class="btn btn-petit ecrit" data-act="tags">${ico("crayon")}Modifier</button></div>
           ${c.n > 1 || plusieursExemplaires({ type: f.type, texte: f.texte }) ? `
-          <div class="fc-ligne"><label class="petit muet" for="fc-n">Exemplaires</label>
+          <div class="fc-ligne ecrit"><label class="petit muet" for="fc-n">Exemplaires</label>
             <input class="champ champ-petit" type="number" id="fc-n" min="1" max="99" value="${c.n}" style="width:4.5rem"></div>` : ""}`}
-        <div class="fc-bloc-actions" role="group" aria-label="Actions sur la carte">
+        <div class="fc-bloc-actions ecrit" role="group" aria-label="Actions sur la carte">
           <div class="fc-actions">
             ${cmd ? "" : `<button class="btn btn-petit" data-act="maybe">${maybe ? ico("annuler") + "Remettre dans le deck" : ico("maybe") + "Passer en Maybeboard"}</button>`}
             ${cmd ? `<button class="btn btn-petit" data-act="cmd">${ico("couronne")}Ne plus en faire le commandant</button>`
@@ -1115,7 +1201,8 @@ function ouvrirCarte(c) {
           </div>
         </div>
         <div class="fc-liens">
-          <a href="#/deck/${enc(d.id)}/combos/${enc(c.nom)}">${ico("combos")}Combos avec cette carte</a>
+          ${PARTAGE ? `<a href="https://commanderspellbook.com/search/?q=${enc(`card:"${ic_cle(c.nom)}"`)}" target="_blank" rel="noopener">${ico("combos")}Combos avec cette carte ↗</a>`
+            : `<a href="#/deck/${enc(d.id)}/combos/${enc(c.nom)}">${ico("combos")}Combos avec cette carte</a>`}
           <a href="${esc(f.prix_lien || lienCardmarket(c.nom))}" target="_blank" rel="noopener">${ico("panier")}Cardmarket ↗</a>
           <a href="${esc(f.gatherer || lienGatherer(c.nom))}" target="_blank" rel="noopener">${ico("livre")}Gatherer ↗</a>
         </div>
@@ -1233,7 +1320,7 @@ const editionVersion = (p) => p ? { set: p.set, num: p.num, lang: p.lang, nom_ed
 function lienVersion(v) {
   return `<div class="fc-version">
     ${v ? `<span class="petit muet">${esc(v.edition)}${v.annee ? " · " + esc(v.annee) : ""}${v.lang === "fr" ? " · en français" : ""}</span>` : ""}
-    <button type="button" class="lien-discret" data-act="version">Changer la version</button>
+    <button type="button" class="lien-discret ecrit" data-act="version">Changer la version</button>
   </div>`;
 }
 
@@ -1736,9 +1823,9 @@ function ligneVersion(v, i) {
     <td class="petit">${diffCourt(v)}</td>
     <td class="num">
       <button class="btn btn-petit" data-act="comparer" data-i="${i}">${ico("comparer")}Comparer</button>
-      <button class="btn btn-petit" data-act="simuler" data-i="${i}">${ico("simulation")}Simuler</button>
-      <button class="btn btn-petit" data-act="restaurer" data-i="${i}">${ico("annuler")}Restaurer</button>
-      ${v.type === "nommee" ? `<button class="btn btn-petit btn-danger" data-act="supprimer" data-i="${i}">${ico("corbeille")}Supprimer</button>` : ""}
+      <button class="btn btn-petit ecrit" data-act="simuler" data-i="${i}">${ico("simulation")}Simuler</button>
+      <button class="btn btn-petit ecrit" data-act="restaurer" data-i="${i}">${ico("annuler")}Restaurer</button>
+      ${v.type === "nommee" ? `<button class="btn btn-petit btn-danger ecrit" data-act="supprimer" data-i="${i}">${ico("corbeille")}Supprimer</button>` : ""}
     </td></tr>`;
 }
 
@@ -1749,7 +1836,7 @@ async function ongletVersions(el, d) {
   const auto = vs.filter((v) => v.type === "auto");
   const defautB = (nommees[0] || auto[0] || {}).fichier ?? "";
   el.innerHTML = `
-    <div class="form-ligne">
+    <div class="form-ligne ecrit">
       <button class="btn btn-accent" id="btn-version">${ico("enregistrer")}Enregistrer une version…</button>
     </div>
 
@@ -1846,7 +1933,7 @@ async function afficheComparaison(zone, d, fa, fb) {
       </table>
       ${!c.seulement_a.length && !c.seulement_b.length ? `<p class="muet">Mêmes cartes.</p>` :
         `<div class="grille-2">${colonne(c.a, c.seulement_a)}${colonne(c.b, c.seulement_b)}</div>
-         <div class="boutons"><button class="btn btn-accent" id="cmp-sim">${ico("simulation")}Simuler « ${esc(c.a.nom)} » contre « ${esc(c.b.nom)} »</button></div>`}`;
+         <div class="boutons ecrit"><button class="btn btn-accent" id="cmp-sim">${ico("simulation")}Simuler « ${esc(c.a.nom)} » contre « ${esc(c.b.nom)} »</button></div>`}`;
     const b = $("#cmp-sim", zone);
     if (b) b.onclick = () => { etat.simA = fa; etat.simB = fb; location.hash = `#/deck/${enc(d.id)}/simulation`; };
   } catch (e) { zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
@@ -1896,7 +1983,7 @@ async function ongletBracket(el, d, force = false) {
         <div class="muet petit">Commander Spellbook</div>
         ${sb ? `<div class="gros-chiffre">${sb.bracket ? "Bracket " + sb.bracket : esc(sb.libelle)}</div>`
           : `<p class="erreur petit">Commander Spellbook ne répond pas : ${esc(b.spellbook_erreur || "")}</p>`}
-        <button class="btn btn-petit" id="btn-recalc" style="margin-top:.6rem">Recalculer</button>
+        <button class="btn btn-petit ecrit" id="btn-recalc" style="margin-top:.6rem">Recalculer</button>
       </div>
     </div>
 
@@ -1948,7 +2035,7 @@ function ligneCombo(c, carte = null) {
     if (!manque.length) etatCarte = `<span class="ok">✓ tout est dans le deck</span>`;
     else {
       const maybe = manque.length === 1 ? ((c.maybe || []).includes(manque[0].nom) ? ` <span class="badge">au Maybeboard</span>`
-        : ` <button type="button" class="btn btn-petit" data-maybe="${esc(manque[0].nom)}">${ico("maybe")}Maybeboard</button>`) : "";
+        : ` <button type="button" class="btn btn-petit ecrit" data-maybe="${esc(manque[0].nom)}">${ico("maybe")}Maybeboard</button>`) : "";
       etatCarte = `Pas dans le deck : ${manque.map((f) => `${nc(f.nom, f.fr || f.nom)} <span class="${(f.prix || 0) > 5 ? "cher" : "muet"}">${euros(f.prix)}</span>`).join(" · ")}${maybe}`;
     }
   }
@@ -2102,11 +2189,12 @@ async function vueCombosCarte(zone, d, carte = null) {
 
 async function ongletCombos(el, d, carte = null) {
   el.innerHTML = `
-    <div class="segments" role="group" style="margin-bottom:1rem">
+    <div class="segments ecrit" role="group" style="margin-bottom:1rem">
       <button type="button" data-vue="deck">${ico("liste")}Le deck</button>
       <button type="button" data-vue="carte">${ico("cartes")}Une carte</button>
     </div>
     <div id="cb-vue"></div>`;
+  if (PARTAGE) carte = null;                     // page partagée : les combos du deck seulement
   const zone = $("#cb-vue", el);
   const montrer = (v, nom = null) => {
     $$("[data-vue]", el).forEach((b) => { b.classList.toggle("actif", b.dataset.vue === v); b.setAttribute("aria-pressed", b.dataset.vue === v); });
@@ -2119,6 +2207,7 @@ async function ongletCombos(el, d, carte = null) {
     const n = ev.target.closest(".cc[data-nom]");
     if (n) {                                                   // un nom de carte : ses combos
       cacherApercu();
+      if (PARTAGE) { const c = d.cartes.find((x) => x.nom === n.dataset.nom); if (c) ouvrirCarte(c); return; }
       if (zone.choisir) zone.choisir(n.dataset.nom); else montrer("carte", n.dataset.nom);
       scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + scrollY - 80) });
       return;
@@ -2212,7 +2301,7 @@ function afficheRapport(zone, r) {
         <tbody>${lignes}</tbody>
       </table>
       ${details}
-      <div class="boutons"><button class="btn" id="rap-claude">${ico("discussion")}Expliquer avec Claude</button></div>
+      <div class="boutons ecrit"><button class="btn" id="rap-claude">${ico("discussion")}Expliquer avec Claude</button></div>
     </div>`;
   $("#rap-claude", zone).onclick = () => ouvrirChat(`Explique-moi le rapport de simulation ${r.deck}/simulations/${zone.dataset.fichier || ""} (${A.nom}${B ? " contre " + B.nom : ""}) : qu'est-ce qui ressort, et que me conseilles-tu ?`);
 }
@@ -2233,7 +2322,7 @@ async function ongletSimulation(conteneur, d, rapportInitial = null) {
   const cartesDeck = [...new Set(d.cartes.filter((c) => c.cat !== "Maybeboard" && c.cat !== "Commander" && !(c.info.type || "").includes("Land")).map((c) => c.nom))].sort();
   const greven = (d.commandant || "").startsWith("Greven");
   el.innerHTML = `
-    <div class="panneau">
+    <div class="panneau ecrit">
       <div class="grille-2">
         <label>Liste à tester (A)<select class="champ" id="s-a">${optionsVersions(o.versions, choixA)}</select></label>
         <label>Comparer avec (B)<select class="champ" id="s-b">${optionsVersions(o.versions, choixB, true, true)}</select></label>
@@ -3347,6 +3436,7 @@ function pageCourante() {
 
 // discussion de la page affichée : le deck ouvert, sinon la discussion générale ("")
 function cleCourante() {
+  if (PARTAGE) return PARTAGE.deck || "";
   if (location.hash.startsWith("#/recherche")) return rch.deck ? rch.deck.id : "";
   const parts = location.hash.replace(/^#\/?/, "").split("/");
   return parts[0] === "deck" && parts[1] ? decodeURIComponent(parts[1]) : "";
@@ -3542,9 +3632,11 @@ async function arreterChat() {
 }
 
 $("#btn-chat").addEventListener("click", () => basculeChat());
-window.addEventListener("hashchange", changerDiscussion);
-try { if (localStorage.getItem("chat-ouvert")) basculeChat(true); } catch (_) {}
-api("/api/discussion/en-cours").then((s) => { if (s.actives.length) suivreChat(); }).catch(() => {});   // une réponse tournait déjà
+if (!PARTAGE) {
+  window.addEventListener("hashchange", changerDiscussion);
+  try { if (localStorage.getItem("chat-ouvert")) basculeChat(true); } catch (_) {}
+  api("/api/discussion/en-cours").then((s) => { if (s.actives.length) suivreChat(); }).catch(() => {});   // une réponse tournait déjà
+}
 
 route();
-suivreMaj();
+if (!PARTAGE) suivreMaj();

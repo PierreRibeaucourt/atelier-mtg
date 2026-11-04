@@ -673,3 +673,6 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .aller-cmd .cher { color: var(--alerte); font-weight: 600; }
 .aller-cmd .ok { color: var(--bon); }
 .aller-liste { max-height: min(70vh, 560px); overflow: auto; }
+
+/* page partagée (lecture seule) : ni ce qui modifie, ni la recherche, ni la discussion */
+.partage :is(.ecrit, .aller, #lien-recherche, #btn-rafraichir, #etat-maj, #btn-chat, .chat, .ligne-outil) { display: none !important; }
