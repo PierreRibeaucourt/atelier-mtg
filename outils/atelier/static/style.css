@@ -486,7 +486,7 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; color:
 .rch-tete { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .4rem 1rem; margin-bottom: .6rem; }
 .rch-tete .fil { margin: 0; }
 /* le moteur, disposé comme celui de Magic-Ville : trois rangées de fenêtres, tout au-dessus de la ligne de flottaison */
-.moteur { display: grid; gap: .6rem; }
+.moteur { display: grid; gap: .6rem; container: moteur / inline-size; }      /* sa disposition suit sa largeur (discussion ouverte ou non) */
 .mt-rang { display: grid; gap: .6rem; }
 .mt-haut { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .mt-milieu { grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(8.5rem, .8fr) repeat(2, minmax(0, 1fr)); }
@@ -520,21 +520,21 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; color:
 .rch-go:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 /* Format : des pastilles abrégées, comme sur Magic-Ville */
 .rch-formats { flex-direction: column; align-items: center; gap: .35rem; }
-.rch-formats-rang { display: flex; justify-content: center; gap: .35rem; }
-.rch-format { min-width: 3.2rem; padding: .28rem .45rem; font-size: .8rem; font-weight: 700; text-align: center; background: var(--surface-2); }
+.rch-formats-rang { display: flex; flex-wrap: wrap; justify-content: center; gap: .35rem; }
+.rch-format { min-width: 2.7rem; padding: .28rem .4rem; font-size: .8rem; font-weight: 700; text-align: center; background: var(--surface-2); }
 /* Rareté : les symboles colorés, comme sur Archidekt */
 .rch-raretes { flex: 1; justify-content: center; align-items: center; gap: .45rem; }
 .rch-bascule.rch-rar { padding: .3rem; border-radius: 8px; line-height: 0; background: transparent; border: 2px solid transparent; opacity: .5; filter: saturate(.7); }
 .rch-bascule.rch-rar:hover { opacity: .85; filter: none; border-color: transparent; }
 .rch-bascule.rch-rar.actif { opacity: 1; filter: none; background: var(--accent-doux); border-color: var(--accent); }
 .fen select.champ { max-width: 100%; }
-@media (max-width: 1100px) {
+@container moteur (max-width: 1060px) {
   .mt-haut { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mt-haut > :last-child { grid-column: 1 / -1; }
   .mt-milieu { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .mt-plus { grid-template-columns: minmax(0, 1fr); }
 }
-@media (max-width: 640px) {
+@container moteur (max-width: 600px) {
   .mt-haut { grid-template-columns: minmax(0, 1fr); }
   .rch-nb label { grid-template-columns: minmax(0, 1fr); gap: .1rem; }
   .mt-go, .mt-milieu .fen-format, .mt-milieu .fen-rarete { grid-column: 1 / -1; }
