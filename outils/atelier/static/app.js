@@ -655,12 +655,13 @@ async function vueAccueil() {
   }));
 }
 
-function chiffresDeck(d) {
+// accueil : sans le Maybeboard ; en-tête d'un deck : avec
+function chiffresDeck(d, accueil = false) {
   const complet = d.total === 100;
   const al = Object.entries(d.alertes || {});
   return `
     <span class="badge ${complet ? "badge-ok" : "badge-alerte"}">${d.total} / 100 cartes</span>
-    ${d.maybe ? `<span class="badge">${d.maybe} en Maybeboard</span>` : ""}
+    ${d.maybe && !accueil ? `<span class="badge">${d.maybe} en Maybeboard</span>` : ""}
     <span class="badge">${euros(d.prix_total)}</span>
     ${d.bracket ? `<span class="badge badge-bracket" title="${esc((d.bracket_raisons || []).join("\n"))}">${ico("bracket")}Bracket ${d.bracket}</span>` : ""}
     <span class="badge ${d.gc.length ? "badge-gc" : ""}" title="${esc(d.gc.join(", "))}">${d.gc.length} Game Changer${d.gc.length > 1 ? "s" : ""}</span>
@@ -679,7 +680,7 @@ function carteDeck(d, noms) {
       <div class="corps">
         <div class="titre">${esc(d.titre)} <span class="identite">${identiteHtml(d.identite)}</span></div>
         <div class="muet petit">${esc(nomsCommandants(d) || "pas encore de commandant")}</div>
-        <div class="chiffres">${chiffresDeck(d)}</div>
+        <div class="chiffres">${chiffresDeck(d, true)}</div>
         ${d.note ? `<div class="petit muet">${esc(d.note)}</div>` : ""}
         ${contientHtml(noms)}
       </div>
@@ -708,7 +709,7 @@ function rendreDecks(zone, cartes) {
       <tbody>${ds.map((d) => `<tr data-deck="${esc(d.id)}">
         <td><a href="#/deck/${enc(d.id)}"><strong>${esc(d.titre)}</strong></a><div class="muet petit">${esc(nomsCommandants(d) || "pas encore de commandant")}</div>${contientHtml(noms(d))}</td>
         <td><span class="identite">${identiteHtml(d.identite)}</span></td>
-        <td class="num ${d.total === 100 ? "" : "alerte-texte"}">${d.total}${d.maybe ? `<div class="muet petit">+${d.maybe} maybe</div>` : ""}</td>
+        <td class="num ${d.total === 100 ? "" : "alerte-texte"}">${d.total}</td>
         <td class="num">${euros(d.prix_total)}</td>
         <td class="num" title="${esc((d.bracket_raisons || []).join("\n"))}">${d.bracket || ""}</td>
         <td class="num">${d.gc.length || ""}</td>
