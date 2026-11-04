@@ -1084,7 +1084,6 @@ function ouvrirCarte(c) {
         <div class="fc-bloc-actions" role="group" aria-label="Actions sur la carte">
           <div class="fc-actions">
             ${cmd ? "" : `<button class="btn btn-petit" data-act="maybe">${maybe ? ico("annuler") + "Remettre dans le deck" : ico("maybe") + "Passer en Maybeboard"}</button>`}
-            <button class="btn btn-petit" data-act="remplacer">Remplacer…</button>
             ${cmd ? `<button class="btn btn-petit" data-act="cmd">${ico("couronne")}Ne plus en faire le commandant</button>`
               : !maybe && legendaire && (d.commandants || []).length < 2 && (!second || f.partenaire !== false) ? `<button class="btn btn-petit" data-act="cmd">${ico("couronne")}${second ? "Ajouter comme second commandant" : "Définir comme commandant"}</button>` : ""}
             <button class="btn btn-petit btn-danger fc-retirer" data-act="retirer">${ico("corbeille")}Retirer du deck</button>
@@ -1112,7 +1111,6 @@ function ouvrirCarte(c) {
       if (act === "prec" || act === "suiv") return ouvrirCarte(d.cartes[ordre[pos + (act === "suiv" ? 1 : -1)]]);
       if (act === "tags") return modaleTags(c, true);
       if (act === "version") return modaleVersion(c);
-      if (act === "remplacer") return modaleRemplacer(c);
       if (act === "retirer") {
         if (!confirm(`Retirer ${c.nom} du deck ?`)) return;
         fermerModale();
@@ -1459,30 +1457,6 @@ function modaleAjout() {
       $("#ok", b).textContent = "Ajouter au deck";
       rech.vider();
     };
-  });
-}
-
-function modaleRemplacer(c) {
-  ouvrirModale(`
-    <h2>Remplacer ${esc(c.nom)}</h2>
-    <div id="rech"></div>
-    <div id="fiche"></div>
-    <div class="boutons"><button class="btn" id="annuler">Annuler</button><button class="btn btn-accent" id="ok" disabled>Remplacer</button></div>`, (b) => {
-    let choix = null;
-    rechercheCarte($("#rech", b), {
-      surChoix: async (x) => {
-        choix = null;
-        $("#ok", b).disabled = true;
-        try {
-          choix = await chargerFiche($("#fiche", b), x.nom, { surVersion: (g) => { choix = g; } });
-          $("#ok", b).disabled = false;
-          $("#ok", b).textContent = `Remplacer par ${choix.nom}`;
-          $("#ok", b).focus();
-        } catch (e) { $("#fiche", b).innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
-      },
-    });
-    $("#annuler", b).onclick = fermerModale;
-    $("#ok", b).onclick = () => { if (!choix) return; fermerModale(); modifier("remplacer", c, { nom: choix.nom, edition: editionVersion(choix.version) }); };
   });
 }
 
