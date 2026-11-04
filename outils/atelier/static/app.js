@@ -222,6 +222,7 @@ async function route() {
   const [chemin, qs] = location.hash.replace(/^#\/?/, "").split(/\?(.*)/s);
   const parts = chemin.split("/");
   $("#lien-recherche").classList.toggle("actif", parts[0] === "recherche");
+  vue.classList.toggle("vue-large", parts[0] === "recherche");
   try {
     if (parts[0] === "recherche") await vueRecherche(new URLSearchParams(qs || ""));
     else if (parts[0] === "deck" && parts[1]) await vueDeck(decodeURIComponent(parts[1]), parts[2] || "liste", parts[3] ? decodeURIComponent(parts[3]) : null);
@@ -2124,7 +2125,7 @@ async function suivreSimulation(el, d, id) {
 // ------------------------------------------------------------------ recherche de cartes (moteur façon Magic-Ville)
 // Mêmes fenêtres et mêmes règles que le moteur de Magic-Ville ; la recherche se fait sur la base locale (recherche.py).
 // Les critères vivent dans l'adresse (#/recherche?…) : précédent / suivant du navigateur, favoris, plusieurs onglets.
-const RCH_DEFAUTS = { fr: "1", en: "1", cm: "1", tm: "1", mvx: "1", fx: "1", ex: "1", img: "1", format: "commander", ordre: "couleur" };
+const RCH_DEFAUTS = { fr: "1", en: "1", cm: "1", tm: "1", mvx: "1", fx: "1", ex: "1", format: "commander", ordre: "couleur" };
 const RCH_TYPES = [["AR", "Artefact"], ["CR", "Créature"], ["EN", "Enchantement"], ["IN", "Éphémère"],
   ["SO", "Rituel"], ["BAT", "Bataille"], ["PL", "Planeswalker"], ["LA", "Terrain"]];
 const RCH_SPE = [["", "Cartes spéciales"], ["colorless", "Symbole de mana incolore"], ["split", "Cartes doubles"], ["flip", "Cartes à inversion"],
@@ -2144,7 +2145,6 @@ const FN_RAPIDES = ["ramp", "pioche", "tuteur", "spot", "balayage", "contresort"
   "jetons", "celerite", "burn", "defausse", "wheel", "protection", "blink"];
 const RCH_GC = [["", "Game Changers : indifférent"], ["sans", "Sans Game Changer"], ["seul", "Game Changers seulement"]];
 const RCH_CMD = [["", "Commandant : indifférent"], ["peut", "Peut être commandant"], ["duo", "Partenaires et Historiques (deux commandants)"]];
-const RCH_RARETE_NOM = { c: "commune", u: "inhabituelle", r: "rare", m: "mythique", s: "spéciale", b: "bonus" };
 const rch = { crit: null, deck: null, res: null, editions: null, fonctions: null, ouvert: true, numero: 0 };
 
 const lettresWUBRG = (s, permis = "WUBRG") => [...permis].filter((k) => (s || "").includes(k)).join("");
@@ -2152,6 +2152,7 @@ const lettresWUBRG = (s, permis = "WUBRG") => [...permis].filter((k) => (s || ""
 function critDepuis(params) {
   const c = { ...RCH_DEFAUTS };
   for (const [k, v] of params) c[k] = v;
+  for (const k of ["doit", "peut", "mult", "img", "versions", "fun"]) delete c[k];      // critères retirés du formulaire (anciennes adresses)
   return c;
 }
 
@@ -2187,58 +2188,88 @@ const rchChamp = (nom, c, attrs = "") => `<input class="champ champ-petit" name=
 const rchSelect = (nom, items, c) => `<select class="champ champ-petit" name="${nom}">${items.map(([k, l]) =>
   `<option value="${esc(k)}" ${(c[nom] || "") === k ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
 
+// formats en pastilles, rangés comme sur Magic-Ville
+const RCH_FORMATS_ABR = { commander: "Multi", duel: "1vs1", modern: "Mod", pioneer: "Pio", standard: "Std", vintage: "Vin", legacy: "Leg",
+  premodern: "Prem", pauper: "Pau", historic: "His", alchemy: "Alch" };
+const RCH_FORMATS_RANGS = [["modern", "pioneer", "standard"], ["vintage", "legacy", "premodern", "pauper"], ["commander", "duel", "historic", "alchemy"]];
+
+function rchFormats(valeur) {
+  const nom = Object.fromEntries(RCH_FORMATS);
+  return `<div class="rch-bascules rch-formats" data-groupe="format" data-unique="1" role="group">${RCH_FORMATS_RANGS.map((r) => `<div class="rch-formats-rang">${r.map((k) =>
+    `<button type="button" class="rch-bascule rch-format ${valeur === k ? "actif" : ""}" data-k="${k}" aria-pressed="${valeur === k}" title="${esc(nom[k])}">${RCH_FORMATS_ABR[k]}</button>`).join("")}</div>`).join("")}</div>`;
+}
+
+// rareté : le symbole à la couleur de la rareté, comme sur Archidekt
+const RCH_RARETE_COULEURS = { C: ["#7a7a7a", "#2e2e2e", "#0b0b0b"], U: ["#f1f5f8", "#a9bac4", "#56666f"], R: ["#f8e4a0", "#cfa63a", "#7a5a0c"], M: ["#ffc38a", "#e8641f", "#912707"] };
+
+function iconeRarete(k) {
+  const [a, b, z] = RCH_RARETE_COULEURS[k];
+  return `<svg viewBox="0 0 24 32" width="30" height="40" aria-hidden="true"><defs><linearGradient id="rar-${k}" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="${a}"/><stop offset=".55" stop-color="${b}"/><stop offset="1" stop-color="${z}"/></linearGradient></defs>
+    <rect x="1.5" y="1.5" width="21" height="29" rx="3" fill="url(#rar-${k})" stroke="rgba(0,0,0,.55)"/>
+    <rect x="4.5" y="4.5" width="15" height="23" rx="1.5" fill="none" stroke="rgba(255,255,255,.45)"/></svg>`;
+}
+
+function rchRaretes(valeur) {
+  const nom = Object.fromEntries(RCH_RARETES);
+  return `<div class="rch-bascules rch-raretes" data-groupe="rar" role="group">${["C", "U", "R", "M"].map((k) => {
+    const on = (valeur || "").includes(k);
+    return `<button type="button" class="rch-bascule rch-rar ${on ? "actif" : ""}" data-k="${k}" aria-pressed="${on}" title="${nom[k]}" aria-label="${nom[k]}">${iconeRarete(k)}</button>`;
+  }).join("")}</div>`;
+}
+
 function rchNombres(titre, cle, x, c) {
+  const champ = (n) => rchChamp(n, c, 'inputmode="decimal" size="3"');
   return `<section class="fen fen-nombres"><h3 class="fen-titre">${titre}</h3>
-    <div class="rch-nombres">
-      <label>Égal à ${rchChamp(cle, c, 'inputmode="decimal" size="3"')}</label>
-      <label>Max ${rchChamp(cle + "max", c, 'inputmode="decimal" size="3"')}</label>
-      <label>Min ${rchChamp(cle + "min", c, 'inputmode="decimal" size="3"')}</label>
+    <div class="rch-nb">
+      <label>Égal à ${champ(cle)}</label>
+      <label>Max ${champ(cle + "max")}</label>
+      <label>Min ${champ(cle + "min")}</label>
     </div>
-    <div class="rch-cases">${rchCase(x, cle === "mv" ? "X inclus" : "* inclus", c)}${cle === "mv" ? rchCase("pair", "pair", c) + rchCase("impair", "impair", c) : ""}</div>
+    <div class="rch-cases rch-centre">${rchCase(x, cle === "mv" ? "X inclus" : "* inclus", c)}${cle === "mv" ? rchCase("pair", "pair", c) + rchCase("impair", "impair", c) : ""}</div>
   </section>`;
 }
 
+// la disposition du moteur de Magic-Ville, simplifiée : Couleurs (coût compris) | Types | Recherche texte,
+// puis Valeur de mana, Force, Endurance, Rechercher, Format, Rareté ; en dessous, ce que l'Atelier ajoute, puis les éditions
 function formulaireRecherche(c) {
   const d = rch.deck;
   return `<form id="moteur" class="moteur" autocomplete="off">
-    <div class="mt-nom">
-      <input class="champ" name="nom" type="search" value="${esc(c.nom || "")}" placeholder="Nom de la carte…" aria-label="Titre de la carte">
-      <button class="btn btn-accent" type="submit">Rechercher</button>
-      <button class="btn" type="button" data-act="raz" title="Remettre toutes les fenêtres à zéro">Tout effacer</button>
-    </div>
-    <div class="fenetres">
-      <section class="fen fen-manas"><h3 class="fen-titre">Manas</h3>
-        <div class="rch-rangee"><span>Doivent faire partie du coût</span>${rchSymboles("doit", c.doit)}</div>
-        <div class="rch-rangee"><span>Peuvent faire partie du coût</span>${rchSymboles("peut", c.peut)}</div>
-        <div class="rch-rangee"><span>Peuvent être multiples</span>${rchSymboles("mult", c.mult)}</div>
-        <label class="rch-ligne-champ">Ou saisissez un coût ${rchChamp("cout", c, 'placeholder="2BR, U?, 1**" size="9" title="Chiffres = mana générique ; ? = un mana générique quelconque ; * = un mana coloré quelconque ; l\'hybride compte pour ses deux couleurs. Prioritaire sur les trois rangées."')}</label>
-        ${rchSelect("spe", RCH_SPE, c)}
-      </section>
+    <div class="mt-rang mt-haut">
       <section class="fen fen-couleurs"><h3 class="fen-titre">Couleurs</h3>
         ${rchSymboles("coul", c.coul, "WUBRGC")}
-        <div class="rch-cases">${rchRadio("cm", "1", "Au moins une", c)}${rchRadio("cm", "2", "Toutes", c)}</div>
-        <div class="rch-cases">${rchCase("seules", "Uniquement celle(s) choisie(s)", c)}${rchCase("id", "Id. couleur", c)}</div>
-        ${d && d.identite ? `<button type="button" class="lien-discret" data-act="identite" title="Cartes jouables dans ce deck : couleurs du commandant et incolores">Couleurs de ${esc(d.titre)} ${identiteHtml(d.identite)}</button>` : ""}
+        <div class="rch-cases rch-centre">${rchRadio("cm", "1", "Au moins une", c)}${rchRadio("cm", "2", "Toutes", c)}${rchCase("seules", "Uniquement celle(s) choisie(s)", c)}</div>
+        <div class="rch-cases rch-entre">${rchCase("id", "Id. couleur", c)}${d && d.identite ? `<button type="button" class="lien-discret" data-act="identite" title="Couleurs du commandant et incolores">Couleurs de ${esc(d.titre)} ${identiteHtml(d.identite)}</button>` : ""}</div>
+        <div class="rch-cases rch-entre rch-cout">
+          <label class="rch-ligne-champ">Coût ${rchChamp("cout", c, 'placeholder="2BR, U?, 1**" size="9" title="Chiffres = mana générique ; ? = un mana générique quelconque ; * = un mana coloré quelconque ; l\'hybride compte pour ses deux couleurs"')}</label>
+          ${rchCase("un", "Un seul symbole par couleur", c)}
+        </div>
+        ${rchSelect("spe", RCH_SPE, c)}
       </section>
       <section class="fen fen-types"><h3 class="fen-titre">Types</h3>
         <div class="rch-types">${RCH_TYPES.map(([k, l]) => `<label class="rch-case"><input type="checkbox" name="types" value="${k}" ${(c.types || "").split(",").includes(k) ? "checked" : ""}> ${l}</label>`).join("")}</div>
-        <div class="rch-cases">${rchRadio("tm", "1", "Au moins un", c)}${rchRadio("tm", "2", "Tous", c)}</div>
-        ${rchSelect("spt", RCH_SPT, c)}
+        <div class="rch-cases rch-ligne-types">${rchRadio("tm", "1", "Au moins un", c)}${rchRadio("tm", "2", "Tous", c)}${rchSelect("spt", RCH_SPT, c)}</div>
       </section>
       <section class="fen fen-texte"><h3 class="fen-titre">Recherche texte</h3>
-        <div class="rch-cases">${rchCase("fr", "français", c)}${rchCase("en", "anglais", c)}</div>
-        <label class="rch-bloc">Type <input class="champ champ-petit" name="type" value="${esc(c.type || "")}" placeholder="gobelin, légendaire, equipment…"></label>
-        <div class="rch-bloc"><span class="rch-texte-tete">Texte ${rchCase("vanilla", "sans texte", c)}</span>
+        <div class="rch-cases rch-centre">${rchCase("fr", "français", c)}${rchCase("en", "anglais", c)}</div>
+        <label class="rch-ligne">Titre <input class="champ champ-petit" name="nom" type="search" value="${esc(c.nom || "")}"></label>
+        <label class="rch-ligne">Type <input class="champ champ-petit" name="type" value="${esc(c.type || "")}" placeholder="gobelin, légendaire, equipment…"></label>
+        <div class="rch-bloc rch-bloc-texte"><span class="rch-texte-tete">Texte ${rchCase("vanilla", "sans texte", c)}</span>
           <textarea class="champ" name="texte" rows="2" placeholder="défaussez, &quot;chaque adversaire&quot;, !additio…">${esc(c.texte || "")}</textarea></div>
       </section>
-      <section class="fen fen-options"><h3 class="fen-titre">Options</h3>
-        <div class="rch-cases rch-colonne">${rchCase("img", "Affichage graphique", c)}${rchCase("versions", "Toutes les versions", c)}${rchCase("fun", "Cartes fantaisie (Un-sets)", c)}</div>
-      </section>
+    </div>
+    <div class="mt-rang mt-milieu">
       ${rchNombres("Valeur de mana", "mv", "mvx", c)}
       ${rchNombres("Force", "f", "fx", c)}
       ${rchNombres("Endurance", "e", "ex", c)}
-      <section class="fen fen-format"><h3 class="fen-titre">Format</h3>${rchBascules("format", RCH_FORMATS, c.format || "", true)}</section>
-      <section class="fen fen-rarete"><h3 class="fen-titre">Rareté</h3>${rchBascules("rar", RCH_RARETES, c.rar || "")}</section>
+      <div class="mt-go">
+        <button class="rch-go" type="submit">Rechercher</button>
+        <button class="lien-discret" type="button" data-act="raz">Tout effacer</button>
+      </div>
+      <section class="fen fen-format"><h3 class="fen-titre">Format</h3>${rchFormats(c.format || "")}</section>
+      <section class="fen fen-rarete"><h3 class="fen-titre">Rareté</h3>${rchRaretes(c.rar || "")}</section>
+    </div>
+    <div class="mt-rang mt-plus">
       <section class="fen fen-atelier"><h3 class="fen-titre">Prix et Commander</h3>
         <div class="rch-nombres">
           <label>Prix max ${rchChamp("prixmax", c, 'inputmode="decimal" size="4"')} €</label>
@@ -2258,15 +2289,15 @@ function formulaireRecherche(c) {
         </div>
         <div class="rch-bascules fn-rapides">${FN_RAPIDES.map((k) => `<button type="button" class="rch-bascule" data-fn="${k}">${esc(nomFn(k, true))}</button>`).join("")}</div>
       </section>
-      <section class="fen fen-editions"><h3 class="fen-titre">Éditions</h3>
-        <div class="eds-tete">
-          <input class="champ champ-petit" type="search" id="eds-filtre" placeholder="Chercher une édition…" aria-label="Chercher une édition">
-          ${rchCase("neuves", "Nouvelles cartes uniquement", c)}
-        </div>
-        <div id="eds-choisies" class="puces"></div>
-        <div id="eds-groupes" class="eds-groupes"><p class="muet petit">Éditions…</p></div>
-      </section>
     </div>
+    <section class="fen fen-editions"><h3 class="fen-titre">Éditions</h3>
+      <div class="eds-tete">
+        <input class="champ champ-petit" type="search" id="eds-filtre" placeholder="Chercher une édition…" aria-label="Chercher une édition">
+        ${rchCase("neuves", "Nouvelles cartes uniquement", c)}
+      </div>
+      <div id="eds-choisies" class="puces"></div>
+      <div id="eds-groupes" class="eds-groupes"><p class="muet petit">Éditions…</p></div>
+    </section>
     <div class="mt-pied"><button class="btn btn-accent" type="submit">Rechercher</button></div>
   </form>`;
 }
@@ -2277,7 +2308,7 @@ function lireFormulaire(form) {
   const val = (n) => (form.elements[n] ? form.elements[n].value.trim() : "");
   for (const n of ["nom", "type", "texte", "cout", "mv", "mvmax", "mvmin", "f", "fmax", "fmin", "e", "emax", "emin", "prixmax", "prixmin", "spe", "spt", "gc", "cmd"]) c[n] = val(n);
   c.fn = (rch.fns || []).join(",");
-  for (const n of ["fr", "en", "vanilla", "seules", "id", "mvx", "pair", "impair", "fx", "ex", "img", "versions", "fun", "neuves", "horsdeck"]) {
+  for (const n of ["fr", "en", "vanilla", "seules", "id", "un", "mvx", "pair", "impair", "fx", "ex", "neuves", "horsdeck"]) {
     const el = form.elements[n];
     c[n] = el && el.checked ? "1" : "";
   }
@@ -2290,23 +2321,6 @@ function lireFormulaire(form) {
   }
   c.eds = [...(rch.eds || [])].join(",");
   return c;
-}
-
-// les trois rangées de la fenêtre Manas, comme sur Magic-Ville : « Doivent » et « Peuvent » s'excluent,
-// et « Multiples » suit la rangée qu'on coche (on peut ensuite le décocher : un seul symbole de cette couleur)
-function basculeMana(form, rangee, k) {
-  const ligne = (r) => $(`.rch-symboles[data-groupe="${r}"] [data-k="${k}"]`, form);
-  const on = (r) => ligne(r).classList.contains("actif");
-  const flip = (r) => { const b = ligne(r); const v = !b.classList.contains("actif"); b.classList.toggle("actif", v); b.setAttribute("aria-pressed", v); };
-  if (rangee === "doit" || rangee === "peut") {
-    const autre = rangee === "doit" ? "peut" : "doit";
-    if (on(autre)) flip(autre);
-    if (on(rangee) === on("mult")) flip("mult");
-    flip(rangee);
-  } else {
-    if (!on("doit") && !on("peut") && !on("mult")) flip("peut");
-    flip("mult");
-  }
 }
 
 // ---- résumé des critères (formulaire replié)
@@ -2324,10 +2338,7 @@ function resumeCrit(c) {
   if (c.texte) r.push(`Texte : ${c.texte}`);
   if (c.vanilla === "1") r.push("Sans texte");
   if (c.cout) r.push(`Coût : ${c.cout}`);
-  else {
-    if (c.doit) r.push(`Coût avec ${[...c.doit].join(" ")}`);
-    if (c.peut) r.push(`Coût parmi ${[...lettresWUBRG((c.doit || "") + c.peut)].join(" ")}`);
-  }
+  if (c.un === "1") r.push("Un seul symbole par couleur");
   if (c.coul) r.push(`Couleurs ${[...c.coul].join(" ")}${c.id === "1" ? " (identité)" : ""}${c.seules === "1" ? ", uniquement" : ""}${c.cm === "2" ? ", toutes" : ""}`);
   if (c.types) r.push(c.types.split(",").map((k) => (RCH_TYPES.find((t) => t[0] === k) || [k, k])[1]).join(c.tm === "2" ? " et " : " ou "));
   if (c.spt) r.push((RCH_SPT.find((t) => t[0] === c.spt) || ["", c.spt])[1]);
@@ -2343,8 +2354,6 @@ function resumeCrit(c) {
   if (c.gc) r.push((RCH_GC.find((g) => g[0] === c.gc) || ["", c.gc])[1]);
   if (c.cmd) r.push((RCH_CMD.find((g) => g[0] === c.cmd) || ["", c.cmd])[1]);
   if (c.horsdeck === "1") r.push("pas déjà dans le deck");
-  if (c.versions === "1") r.push("toutes les versions");
-  if (c.fun === "1") r.push("cartes fantaisie");
   return r;
 }
 
@@ -2381,9 +2390,8 @@ async function vueRecherche(params) {
   rch.ouvert = c.r !== "1" || rch.ouvrir === true;
   rch.ouvrir = false;
   vue.innerHTML = `
-    <nav class="fil" aria-label="Fil d'Ariane"><a href="#/">Mes decks</a><span aria-hidden="true">›</span>${rch.deck ? `<a href="#/deck/${enc(rch.deck.id)}">${esc(rch.deck.titre)}</a><span aria-hidden="true">›</span>` : ""}<span aria-current="page">Recherche de cartes</span></nav>
-    <div class="titre-page rch-titre">
-      <h1>Recherche de cartes</h1>
+    <div class="rch-tete">
+      <nav class="fil" aria-label="Fil d'Ariane"><a href="#/">Mes decks</a><span aria-hidden="true">›</span>${rch.deck ? `<a href="#/deck/${enc(rch.deck.id)}">${esc(rch.deck.titre)}</a><span aria-hidden="true">›</span>` : ""}<span aria-current="page">Recherche de cartes</span></nav>
       <div class="rch-deck">
         <label class="petit muet" for="rch-deck">Pour le deck</label>
         <select class="champ champ-petit" id="rch-deck">
@@ -2447,7 +2455,6 @@ function rendreFormulaire() {
     const s = ev.target.closest(".rch-sym, .rch-bascule:not([data-fn])");
     if (s) {
       const g = s.closest("[data-groupe]");
-      if (["doit", "peut", "mult"].includes(g.dataset.groupe)) return basculeMana(form, g.dataset.groupe, s.dataset.k);
       const v = !s.classList.contains("actif");
       if (g.dataset.unique) $$(".actif", g).forEach((b) => { b.classList.remove("actif"); b.setAttribute("aria-pressed", "false"); });
       s.classList.toggle("actif", v);
@@ -2473,7 +2480,7 @@ function rendreFormulaire() {
 }
 
 function nouvelleRecherche() {
-  const c = { ...RCH_DEFAUTS, deck: rch.crit.deck || "", img: rch.crit.img, vue: rch.crit.vue || "", ordre: rch.crit.ordre, sens: rch.crit.sens || "" };
+  const c = { ...RCH_DEFAUTS, deck: rch.crit.deck || "", vue: rch.crit.vue || "", ordre: rch.crit.ordre, sens: rch.crit.sens || "" };
   if (rch.deck && rch.deck.identite) Object.assign(c, critIdentite(rch.deck));
   rch.crit = c;
   rch.eds = new Set();
@@ -2623,7 +2630,6 @@ async function lancerRecherche() {
     return;
   }
   if (k !== rch.numero) return;
-  if (c.versions === "1") r.cartes.forEach((x) => { x.versionLigne = true; });
   rch.res = r;
   memoriser();
   rendreResultats(z, r);
@@ -2672,10 +2678,9 @@ function rendreResultats(z, r) {
   const c = rch.crit;
   const vueImages = c.vue === "images";
   const sens = c.sens || (RCH_TRI_DESC[c.ordre] ? "desc" : "asc");
-  const lignes = c.versions === "1" && r.lignes !== r.total ? ` · ${sepMilliers(r.lignes)} versions` : "";
   z.innerHTML = `
     <div class="rch-entete">
-      <div class="rch-compte"><strong>${sepMilliers(r.total)} carte${r.total > 1 ? "s" : ""} trouvée${r.total > 1 ? "s" : ""}</strong>${lignes}</div>
+      <div class="rch-compte"><strong>${sepMilliers(r.total)} carte${r.total > 1 ? "s" : ""} trouvée${r.total > 1 ? "s" : ""}</strong></div>
       ${paginationRch(r)}
       <div class="rch-outils">
         <div class="segments" role="group" aria-label="Affichage">${[["liste", "Liste"], ["images", "Images"]].map(([k, l]) =>
@@ -2684,7 +2689,7 @@ function rendreResultats(z, r) {
         <button class="btn btn-petit" id="rch-sens" title="Inverser l'ordre">${sens === "desc" ? "↓" : "↑"}</button>
       </div>
     </div>
-    ${r.total ? `<div class="rch-liste ${vueImages ? "etale" : ""} ${c.img === "1" ? "avec-images" : ""}">${r.cartes.map((x, i) => (vueImages ? carteImageRch(x, i) : ligneRch(x, i))).join("")}</div>`
+    ${r.total ? `<div class="rch-liste ${vueImages ? "etale" : "avec-images"}">${r.cartes.map((x, i) => (vueImages ? carteImageRch(x, i) : ligneRch(x, i))).join("")}</div>`
       : `<div class="panneau vide"><p>Aucune carte.</p></div>`}
     <div class="rch-bas">${paginationRch(r)}</div>
     <p class="muet petit rch-base">${baseTexte(r.base)}</p>`;
@@ -2783,22 +2788,12 @@ function texteCarteRch(x) {
   return (t || "").split("\n").map((l) => l.trim() === "//" ? "<hr>" : l.trim() ? `<p>${texteMana(l)}</p>` : "").join("");
 }
 
-// l'édition n'apparaît que dans « Toutes les versions » (une ligne par impression) : c'est ce qui distingue les lignes
-function editionRch(x) {
-  const e = x.edition;
-  if (!e || rch.crit.versions !== "1") return "";
-  return `<span class="rch-ed" title="${esc(`${e.nom} · ${e.set.toUpperCase()} ${e.num} · ${RCH_RARETE_NOM[e.rarete] || e.rarete}`)}">
-    ${e.icone ? `<span class="ed-icone rarete-${esc(e.rarete)}" style="--ic:url('${esc(e.icone)}')" aria-hidden="true"></span>` : ""}<span class="rch-ed-nom">${esc(e.nom)}</span>
-    <span class="muet">${esc(e.annee)}</span>
-  </span>`;
-}
-
 function ligneRch(x, i) {
   const cher = (x.prix || 0) > 5;
   const typeAff = rch.crit.fr !== "" && x.type_fr ? x.type_fr : x.type;
   return `<article class="rch-carte" data-i="${i}">
-    ${rch.crit.img === "1" ? `<button type="button" class="rch-vignette" data-act="ouvrir" data-image="${esc(x.image)}" data-legende="${esc(`${x.fr || x.nom} — ${prixRch(x)}`)}" ${cher ? 'data-cher="1"' : ""} aria-label="Fiche de ${esc(x.nom)}">
-      ${x.petite ? `<img src="${esc(x.petite)}" alt="" loading="lazy">` : `<span class="sans-image">${esc(x.nom)}</span>`}</button>` : ""}
+    <button type="button" class="rch-vignette" data-act="ouvrir" data-image="${esc(x.image)}" data-legende="${esc(`${x.fr || x.nom} — ${prixRch(x)}`)}" ${cher ? 'data-cher="1"' : ""} aria-label="Fiche de ${esc(x.nom)}">
+      ${x.petite ? `<img src="${esc(x.petite)}" alt="" loading="lazy">` : `<span class="sans-image">${esc(x.nom)}</span>`}</button>
     <div class="rch-corps">
       <div class="rch-haut">
         <div class="rch-noms"><button type="button" class="rch-nom" data-act="ouvrir">${esc(x.nom)}</button>${x.fr && x.fr !== x.nom ? `<span class="rch-vf">${esc(x.fr)}</span>` : ""}</div>
@@ -2807,7 +2802,6 @@ function ligneRch(x, i) {
       <div class="rch-type">${esc(typeAff)}${x.pt ? ` <span class="rch-pt">${esc(x.pt)}</span>` : ""}</div>
       ${x.texte || x.texte_fr ? `<div class="rch-texte fs-texte">${texteCarteRch(x)}</div>` : ""}
       <div class="rch-pied">
-        ${editionRch(x)}
         <a class="prix ${cher ? "cher" : ""}" href="${esc(lienCardmarket(x.nom))}" target="_blank" rel="noopener" title="Cardmarket">${prixRch(x)}</a>
         <span class="rch-badges">${badgesRch(x)}</span>
         <span class="rch-actions">${etatDeckRch(x)}</span>
@@ -2849,8 +2843,7 @@ async function ajouterRecherche(x, { maybe = false, tags = [], n = 1, edition = 
       res = c ? await api(`/api/decks/${enc(d.id)}/modifier`, { method: "POST", body: { op: "maybeboard", index: c.index, nom_actuel: c.nom } }) : null;
     }
     if (!res) {
-      const ed = edition || (x.versionLigne && x.edition ? { set: x.edition.set, num: x.edition.num, lang: "en", nom_edition: x.edition.nom } : null);
-      res = await api(`/api/decks/${enc(d.id)}/modifier`, { method: "POST", body: { op: "ajouter", nom: x.nom, tags: maybe ? ["Maybeboard", ...tags] : tags, n, edition: ed } });
+      res = await api(`/api/decks/${enc(d.id)}/modifier`, { method: "POST", body: { op: "ajouter", nom: x.nom, tags: maybe ? ["Maybeboard", ...tags] : tags, n, edition } });
     }
     if (!maybe || x.dans !== "deck") x.dans = maybe ? (x.dans || "maybe") : "deck";
     etat.decks = [];

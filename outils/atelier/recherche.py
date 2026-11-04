@@ -611,22 +611,6 @@ def _ok_texte(textes, incl, excl):
     return not incl or any(all(t in h for t in incl) for h in textes)
 
 
-def _ok_rangees(syms, doit, peut, mult):
-    """Les trois rangées de la fenêtre Manas : les couleurs non cochées ne peuvent pas faire partie du coût
-    (sauf mana phyrexian ou hybride payable autrement) ; sans « multiples », un seul symbole de cette couleur."""
-    autorises = doit | peut
-    for cols, souple in syms:
-        if not souple and not (cols & autorises):
-            return False
-    for k in doit:
-        if not any(k in cols for cols, _ in syms):
-            return False
-    for k in autorises - mult:
-        if sum(1 for cols, _ in syms if k in cols) > 1:
-            return False
-    return True
-
-
 def _motif(s):
     """Coût exact : « 2UU », « {1}{B}{R} », « U? » (plus un mana générique quelconque), « U** » (deux colorés quelconques)."""
     s = (s or "").upper().replace(" ", "")
@@ -733,10 +717,8 @@ def _filtre(p, b):
     if g("cout"):
         motif = _motif(g("cout"))
         tests.append(lambda x: any(_ok_motif(m, motif) for m in x["_moities"]))
-    else:
-        doit, peut, mult = _lettres(g("doit"), COULEURS), _lettres(g("peut"), COULEURS), _lettres(g("mult"), COULEURS)
-        if doit or peut:
-            tests.append(lambda x: _ok_rangees(x["_col"], doit, peut, mult))
+    if oui("un"):                                    # un seul symbole par couleur ; l'hybride compte pour ses deux couleurs
+        tests.append(lambda x: all(sum(1 for cols, _ in x["_col"] if k in cols) <= 1 for k in COULEURS))
     spe = g("spe")
     if spe:
         f = {"colorless": lambda x: "C" in x["_sym"], "split": lambda x: x["lay"] == "split",
@@ -831,18 +813,20 @@ def _ok_impression(pr, eds, rar, b):
 
 
 def _cle_couleur(x):
+    """Comme Magic-Ville : blanc, bleu, noir, rouge, vert, puis les bicolores et les multicolores (dans l'ordre WUBRG),
+    les incolores (artefacts…), enfin les terrains."""
     cc = x["co"]
     if "Land" in x["_types"] and not cc:
-        return (8, "")
+        return (8, ())
     if not cc:
-        return (7, "")
+        return (7, ())
     if len(cc) == 1:
-        return (COULEURS.index(cc), "")
-    return (5 + (len(cc) > 2), cc)
+        return (COULEURS.index(cc), ())
+    return (5 + (len(cc) > 2), tuple(COULEURS.index(k) for k in cc))
 
 
 TRIS = {
-    "couleur": lambda x: (_cle_couleur(x), x["_n"]),
+    "couleur": lambda x: (_cle_couleur(x), x["mv"], x["_n"]),       # dans chaque couleur : coût de mana croissant
     "nom": lambda x: x["_n"],
     "nomfr": lambda x: (x["_nf"] or x["_n"]),
     "type": lambda x: (_rang_type(x), x["_n"]),
