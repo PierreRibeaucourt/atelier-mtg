@@ -679,16 +679,30 @@ def api_discussion_arreter():
 
 
 # ---------------------------------------------------------------- lancement
-def deja_lance():
+def port_pris(port):
     with socket.socket() as s:
-        return s.connect_ex(("127.0.0.1", PORT)) == 0
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+def atelier_sur(port):
+    """L'Atelier répond-il déjà sur ce port (et pas un autre programme, comme AirPlay sur le port 5000 d'un Mac) ?"""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/reglages.js", timeout=3) as r:
+            return r.read(40).startswith(b"window.REGLAGES")
+    except Exception:
+        return False
 
 
 if __name__ == "__main__":
+    for p in range(PORT, PORT + 20):               # port occupé par un autre programme : le suivant
+        if not port_pris(p):
+            PORT = p
+            break
+        if atelier_sur(p):                         # l'Atelier est déjà ouvert : on montre sa page
+            webbrowser.open(f"http://127.0.0.1:{p}")
+            sys.exit(0)
     url = f"http://127.0.0.1:{PORT}"
-    if deja_lance():
-        webbrowser.open(url)
-        sys.exit(0)
     en_fond(ic.mise_a_jour, tous_les_noms())
     import recherche
     en_fond(recherche.demarrer)                    # base de la recherche de cartes : chargée, puis surveillée (nouvelles cartes, prix)

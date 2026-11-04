@@ -17,6 +17,11 @@ outils/atelier/cache_spellbook.json
 outils/atelier/base_cartes.json.gz
 outils/atelier/base_cartes.json.gz.tmp
 
+# Installation (installer.py) : environnement Python, icône du raccourci
+.venv/
+outils/atelier/atelier.ico
+outils/atelier/atelier.png
+
 # Divers
 __pycache__/
 *.tmp

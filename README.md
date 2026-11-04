@@ -24,17 +24,29 @@ Tout tourne sur ton PC, à l'adresse http://127.0.0.1:5000. Rien n'est mis en li
 
 ## Installation
 
-Il faut Windows et Python 3.10 ou plus récent.
+Le plus simple : demande à ton assistant IA (Claude Code, Codex, Cursor, Copilot…) « Installe l'Atelier MTG depuis https://github.com/PierreRibeaucourt/atelier-mtg ». Il suit [AGENTS.md](AGENTS.md). Il te pose trois questions (ton budget par carte, si tu veux partager tes decks, si tu veux discuter avec Claude) et fait le reste.
+
+À la main, il faut Python 3.10 ou plus récent, et git :
 
 ```
-pip install -r requirements.txt
+git clone https://github.com/PierreRibeaucourt/atelier-mtg.git "Atelier MTG"
+cd "Atelier MTG"
+python installer.py --budget 5
 ```
 
-La discussion demande en plus l'extension Claude Code de VS Code (ou le programme `claude`) et un abonnement Claude. Chaque message compte dans ta limite d'utilisation.
+L'installeur crée l'environnement Python (`.venv`), écrit tes réglages, vérifie que l'Atelier démarre et pose un raccourci « Atelier MTG » sur le bureau. On le relance après une mise à jour (`git pull`). Testé sous Windows ; macOS et Linux devraient marcher.
+
+En option :
+- **la discussion avec Claude** demande Claude Code (l'extension de VS Code, de Cursor ou de Windsurf, ou le programme `claude`) et un abonnement Claude. Chaque message compte dans ta limite d'utilisation ;
+- **le partage des decks** demande git et un compte GitHub (voir « Partager un deck »).
+
+Les réglages propres à ton installation sont dans `reglages.json`, à la racine, hors du dépôt. Toutes les clés sont facultatives :
+- `budget` : le prix maximum par carte, en euros ; les cartes plus chères sont signalées. 5 par défaut, 0 pour aucune alerte ;
+- `github` : le compte GitHub où publier les decks partagés.
 
 ## Lancement
 
-Double-clique sur `Atelier MTG.bat`, ou lance `python outils/atelier/app.py`. La page s'ouvre dans le navigateur. Laisse la fenêtre noire ouverte : la fermer arrête l'Atelier.
+Double-clique sur le raccourci « Atelier MTG » du bureau, sur `Atelier MTG.bat` (Windows) ou lance `./atelier.sh` (macOS, Linux). La page s'ouvre dans le navigateur. Laisse la fenêtre du terminal ouverte : la fermer arrête l'Atelier.
 
 ## Où sont les decks
 
@@ -68,7 +80,7 @@ La recherche est instantanée : elle se fait sur une base locale (`outils/atelie
 - les fonctions ;
 - les noms et textes français. La première fois, il faut environ 15 minutes pour lire les 59 000 impressions françaises. Ensuite, seules les nouvelles sont lues : une mise à jour prend moins d'une minute.
 
-La base se tient à jour toute seule. Au lancement, puis toutes les 6 heures tant que l'Atelier est ouvert, il demande à Scryfall la liste des éditions. Il refait la base dès qu'une édition récente ou à venir a plus de cartes que dans la base : nouvelle extension, spoilers. Il attend pour cela que le fichier complet de Scryfall les contienne, car Scryfall le refait une fois par jour. Il la refait aussi chaque semaine, pour les prix. Le bouton « Mettre à jour maintenant », en bas des résultats, force une mise à jour.
+La base se tient à jour toute seule. Au lancement, puis toutes les 6 heures tant que l'Atelier est ouvert, il demande à Scryfall la liste des éditions. Il refait la base dès qu'une édition récente ou à venir a plus de cartes que dans la base : nouvelle extension, spoilers. Il attend pour cela que le fichier complet de Scryfall les contienne, car Scryfall le refait une fois par jour. Il la refait aussi chaque semaine, pour les prix. Le bouton « Mettre à jour », en bas des résultats, force une mise à jour.
 
 ## Combos
 

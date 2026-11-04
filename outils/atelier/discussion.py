@@ -50,14 +50,24 @@ def consigne(cle):
 
 
 def trouver_claude():
-    """claude.exe de l'extension VS Code la plus récente, sinon « claude » dans le PATH."""
-    motif = os.path.expanduser("~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude.exe")
+    """Claude Code : le programme de l'extension la plus récente (VS Code, Cursor, Windsurf…), sinon « claude » dans
+    le PATH ou à sa place d'installation habituelle."""
+    exe = ".exe" if os.name == "nt" else ""
 
     def version(p):
         m = re.search(r"claude-code-(\d+)\.(\d+)\.(\d+)", p)
         return tuple(int(x) for x in m.groups()) if m else (0,)
-    cands = glob.glob(motif)
-    return max(cands, key=version) if cands else shutil.which("claude")
+    cands = [p for d in ("~/.vscode", "~/.vscode-insiders", "~/.cursor", "~/.windsurf", "~/.vscode-oss")
+             for p in glob.glob(os.path.expanduser(f"{d}/extensions/anthropic.claude-code-*/resources/native-binary/claude{exe}"))]
+    if cands:
+        return max(cands, key=version)
+    if shutil.which("claude"):
+        return shutil.which("claude")
+    for p in ("~/.local/bin/claude", "~/.claude/local/claude"):
+        p = os.path.expanduser(p + exe)
+        if os.path.isfile(p):
+            return p
+    return None
 
 
 # ---------------------------------------------------------------- historique d'une discussion

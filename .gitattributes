@@ -1,0 +1,3 @@
+# Fins de ligne des lanceurs, quel que soit le réglage git de la personne qui clone
+*.bat text eol=crlf
+*.sh text eol=lf

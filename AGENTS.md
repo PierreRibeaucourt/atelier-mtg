@@ -1,0 +1,112 @@
+# Atelier MTG : guide pour les assistants IA
+
+Ce fichier s'adresse à l'assistant IA (Claude Code, Codex, Cursor, Copilot…) à qui l'on demande d'installer l'Atelier MTG, de le mettre à jour ou de le dépanner. Le README décrit l'outil pour la personne qui l'utilise.
+
+L'Atelier est une application web locale pour les joueurs de Magic: The Gathering au format Commander : decks, prix, bracket, combos, recherche de cartes, simulation, discussion avec Claude. C'est un serveur Flask qui écoute seulement sur `127.0.0.1:5000` et ouvre la page dans le navigateur. Interface en français. Les données restent sur le PC.
+
+## Installer
+
+Parle à la personne en français, simplement, sans jargon. Fais tout toi-même ; ne lui demande que ce qui suit.
+
+1. **Prérequis.**
+   - Python 3.10 ou plus récent. Vérifie avec `python --version` (sous Windows, essaie aussi `py --version`).
+   - S'il manque : sous Windows, `winget install Python.Python.3.12` ou python.org (case « Add python.exe to PATH ») ; sur macOS, `brew install python` ou python.org ; sous Linux, le paquet `python3` avec `python3-venv`.
+   - git, conseillé pour récupérer le code et les mises à jour, et nécessaire pour partager des decks : `winget install Git.Git`, `brew install git` ou le paquet `git`.
+2. **Récupérer le code.**
+   - Commande : `git clone https://github.com/PierreRibeaucourt/atelier-mtg.git "Atelier MTG"`, dans le dossier où la personne range ses affaires (Documents par exemple). Sans git, l'archive ZIP de GitHub marche aussi, mais sans mises à jour faciles.
+   - Si elle a déjà un dossier de decks (sous-dossiers `Deck <nom>`), installe le code à côté ou dans ce dossier : les decks doivent finir à la racine du dépôt.
+3. **Lui poser trois questions, pas plus.**
+   - Son budget maximum par carte, en euros. Les cartes plus chères sont signalées. 5 € par défaut ; 0 pour aucune alerte.
+   - Veut-elle partager ses decks en ligne, avec un lien à envoyer ? Il faut alors un compte GitHub (gratuit).
+   - Veut-elle discuter avec Claude depuis l'Atelier ? Il faut alors un abonnement Claude.
+4. **Lancer l'installeur** depuis la racine du dépôt : `python installer.py --budget 5` (avec `py` ou `python3` selon le système). Ajoute `--github <compte>` si elle partage ses decks.
+   - L'installeur crée l'environnement `.venv` et y installe les dépendances (`requirements.txt` : Flask, Pillow).
+   - Il écrit `reglages.json`, vérifie que l'Atelier démarre et crée le raccourci « Atelier MTG » sur le bureau.
+   - Il signale enfin ce qui manque pour les fonctions facultatives.
+   - On peut le relancer sans risque. Lis sa sortie : s'il affiche « ÉCHEC », règle le problème (voir Dépannage), puis relance-le.
+5. **Fonctions facultatives** qu'elle a demandées : voir plus bas.
+6. **Lancer l'Atelier** une première fois :
+   - Windows : le raccourci du bureau ou `Atelier MTG.bat`.
+   - macOS, Linux : `./atelier.sh`.
+   - Ce qu'elle voit au premier lancement :
+     - La page s'ouvre sur http://127.0.0.1:5000.
+     - L'Atelier télécharge la base des cartes de Scryfall en tâche de fond : environ 80 Mo, puis une quinzaine de minutes pour les noms français. Pendant ce temps, la recherche de cartes affiche son avancement ; le reste marche tout de suite.
+     - Une fenêtre de terminal reste ouverte : la fermer arrête l'Atelier.
+7. **Montrer comment créer un premier deck.** Bouton « Nouveau deck » sur l'accueil. On peut coller une liste exportée d'Archidekt, de Moxfield ou de MTG Arena, ou partir d'un deck vide.
+
+Testé sous Windows. macOS et Linux devraient marcher (Python et Flask sont multiplateformes), sans avoir été essayés : signale tout problème.
+
+## Fonctions facultatives
+
+### Discussion avec Claude
+
+L'Atelier lance Claude Code (`claude -p`) dans le dossier du dépôt : pas de clé API, chaque message compte dans l'abonnement Claude de la personne.
+- Il trouve Claude Code tout seul :
+  - le programme de l'extension Claude Code de VS Code, Cursor ou Windsurf ;
+  - sinon `claude` dans le PATH, ou dans `~/.local/bin`.
+- Pour l'installer (documentation : https://code.claude.com/docs/en/setup) :
+  - Windows (PowerShell) : `irm https://claude.ai/install.ps1 | iex` ;
+  - macOS, Linux : `curl -fsSL https://claude.ai/install.sh | bash`.
+- Puis la personne lance `claude` une fois dans un terminal pour se connecter à son compte. Relance l'installeur : il doit afficher « Claude Code trouvé ».
+
+### Partager des decks (GitHub Pages)
+
+« Partager le deck… » publie une copie en lecture seule de la page du deck dans le dépôt GitHub `decks` de la personne, servi par GitHub Pages : `https://<compte>.github.io/decks/<deck>/`. Mise en place, une seule fois, de préférence avec la CLI GitHub (`gh`, `winget install GitHub.cli` ou `brew install gh`) :
+
+1. `gh auth login`, puis `gh auth setup-git` : git peut alors envoyer vers GitHub en HTTPS.
+2. Une identité git, si `git config --global user.email` ne répond rien :
+   - `git config --global user.name "<pseudo>"` ;
+   - `git config --global user.email "<id>+<compte>@users.noreply.github.com"` : l'adresse « noreply » de GitHub, que l'on voit dans ses réglages, pour ne pas publier son adresse e-mail.
+3. `gh repo create decks --public --add-readme`
+4. Activer GitHub Pages : `gh api -X POST repos/<compte>/decks/pages -f "source[branch]=main" -f "source[path]=/"`
+5. `python installer.py --github <compte>`, ou bien la clé `"github"` dans `reglages.json`.
+
+Sans `gh` : créer le dépôt public `decks` sur github.com, avec un README, puis Settings › Pages › Deploy from a branch › `main` / `(root)`.
+
+Les pages sont préparées dans le dossier `Partage Atelier/`, un dépôt git à part, ignoré par ce dépôt-ci. Une page publiée est en ligne au bout d'une minute environ.
+
+## Réglages
+
+`reglages.json`, à la racine, est propre à chaque installation et ignoré par git. Toutes ses clés sont facultatives : `{"budget": 5, "github": "MonCompte"}`. Voir `outils/reglages.py`. Relance l'Atelier après une modification.
+
+## Mettre à jour
+
+`git pull`, puis `python installer.py` (pour les nouvelles dépendances), puis relancer l'Atelier. Les decks ne bougent pas : ils sont ignorés par git.
+
+## Où sont les données
+
+Tout ceci est ignoré par git et ne doit jamais être commité, poussé ni effacé : pas de `git clean -x`, pas de `git reset --hard` qui toucherait à ces dossiers.
+- `Deck <nom>/`, un dossier par deck, à la racine :
+  - `archidekt.txt`, la liste de référence au format Archidekt (`1x Nom [Catégorie]`) ;
+  - l'historique et les versions ;
+  - `simulations/`, `pilote.json` (réglages du simulateur) et `discussion.json`.
+- `Corbeille Atelier/` : les decks supprimés, récupérables.
+- `Partage Atelier/` : les pages partagées. `reglages.json` : les réglages.
+- Les caches, dans `outils/` et `outils/atelier/` : base des cartes, prix, combos. Ils se reconstruisent tout seuls.
+
+Sauvegarder ses decks, c'est copier les dossiers `Deck …`.
+
+## Dépannage
+
+- **`python` ouvre le Microsoft Store ou n'existe pas (Windows).** Installe Python (voir plus haut), ou utilise `py installer.py`.
+- **« externally-managed-environment » (macOS, Linux).** N'installe rien avec le pip du système : l'installeur passe par `.venv`. Si `venv` manque (Debian, Ubuntu) : `sudo apt install python3-venv`.
+- **Port 5000 déjà pris**, par exemple par le récepteur AirPlay d'un Mac. L'Atelier prend le port libre suivant et ouvre la bonne page. Pour imposer un port : variable d'environnement `ATELIER_PORT`.
+- **La recherche affiche « La base de cartes se construit ».** C'est normal au premier lancement (voir plus haut) : laisse l'Atelier ouvert. En cas d'erreur réseau, le bouton « Relancer » reprend la construction ; ensuite, « Mettre à jour », en bas des résultats, force une mise à jour.
+- **« Claude Code est introuvable » dans la discussion.** Voir « Discussion avec Claude », puis relance l'Atelier.
+- **Le partage échoue.** Le message dit quoi faire : compte absent de `reglages.json`, dépôt `decks` inexistant, accès refusé (`gh auth login`, puis `gh auth setup-git`), identité git manquante.
+- **Pour vérifier l'installation sans lancer l'interface :** `python installer.py --sans-raccourci`.
+
+## Règles pour l'assistant
+
+- **Prix.** Ils viennent de Scryfall, qui republie chaque jour ceux de Cardmarket. N'interroge jamais Cardmarket automatiquement : il bloque les robots, et ses protections ne se contournent pas.
+- **EDHREC.** N'interroge pas EDHREC automatiquement : ses conditions d'utilisation l'interdisent. La popularité vient du rang EDHREC que Scryfall inclut dans ses données.
+- **Scryfall.** Respecte ses limites : 10 requêtes par seconde au plus, moins pour les recherches. Le code attend déjà entre deux requêtes.
+- **Listes des decks.** Avant de modifier un `archidekt.txt`, lance `python outils/atelier/sauvegarde.py "<dossier du deck>" "<ce qui change>"` : l'ancienne liste reste dans l'historique. Remplace une carte à la même ligne, pour que les simulations restent comparables.
+- **Code.** Après une modification du Python, relance l'Atelier. Pour le JavaScript et le CSS (`outils/atelier/static/`), un rechargement de la page suffit (Ctrl+F5).
+- **Organisation du code** :
+  - `outils/atelier/app.py`, le serveur et ses routes ;
+  - `outils/atelier/static/`, l'interface, en JavaScript sans framework ;
+  - `outils/atelier/*.py`, les modules (decks, prix, bracket, combos, recherche, simulation, discussion, partage) ;
+  - `outils/simu*.py`, le simulateur ;
+  - `outils/prix.py` et `outils/proba.py`, des outils en ligne de commande.
+- **Contribution.** Ce dépôt est celui de son auteur. Pour contribuer, travaille dans un fork : ne pousse rien sur le dépôt d'origine.
