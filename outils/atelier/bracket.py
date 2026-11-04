@@ -47,15 +47,56 @@ def _combo(c, dans_deck):
                 lien=f"https://commanderspellbook.com/combo/{c.get('id')}/" if c.get("id") else "")
 
 
-def spellbook(deck, force=False):
-    """Estimation de bracket et combos du deck selon Commander Spellbook, gardées tant que la liste ne change pas."""
-    entrees = decks.lire(decks.chemin(deck))
-    jeu = [e for e in entrees if decks.categorie(e) != "Maybeboard"]
+def _liste(deck):
+    """Ce qu'on envoie à Spellbook, et la clé du cache (la liste du deck, hors Maybeboard)."""
+    jeu = [e for e in decks.lire(decks.chemin(deck)) if decks.categorie(e) != "Maybeboard"]
     corps = {"main": [{"card": e["nom"], "quantity": e["n"]} for e in jeu if decks.categorie(e) != "Commander"],
              "commanders": [{"card": e["nom"], "quantity": 1} for e in jeu if decks.categorie(e) == "Commander"]}
-    cle = hashlib.sha1(json.dumps(dict(corps, v=VERSION_CACHE), sort_keys=True).encode()).hexdigest()
-    cache = json.load(open(CACHE, encoding="utf-8")) if os.path.exists(CACHE) else {}
+    return jeu, corps, hashlib.sha1(json.dumps(dict(corps, v=VERSION_CACHE), sort_keys=True).encode()).hexdigest()
+
+
+def _cache():
+    return json.load(open(CACHE, encoding="utf-8")) if os.path.exists(CACHE) else {}
+
+
+def _noter_dernier(cache, deck, cle):
+    """« _dernier » : la dernière analyse de chaque deck, pour l'afficher pendant que la nouvelle se fait."""
+    if cache.setdefault("_dernier", {}).get(deck) != cle:
+        cache["_dernier"][deck] = cle
+        json.dump(cache, open(CACHE, "w", encoding="utf-8"), ensure_ascii=False)
+
+
+def spellbook_connu(deck):
+    """Sans réseau : (analyse de la liste actuelle, True), sinon (dernière analyse du deck ou None, False)."""
+    _, _, cle = _liste(deck)
+    cache = _cache()
+    if cle in cache:
+        return cache[cle], True
+    return cache.get(cache.get("_dernier", {}).get(deck) or ""), False
+
+
+_en_cours = set()
+
+
+def rafraichir(deck):
+    """Analyse Spellbook de la liste actuelle, en tâche de fond (une seule à la fois par deck)."""
+    if deck in _en_cours:
+        return
+    _en_cours.add(deck)
+    try:
+        spellbook(deck)
+    except Exception:                                   # pas de réseau : on réessaiera au prochain affichage
+        pass
+    finally:
+        _en_cours.discard(deck)
+
+
+def spellbook(deck, force=False):
+    """Estimation de bracket et combos du deck selon Commander Spellbook, gardées tant que la liste ne change pas."""
+    jeu, corps, cle = _liste(deck)
+    cache = _cache()
     if not force and cle in cache:
+        _noter_dernier(cache, deck, cle)
         return cache[cle]
     est = _spellbook("estimate-bracket", corps)
     fmc = _spellbook("find-my-combos", corps)["results"]
@@ -65,13 +106,16 @@ def spellbook(deck, force=False):
     res = dict(date=time.time(), tag=tag, bracket=TAGS.get(tag, (None, tag))[0], libelle=TAGS.get(tag, (None, tag))[1], **drapeaux,
                combos=[_combo(c, dans) for c in fmc.get("included", [])],
                presque=[_combo(c, dans) for c in fmc.get("almostIncluded", [])][:80])
+    cache = _cache()                                   # relu : une autre analyse a pu l'écrire pendant les requêtes
     cache[cle] = res
+    cache.setdefault("_dernier", {})[deck] = cle
     json.dump(cache, open(CACHE, "w", encoding="utf-8"), ensure_ascii=False)
     return res
 
 
-def bracket(deck, force=False):
-    """Nos comptes + Spellbook + une estimation selon les règles officielles."""
+def bracket(deck, force=False, reseau=True):
+    """Nos comptes + Spellbook + une estimation selon les règles officielles.
+    reseau=False : sans attendre Spellbook, avec sa dernière analyse du deck (spellbook_a_jour dit si c'est celle de la liste actuelle)."""
     entrees = decks.lire(decks.chemin(deck))
     jeu = [e for e in entrees if decks.categorie(e) != "Maybeboard"]
     noms = [e["nom"] for e in jeu]
@@ -82,10 +126,10 @@ def bracket(deck, force=False):
     tuteurs = [n for n in noms if TUTEUR.search(sans_rappel[n])]
     tours = [n for n in noms if re.search(r"extra turn", (I.get(n) or {}).get("texte", ""), re.I)]
     try:
-        sb = spellbook(deck, force)
+        sb, a_jour = (spellbook(deck, force), True) if reseau else spellbook_connu(deck)
         sb_erreur = None
     except Exception as e:                          # Spellbook indisponible : on garde nos propres comptes
-        sb, sb_erreur = None, str(e)
+        sb, sb_erreur, a_jour = None, str(e), False
     mld = sb["massLandDenial"] if sb else []
     tours = sorted(set(tours) | set(sb["extraTurn"] if sb else []))
     combos2 = [c for c in (sb["combos"] if sb else []) if len(c["cartes"]) <= 2]
@@ -114,4 +158,4 @@ def bracket(deck, force=False):
     if len(tuteurs) > 3:
         raisons.append(f"{len(tuteurs)} tuteurs : beaucoup pour un bracket 1-2")
     return dict(estime=estime, raisons=raisons, gc=gc, gc_liste=ic._charge()["gc"].get("noms", []), gc_maj=ic._charge()["gc"].get("maj"),
-                tuteurs=tuteurs, tours=tours, mld=mld, spellbook=sb, spellbook_erreur=sb_erreur)
+                tuteurs=tuteurs, tours=tours, mld=mld, spellbook=sb, spellbook_erreur=sb_erreur, spellbook_a_jour=a_jour)

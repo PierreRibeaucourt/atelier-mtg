@@ -662,6 +662,7 @@ function chiffresDeck(d) {
     <span class="badge ${complet ? "badge-ok" : "badge-alerte"}">${d.total} / 100 cartes</span>
     ${d.maybe ? `<span class="badge">${d.maybe} en Maybeboard</span>` : ""}
     <span class="badge">${euros(d.prix_total)}</span>
+    ${d.bracket ? `<span class="badge badge-bracket" title="${esc((d.bracket_raisons || []).join("\n"))}">${ico("bracket")}Bracket ${d.bracket}</span>` : ""}
     <span class="badge ${d.gc.length ? "badge-gc" : ""}" title="${esc(d.gc.join(", "))}">${d.gc.length} Game Changer${d.gc.length > 1 ? "s" : ""}</span>
     ${!d.commandant ? `<span class="badge badge-alerte">pas de commandant</span>` : ""}
     ${al.length ? `<span class="badge badge-alerte" title="${esc(al.map(([n, a]) => `${n} : ${a.join(", ")}`).join("\n"))}">${al.length} carte${al.length > 1 ? "s" : ""} hors règles</span>` : ""}`;
@@ -703,12 +704,13 @@ function rendreDecks(zone, cartes) {
   const noms = (d) => sansAccent(`${d.titre} ${nomsCommandants(d)}`).includes(q) ? null : cartes[d.id];
   if (PREF.get("vue-decks", "grille") === "liste") {
     zone.innerHTML = `<table class="tableau tableau-decks">
-      <thead><tr><th>Deck</th><th>Couleurs</th><th class="num">Cartes</th><th class="num">Prix</th><th class="num">Game Changers</th><th class="num">Modifié</th></tr></thead>
+      <thead><tr><th>Deck</th><th>Couleurs</th><th class="num">Cartes</th><th class="num">Prix</th><th class="num">Bracket</th><th class="num">Game Changers</th><th class="num">Modifié</th></tr></thead>
       <tbody>${ds.map((d) => `<tr data-deck="${esc(d.id)}">
         <td><a href="#/deck/${enc(d.id)}"><strong>${esc(d.titre)}</strong></a><div class="muet petit">${esc(nomsCommandants(d) || "pas encore de commandant")}</div>${contientHtml(noms(d))}</td>
         <td><span class="identite">${identiteHtml(d.identite)}</span></td>
         <td class="num ${d.total === 100 ? "" : "alerte-texte"}">${d.total}${d.maybe ? `<div class="muet petit">+${d.maybe} maybe</div>` : ""}</td>
         <td class="num">${euros(d.prix_total)}</td>
+        <td class="num" title="${esc((d.bracket_raisons || []).join("\n"))}">${d.bracket || ""}</td>
         <td class="num">${d.gc.length || ""}</td>
         <td class="num muet">${dateCourte(d.modifie)}</td></tr>`).join("")}</tbody></table>`;
   } else {

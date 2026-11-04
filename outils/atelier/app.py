@@ -167,6 +167,19 @@ def version_courte(v):
     return dict(set=v["set"], num=v["num"], lang=v["lang"], edition=v["edition"], annee=v["annee"]) if v else None
 
 
+def bracket_resume(deck):
+    """Bracket estimé (règles officielles) pour l'accueil et l'en-tête, sans attendre Commander Spellbook : sa dernière
+    analyse du deck sert en attendant la nouvelle, lancée en tâche de fond. (None, []) si le deck n'a jamais été analysé."""
+    import bracket
+    try:
+        b = bracket.bracket(deck, reseau=False)
+    except Exception:
+        return None, []
+    if not b["spellbook_a_jour"]:
+        en_fond(bracket.rafraichir, deck)
+    return (b["estime"], b["raisons"]) if b["spellbook"] else (None, [])
+
+
 def resume_deck(deck, avec_cartes=False):
     entrees = decks.lire(decks.chemin(deck))
     cpt = decks.comptes(entrees)
@@ -181,7 +194,8 @@ def resume_deck(deck, avec_cartes=False):
     cmd = cpt["commandant"]
     alertes, ident = alertes_cartes(entrees, I)
     hors_maybe = {e["nom"] for e in jeu}
-    r = dict(id=deck, titre=deck.removeprefix("Deck "), note=decks.note(deck), **cpt, prix_total=round(prix_total, 2),
+    br, br_raisons = bracket_resume(deck)
+    r = dict(bracket=br, bracket_raisons=br_raisons, id=deck, titre=deck.removeprefix("Deck "), note=decks.note(deck), **cpt, prix_total=round(prix_total, 2),
              commandants=[e["nom"] for e in entrees if decks.categorie(e) == "Commander"],
              gc=gc, trop_cher=trop_cher, art=avec_visuel(I.get(cmd), V.get(i_cmd)).get("art", ""),
              image_cmd=avec_visuel(I.get(cmd), V.get(i_cmd)).get("image", ""),
