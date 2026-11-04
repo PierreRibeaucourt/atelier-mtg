@@ -273,6 +273,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .apercu .legende { margin-top: .35rem; padding: .3rem .6rem; border-radius: 6px; background: var(--texte); color: var(--fond); font-size: .85rem;
   text-align: center; font-variant-numeric: tabular-nums; box-shadow: var(--ombre); }
 .apercu .legende.cher { background: var(--alerte); color: var(--accent-texte); font-weight: 600; }
+/* carte citée dans un texte rédigé : l'image au survol */
+:is(.msg, p, li, .note) .nc { text-decoration: underline dotted color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: 3px; }
 /* fiche texte au survol d'une carte (vue Visuel), façon Magic-Ville */
 .fiche-survol { position: fixed; z-index: 62; width: 330px; max-width: calc(100vw - 16px); background: var(--surface); color: var(--texte);
   border: 1px solid var(--bord); border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.35); padding: .7rem .85rem; pointer-events: none;

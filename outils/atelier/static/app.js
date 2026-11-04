@@ -155,28 +155,44 @@ document.addEventListener("mousemove", (ev) => {
   fs.style.top = y + "px";
 });
 
-document.addEventListener("mouseover", (ev) => {
-  const el = ev.target.closest("[data-image]");
+const souris = { x: 0, y: 0 };
+
+function placerApercu() {
   const ap = $("#apercu");
-  if (!el || !el.dataset.image) { ap.hidden = true; survol = null; }
-  else if (el !== survol || ap.hidden) {
-    survol = el;
-    $("img", ap).src = el.dataset.image;
-    majLegende();
-    ap.hidden = false;
-  }
+  ap.style.left = (souris.x + 24 + 244 > innerWidth ? souris.x - 268 : souris.x + 24) + "px";
+  ap.style.top = Math.max(8, Math.min(souris.y - 40, innerHeight - 390)) + "px";
+}
+
+function montrerApercu(el) {
+  const ap = $("#apercu");
+  survol = el;
+  $("img", ap).src = el.dataset.image;
+  majLegende();
+  placerApercu();
+  ap.hidden = false;
+}
+
+document.addEventListener("mouseover", (ev) => {
+  const el = ev.target.closest("[data-image], [data-apercu]");
+  const ap = $("#apercu");
+  if (el && el.dataset.image == null) {          // carte citée : son image est cherchée au premier survol
+    if (el !== survol) {
+      survol = el;
+      ap.hidden = true;
+      apercuCite(el).then(() => { if (survol === el && el.dataset.image) montrerApercu(el); });
+    }
+  } else if (!el || !el.dataset.image) { ap.hidden = true; survol = null; }
+  else if (el !== survol || ap.hidden) montrerApercu(el);
   const b = ev.target.closest("[data-bulle]");
   const bu = $("#bulle");
   if (!b || !b.dataset.bulle) bu.hidden = true;
   else { bu.textContent = b.dataset.bulle; bu.hidden = false; }
 });
 document.addEventListener("mousemove", (ev) => {
+  souris.x = ev.clientX;
+  souris.y = ev.clientY;
   const ap = $("#apercu");
-  if (!ap.hidden) {
-    const x = ev.clientX + 24 + 244 > innerWidth ? ev.clientX - 268 : ev.clientX + 24;
-    ap.style.left = x + "px";
-    ap.style.top = Math.max(8, Math.min(ev.clientY - 40, innerHeight - 390)) + "px";
-  }
+  if (!ap.hidden) placerApercu();
   const bu = $("#bulle");
   if (!bu.hidden) {
     const w = bu.offsetWidth, h = bu.offsetHeight;
@@ -184,6 +200,161 @@ document.addEventListener("mousemove", (ev) => {
     bu.style.top = (ev.clientY + 18 + h > innerHeight ? Math.max(8, ev.clientY - h - 12) : ev.clientY + 18) + "px";
   }
 });
+
+// ------------------------------------------------------------------ cartes citées : où qu'il soit, le nom d'une carte la montre au survol
+// Les noms (anglais et français) viennent de la base de cartes ; chaque texte affiché est relu, et les noms trouvés sont
+// entourés d'un <span class="nc" data-apercu="nom anglais">. L'image est demandée au premier survol.
+const nc = (nom, texte = nom) => `<span class="nc" data-apercu="${esc(nom)}">${esc(texte)}</span>`;
+const CITE = { cles: null, index: null, communs: null, deck: undefined, ctx: null };
+const APERCUS = new Map();                         // nom anglais -> promesse de { nom, fr, image, prix, foil }
+const minuscules = (s) => s.toLowerCase().replace(/[’‘]/g, "'");
+const LETTRE = /[\p{L}\p{N}]/u;
+const SANS_CITE = "script, style, textarea, input, select, option, code, pre, svg, h1, h2, .fil, .nc, [data-apercu], [data-image], "
+  + "[data-survol], [data-survol-r], .fs-texte, .texte, .fc-tete, .fiche, .moteur, #apercu, #bulle, #fiche-survol, #toast, #menu, [contenteditable]";
+
+function apercuCite(el) {
+  const nom = el.dataset.apercu;
+  const remplir = (f) => {
+    if (!f || !f.image) { el.dataset.image = ""; return; }
+    const autre = sansAccent(el.textContent.trim()) === sansAccent(f.fr) ? f.nom : f.fr || f.nom;     // l'autre langue
+    el.dataset.image = f.image;
+    el.dataset.legende = `${autre} — ${prixRch(f)}`;
+    if ((f.prix || 0) > 5) el.dataset.cher = "1";
+  };
+  const c = etat.deck && etat.deck.cartes.find((x) => x.nom === nom);        // carte du deck : la version choisie
+  if (c && c.info && c.info.image) { remplir({ nom: c.nom, fr: c.info.fr, image: c.info.image, prix: c.info.prix }); return Promise.resolve(); }
+  if (!APERCUS.has(nom)) APERCUS.set(nom, api(`/api/apercu-carte?nom=${enc(nom)}`).catch(() => null));
+  return APERCUS.get(nom).then(remplir);
+}
+
+function indexerNom(cles, index, nom, en) {
+  const k = minuscules(nom.trim());
+  const m = k.match(/^[\p{L}\p{N}]+/u);
+  if (k.length < 3 || !m || cles.has(k)) return;
+  cles.set(k, en);
+  if (!index.has(m[0])) index.set(m[0], []);
+  index.get(m[0]).push(k.length);                  // premier mot -> longueurs des noms qui commencent par lui
+}
+
+function trierIndex(index) {
+  for (const [k, l] of index) index.set(k, [...new Set(l)].sort((a, b) => b - a));
+}
+
+// le deck ouvert : ses cartes sont liées même quand leur nom est un mot courant, et ses légendes par leur nom court (« Kels »)
+function contexteCite() {
+  const d = etat.deck && etat.deck.id === cleCourante() ? etat.deck : null;
+  if (CITE.deck !== d) {
+    const cles = new Map(), index = new Map(), courts = new Map();
+    for (const c of d ? d.cartes : []) {
+      for (const n of [c.nom, c.info && c.info.fr]) {
+        if (!n) continue;
+        for (const a of [n, ...(n.includes(" // ") ? n.split(" // ") : [])]) {
+          indexerNom(cles, index, a, c.nom);
+          const court = a.split(", ")[0];
+          if (court !== a) courts.set(court, courts.has(court) && courts.get(court) !== c.nom ? null : c.nom);
+        }
+      }
+    }
+    for (const [court, en] of courts) if (en && court.length >= 4) indexerNom(cles, index, court, en);
+    trierIndex(index);
+    CITE.deck = d;
+    CITE.ctx = { cles, index };
+  }
+  return CITE.ctx;
+}
+
+// [début, longueur, nom anglais] des cartes citées dans un texte ; entier : le texte de l'élément en gras qui le contient
+function citesDans(texte, entier) {
+  const bas = minuscules(texte);
+  if (bas.length !== texte.length) return [];
+  const ctx = contexteCite(), res = [];
+  const mots = /[\p{L}\p{N}]+/gu;
+  let m;
+  while ((m = mots.exec(bas))) {
+    const i = m.index, a = ctx.index.get(m[0]), b = CITE.index.get(m[0]);
+    for (const L of a && b ? [...a, ...b].sort((x, y) => y - x) : a || b || []) {
+      if (i + L > bas.length || LETTRE.test(bas[i + L] || "")) continue;
+      const k = bas.substr(i, L), du = ctx.cles.get(k), en = du || CITE.cles.get(k);
+      if (!en) continue;
+      const vu = texte.substr(i, L);
+      if (!/\p{Lu}/u.test(vu)) continue;                                   // « fin vivante » au fil d'une phrase
+      if (!du && CITE.communs.has(k) && vu !== entier) continue;           // « Sacrifice », « Flash » : mot courant
+      res.push([i, L, en]);
+      mots.lastIndex = i + L;
+      break;
+    }
+  }
+  return res;
+}
+
+function lierNoeud(n) {
+  const t = n.nodeValue, p = n.parentElement;
+  if (!p || t.length < 3 || !/\p{Lu}/u.test(t)) return;
+  const ms = citesDans(t, /^(STRONG|B|EM)$/.test(p.tagName) ? p.textContent.trim() : null);
+  if (!ms.length) return;
+  const frag = document.createDocumentFragment();
+  let k = 0;
+  for (const [i, L, en] of ms) {
+    if (i > k) frag.append(t.slice(k, i));
+    const s = document.createElement("span");
+    s.className = "nc";
+    s.dataset.apercu = en;
+    s.textContent = t.substr(i, L);
+    frag.append(s);
+    k = i + L;
+  }
+  if (k < t.length) frag.append(t.slice(k));
+  n.replaceWith(frag);
+}
+
+function lierCites(racine) {
+  if (!CITE.cles || !racine.isConnected) return;
+  if (racine.nodeType === Node.TEXT_NODE) {
+    if (racine.parentElement && !racine.parentElement.closest(SANS_CITE)) lierNoeud(racine);
+    return;
+  }
+  if (racine.nodeType !== Node.ELEMENT_NODE || racine.closest(SANS_CITE)) return;
+  const w = document.createTreeWalker(racine, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => n.nodeType === Node.TEXT_NODE ? NodeFilter.FILTER_ACCEPT
+      : n.matches(SANS_CITE) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP,
+  });
+  const textes = [];
+  while (w.nextNode()) textes.push(w.currentNode);
+  textes.forEach(lierNoeud);
+}
+
+const aLier = new Set();
+const observateur = new MutationObserver((ms) => {
+  for (const m of ms) {
+    if (m.type === "characterData") aLier.add(m.target);
+    else m.addedNodes.forEach((n) => aLier.add(n));
+  }
+  if (aLier.size && !lierCites.prevu) { lierCites.prevu = true; requestAnimationFrame(passeCites); }
+});
+
+function passeCites() {
+  lierCites.prevu = false;
+  const rs = [...aLier];
+  aLier.clear();
+  rs.forEach((r) => lierCites(r));
+  observateur.takeRecords();                       // les noms qu'on vient d'entourer
+}
+
+async function chargerCites() {
+  const r = await api("/api/noms-cartes").catch(() => null);
+  if (!r || !r.noms.length) { setTimeout(chargerCites, 10000); return; }      // base de cartes en cours de chargement
+  const cles = new Map(), index = new Map();
+  for (const [en] of r.noms) indexerNom(cles, index, en, en);
+  for (const [en, fr] of r.noms) if (fr) indexerNom(cles, index, fr, en);
+  for (const n of r.noms) for (const x of n) if (x.includes(" // ")) for (const f of x.split(" // ")) indexerNom(cles, index, f, n[0]);
+  trierIndex(index);
+  Object.assign(CITE, { cles, index, communs: new Set(r.communs) });
+  lierCites(document.body);
+  observateur.takeRecords();
+}
+
+observateur.observe(document.body, { childList: true, subtree: true, characterData: true });
+chargerCites();
 
 // ------------------------------------------------------------------ menu contextuel et modale
 function ouvrirMenu(bouton, items, ev = null) {
@@ -448,7 +619,7 @@ function chiffresDeck(d) {
 }
 
 function contientHtml(noms) {
-  return noms && noms.length ? `<div class="contient petit">contient ${noms.map((n) => `<strong>${esc(n)}</strong>`).join(", ")}</div>` : "";
+  return noms && noms.length ? `<div class="contient petit">contient ${noms.map((n) => `<strong>${nc(n)}</strong>`).join(", ")}</div>` : "";
 }
 
 function carteDeck(d, noms) {
@@ -755,7 +926,7 @@ function ligneCarte(c, rangement) {
   const cher = (f.prix || 0) > 5;
   return `<div class="ligne ligne-carte" data-carte="${c.index}">
     <span class="qte">${c.n > 1 ? c.n + "×" : ""}</span>
-    <span class="nom"><span class="en" data-image="${esc(f.image)}" data-legende="${esc(legendeCarte(c))}" ${cher ? 'data-cher="1"' : ""}>${esc(c.nom)}</span>${f.fr && f.fr !== c.nom ? `<span class="fr">${esc(f.fr)}</span>` : ""}
+    <span class="nom"><span class="en" data-image="${esc(f.image)}" data-legende="${esc(legendeCarte(c))}" ${cher ? 'data-cher="1"' : ""}>${esc(c.nom)}</span>${f.fr && f.fr !== c.nom ? `<span class="fr" data-image="${esc(f.image)}" data-legende="${esc(legendeCarte(c))}" ${cher ? 'data-cher="1"' : ""}>${esc(f.fr)}</span>` : ""}
       ${tags.map((t) => `<button type="button" class="tag" data-tag="#${esc(t)}" title="Voir toutes les cartes « ${esc(t)} »">${esc(t)}</button>`).join("")}</span>
     ${mana(f.cout)}
     <span class="badges">
@@ -1424,7 +1595,7 @@ function ongletStats(el, d) {
     <div class="panneau">
       <h3 style="margin-top:0">Les plus chères</h3>
       ${chers.map((c) => `<div class="ligne ligne-3">
-        <span class="nom"><span class="en" data-image="${esc(c.info.image)}" data-legende="${esc(legendeCarte(c))}">${esc(c.nom)}</span>${c.info.fr && c.info.fr !== c.nom ? `<span class="fr">${esc(c.info.fr)}</span>` : ""}</span>
+        <span class="nom"><span class="en" data-image="${esc(c.info.image)}" data-legende="${esc(legendeCarte(c))}">${esc(c.nom)}</span>${c.info.fr && c.info.fr !== c.nom ? `<span class="fr" data-image="${esc(c.info.image)}" data-legende="${esc(legendeCarte(c))}">${esc(c.info.fr)}</span>` : ""}</span>
         ${mana(c.info.cout)}
         ${c.info.prix_lien ? `<a class="prix ${c.info.prix > 5 ? "cher" : ""}" href="${esc(c.info.prix_lien)}" target="_blank" rel="noopener">${euros(c.info.prix)}</a>` : `<span class="prix">${euros(c.info.prix)}</span>`}
       </div>`).join("")}
@@ -1479,8 +1650,8 @@ function optionsVersions(vs, choisi, avecActuelle = true, avecAucune = false) {
 
 function diffCourt(v) {
   if (!v.plus.length && !v.moins.length) return `<span class="muet">identique</span>`;
-  return (v.plus.length ? `<div><span class="ok">+</span> ${v.plus.map(esc).join(", ")}</div>` : "") +
-    (v.moins.length ? `<div><span class="alerte-texte">−</span> ${v.moins.map(esc).join(", ")}</div>` : "");
+  return (v.plus.length ? `<div><span class="ok">+</span> ${v.plus.map((n) => nc(n)).join(", ")}</div>` : "") +
+    (v.moins.length ? `<div><span class="alerte-texte">−</span> ${v.moins.map((n) => nc(n)).join(", ")}</div>` : "");
 }
 
 function ligneVersion(v, i) {
@@ -1596,7 +1767,7 @@ async function afficheComparaison(zone, d, fa, fb) {
         <tbody>
           <tr><td>Cartes</td><td>${c.a.total}</td><td>${c.b.total}</td></tr>
           <tr><td>Prix</td><td>${euros(c.a.prix)}</td><td>${euros(c.b.prix)}</td></tr>
-          <tr><td>Game Changers</td><td>${c.a.gc.map(esc).join(", ") || "aucun"}</td><td>${c.b.gc.map(esc).join(", ") || "aucun"}</td></tr>
+          <tr><td>Game Changers</td><td>${c.a.gc.map((n) => nc(n)).join(", ") || "aucun"}</td><td>${c.b.gc.map((n) => nc(n)).join(", ") || "aucun"}</td></tr>
           <tr><td>Cartes en commun</td><td colspan="2">${c.communes}</td></tr>
         </tbody>
       </table>
@@ -1618,12 +1789,12 @@ const REGLES_BRACKETS = [
 ];
 
 function listeCartes(noms) {
-  return noms.length ? noms.map((n) => `<span class="badge">${esc(n)}</span>`).join(" ") : `<span class="muet">aucune</span>`;
+  return noms.length ? noms.map((n) => `<span class="badge">${nc(n)}</span>`).join(" ") : `<span class="muet">aucune</span>`;
 }
 
 function blocCombo(c, presque) {
   return `<div class="panneau" style="margin-top:.6rem">
-    <div><strong>${c.cartes.map((n) => presque && c.manque.includes(n) ? `<span style="color:var(--accent)">${esc(n)} (manque)</span>` : esc(n)).join(" + ")}</strong>
+    <div><strong>${c.cartes.map((n) => presque && c.manque.includes(n) ? `<span style="color:var(--accent)">${nc(n)} (manque)</span>` : nc(n)).join(" + ")}</strong>
       ${c.tag ? `<span class="badge" title="Bracket de la combo selon Commander Spellbook">${esc(c.tag)}${c.bracket ? ` · bracket ${c.bracket}` : ""}</span>` : ""}</div>
     <div class="petit muet" style="margin-top:.25rem">${c.produit.map(esc).join(" · ")}</div>
     <details><summary>Comment ça marche</summary>
@@ -1705,7 +1876,7 @@ function ligneCombo(c, carte = null) {
     else {
       const maybe = manque.length === 1 ? ((c.maybe || []).includes(manque[0].nom) ? ` <span class="badge">au Maybeboard</span>`
         : ` <button type="button" class="btn btn-petit" data-maybe="${esc(manque[0].nom)}">+ Maybeboard</button>`) : "";
-      etatCarte = `Pas dans le deck : ${manque.map((f) => `${esc(f.fr || f.nom)} <span class="${(f.prix || 0) > 5 ? "cher" : "muet"}">${euros(f.prix)}</span>`).join(" · ")}${maybe}`;
+      etatCarte = `Pas dans le deck : ${manque.map((f) => `${nc(f.nom, f.fr || f.nom)} <span class="${(f.prix || 0) > 5 ? "cher" : "muet"}">${euros(f.prix)}</span>`).join(" · ")}${maybe}`;
     }
   }
   return `<div class="combo">
@@ -1920,9 +2091,9 @@ function listeChiffres(obj, table, format) {
 function couvertureHtml(v) {
   const c = v.couverture || {};
   const parts = [];
-  if (c.corps?.length) parts.push(`${c.corps.length} créature${c.corps.length > 1 ? "s" : ""} jouée${c.corps.length > 1 ? "s" : ""} comme simple corps (${c.corps.map(esc).join(", ")})`);
-  if (c.sans_effet?.length) parts.push(`${c.sans_effet.length} sort${c.sans_effet.length > 1 ? "s" : ""} sans effet (${c.sans_effet.map(esc).join(", ")})`);
-  if (c.partiel?.length) parts.push(`${c.partiel.length} carte${c.partiel.length > 1 ? "s" : ""} lue${c.partiel.length > 1 ? "s" : ""} en partie (${c.partiel.map(esc).join(", ")})`);
+  if (c.corps?.length) parts.push(`${c.corps.length} créature${c.corps.length > 1 ? "s" : ""} jouée${c.corps.length > 1 ? "s" : ""} comme simple corps (${c.corps.map((n) => nc(n)).join(", ")})`);
+  if (c.sans_effet?.length) parts.push(`${c.sans_effet.length} sort${c.sans_effet.length > 1 ? "s" : ""} sans effet (${c.sans_effet.map((n) => nc(n)).join(", ")})`);
+  if (c.partiel?.length) parts.push(`${c.partiel.length} carte${c.partiel.length > 1 ? "s" : ""} lue${c.partiel.length > 1 ? "s" : ""} en partie (${c.partiel.map((n) => nc(n)).join(", ")})`);
   return parts.length ? `<p class="note petit"><strong>${esc(v.nom)} :</strong> ${parts.join(" ; ")}.</p>` : "";
 }
 
@@ -1959,7 +2130,7 @@ function afficheRapport(zone, r) {
   zone.innerHTML = `
     <div class="panneau">
       <h2 style="margin-top:0">Rapport du ${esc(new Date(r.date).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" }))}</h2>
-      <p class="muet petit">${r.n} parties · ${esc(reg.pilote || "vite")}${reg.premier?.length ? ` · en premier : ${reg.premier.map(esc).join(", ")}` : ""}${reg.garder?.length ? ` · gardées pour la salve : ${reg.garder.map(esc).join(", ")}` : ""}</p>
+      <p class="muet petit">${r.n} parties · ${esc(reg.pilote || "vite")}${reg.premier?.length ? ` · en premier : ${reg.premier.map((n) => nc(n)).join(", ")}` : ""}${reg.garder?.length ? ` · gardées pour la salve : ${reg.garder.map((n) => nc(n)).join(", ")}` : ""}</p>
       <p><strong>A</strong> = ${esc(A.nom)}${B ? ` · <strong>B</strong> = ${esc(B.nom)}` : ""}</p>
       ${couvertureHtml(A)}${B ? couvertureHtml(B) : ""}
       <table class="tableau">
@@ -1974,7 +2145,7 @@ function afficheRapport(zone, r) {
 }
 
 function puces(liste, nom) {
-  return `<div class="puces">${liste.map((n, i) => `<span class="puce">${esc(n)}<button data-ote="${nom}" data-i="${i}" aria-label="Retirer">✕</button></span>`).join("") || `<span class="muet petit">aucune</span>`}</div>`;
+  return `<div class="puces">${liste.map((n, i) => `<span class="puce">${nc(n)}<button data-ote="${nom}" data-i="${i}" aria-label="Retirer">✕</button></span>`).join("") || `<span class="muet petit">aucune</span>`}</div>`;
 }
 
 async function ongletSimulation(conteneur, d, rapportInitial = null) {
@@ -2814,7 +2985,7 @@ function ligneRch(x, i) {
       ${x.petite ? `<img src="${esc(x.petite)}" alt="" loading="lazy">` : `<span class="sans-image">${esc(x.nom)}</span>`}</button>
     <div class="rch-corps">
       <div class="rch-haut">
-        <div class="rch-noms"><button type="button" class="rch-nom" data-act="ouvrir">${esc(x.nom)}</button>${x.fr && x.fr !== x.nom ? `<span class="rch-vf">${esc(x.fr)}</span>` : ""}</div>
+        <div class="rch-noms" data-image="${esc(x.image)}" data-legende="${esc(`${x.fr || x.nom} — ${prixRch(x)}`)}" ${cher ? 'data-cher="1"' : ""}><button type="button" class="rch-nom" data-act="ouvrir">${esc(x.nom)}</button>${x.fr && x.fr !== x.nom ? `<span class="rch-vf">${esc(x.fr)}</span>` : ""}</div>
         ${mana(x.cout)}
       </div>
       <div class="rch-type">${esc(typeAff)}${x.pt ? ` <span class="rch-pt">${esc(x.pt)}</span>` : ""}</div>

@@ -473,6 +473,25 @@ def api_recherche_noms():
     return jsonify(recherche.noms(request.args.get("q", ""), request.args.get("deck") or None))
 
 
+@app.get("/api/noms-cartes")
+def api_noms_cartes():
+    """Noms de toutes les cartes, pour donner un aperçu au survol de chaque carte citée (revérifié à chaque chargement)."""
+    import recherche
+    d = recherche.noms_cites()
+    if d is None:
+        return jsonify(noms=[], communs=[])
+    r = jsonify(d)
+    r.set_etag(f"{recherche.base()['date']}-{len(d['noms'])}-{len(d['communs'])}")
+    r.headers["Cache-Control"] = "no-cache"
+    return r.make_conditional(request)
+
+
+@app.get("/api/apercu-carte")
+def api_apercu_carte():
+    import recherche
+    return jsonify(recherche.apercu(request.args.get("nom", "")))
+
+
 @app.get("/api/recherche/tags")
 def api_recherche_tags():
     """Fonctions Scryfall Tagger qui correspondent au texte tapé (fenêtre Fonctions de la recherche)."""

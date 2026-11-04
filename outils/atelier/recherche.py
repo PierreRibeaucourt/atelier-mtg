@@ -493,6 +493,7 @@ def demarrer():
         b = _lire_fichier()
         if b:
             _preparer(b)
+            noms_cites()                      # prêts pour la première page
         verifier()
     except Exception as e:
         etat["erreur"] = str(e)
@@ -977,3 +978,43 @@ def noms(q, deck=None, n=8):
     dans = _deck(deck)
     jour = ic.aujourdhui()
     return [_sortie(x, b, dans, None, jour) for *_, x in trouves[:n]]
+
+
+# ---------------------------------------------------------------- cartes citées dans un texte (aperçu au survol)
+_citees = {}
+
+
+def noms_cites():
+    """Noms des cartes jouables, pour reconnaître une carte citée n'importe où dans l'Atelier : [anglais] ou
+    [anglais, français], plus les noms d'un seul mot qui sont aussi des mots courants (« Sacrifice », « Endurance »),
+    que l'interface ne lie que dans leur deck ou en gras. Un mot est courant s'il s'écrit en minuscules dans le texte
+    des cartes, ou s'il sert dans l'interface. None tant que la base se charge (au lancement de l'Atelier)."""
+    b = _base
+    if b is None:
+        return None
+    with _verrou:
+        if _citees.get("date") != b["date"]:
+            jouables = [x for x in b["cartes"] if x["spe"] not in HORS_JEU and not x["dig"] and not x["fun"]]
+            noms = [[x["n"], x["fr"]] if x.get("fr") and x["fr"] != x["n"] else [x["n"]] for x in jouables]
+            seuls = {a.lower().replace("’", "'") for n in noms for nom in n for a in [nom, *nom.split(" // ")] if not re.search(r"\s", a)}
+            courants = set()
+            for x in b["cartes"]:
+                for k in ("o", "of", "t", "tf"):
+                    courants.update(m for m in re.findall(r"[^\W_][\w'’-]*", (x.get(k) or "").replace("’", "'")) if m == m.lower())
+            for f in ("app.js", "index.html"):
+                with open(os.path.join(ICI, "static", f), encoding="utf-8") as fh:
+                    src = re.sub(r"/\*.*?\*/|(?<!:)//[^\n]*|<!--.*?-->", "", fh.read(), flags=re.S)   # sans les commentaires
+                src = re.sub(r"\b\w+(?=:)", "", src)                       # ni les clés du code (aube: "Dawn of the Dead")
+                courants.update(m.lower() for m in re.findall(r"[^\W_][\w'’-]*", src.replace("’", "'")))
+            _citees.update(date=b["date"], donnees=dict(noms=noms, communs=sorted(seuls & courants)))
+        return _citees["donnees"]
+
+
+def apercu(nom):
+    """Image et prix d'une carte citée."""
+    b = base()
+    x = b and b["par_cle"].get(ic._cle(nom).lower())
+    if not x:
+        return None
+    s = _sortie(x, b, {}, None, ic.aujourdhui())
+    return {k: s[k] for k in ("nom", "fr", "image", "prix", "foil")}
