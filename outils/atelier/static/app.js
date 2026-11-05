@@ -519,12 +519,8 @@ window.addEventListener("hashchange", route);
 const nomsCommandants = (d) => ((d.commandants && d.commandants.length) ? d.commandants : d.commandant ? [d.commandant] : []).join(" + ");
 const identiteHtml = (ident) => ident == null ? "" : (ident.length ? ident.map(symbole).join("") : symbole("C"));
 
-// decks ouverts récemment (gardés dans ce navigateur) : en tête du sélecteur et du tri « récents »
-const RECENTS = {
-  lire() { try { return JSON.parse(localStorage.getItem("decks-recents") || "{}"); } catch (_) { return {}; } },
-  noter(id) { try { const r = RECENTS.lire(); r[id] = Date.now(); localStorage.setItem("decks-recents", JSON.stringify(r)); } catch (_) {} },
-};
-const recence = (d) => Math.max(RECENTS.lire()[d.id] || 0, (d.modifie || 0) * 1000);
+// « récent » = liste modifiée récemment (ouvrir un deck sans le modifier ne le fait pas remonter)
+const recence = (d) => (d.modifie || 0) * 1000;
 
 async function listeDecks() {
   if (!etat.decks.length) etat.decks = await api("/api/decks");
@@ -821,7 +817,6 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
   }
   const d = donnees || await api("/api/decks/" + enc(id));
   etat.deck = d;
-  RECENTS.noter(id);
   const cmdsEntete = d.cartes.filter((c) => c.cat === "Commander" && c.info.image);      // deux partenaires : en éventail
   vue.innerHTML = `
     <nav class="fil" aria-label="Fil d'Ariane"><a href="${PARTAGE ? esc(PARTAGE.accueil) : "#/"}">Mes decks</a><span aria-hidden="true">›</span><span aria-current="page">${esc(d.titre)}</span></nav>
