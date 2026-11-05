@@ -332,7 +332,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .fs-texte p:last-child { margin-bottom: 0; }
 .fs-texte hr { border: 0; border-top: 1px solid var(--bord); margin: .45rem 0; }
 .rappel { color: var(--texte-2); }
-.sym-t { width: 15px; height: 15px; vertical-align: -2px; margin: 0 1px; }
+.sym-t { width: 1.07em; height: 1.07em; vertical-align: -.16em; margin: 0 .07em; }   /* à la taille du texte qui l'entoure */
 .fs-pied { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .5rem; margin-top: .55rem; padding-top: .45rem; border-top: 1px solid var(--bord);
   font-size: .82rem; font-variant-numeric: tabular-nums; }
 .fs-pied .cher { color: var(--alerte); font-weight: 600; }

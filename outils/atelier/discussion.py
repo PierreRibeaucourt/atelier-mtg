@@ -26,6 +26,7 @@ OUTILS_PERMIS = "Read Edit Write Glob Grep Bash(python *) WebFetch(domain:api.sc
 
 CONSIGNE = """Tu es appelé depuis l'Atelier MTG, l'interface locale de l'utilisateur (code dans outils/atelier).
 Réponds en français, court et concret ; la fenêtre affiche du texte simple (listes à puces et **gras** acceptés, pas de tableaux).
+Écris les coûts et symboles de mana entre accolades, comme sur les cartes : {2}{R}, {T}, {W/U}, {X} ; la fenêtre les affiche en symboles.
 Chaque message commence par [Page : …] : c'est ce que l'utilisateur regarde dans l'Atelier.
 - Les decks sont dans les dossiers « Deck … » : la liste de référence est archidekt.txt (format « 1x Nom [Catégorie] »,
   ou « 1x Nom (ima) 205 [Catégorie] » quand l'utilisateur a choisi une impression : garde ce « (set) numéro » si tu touches la ligne).

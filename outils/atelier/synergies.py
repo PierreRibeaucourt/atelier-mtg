@@ -52,6 +52,7 @@ Règles :
   Protection, Contrôle, Synergie (le reste).
 - « cartes » : les noms ANGLAIS exacts tels qu'ils sont écrits dans la liste.
 - « titre » : 3 à 6 mots en français. « explication » : 1 à 2 phrases en français, avec les noms français des cartes quand ils existent.
+  Coûts et symboles entre accolades, comme sur les cartes : {2}{R}, {T}, {W/U} (l'Atelier les affiche en symboles).
 - « resume » : 1 phrase sur le cœur du deck (son moteur principal).
 Réponds uniquement par la structure demandée."""
 

@@ -188,9 +188,10 @@ function cacherApercu() {
 let survolCarte = null;
 
 // textes français de Scryfall : symboles collés ou entre parenthèses (« {2BB} », « {(u/p)} », « {(}b/r)} ») → {2}{B}{B}, {U/P}, {B/R}
+const SYMBOLE = /^(\d+|[WUBRGCXYZSTQEPHDL½∞]|[WUBRGC2]\/[WUBRGCP](\/P)?|CHAOS|TK|PW|A)$/;
 function symbolesTexte(s) {
   const t = s.toUpperCase().replace(/[()]/g, "");
-  if (/^(\d+|[WUBRGCXYZSTQEPHDL½∞]|[WUBRGC2]\/[WUBRGCP](\/P)?|CHAOS|TK|PW|A)$/.test(t)) return [t];
+  if (SYMBOLE.test(t)) return [t];
   const m = t.match(/\d+|[WUBRGCXYZS]\/[WUBRGCP](?:\/P)?|[WUBRGCXYZS]/g);
   return m && m.join("") === t ? m : [s];            // forme inconnue : laissée telle quelle
 }
@@ -201,10 +202,56 @@ function normaliserSymboles(t) {
     .replace(/\{([^}]+)\}/g, (_, s) => symbolesTexte(s).map((y) => `{${y}}`).join(""));
 }
 
+const urlSymbole = (y) => `https://svgs.scryfall.io/card-symbols/${enc(y === "½" ? "HALF" : y === "∞" ? "INFINITY" : y.replace(/\//g, ""))}.svg`;
+
 function texteMana(ligne) {
   return esc(normaliserSymboles(ligne))
     .replace(/\(([^)]*)\)/g, '<i class="rappel">($1)</i>')                 // texte de rappel en italique
-    .replace(/\{([^}]+)\}/g, (_, s) => `<img class="sym-t" src="https://svgs.scryfall.io/card-symbols/${enc(s.replace(/\//g, ""))}.svg" alt="{${esc(s)}}">`);
+    .replace(/\{([^}]+)\}/g, (_, s) => `<img class="sym-t" src="${urlSymbole(s)}" alt="{${esc(s)}}">`);
+}
+
+// partout ailleurs (discussion avec Claude, combos, bulles, modales, rapports…) : chaque texte affiché est relu, et
+// « {R}{W} », « {2BB} », « {T} » deviennent des symboles. Une accolade qui n'est pas un symbole reste du texte.
+const JETON = /\{\(\}[a-z]\/[a-z]\)\}|\{[^{}\s]{1,9}\}/gi;
+const SANS_SYMBOLES = "script, style, textarea, input, select, option, svg, [contenteditable]";
+
+function remplacerSymboles(n) {
+  const t = n.nodeValue;
+  let m, k = 0, frag = null;
+  JETON.lastIndex = 0;
+  while ((m = JETON.exec(t))) {
+    const ys = (normaliserSymboles(m[0]).match(/\{[^}]+\}/g) || []).map((x) => x.slice(1, -1));
+    if (!ys.length || !ys.every((y) => SYMBOLE.test(y))) continue;
+    frag = frag || document.createDocumentFragment();
+    frag.append(t.slice(k, m.index));
+    for (const y of ys) {
+      const img = document.createElement("img");
+      img.className = "sym-t";
+      img.src = urlSymbole(y);
+      img.alt = `{${y}}`;
+      frag.append(img);
+    }
+    k = m.index + m[0].length;
+  }
+  if (!frag) return;
+  frag.append(t.slice(k));
+  n.replaceWith(frag);
+}
+
+function symbolesDans(racine) {
+  if (racine.nodeType === Node.TEXT_NODE) {
+    const p = racine.parentElement;
+    if (p && racine.nodeValue.includes("{") && !p.closest(SANS_SYMBOLES)) remplacerSymboles(racine);
+    return;
+  }
+  if (racine.nodeType !== Node.ELEMENT_NODE || !racine.isConnected || !racine.textContent.includes("{") || racine.closest(SANS_SYMBOLES)) return;
+  const w = document.createTreeWalker(racine, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => n.nodeType === Node.TEXT_NODE ? (n.nodeValue.includes("{") ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP)
+      : n.matches(SANS_SYMBOLES) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP,
+  });
+  const textes = [];
+  while (w.nextNode()) textes.push(w.currentNode);
+  textes.forEach(remplacerSymboles);
 }
 
 function ficheSurvol(c) {
@@ -426,8 +473,13 @@ function passeCites() {
   lierCites.prevu = false;
   const rs = [...aLier];
   aLier.clear();
-  rs.forEach((r) => lierCites(r));
-  observateur.takeRecords();                       // les noms qu'on vient d'entourer
+  rs.forEach((r) => {
+    const p = r.parentNode;
+    symbolesDans(r);                               // d'abord les symboles de mana, puis les noms de cartes
+    const q = r.isConnected ? r : p;               // texte remplacé par ses morceaux : on relit son parent
+    if (q && q.isConnected) lierCites(q);
+  });
+  observateur.takeRecords();                       // les symboles et les noms qu'on vient de poser
 }
 
 async function chargerCites() {
@@ -444,6 +496,7 @@ async function chargerCites() {
 }
 
 observateur.observe(document.body, { childList: true, subtree: true, characterData: true });
+symbolesDans(document.body);
 chargerCites();
 
 // ------------------------------------------------------------------ menu contextuel et modale
