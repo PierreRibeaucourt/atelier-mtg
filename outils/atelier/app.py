@@ -651,7 +651,8 @@ def api_discussion():
     import discussion
     cle = request.args.get("deck", "")
     e = discussion.lire_etat(cle)
-    return jsonify(messages=e["messages"], disponible=bool(discussion.trouver_claude()), en_cours=discussion.en_cours(cle))
+    return jsonify(messages=e["messages"], session=bool(e.get("session")), contexte=e.get("contexte"),
+                   disponible=bool(discussion.trouver_claude()), en_cours=discussion.en_cours(cle))
 
 
 @app.post("/api/discussion/nouvelle")
@@ -668,6 +669,14 @@ def api_discussion_envoyer():
     import discussion
     d = request.get_json()
     return jsonify(discussion.lancer(d.get("message", ""), d.get("page", ""), d.get("modele", ""), d.get("deck", "")))
+
+
+@app.post("/api/discussion/compacter")
+def api_discussion_compacter():
+    """/compact : Claude résume la conversation pour qu'elle coûte moins de tokens ; suivi comme une réponse."""
+    import discussion
+    d = request.get_json(silent=True) or {}
+    return jsonify(discussion.compacter(d.get("deck", ""), d.get("modele", "")))
 
 
 @app.get("/api/discussion/en-cours")

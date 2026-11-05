@@ -126,6 +126,7 @@ const ICONES = {
   crayon: '<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
   effacer: '<path d="M20 20H9L4 15a2 2 0 0 1 0-2.8L13.2 3a2 2 0 0 1 2.8 0l4 4a2 2 0 0 1 0 2.8L11 19"/><path d="m8 9 7 7"/>',
   partager: '<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 13.3 7.6 4.4M15.8 6.3l-7.6 4.4"/>',
+  compacter: '<path d="M4 14h6v6M20 10h-6V4"/><path d="m14 10 7-7M3 21l7-7"/>',
   ouvrir: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>',
 };
 if (PARTAGE) $(".logo").href = PARTAGE.accueil === true ? "#/" : PARTAGE.accueil;
@@ -3570,11 +3571,14 @@ $("#btn-rafraichir").addEventListener("click", async () => {
 // Une discussion par deck (son historique et son propre contexte Claude), plus une discussion générale.
 // On choisit la discussion dans l'en-tête du panneau, depuis n'importe quelle page ; ouvrir un deck (ou le choisir
 // comme cible de la recherche) passe à sa discussion. Ailleurs, la discussion choisie reste celle qui était là.
-// Les réponses tournent sur le serveur (tâche de fond) : fermer le panneau, changer de page ou recharger ne les perd pas,
-// et plusieurs decks peuvent attendre une réponse.
-const chat = { ouvert: false, charge: false, cle: "", contexte: null, suivi: false, bulle: null, nbOutils: 0 };
-const ETAT_CHAT = "";
+// Les réponses tournent sur le serveur (tâche de fond) : fermer le panneau, changer de page ou d'onglet, ou recharger
+// ne les perd pas, et plusieurs decks peuvent attendre une réponse.
+// Une réponse se lit comme dans VS Code : le premier message de Claude, puis le détail de son travail dans l'ordre
+// (outils et messages intermédiaires, replié une fois la réponse finie), puis sa réponse finale.
+const chat = { ouvert: false, charge: false, cle: "", contexte: null, suivi: false, reponse: null, signature: "",
+  detailOuvert: true, actif: false, session: false, colle: true, nbMessages: -1 };
 const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
+const kTokens = (n) => (n >= 1000 ? Math.round(n / 1000) + " k" : String(n || 0));
 
 function texteRiche(t) {
   // texte simple : on échappe, puis **gras**, `code` et retours à la ligne
@@ -3624,29 +3628,68 @@ async function choisirDiscussion(cle) {
   if (chat.charge) { try { await afficheHistorique(); } catch (e) { ajouteMessage("outil", "Erreur : " + (e.message || e)); } }
 }
 
-function ajouteMessage(role, texte) {
+// le fil reste collé en bas tant qu'on y est (nouveaux messages, symboles de mana qui se chargent)
+function enBas(forcer) {
   const fil = $("#chat-fil");
+  if (!fil) return;
+  if (forcer) chat.colle = true;
+  if (chat.colle) fil.scrollTop = fil.scrollHeight;
+}
+
+function ajouteMessage(role, texte) {
   const div = document.createElement("div");
   div.className = "msg msg-" + role;
   div.innerHTML = role === "claude" ? texteRiche(texte) : esc(texte);
-  fil.appendChild(div);
-  fil.scrollTop = fil.scrollHeight;
+  $("#chat-fil").appendChild(div);
+  enBas();
   return div;
 }
 
-function ajouteOutil(texte, avant = null) {
-  const o = document.createElement("div");
-  o.className = "msg msg-outil";
-  o.textContent = "· " + texte;
-  if (avant) avant.before(o); else $("#chat-fil").appendChild(o);
+// les réponses d'avant les étapes : leurs outils, puis leur texte
+const etapesDe = (m) => m.etapes
+  || [...(m.outils || []).map((texte) => ({ type: "outil", texte })), ...(m.texte ? [{ type: "texte", texte: m.texte }] : [])];
+
+// « 3 lectures · 2 commandes · 1 modification · 2 messages »
+function resumeEtapes(es) {
+  const n = {};
+  for (const e of es) {
+    const k = e.type === "texte" ? "message" : /^lit /.test(e.texte) ? "lecture" : /^(modifie|écrit) /.test(e.texte) ? "modification"
+      : /^lance/.test(e.texte) ? "commande" : /^cherche/.test(e.texte) ? "recherche" : /^consulte/.test(e.texte) ? "page web" : "action";
+    n[k] = (n[k] || 0) + 1;
+  }
+  return ["lecture", "recherche", "page web", "commande", "modification", "action", "message"].filter((k) => n[k])
+    .map((k) => `${n[k]} ${(n[k] > 1 ? k.replace(/^(\S+)/, "$1s") : k).replace(" ", " ")}`).join(" · ");
+}
+
+// une réponse : le texte avant le premier outil, le détail (du premier au dernier outil), le texte après le dernier outil
+function htmlReponse(etapes, actif = false, mode = "") {
+  const es = etapes.filter((e) => e.type === "outil" || (e.texte || "").trim());
+  const i = es.findIndex((e) => e.type === "outil");
+  const j = es.length - 1 - [...es].reverse().findIndex((e) => e.type === "outil");
+  const debut = i < 0 ? [] : es.slice(0, i), milieu = i < 0 ? [] : es.slice(i, j + 1), fin = i < 0 ? es : es.slice(j + 1);
+  const bulle = (e) => `<div class="msg msg-claude">${texteRiche(e.texte.trim())}</div>`;
+  return debut.map(bulle).join("")
+    + (milieu.length ? `<details class="etapes"${actif && chat.detailOuvert ? " open" : ""}><summary>${esc(resumeEtapes(milieu))}</summary>`
+      + `<div class="etapes-corps">${milieu.map((e) => e.type === "outil" ? `<div class="etape-outil">${esc(e.texte)}</div>`
+        : `<div class="etape-texte">${texteRiche(e.texte.trim())}</div>`).join("")}</div></details>` : "")
+    + fin.map(bulle).join("")
+    + (actif ? `<div class="msg-attente">${mode === "compact" ? "Compactage…" : "Claude réfléchit…"}</div>` : "");
+}
+
+function blocReponse(etapes) {
+  const div = document.createElement("div");
+  div.className = "reponse";
+  div.innerHTML = htmlReponse(etapes);
+  return div;
 }
 
 function boutonEnvoyer(enCours) {
+  chat.actif = enCours;
   const b = $("#chat-envoyer");
   if (!b) return;
   b.innerHTML = enCours ? ico("arreter") + "Arrêter" : ico("envoyer") + "Envoyer";
   b.classList.toggle("btn-accent", !enCours);
-  if (!enCours) $("#chat-etat").textContent = ETAT_CHAT;
+  $("#chat-compacter").disabled = enCours || !chat.session;
 }
 
 async function afficheHistorique() {
@@ -3662,15 +3705,20 @@ async function afficheHistorique() {
   remplirChoixDiscussion(ds || etat.decks);
   const fil = $("#chat-fil");
   fil.innerHTML = "";
+  chat.reponse = null;
   if (!h.disponible) ajouteMessage("outil", "Claude Code est introuvable sur ce PC : la discussion ne marchera pas (installe l'extension Claude Code de VS Code).");
   for (const m of h.messages) {
-    if (m.role === "moi") { ajouteMessage("moi", m.texte); continue; }
-    for (const o of m.outils || []) ajouteOutil(o);
-    if (m.texte) ajouteMessage("claude", m.texte);
+    if (m.role === "moi") ajouteMessage("moi", m.texte);
+    else if (m.role === "compact") ajouteMessage("compact", `Discussion compactée · ${kTokens(m.avant)} → ${kTokens(m.apres)} tokens`);
+    else fil.appendChild(blocReponse(etapesDe(m)));
   }
-  chat.bulle = null;
+  chat.session = h.session;
+  chat.nbMessages = h.messages.length;
+  $("#chat-contexte").textContent = h.contexte ? `· ${kTokens(h.contexte)} tokens` : "";
   boutonEnvoyer(h.en_cours.actif);
   if (h.en_cours.actif) { afficheEnCours(h.en_cours); suivreChat(); }
+  enBas(true);
+  requestAnimationFrame(() => requestAnimationFrame(() => enBas()));   // après la pose des symboles de mana
   return h;
 }
 
@@ -3681,6 +3729,27 @@ async function changerDiscussion() {
   chat.contexte = ctx;
   if (arrivee && ctx !== chat.cle) await choisirDiscussion(ctx);
   else if (chat.charge) listeDecks().then(remplirChoixDiscussion).catch(() => {});   // un deck a pu être créé ou supprimé
+}
+
+// retour sur cet onglet du navigateur : le panneau reprend l'état ouvert ou fermé des autres onglets, la discussion du
+// deck affiché, et ce qui a été dit ou lancé depuis un autre onglet. Les réponses en cours ailleurs continuent.
+async function retourOnglet() {
+  if (document.hidden || retourOnglet.enCours) return;
+  retourOnglet.enCours = true;
+  try {
+    let ouvert = chat.ouvert;
+    try { ouvert = !!localStorage.getItem("chat-ouvert"); } catch (_) {}
+    chat.contexte = null;
+    await changerDiscussion();
+    if (ouvert !== chat.ouvert) await basculeChat(ouvert);
+    else if (chat.charge) {
+      const h = await api("/api/discussion" + qDeck(chat.cle));
+      if (h.messages.length !== chat.nbMessages || h.en_cours.actif !== chat.actif) await afficheHistorique();
+    }
+    const s = await api("/api/discussion/en-cours");
+    if (s.actives.length) suivreChat();
+  } catch (_) {
+  } finally { retourOnglet.enCours = false; }
 }
 
 async function montageChat() {
@@ -3700,7 +3769,7 @@ async function montageChat() {
     <div class="chat-saisie">
       <textarea id="chat-saisie" placeholder="Ton message…"></textarea>
       <div class="form-ligne" style="margin:0;justify-content:space-between">
-        <span class="muet petit" id="chat-etat">${ETAT_CHAT}</span>
+        <button class="btn btn-petit btn-discret" id="chat-compacter" title="/compact">${ico("compacter")}Compacter <span class="muet" id="chat-contexte"></span></button>
         <button class="btn btn-accent" id="chat-envoyer">${ico("envoyer")}Envoyer</button>
       </div>
     </div>`;
@@ -3715,26 +3784,35 @@ async function montageChat() {
       await afficheHistorique();
     } catch (e) { erreur(e); }
   };
-  $("#chat-envoyer").onclick = () => ($("#chat-envoyer").textContent === "Arrêter" ? arreterChat() : envoyerChat());
-  $("#chat-saisie").addEventListener("keydown", (ev) => { if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) envoyerChat(); });
+  $("#chat-envoyer").onclick = () => (chat.actif ? arreterChat() : envoyerChat());
+  $("#chat-compacter").onclick = compacterChat;
+  $("#chat-saisie").addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); envoyerChat(); }
+  });
+  const fil = $("#chat-fil");
+  fil.addEventListener("scroll", () => { chat.colle = fil.scrollHeight - fil.scrollTop - fil.clientHeight < 60; }, { passive: true });
+  fil.addEventListener("load", () => enBas(), true);              // une image (symbole de mana) vient d'arriver
+  fil.addEventListener("toggle", (ev) => { if (chat.reponse && chat.reponse.contains(ev.target)) chat.detailOuvert = ev.target.open; }, true);
   chat.charge = true;
   await afficheHistorique();
 }
 
-// réponse en cours dans la discussion affichée : outils utilisés au fur et à mesure, puis le texte
+// réponse en cours dans la discussion affichée, redessinée à chaque nouveauté
 function afficheEnCours(s) {
   if (!chat.charge) return;
-  const fil = $("#chat-fil");
-  const enBas = fil.scrollHeight - fil.scrollTop - fil.clientHeight < 60;
-  if (!chat.bulle || !chat.bulle.isConnected) {
-    chat.bulle = ajouteMessage("claude", "");
-    chat.nbOutils = 0;
+  if (!chat.reponse || !chat.reponse.isConnected) {
+    chat.reponse = document.createElement("div");
+    chat.reponse.className = "reponse";
+    chat.signature = "";
+    $("#chat-fil").appendChild(chat.reponse);
   }
-  while (chat.nbOutils < s.outils.length) ajouteOutil(s.outils[chat.nbOutils++], chat.bulle);
-  chat.bulle.innerHTML = s.texte ? texteRiche(s.texte) : `<span class="muet">Claude réfléchit…</span>`;
-  $("#chat-etat").textContent = s.outils.length && !s.texte ? "Claude travaille : " + s.outils[s.outils.length - 1] : "Claude écrit…";
+  const sig = s.mode + JSON.stringify(s.etapes);
+  if (sig !== chat.signature) {
+    chat.signature = sig;
+    chat.reponse.innerHTML = htmlReponse(s.etapes, true, s.mode);
+  }
   boutonEnvoyer(true);
-  if (enBas) fil.scrollTop = fil.scrollHeight;
+  enBas();
 }
 
 function boutonDiscussion(actives) {
@@ -3754,7 +3832,7 @@ async function reponseFinie(cle) {
   }
   if (!chat.ouvert || cle !== chat.cle) {
     $("#btn-chat").classList.add("nouveau");
-    toast(`Claude a répondu dans la discussion ${nomDiscussion(cle)}.`, 5000);
+    toast(s.mode === "compact" ? `Discussion ${nomDiscussion(cle)} compactée.` : `Claude a répondu dans la discussion ${nomDiscussion(cle)}.`, 5000);
   }
   if ((s.outils || []).some((o) => /^(modifie|écrit|lance)/.test(o))) { etat.decks = []; route(); }   // un deck a peut-être changé
 }
@@ -3788,6 +3866,7 @@ async function basculeChat(ouvrir) {
   if (chat.ouvert) $("#btn-chat").classList.remove("nouveau");
   try { localStorage.setItem("chat-ouvert", chat.ouvert ? "1" : ""); } catch (_) {}
   if (chat.ouvert && !chat.charge) await montageChat();
+  else if (chat.ouvert) enBas(true);
 }
 
 async function ouvrirChat(texte) {
@@ -3802,13 +3881,29 @@ async function ouvrirChat(texte) {
 async function envoyerChat() {
   const t = $("#chat-saisie");
   const message = t.value.trim();
-  if (!message || $("#chat-envoyer").textContent === "Arrêter") return;
+  if (!message || chat.actif) return;
   try {
     const s = await api("/api/discussion", { method: "POST", body: { message, page: pageCourante(), modele: $("#chat-modele").value, deck: chat.cle } });
     t.value = "";
     ajouteMessage("moi", message);
-    chat.bulle = null;
+    chat.reponse = null;
+    chat.detailOuvert = true;
+    chat.nbMessages++;
     afficheEnCours(s);
+    enBas(true);
+    suivreChat();
+  } catch (e) {
+    ajouteMessage("outil", "Erreur : " + (e.message || e));
+  }
+}
+
+async function compacterChat() {
+  if (chat.actif || !chat.session) return;
+  try {
+    const s = await api("/api/discussion/compacter", { method: "POST", body: { deck: chat.cle, modele: $("#chat-modele").value } });
+    chat.reponse = null;
+    afficheEnCours(s);
+    enBas(true);
     suivreChat();
   } catch (e) {
     ajouteMessage("outil", "Erreur : " + (e.message || e));
@@ -3825,6 +3920,8 @@ if (!PARTAGE) {
   chat.contexte = deckDeLaPage();
   chat.cle = chat.contexte ?? PREF.get("chat-discussion", "");
   window.addEventListener("hashchange", changerDiscussion);
+  document.addEventListener("visibilitychange", retourOnglet);
+  window.addEventListener("focus", retourOnglet);
   try { if (localStorage.getItem("chat-ouvert")) basculeChat(true); } catch (_) {}
   api("/api/discussion/en-cours").then((s) => { if (s.actives.length) suivreChat(); }).catch(() => {});   // une réponse tournait déjà
 }

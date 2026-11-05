@@ -444,6 +444,16 @@ button.puce-dispo:hover { border-color: var(--accent); color: var(--accent); }
 .msg-moi { align-self: flex-end; background: var(--accent-doux); }
 .msg-claude { align-self: flex-start; background: var(--surface-2); }
 .msg-outil { align-self: flex-start; font-size: .78rem; color: var(--texte-2); padding: 0 .3rem; }
+.reponse { display: flex; flex-direction: column; gap: .5rem; }
+.etapes { align-self: flex-start; max-width: 92%; font-size: .8rem; color: var(--texte-2); padding: 0 .3rem; }
+.etapes > summary { margin: 0; }
+.etapes-corps { display: grid; gap: .35rem; margin: .35rem 0 0 .25rem; padding-left: .65rem; border-left: 2px solid var(--bord); }
+.etape-outil { overflow-wrap: anywhere; }
+.etape-texte { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--texte); font-size: .84rem; }
+.msg-attente { align-self: flex-start; font-size: .8rem; color: var(--texte-2); padding: 0 .3rem; animation: attente 1.4s ease-in-out infinite; }
+@keyframes attente { 50% { opacity: .4; } }
+@media (prefers-reduced-motion: reduce) { .msg-attente { animation: none; } }
+.msg-compact { align-self: center; max-width: none; font-size: .75rem; color: var(--texte-2); padding: .1rem .6rem; }
 .chat-saisie { border-top: 1px solid var(--bord); padding: .6rem; display: grid; gap: .4rem; }
 .chat-saisie textarea { width: 100%; min-height: 64px; resize: vertical; padding: .5rem .6rem; border: 1px solid var(--bord); border-radius: 8px; background: var(--fond); }
 @media (max-width: 1000px) { .chat { position: fixed; right: 0; top: 54px; z-index: 30; width: min(400px, 100vw); box-shadow: var(--ombre); } }

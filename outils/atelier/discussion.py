@@ -8,6 +8,9 @@ Une discussion par deck (<dossier du deck>/discussion.json : son historique et s
 plus une discussion générale (outils/atelier/discussion.json), au choix depuis n'importe quelle page. La conversation reprend d'un
 message à l'autre (--resume). Chaque réponse tourne en tâche de fond sur le serveur, pas dans la page : fermer ou recharger
 la page ne la perd pas, et plusieurs decks peuvent avoir une réponse en cours en même temps.
+
+Une réponse est une suite d'étapes dans l'ordre où Claude les fait : ses messages et les outils qu'il utilise
+(dict(type="texte"|"outil", texte=…)). « /compact » résume la conversation côté Claude pour économiser des tokens.
 """
 import glob
 import json
@@ -98,7 +101,7 @@ def nouvelle(cle=""):
 def _resume_outil(nom, entree):
     """Une ligne lisible pour un outil utilisé par Claude."""
     if nom in ("Read", "Edit", "Write"):
-        f = os.path.relpath(entree.get("file_path", ""), decks.RACINE) if entree.get("file_path") else ""
+        f = os.path.relpath(entree.get("file_path", ""), decks.RACINE).replace("\\", "/") if entree.get("file_path") else ""
         return {"Read": "lit", "Edit": "modifie", "Write": "écrit"}[nom] + " " + f
     if nom == "Bash":
         return "lance : " + (entree.get("command", "")[:140])
@@ -109,32 +112,50 @@ def _resume_outil(nom, entree):
     return nom
 
 
+def _ajouter(etapes, type_, texte):
+    """Le texte qui arrive prolonge le message en cours ; un outil ouvre une nouvelle étape."""
+    if type_ == "texte" and etapes and etapes[-1]["type"] == "texte":
+        etapes[-1]["texte"] += texte
+    else:
+        etapes.append(dict(type=type_, texte=texte))
+
+
 # ---------------------------------------------------------------- réponses en cours (une par discussion au plus)
 _verrou = threading.Lock()
-_jobs = {}            # cle -> dict(actif, texte, outils, erreur, proc, arret) ; garde le dernier état une fois fini
+_jobs = {}            # cle -> dict(actif, mode, etapes, erreur, proc, arret) ; garde le dernier état une fois fini
 
 
 def en_cours(cle=""):
     with _verrou:
         j = _jobs.get(cle) or {}
-        return dict(actif=j.get("actif", False), texte=j.get("texte", ""), outils=list(j.get("outils", [])),
+        etapes = [dict(x) for x in j.get("etapes", [])]
+        return dict(actif=j.get("actif", False), mode=j.get("mode", ""), etapes=etapes,
+                    outils=[x["texte"] for x in etapes if x["type"] == "outil"],
                     erreur=j.get("erreur", ""), actives=[k for k, x in _jobs.items() if x["actif"]])
 
 
-def lancer(message, page="", modele="", cle=""):
-    """Démarre la réponse de Claude en tâche de fond et rend la main tout de suite."""
+def lancer(message, page="", modele="", cle="", mode=""):
+    """Démarre la réponse de Claude en tâche de fond et rend la main tout de suite. mode="compact" : /compact."""
     exe = trouver_claude()
     if not exe:
         raise RuntimeError("Claude Code introuvable : installe l'extension Claude Code de VS Code, ou le programme « claude ».")
-    if not message.strip():
+    if mode == "compact":
+        if not lire_etat(cle).get("session"):
+            raise ValueError("Rien à compacter : la discussion est vide.")
+        message = "/compact"
+    elif not message.strip():
         raise ValueError("message vide")
     chemin_etat(cle)                                         # deck inconnu : erreur tout de suite
     with _verrou:
         if (_jobs.get(cle) or {}).get("actif"):
             raise RuntimeError("Claude répond déjà dans cette discussion : attends la fin de la réponse (ou arrête-la).")
-        j = _jobs[cle] = dict(actif=True, texte="", outils=[], erreur="", proc=None, arret=False)
+        j = _jobs[cle] = dict(actif=True, mode=mode, etapes=[], erreur="", proc=None, arret=False)
     threading.Thread(target=_travail, args=(j, exe, message, page, modele, cle), daemon=True).start()
     return en_cours(cle)
+
+
+def compacter(cle="", modele=""):
+    return lancer("", modele=modele, cle=cle, mode="compact")
 
 
 def arreter(cle=""):
@@ -149,10 +170,8 @@ def _travail(j, exe, message, page, modele, cle):
     try:
         for ev in _envoyer(j, exe, message, page, modele, cle):
             with _verrou:
-                if ev["type"] == "texte":
-                    j["texte"] += ev["texte"]
-                elif ev["type"] == "outil":
-                    j["outils"].append(ev["texte"])
+                if ev["type"] in ("texte", "outil"):
+                    _ajouter(j["etapes"], ev["type"], ev["texte"])
                 elif ev["type"] == "erreur":
                     j["erreur"] = ev["texte"]
     except Exception as e:                                  # noqa: BLE001 — l'erreur s'affiche dans la discussion
@@ -164,23 +183,32 @@ def _travail(j, exe, message, page, modele, cle):
             j["proc"] = None
 
 
+def _taille(usage):
+    """Taille de la conversation vue par Claude à cet appel (tokens)."""
+    return sum(usage.get(k) or 0 for k in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens"))
+
+
 def _envoyer(j, exe, message, page, modele, cle):
-    """Générateur d'événements : dict(type=texte|outil|fin|erreur, ...)."""
+    """Générateur d'événements : dict(type=texte|outil|fin|erreur, ...). Les étapes s'accumulent dans j["etapes"]."""
     e = lire_etat(cle)
+    compact = j["mode"] == "compact"
     cmd = [exe, "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
            "--permission-mode", "acceptEdits", "--allowedTools", OUTILS_PERMIS, "--append-system-prompt", consigne(cle)]
     if modele:
         cmd += ["--model", modele]
     if e.get("session"):
         cmd += ["--resume", e["session"]]
-    texte_envoye = (f"[Page : {page}]\n" if page else "") + message
-    e["messages"].append(dict(role="moi", texte=message))
-    ecrire_etat(e, cle)
+    if compact:
+        texte_envoye = message
+    else:
+        texte_envoye = (f"[Page : {page}]\n" if page else "") + message
+        e["messages"].append(dict(role="moi", texte=message))
+        ecrire_etat(e, cle)
     proc = j["proc"] = subprocess.Popen(cmd, cwd=decks.RACINE, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     proc.stdin.write(texte_envoye.encode("utf-8"))
     proc.stdin.close()
-    reponse, delta_vu, session, fin, outils = [], False, e.get("session"), None, []
+    delta_vu, session, fin, taille, resume = False, e.get("session"), None, e.get("contexte"), None
     for brut in proc.stdout:
         try:
             ev = json.loads(brut.decode("utf-8", "replace"))
@@ -189,36 +217,49 @@ def _envoyer(j, exe, message, page, modele, cle):
         session = ev.get("session_id") or session
         t = ev.get("type")
         if t == "stream_event":
-            d = (ev.get("event") or {}).get("delta") or {}
+            sev = ev.get("event") or {}
+            if sev.get("type") == "content_block_start" and (sev.get("content_block") or {}).get("type") == "text":
+                with _verrou:
+                    suite = bool(j["etapes"]) and j["etapes"][-1]["type"] == "texte" and j["etapes"][-1]["texte"].strip()
+                if suite:                                    # nouveau paragraphe à la suite du même message
+                    yield dict(type="texte", texte="\n\n")
+            d = sev.get("delta") or {}
             if d.get("type") == "text_delta" and d.get("text"):
                 delta_vu = True
-                reponse.append(d["text"])
                 yield dict(type="texte", texte=d["text"])
         elif t == "assistant":
-            for bloc in (ev.get("message") or {}).get("content", []):
+            m = ev.get("message") or {}
+            if m.get("usage") and not ev.get("parent_tool_use_id"):
+                taille = _taille(m["usage"]) or taille
+            for bloc in m.get("content", []):
                 if bloc.get("type") == "tool_use":
-                    outils.append(_resume_outil(bloc.get("name", ""), bloc.get("input") or {}))
-                    yield dict(type="outil", texte=outils[-1])
+                    yield dict(type="outil", texte=_resume_outil(bloc.get("name", ""), bloc.get("input") or {}))
                 elif bloc.get("type") == "text" and not delta_vu and bloc.get("text"):
-                    reponse.append(bloc["text"])
                     yield dict(type="texte", texte=bloc["text"])
             delta_vu = False
-            if reponse and not reponse[-1].endswith("\n"):
-                reponse.append("\n")
-                yield dict(type="texte", texte="\n")
+        elif t == "system" and ev.get("subtype") == "compact_boundary":
+            resume = ev.get("compact_metadata") or {}
+            taille = resume.get("post_tokens") or taille
         elif t == "result":
             fin = ev
     proc.wait()
-    texte = "".join(reponse).strip()
+    with _verrou:
+        etapes = [dict(x) for x in j["etapes"]]
     if j["arret"]:
-        texte += "\n\n(réponse arrêtée)"
+        _ajouter(etapes, "texte", "\n\n(réponse arrêtée)")
         yield dict(type="erreur", texte="Réponse arrêtée.")
     elif fin is None or fin.get("is_error"):
         err = proc.stderr.read().decode("utf-8", "replace").strip()
         msg = (fin or {}).get("result") or err or f"Claude Code s'est arrêté (code {proc.returncode})."
         yield dict(type="erreur", texte=msg[:2000])
+    etapes = [dict(x, texte=x["texte"].strip()) for x in etapes if x["type"] == "outil" or x["texte"].strip()]
     e = lire_etat(cle)
     e["session"] = session
-    e["messages"].append(dict(role="claude", texte=texte, outils=outils))
+    e["contexte"] = taille
+    if compact:
+        if resume is not None:
+            e["messages"].append(dict(role="compact", avant=resume.get("pre_tokens"), apres=resume.get("post_tokens")))
+    else:
+        e["messages"].append(dict(role="claude", etapes=etapes))
     ecrire_etat(e, cle)
     yield dict(type="fin", session=session, cout=(fin or {}).get("total_cost_usd"))
