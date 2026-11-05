@@ -14,6 +14,12 @@ ICI = os.path.dirname(os.path.abspath(__file__))
 OUTILS = os.path.dirname(ICI)
 sys.path.insert(0, ICI)
 sys.path.insert(0, OUTILS)
+# sans console (pythonw : raccourci du bureau, icône de la barre d'état) : ce qui s'afficherait va dans atelier.log
+SANS_CONSOLE = sys.stdout is None
+if sys.stdout is None or sys.stderr is None:
+    _log = os.path.join(ICI, "atelier.log")
+    _j = open(_log, "a" if os.path.exists(_log) and os.path.getsize(_log) < 1_000_000 else "w", encoding="utf-8", buffering=1)
+    sys.stdout, sys.stderr = sys.stdout or _j, sys.stderr or _j
 sys.stdout.reconfigure(encoding="utf-8")
 
 from flask import Flask, Response, jsonify, request, send_from_directory  # noqa: E402
@@ -694,7 +700,78 @@ def atelier_sur(port):
         return False
 
 
+def icone_possible():
+    try:
+        import pystray  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def relancer_sans_console():
+    """Windows : relance l'Atelier avec pythonw, sans fenêtre ; il vit dans la barre d'état. False si c'est impossible."""
+    pyw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
+    if os.name != "nt" or not os.path.isfile(pyw) or not icone_possible():
+        return False
+    import subprocess
+    subprocess.Popen([pyw, os.path.abspath(__file__), *[a for a in sys.argv[1:] if a != "--barre"]], close_fds=True,
+                     creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP)
+    return True
+
+
+def montrer_icone():
+    """Windows 11 range les nouvelles icônes derrière la flèche ^ : on affiche le chaudron dans la barre, sauf si
+    on l'a soi-même caché (Paramètres › Barre des tâches)."""
+    if os.name != "nt":
+        return
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Control Panel\NotifyIconSettings") as racine:
+            for i in range(winreg.QueryInfoKey(racine)[0]):
+                with winreg.OpenKey(racine, winreg.EnumKey(racine, i), 0, winreg.KEY_READ | winreg.KEY_SET_VALUE) as k:
+                    try:
+                        exe = winreg.QueryValueEx(k, "ExecutablePath")[0]
+                    except FileNotFoundError:
+                        continue
+                    if os.path.normcase(exe) != os.path.normcase(sys.executable):
+                        continue
+                    try:
+                        winreg.QueryValueEx(k, "IsPromoted")             # déjà choisi : on n'y touche pas
+                    except FileNotFoundError:
+                        winreg.SetValueEx(k, "IsPromoted", 0, winreg.REG_DWORD, 1)
+    except OSError:
+        pass
+
+
+def barre_etat(url):
+    """Le chaudron dans la barre d'état, près de l'horloge : clic = ouvrir l'Atelier ; clic droit › Quitter.
+    Rend la main quand on choisit « Quitter »."""
+    import pystray
+    from image_partage import _chaudron
+
+    def ouvrir(icone, item):
+        webbrowser.open(url)
+
+    def quitter(icone, item):
+        icone.stop()
+    menu = pystray.Menu(pystray.MenuItem("Ouvrir l'Atelier", ouvrir, default=True), pystray.MenuItem("Quitter", quitter))
+    threading.Timer(4, montrer_icone).start()      # Windows enregistre l'icône quand elle apparaît
+    pystray.Icon("atelier-mtg", _chaudron(64), "Atelier MTG", menu).run()
+
+
 if __name__ == "__main__":
+    # dans la barre d'état : lancé sans console (raccourci du bureau), ou avec --barre (« Atelier MTG.bat »)
+    barre = SANS_CONSOLE or "--barre" in sys.argv
+    if barre and not SANS_CONSOLE:                 # lancé dans une console : on repart sans elle
+        if relancer_sans_console():
+            sys.exit(0)
+        barre = False                              # pas de pythonw ou de pystray : l'Atelier reste dans cette fenêtre
+    if barre and not icone_possible():             # sans console ni icône, on ne pourrait plus l'arrêter
+        if os.name == "nt":
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(0, "Il manque pystray : lance « python installer.py » dans le dossier de l'Atelier.",
+                                             "Atelier MTG", 0x10)
+        sys.exit(1)
     for p in range(PORT, PORT + 20):               # port occupé par un autre programme : le suivant
         if not port_pris(p):
             PORT = p
@@ -708,5 +785,9 @@ if __name__ == "__main__":
     en_fond(recherche.demarrer)                    # base de la recherche de cartes : chargée, puis surveillée (nouvelles cartes, prix)
     if "--sans-navigateur" not in sys.argv:
         threading.Timer(1.5, lambda: webbrowser.open(url)).start()
+    if barre:
+        threading.Thread(target=lambda: app.run(host="127.0.0.1", port=PORT, threaded=True, debug=False), daemon=True).start()
+        barre_etat(url)
+        os._exit(0)                                # « Quitter » : tout s'arrête, comme en fermant la fenêtre
     print(f"Atelier MTG : {url}  (ferme cette fenêtre pour arrêter l'Atelier)")
     app.run(host="127.0.0.1", port=PORT, threaded=True, debug=False)

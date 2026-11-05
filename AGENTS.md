@@ -20,7 +20,7 @@ Parle à la personne en français, simplement, sans jargon. Fais tout toi-même 
    - Veut-elle partager ses decks en ligne, avec un lien à envoyer ? Il faut alors un compte GitHub (gratuit).
    - Veut-elle discuter avec Claude depuis l'Atelier ? Il faut alors un abonnement Claude.
 4. **Lancer l'installeur** depuis la racine du dépôt : `python installer.py --budget 5` (avec `py` ou `python3` selon le système). Ajoute `--github <compte>` si elle partage ses decks.
-   - L'installeur crée l'environnement `.venv` et y installe les dépendances (`requirements.txt` : Flask, Pillow).
+   - L'installeur crée l'environnement `.venv` et y installe les dépendances (`requirements.txt` : Flask, Pillow, pystray).
    - Il écrit `reglages.json`, vérifie que l'Atelier démarre et crée le raccourci « Atelier MTG » sur le bureau.
    - Il signale enfin ce qui manque pour les fonctions facultatives.
    - On peut le relancer sans risque. Lis sa sortie : s'il affiche « ÉCHEC », règle le problème (voir Dépannage), puis relance-le.
@@ -31,7 +31,8 @@ Parle à la personne en français, simplement, sans jargon. Fais tout toi-même 
    - Ce qu'elle voit au premier lancement :
      - La page s'ouvre sur http://127.0.0.1:5000.
      - L'Atelier télécharge la base des cartes de Scryfall en tâche de fond : environ 80 Mo, puis une quinzaine de minutes pour les noms français. Pendant ce temps, la recherche de cartes affiche son avancement ; le reste marche tout de suite.
-     - Une fenêtre de terminal reste ouverte : la fermer arrête l'Atelier.
+     - Windows : l'Atelier se range dans la barre d'état, près de l'horloge (le chaudron ; avec Windows 11, peut-être derrière la flèche ^, où l'on peut l'épingler). Un clic rouvre la page, clic droit › Quitter l'arrête. Ce qu'il écrirait dans une console va dans `outils/atelier/atelier.log`.
+     - macOS, Linux : une fenêtre de terminal reste ouverte ; la fermer arrête l'Atelier.
 7. **Montrer comment créer un premier deck.** Bouton « Nouveau deck » sur l'accueil. On peut coller une liste exportée d'Archidekt, de Moxfield ou de MTG Arena, ou partir d'un deck vide.
 
 Testé sous Windows. macOS et Linux devraient marcher (Python et Flask sont multiplateformes), sans avoir été essayés : signale tout problème.
@@ -90,6 +91,7 @@ Sauvegarder ses decks, c'est copier les dossiers `Deck …`.
 
 - **`python` ouvre le Microsoft Store ou n'existe pas (Windows).** Installe Python (voir plus haut), ou utilise `py installer.py`.
 - **« externally-managed-environment » (macOS, Linux).** N'installe rien avec le pip du système : l'installeur passe par `.venv`. Si `venv` manque (Debian, Ubuntu) : `sudo apt install python3-venv`.
+- **Rien ne s'ouvre avec le raccourci (Windows).** Lis `outils/atelier/atelier.log`, ou lance `python outils/atelier/app.py` dans un terminal pour voir l'erreur. Le chaudron absent de la barre d'état : regarde derrière la flèche ^.
 - **Port 5000 déjà pris**, par exemple par le récepteur AirPlay d'un Mac. L'Atelier prend le port libre suivant et ouvre la bonne page. Pour imposer un port : variable d'environnement `ATELIER_PORT`.
 - **La recherche affiche « La base de cartes se construit ».** C'est normal au premier lancement (voir plus haut) : laisse l'Atelier ouvert. En cas d'erreur réseau, le bouton « Relancer » reprend la construction ; ensuite, « Mettre à jour », en bas des résultats, force une mise à jour.
 - **« Claude Code est introuvable » dans la discussion.** Voir « Discussion avec Claude », puis relance l'Atelier.

@@ -21,6 +21,7 @@ outils/atelier/base_cartes.json.gz.tmp
 .venv/
 outils/atelier/atelier.ico
 outils/atelier/atelier.png
+outils/atelier/atelier.log
 
 # Divers
 __pycache__/

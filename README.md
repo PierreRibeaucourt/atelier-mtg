@@ -46,7 +46,7 @@ Les réglages propres à ton installation sont dans `reglages.json`, à la racin
 
 ## Lancement
 
-Double-clique sur le raccourci « Atelier MTG » du bureau, sur `Atelier MTG.bat` (Windows) ou lance `./atelier.sh` (macOS, Linux). La page s'ouvre dans le navigateur. Laisse la fenêtre du terminal ouverte : la fermer arrête l'Atelier.
+Double-clique sur le raccourci « Atelier MTG » du bureau, sur `Atelier MTG.bat` (Windows) ou lance `./atelier.sh` (macOS, Linux). La page s'ouvre dans le navigateur. Sous Windows, l'Atelier se range dans la barre d'état, près de l'horloge (le chaudron ; avec Windows 11, peut-être derrière la flèche ^) : un clic rouvre la page, clic droit › Quitter l'arrête. Sur macOS et Linux, laisse la fenêtre du terminal ouverte : la fermer arrête l'Atelier.
 
 ## Où sont les decks
 

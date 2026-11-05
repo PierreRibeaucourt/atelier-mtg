@@ -131,13 +131,15 @@ def raccourci(dossier):
     if not dossier:
         print("  Bureau introuvable : pas de raccourci (lance l'Atelier avec « Atelier MTG.bat » ou « atelier.sh »).")
         return
-    if WINDOWS:
+    if WINDOWS:                    # pythonw, sans fenêtre : l'Atelier se range dans la barre d'état (le chaudron)
         lien = os.path.join(dossier, "Atelier MTG.lnk")
-        env = dict(os.environ, LIEN=lien, CIBLE=os.path.join(RACINE, "Atelier MTG.bat"), DOSSIER=RACINE,
+        env = dict(os.environ, LIEN=lien, CIBLE=os.path.join(VENV, "Scripts", "pythonw.exe"),
+                   ARGS=f'"{os.path.join(ATELIER, "app.py")}"', DOSSIER=RACINE,
                    ICONE=icone("ico") or r"%SystemRoot%\System32\shell32.dll,13")
         code, sortie = lancer(["powershell", "-NoProfile", "-Command",
                                "$s = (New-Object -ComObject WScript.Shell).CreateShortcut($env:LIEN); $s.TargetPath = $env:CIBLE; "
-                               "$s.WorkingDirectory = $env:DOSSIER; $s.IconLocation = $env:ICONE; $s.WindowStyle = 7; $s.Save()"], env=env)
+                               "$s.Arguments = $env:ARGS; $s.WorkingDirectory = $env:DOSSIER; $s.IconLocation = $env:ICONE; "
+                               "$s.Description = 'Atelier MTG'; $s.Save()"], env=env)
         if code:
             raise Echec(f"Raccourci impossible :\n{sortie[-800:]}")
     elif MAC:
@@ -198,7 +200,9 @@ def main():
     except Echec as e:
         print(f"\nÉCHEC : {e}")
         return 1
-    lanceur = "le raccourci « Atelier MTG » du bureau, ou « Atelier MTG.bat »" if WINDOWS else "« ./atelier.sh » (ou le raccourci du bureau)"
+    lanceur = ("le raccourci « Atelier MTG » du bureau, ou « Atelier MTG.bat ». Il se range dans la barre d'état, près de\n"
+               "l'horloge (le chaudron) : clic pour ouvrir la page, clic droit › Quitter pour l'arrêter" if WINDOWS
+               else "« ./atelier.sh » (ou le raccourci du bureau)")
     print(f"\nInstallation terminée. Pour lancer l'Atelier : {lanceur}.\n"
           "La page s'ouvre sur http://127.0.0.1:5000. Au premier lancement, l'Atelier télécharge la base des cartes de Scryfall\n"
           "(environ 80 Mo, puis 15 minutes pour les noms français) : la recherche de cartes est prête ensuite, le reste tout de suite.")
