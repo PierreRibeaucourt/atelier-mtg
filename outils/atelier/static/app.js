@@ -548,10 +548,27 @@ function fermerModale() { $("#modale").hidden = true; $("#modale").innerHTML = "
 document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { fermerModale(); fermerMenu(); } });
 
 // ------------------------------------------------------------------ navigation
+// titre de l'onglet du navigateur, la page d'abord : « Kels · Statistiques », « Recherche · « dragon » · Kels »
+function majTitre() {
+  if (PARTAGE) return;                             // page partagée : le titre écrit par partage.py
+  const [chemin, qs] = location.hash.replace(/^#\/?/, "").split(/\?(.*)/s);
+  const parts = chemin.split("/");
+  let t = "Mes decks";
+  if (parts[0] === "deck" && parts[1]) {
+    const o = ONGLETS.find(([k]) => k === (parts[2] || "liste"));
+    t = decodeURIComponent(parts[1]).replace(/^Deck /, "") + (o ? " · " + o[1] : "");
+  } else if (parts[0] === "recherche") {
+    const p = new URLSearchParams(qs || "");
+    t = ["Recherche", p.get("nom") && `« ${p.get("nom")} »`, (p.get("deck") || "").replace(/^Deck /, "")].filter(Boolean).join(" · ");
+  }
+  document.title = t + " — Atelier MTG";
+}
+
 async function route() {
   fermerMenu();
   if (!$("#modale").hidden) fermerModale();
   cacherApercu();
+  majTitre();
   const [chemin, qs] = location.hash.replace(/^#\/?/, "").split(/\?(.*)/s);
   const parts = chemin.split("/");
   $("#lien-recherche").classList.toggle("actif", parts[0] === "recherche");
@@ -565,6 +582,7 @@ async function route() {
   } catch (e) {
     vue.innerHTML = `<p class="erreur">${esc(e.message || e)}</p>`;
   }
+  majTitre();                                      // l'adresse a pu être complétée (dernière recherche reprise)
 }
 window.addEventListener("hashchange", route);
 
