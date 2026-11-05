@@ -3668,9 +3668,12 @@ function htmlReponse(etapes, actif = false, mode = "") {
   const j = es.length - 1 - [...es].reverse().findIndex((e) => e.type === "outil");
   const debut = i < 0 ? [] : es.slice(0, i), milieu = i < 0 ? [] : es.slice(i, j + 1), fin = i < 0 ? es : es.slice(j + 1);
   const bulle = (e) => `<div class="msg msg-claude">${texteRiche(e.texte.trim())}</div>`;
+  const refus = milieu.filter((e) => e.refus).length;       // outils que Claude Code lui a refusés
   return debut.map(bulle).join("")
-    + (milieu.length ? `<details class="etapes"${actif && chat.detailOuvert ? " open" : ""}><summary>${esc(resumeEtapes(milieu))}</summary>`
-      + `<div class="etapes-corps">${milieu.map((e) => e.type === "outil" ? `<div class="etape-outil">${esc(e.texte)}</div>`
+    + (milieu.length ? `<details class="etapes"${actif && chat.detailOuvert ? " open" : ""}><summary>${esc(resumeEtapes(milieu))}`
+      + `${refus ? ` · <span class="etape-refus">${refus} refusé${refus > 1 ? "s" : ""}</span>` : ""}</summary>`
+      + `<div class="etapes-corps">${milieu.map((e) => e.type === "outil"
+        ? `<div class="etape-outil${e.refus ? " etape-refus" : ""}">${esc(e.texte)}${e.refus ? " — refusé" : ""}</div>`
         : `<div class="etape-texte">${texteRiche(e.texte.trim())}</div>`).join("")}</div></details>` : "")
     + fin.map(bulle).join("")
     + (actif ? `<div class="msg-attente">${mode === "compact" ? "Compactage…" : "Claude réfléchit…"}</div>` : "");

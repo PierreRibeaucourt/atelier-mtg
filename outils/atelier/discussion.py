@@ -1,8 +1,9 @@
 """Discussion avec Claude depuis l'Atelier, via Claude Code (claude.exe), déjà installé avec l'extension VS Code.
 
 Pas de clé API : Claude Code utilise ton abonnement Claude (chaque message compte dans ta limite d'utilisation).
-Lancé dans le dossier MTG, Claude a la même mémoire que dans VS Code. Il peut lire et modifier les fichiers du dossier
-et lancer python (rien d'autre).
+Lancé dans le dossier MTG, Claude a la même mémoire que dans VS Code. Il peut lire et modifier les fichiers du dossier,
+lancer python, chercher sur Internet et lire des pages web, sauf EDHREC (ses conditions interdisent les accès automatisés)
+et Cardmarket (protégé contre les robots).
 
 Une discussion par deck (<dossier du deck>/discussion.json : son historique et sa session Claude, donc son propre contexte),
 plus une discussion générale (outils/atelier/discussion.json), au choix depuis n'importe quelle page. La conversation reprend d'un
@@ -10,7 +11,8 @@ message à l'autre (--resume). Chaque réponse tourne en tâche de fond sur le s
 la page ne la perd pas, et plusieurs decks peuvent avoir une réponse en cours en même temps.
 
 Une réponse est une suite d'étapes dans l'ordre où Claude les fait : ses messages et les outils qu'il utilise
-(dict(type="texte"|"outil", texte=…)). « /compact » résume la conversation côté Claude pour économiser des tokens.
+(dict(type="texte"|"outil", texte=…), refus=True quand l'outil lui a été refusé).
+« /compact » résume la conversation côté Claude pour économiser des tokens.
 """
 import glob
 import json
@@ -25,7 +27,9 @@ import decks
 ICI = os.path.dirname(os.path.abspath(__file__))
 ETAT_GENERAL = os.path.join(ICI, "discussion.json")
 FICHIER = "discussion.json"
-OUTILS_PERMIS = "Read Edit Write Glob Grep Bash(python *) WebFetch(domain:api.scryfall.com) WebFetch(domain:backend.commanderspellbook.com)"
+OUTILS_PERMIS = "Read Edit Write Glob Grep Bash(python *) WebSearch WebFetch"
+OUTILS_INTERDITS = " ".join(f"WebFetch(domain:{d})" for d in (     # domaine exact, et ses sous-domaines par *.
+    "edhrec.com", "*.edhrec.com", "cardmarket.com", "*.cardmarket.com"))
 
 CONSIGNE = """Tu es appelé depuis l'Atelier MTG, l'interface locale de l'utilisateur (code dans outils/atelier).
 Réponds en français, court et concret ; la fenêtre affiche du texte simple (listes à puces et **gras** acceptés, pas de tableaux).
@@ -40,7 +44,9 @@ Chaque message commence par [Page : …] : c'est ce que l'utilisateur regarde da
   Une consigne de jeu en français qui ne rentre pas dans ces réglages se code dans outils/simu_moteur.py (vérifie ensuite que
   les résultats par défaut ne changent pas).
 - Rapports de simulation : <dossier du deck>/simulations/*.json. Simulateur : outils/simu.py, simu_cartes.py, simu_moteur.py.
-- Prix : python outils/prix.py "<carte>" ({budget}). Respecte la méthode et les préférences gardées en mémoire."""
+- Prix : python outils/prix.py "<carte>" ({budget}). Respecte la méthode et les préférences gardées en mémoire.
+- Tu peux chercher sur Internet et lire des pages web (listes, articles, nouveautés), sauf EDHREC (ses conditions interdisent
+  les accès automatisés) et Cardmarket (protégé contre les robots) : pour les prix, passe par prix.py ou Scryfall."""
 
 
 def consigne(cle):
@@ -109,15 +115,17 @@ def _resume_outil(nom, entree):
         return "cherche : " + (entree.get("pattern", "")[:100])
     if nom == "WebFetch":
         return "consulte " + entree.get("url", "")[:100]
+    if nom == "WebSearch":
+        return "cherche sur le web : " + entree.get("query", "")[:100]
     return nom
 
 
-def _ajouter(etapes, type_, texte):
-    """Le texte qui arrive prolonge le message en cours ; un outil ouvre une nouvelle étape."""
+def _ajouter(etapes, type_, texte, id_outil=None):
+    """Le texte qui arrive prolonge le message en cours ; un outil ouvre une nouvelle étape (avec son id, pour le refus)."""
     if type_ == "texte" and etapes and etapes[-1]["type"] == "texte":
         etapes[-1]["texte"] += texte
     else:
-        etapes.append(dict(type=type_, texte=texte))
+        etapes.append(dict(type=type_, texte=texte, **({"id": id_outil} if id_outil else {})))
 
 
 # ---------------------------------------------------------------- réponses en cours (une par discussion au plus)
@@ -171,7 +179,11 @@ def _travail(j, exe, message, page, modele, cle):
         for ev in _envoyer(j, exe, message, page, modele, cle):
             with _verrou:
                 if ev["type"] in ("texte", "outil"):
-                    _ajouter(j["etapes"], ev["type"], ev["texte"])
+                    _ajouter(j["etapes"], ev["type"], ev["texte"], ev.get("id"))
+                elif ev["type"] == "refus":
+                    for x in j["etapes"]:
+                        if x.get("id") == ev["id"]:
+                            x["refus"] = True
                 elif ev["type"] == "erreur":
                     j["erreur"] = ev["texte"]
     except Exception as e:                                  # noqa: BLE001 — l'erreur s'affiche dans la discussion
@@ -181,6 +193,13 @@ def _travail(j, exe, message, page, modele, cle):
         with _verrou:
             j["actif"] = False
             j["proc"] = None
+
+
+def _refuse(contenu):
+    """Le résultat d'outil dit-il que Claude Code a refusé l'outil (permission non accordée ou interdite) ?"""
+    if isinstance(contenu, list):
+        contenu = " ".join(b.get("text", "") for b in contenu if isinstance(b, dict))
+    return bool(re.search(r"permission|haven't granted|not allowed|denied", str(contenu or ""), re.I))
 
 
 def _taille(usage):
@@ -193,7 +212,8 @@ def _envoyer(j, exe, message, page, modele, cle):
     e = lire_etat(cle)
     compact = j["mode"] == "compact"
     cmd = [exe, "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
-           "--permission-mode", "acceptEdits", "--allowedTools", OUTILS_PERMIS, "--append-system-prompt", consigne(cle)]
+           "--permission-mode", "acceptEdits", "--allowedTools", OUTILS_PERMIS, "--disallowedTools", OUTILS_INTERDITS,
+           "--append-system-prompt", consigne(cle)]
     if modele:
         cmd += ["--model", modele]
     if e.get("session"):
@@ -233,10 +253,14 @@ def _envoyer(j, exe, message, page, modele, cle):
                 taille = _taille(m["usage"]) or taille
             for bloc in m.get("content", []):
                 if bloc.get("type") == "tool_use":
-                    yield dict(type="outil", texte=_resume_outil(bloc.get("name", ""), bloc.get("input") or {}))
+                    yield dict(type="outil", texte=_resume_outil(bloc.get("name", ""), bloc.get("input") or {}), id=bloc.get("id"))
                 elif bloc.get("type") == "text" and not delta_vu and bloc.get("text"):
                     yield dict(type="texte", texte=bloc["text"])
             delta_vu = False
+        elif t == "user":                                    # résultats d'outils : on repère ceux qui lui ont été refusés
+            for bloc in (ev.get("message") or {}).get("content") or []:
+                if isinstance(bloc, dict) and bloc.get("type") == "tool_result" and bloc.get("is_error") and _refuse(bloc.get("content")):
+                    yield dict(type="refus", id=bloc.get("tool_use_id"))
         elif t == "system" and ev.get("subtype") == "compact_boundary":
             resume = ev.get("compact_metadata") or {}
             taille = resume.get("post_tokens") or taille
@@ -252,7 +276,8 @@ def _envoyer(j, exe, message, page, modele, cle):
         err = proc.stderr.read().decode("utf-8", "replace").strip()
         msg = (fin or {}).get("result") or err or f"Claude Code s'est arrêté (code {proc.returncode})."
         yield dict(type="erreur", texte=msg[:2000])
-    etapes = [dict(x, texte=x["texte"].strip()) for x in etapes if x["type"] == "outil" or x["texte"].strip()]
+    etapes = [{**{k: v for k, v in x.items() if k != "id"}, "texte": x["texte"].strip()}
+              for x in etapes if x["type"] == "outil" or x["texte"].strip()]
     e = lire_etat(cle)
     e["session"] = session
     e["contexte"] = taille
