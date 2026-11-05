@@ -2732,10 +2732,12 @@ function resumeCrit(c) {
 
 // ---- la page
 async function vueRecherche(params) {
-  // la page sans critère (lien du haut, bouton d'un deck) : le formulaire, avec les critères de la dernière recherche
-  const deckDemande = params.get("deck");
+  // la page sans critère : le formulaire, avec les critères de la dernière recherche du même genre. Lien du haut : la
+  // dernière recherche sans deck ; bouton « Chercher des cartes » d'un deck : la dernière recherche pour ce deck
+  const deckDemande = params.get("deck") || "";
   if ([...params.keys()].every((k) => k === "deck")) {
-    const derniere = new URLSearchParams(PREF.get(cleDerniere(deckDemande || ""), ""));
+    let derniere = new URLSearchParams(PREF.get(cleDerniere(deckDemande), ""));
+    if ((derniere.get("deck") || "") !== deckDemande) derniere = new URLSearchParams();   // mémorisée pour un autre deck
     derniere.delete("r");                          // le formulaire, prérempli, sans relancer la recherche
     derniere.delete("page");
     if ([...derniere.keys()].length) {
@@ -2746,7 +2748,7 @@ async function vueRecherche(params) {
   const neuve = [...params.keys()].every((k) => k === "deck");
   scrollTo(0, 0);
   const c = critDepuis(params);
-  if (!params.has("deck")) c.deck = PREF.get("rch-deck", "");
+  c.deck = c.deck || "";                           // pas de deck dans l'adresse : recherche sans deck
   etat.deck = null;
   let [ds, fonctions] = await Promise.all([listeDecks(), rch.fonctions ? rch.fonctions : api("/api/recherche/fonctions").catch(() => [])]);
   rch.fonctions = fonctions;
@@ -2757,7 +2759,6 @@ async function vueRecherche(params) {
   if (c.deck && !ds.some((d) => d.id === c.deck)) c.deck = "";
   rch.deck = c.deck ? await api(`/api/decks/${enc(c.deck)}/apercu`).catch(() => null) : null;
   if (!rch.deck) c.deck = "";
-  if (deckDemande) PREF.set("rch-deck", c.deck);
   if (neuve && rch.deck && rch.deck.identite) Object.assign(c, critIdentite(rch.deck));    // nouvelle recherche pour un deck : ses couleurs
   rch.crit = c;
   rch.eds = new Set((c.eds || "").split(",").filter(Boolean));
@@ -2782,7 +2783,6 @@ async function vueRecherche(params) {
   majInfosDeck();
   $("#rch-deck").onchange = async (ev) => {
     const id = ev.target.value;
-    PREF.set("rch-deck", id);
     if (id) choisirDiscussion(id);                 // chercher pour un autre deck : sa discussion suit
     const nc = { ...rch.crit, deck: id };
     if (!id) delete nc.horsdeck;
@@ -3011,11 +3011,9 @@ async function lancerRecherche() {
   rendreResultats(z, r);
 }
 
-// la dernière recherche : celle du lien du haut, et celle de chaque deck (bouton « Chercher des cartes » du deck)
+// la dernière recherche : sans deck pour le lien du haut, et celle de chaque deck (bouton « Chercher des cartes » du deck)
 function memoriser() {
-  const qs = critVersHash(rch.crit);
-  PREF.set(cleDerniere(""), qs);
-  if (rch.crit.deck) PREF.set(cleDerniere(rch.crit.deck), qs);
+  PREF.set(cleDerniere(rch.crit.deck || ""), critVersHash(rch.crit));
 }
 
 async function attendreBase(z) {
