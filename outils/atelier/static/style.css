@@ -13,6 +13,8 @@
   --bon-doux: #e3f4e8;
   --alerte: #b91c1c;
   --alerte-doux: #fde4e2;
+  --juste: #b45309;
+  --juste-doux: #fdf0d5;
   --info: #1d4ed8;
   --info-doux: #e3ebfd;
   --ombre: 0 1px 2px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.06);
@@ -23,14 +25,14 @@
   :root:not([data-theme="light"]) {
     --fond: #161513; --surface: #1f1e1b; --surface-2: #2a2825; --bord: #383530; --texte: #ece9e3; --texte-2: #a39d93;
     --accent: #f26b2c; --accent-texte: #1a0d05; --accent-doux: #3a2216; --bon: #4ade80; --bon-doux: #15301f;
-    --alerte: #f87171; --alerte-doux: #3a1919; --info: #93b4ff; --info-doux: #1b2541;
+    --alerte: #f87171; --alerte-doux: #3a1919; --info: #93b4ff; --info-doux: #1b2541; --juste: #fbbf24; --juste-doux: #3a2d12;
     --ombre: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3); color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --fond: #161513; --surface: #1f1e1b; --surface-2: #2a2825; --bord: #383530; --texte: #ece9e3; --texte-2: #a39d93;
   --accent: #f26b2c; --accent-texte: #1a0d05; --accent-doux: #3a2216; --bon: #4ade80; --bon-doux: #15301f;
-  --alerte: #f87171; --alerte-doux: #3a1919; --info: #93b4ff; --info-doux: #1b2541;
+  --alerte: #f87171; --alerte-doux: #3a1919; --info: #93b4ff; --info-doux: #1b2541; --juste: #fbbf24; --juste-doux: #3a2d12;
   --ombre: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3); color-scheme: dark;
 }
 
@@ -134,6 +136,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   background: var(--surface-2); color: var(--texte-2); white-space: nowrap; }
 .badge-ok { background: var(--bon-doux); color: var(--bon); }
 .badge-alerte, .badge-cher { background: var(--alerte-doux); color: var(--alerte); }
+.badge-juste { background: var(--juste-doux); color: var(--juste); }
 .badge-gc { background: var(--accent-doux); color: var(--accent); font-weight: 600; }
 .badge-sim { background: var(--info-doux); color: var(--info); }
 .badge-bracket { font-weight: 600; color: var(--texte); }
@@ -347,6 +350,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tableau th { background: var(--surface-2); font-weight: 600; font-size: .85rem; color: var(--texte-2); }
 .tableau td.num, .tableau th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tableau tr:last-child td { border-bottom: 0; }
+.defile { overflow-x: auto; }                         /* tableau trop large pour l'écran : il défile, la page non */
+.defile > .tableau { min-width: 40rem; }
+/* jauge de confort d'une couleur (base de mana) : 50 à 100 %, repère à 90 % (l'objectif de Karsten) */
+.jauge { display: flex; align-items: center; gap: .6rem; white-space: nowrap; }
+.jauge-piste { position: relative; width: 7rem; height: 8px; border-radius: 4px; background: var(--surface-2); flex: none; }
+.jauge-barre { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; }
+.jauge-bon { background: var(--bon); } .jauge-juste { background: var(--juste); } .jauge-alerte { background: var(--alerte); }
+.jauge-cible { position: absolute; left: 80%; top: -3px; bottom: -3px; border-left: 2px solid var(--texte); opacity: .45; }
+.jauge-val { min-width: 2.6rem; text-align: right; font-variant-numeric: tabular-nums; }
 .diff-plus { color: var(--bon); }
 .diff-moins { color: var(--alerte); }
 .panneau { background: var(--surface); border: 1px solid var(--bord); border-radius: var(--rayon); padding: 1rem 1.1rem; margin-top: 1rem; }

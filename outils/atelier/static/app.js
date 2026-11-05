@@ -1687,6 +1687,10 @@ function nomsBulle(titre, cartes) {
   return titre + (noms.length ? "\n" + noms.slice(0, 30).join("\n") + (noms.length > 30 ? `\n… et ${noms.length - 30} autres` : "") : "");
 }
 
+// symboles de la couleur x dans le coût d'une carte ({W/U} compte pour les deux)
+const pipsDe = (c, x) => ((c.info.cout || "").match(/\{[^}]+\}/g) || []).filter((s) => s.includes(x)).length;
+const BASIQUES = { W: "Plains", U: "Island", B: "Swamp", R: "Mountain", G: "Forest" };
+
 function calculStats(d) {
   const jeu = d.cartes.filter((c) => c.cat !== "Maybeboard");
   const bib = jeu.filter((c) => c.cat !== "Commander");            // les 99 : ce qu'on pioche
@@ -1696,12 +1700,22 @@ function calculStats(d) {
   const mdfc = sorts.filter((c) => c.info.dos && /\bLand\b/.test(c.info.dos.type || ""));
   const types = ORDRE_TYPES.map((t) => [t, bib.filter((c) => typeCarte(c.info.type) === t)]).filter(([, l]) => l.length);
   const courbe = Array.from({ length: 8 }, (_, k) => sorts.filter((c) => Math.min(7, Math.floor(c.info.mv || 0)) === k));
-  const pips = (c, x) => ((c.info.cout || "").match(/\{[^}]+\}/g) || []).filter((s) => s.includes(x)).length;
+  const pips = pipsDe;
+  const cmds = jeu.filter((c) => c.cat === "Commander");
+  // terrains qui vont chercher un terrain (Évolution sauvage, fetchlands…) : sources des couleurs qu'ils peuvent trouver
+  const basiques = Object.keys(BASIQUES).filter((x) => terrains.some((t) => /\bBasic\b/.test(t.info.type || "") && new RegExp(`\\b${BASIQUES[x]}\\b`).test(t.info.type || "")));
+  const trouve = (t) => {
+    const s = t.info.texte || "";
+    if (!/search your library for/i.test(s)) return [];
+    const nommes = Object.keys(BASIQUES).filter((x) => new RegExp(`\\b${BASIQUES[x]}\\b`).test(s));
+    return nommes.length ? nommes : /basic land/i.test(s) ? basiques : [];
+  };
   const couleurs = COULEURS.map(([x, nom]) => ({
     x, nom,
     cartes: sorts.filter((c) => pips(c, x) > 0),
     symboles: sorts.reduce((s, c) => s + pips(c, x) * c.n, 0),
-    sources: terrains.filter((c) => (c.info.produit || []).includes(x)),
+    symbolesCmd: cmds.reduce((s, c) => s + pips(c, x), 0),          // les commandants : on les lance encore et encore
+    sources: terrains.filter((c) => (c.info.produit || []).includes(x) || trouve(c).includes(x)),
     autres: sorts.filter((c) => (c.info.produit || []).includes(x)),
   }));
   const incolores = sorts.filter((c) => !COULEURS.some(([x]) => pips(c, x) > 0));
@@ -1757,7 +1771,8 @@ function resumeStats(d) {
     <div class="panneau"><h3>Cartes par type</h3>${colonnes(S.types.map(([t, l]) => ({ label: esc(ABREV[t]), valeur: nbCartes(l), bulle: nomsBulle(`${t} : ${nbCartes(l)}`, l) })))}</div>
     <div class="panneau"><h3>Cartes par couleur</h3>${grapheCouleurs(S)}</div>
     <div class="panneau"><h3>Courbe de mana</h3>${grapheCourbe(S)}<div class="muet petit" style="margin-top:.4rem">coût moyen ${virgule(S.mvMoy, 2)}</div></div>
-  </div>`;
+  </div>
+  <div class="panneau"><h3>Base de mana</h3>${tableauBaseMana(S, d)}</div>`;
 }
 
 function comb(n, k) {
@@ -1767,9 +1782,75 @@ function comb(n, k) {
   return r;
 }
 const hyper = (N, K, n, k) => (comb(K, k) * comb(N - K, n - k)) / comb(N, n);
+// chance d'avoir au moins k succès en tirant n cartes parmi N, dont K succès
+const auMoins = (N, K, n, k) => Math.max(0, 1 - Array.from({ length: k }, (_, i) => hyper(N, K, Math.min(n, N), i)).reduce((s, p) => s + p, 0));
+
+// confort d'une couleur, à la manière de Frank Karsten : pour chaque sort qui la demande, la chance d'avoir assez de
+// sources de cette couleur au tour où on le lance (sa valeur de mana). En multijoueur, chacun pioche dès son 1er tour :
+// au tour N, on a vu 7 + N cartes. Moyenne sur les sorts, le plus dur à part.
+function confortCouleur(lanceurs, N, x, sources) {
+  let tot = 0, poids = 0, pire = null;
+  for (const c of lanceurs) {
+    const k = pipsDe(c, x);
+    if (!k) continue;
+    const p = auMoins(N, sources, 7 + Math.max(1, Math.ceil(c.info.mv || 0)), k);
+    tot += p * c.n;
+    poids += c.n;
+    if (!pire || p < pire.p) pire = { c, p };
+  }
+  return poids ? { p: tot / poids, pire } : null;
+}
+// 90 % : l'objectif de Karsten pour lancer un sort à son tour
+const NIVEAUX_MANA = [[0.95, "très confortable", "bon"], [0.9, "confortable", "bon"], [0.8, "juste", "juste"], [0, "insuffisant", "alerte"]];
+const niveauMana = (p) => NIVEAUX_MANA.find(([s]) => p >= s);
 
 function tuile(lib, val, sous = "") {
   return `<div class="tuile"><div class="lib">${lib}</div><div class="val">${val}</div>${sous ? `<div class="sous">${sous}</div>` : ""}</div>`;
+}
+
+// base de mana : un tableau par couleur, avec la jauge de confort (onglet Statistiques et sous la liste)
+function tableauBaseMana(S, d) {
+  const N = nbCartes(S.bib);
+  // couleurs du commandant (sinon celles que demandent les cartes) : Command Tower « produit » les 5, ça ne compte pas
+  const coul = S.couleurs.filter((c) => d.identite ? d.identite.includes(c.x) : c.cartes.length);
+  // base de mana. Demande : les symboles des sorts et des commandants. Offre : toutes les sources (terrains, cailloux,
+  // créatures). La jauge : le confort de chaque couleur (confortCouleur). Seul le manque est un défaut ; quand une couleur
+  // manque, la piste : les terrains d'une seule couleur (de base surtout) qu'une autre a en trop d'après ses symboles,
+  // sans passer elle-même sous les 90 %.
+  const ids = coul.map((k) => k.x);
+  const demande = (c) => c.symboles + c.symbolesCmd;
+  const totD = coul.reduce((s, c) => s + demande(c), 0) || 1;
+  const monoDe = (x) => S.terrains.filter((t) => { const p = (t.info.produit || []).filter((y) => ids.includes(y)); return p.length === 1 && p[0] === x; });
+  const totMono = coul.reduce((s, c) => s + nbCartes(monoDe(c.x)), 0);
+  const lanceurs = [...S.sorts, ...S.jeu.filter((c) => c.cat === "Commander")];
+  const baseMana = coul.map((c) => {
+    const pd = demande(c) / totD, src = nbCartes(c.sources) + nbCartes(c.autres), mono = monoDe(c.x);
+    const conf = confortCouleur(lanceurs, N, c.x, src);
+    let cederait = Math.floor(nbCartes(mono) - totMono * pd + 1e-9);
+    while (cederait > 0 && conf && confortCouleur(lanceurs, N, c.x, src - cederait).p < 0.9) cederait--;
+    return { c, pd, src, mono, conf, cederait };
+  });
+  return `<div class="defile"><table class="tableau petit">
+        <thead><tr><th>Couleur</th><th class="num">Cartes</th><th class="num">Symboles</th><th class="num">Terrains</th><th class="num">Autres sources</th><th>Confort</th></tr></thead>
+        <tbody>${baseMana.map(({ c, pd, src, conf }) => {
+          if (!conf) return `<tr><td>${symbole(c.x)} ${c.nom}</td><td class="num">0</td><td class="num">0</td>
+            <td class="num">${nbCartes(c.sources)}</td><td class="num">${nbCartes(c.autres)}</td><td class="muet">—</td></tr>`;
+          const niv = niveauMana(conf.p), manque = conf.p < 0.9;
+          const pistes = manque ? baseMana.filter((m) => m.conf && m.conf.p >= 0.9 && m.cederait >= 1)
+            .map((m) => `${m.cederait} terrain${m.cederait > 1 ? "s" : ""} ${m.c.nom.toLowerCase()}${m.cederait > 1 ? "s" : ""} (${[...new Set(m.mono.map(nomAffiche))].join(", ")})`) : [];
+          const detail = `${c.nom} : ${Math.floor(conf.p * 100)} % de chances en moyenne d'avoir assez de sources au tour où tu lances le sort`
+            + ` (${src} sources sur ${N} cartes)\nLe plus dur : ${nomAffiche(conf.pire.c)} ${conf.pire.c.info.cout || ""}, ${Math.floor(conf.pire.p * 100)} %`
+            + (pistes.length ? `\nPiste : remplacer ${pistes.join(" ou ")} par des terrains ${c.nom.toLowerCase()}s` : "");
+          const eq = `<span class="jauge"><span class="jauge-piste"><span class="jauge-barre jauge-${niv[2]}" style="width:${Math.max(0.03, Math.min(1, (conf.p - 0.5) / 0.5)) * 100}%"></span>`
+            + `<span class="jauge-cible"></span></span><span class="jauge-val">${Math.floor(conf.p * 100)} %</span><span class="badge badge-${niv[2] === "bon" ? "ok" : niv[2]}">${niv[1]}</span></span>`;
+          return `<tr><td>${symbole(c.x)} ${c.nom}</td>
+            <td class="num" data-bulle="${esc(nomsBulle(`${c.nom} : ${nbCartes(c.cartes)} cartes`, c.cartes))}">${nbCartes(c.cartes)}</td>
+            <td class="num" data-bulle="${esc(`${c.symboles} dans les sorts, ${c.symbolesCmd} dans les commandants`)}">${demande(c)} · ${pct(pd, 0)}</td>
+            <td class="num" data-bulle="${esc(nomsBulle(`Terrains qui produisent du ${c.nom.toLowerCase()} : ${nbCartes(c.sources)}`, c.sources))}">${nbCartes(c.sources)}</td>
+            <td class="num" data-bulle="${esc(nomsBulle(`Autres sources (cailloux, créatures) : ${nbCartes(c.autres)}`, c.autres))}">${nbCartes(c.autres)}</td>
+            <td data-bulle="${esc(detail)}">${eq}</td></tr>`;
+        }).join("")}</tbody>
+      </table></div>`;
 }
 
 function ongletStats(el, d) {
@@ -1786,11 +1867,6 @@ function ongletStats(el, d) {
     .map((f) => [f, S.sorts.filter((c) => (f === "Autres" ? !(c.fonctions || []).length : (c.fonctions || []).includes(f)))])
     .filter(([, l]) => l.length)
     .map(([f, l]) => ({ label: esc(f), valeur: nbCartes(l), bulle: nomsBulle(`${f} : ${nbCartes(l)}`, l), repere: repere(f) }));
-  // couleurs du commandant (sinon celles que demandent les cartes) : Command Tower « produit » les 5, ça ne compte pas
-  const coul = S.couleurs.filter((c) => d.identite ? d.identite.includes(c.x) : c.cartes.length);
-  const colorees = S.sorts.filter((c) => coul.some((k) => k.cartes.includes(c)));
-  const totC = nbCartes(colorees) || 1;         // part des sorts colorés qui demandent la couleur
-  const totS = K || 1;                          // part des terrains qui la produisent
   const chers = S.jeu.filter((c) => c.info.prix).sort((a, b) => b.info.prix - a.info.prix).slice(0, 10);
   el.innerHTML = `
     <div class="tuiles">
@@ -1811,21 +1887,7 @@ function ongletStats(el, d) {
     </div>
     <div class="panneau">
       <h3 style="margin-top:0">Base de mana</h3>
-      <table class="tableau petit">
-        <thead><tr><th>Couleur</th><th class="num">Cartes</th><th class="num">Symboles</th><th class="num">Terrains</th><th class="num">Autres sources</th><th></th></tr></thead>
-        <tbody>${coul.map((c) => {
-          const pc = nbCartes(c.cartes) / totC, ps = nbCartes(c.sources) / totS;
-          const eq = coul.length < 2 ? `<span class="muet">—</span>`
-            : ps < pc * 0.8 ? `<span class="badge badge-alerte">peu de terrains</span>`
-            : ps > pc * 1.5 + 0.05 ? `<span class="badge">beaucoup de terrains</span>` : `<span class="badge badge-ok">équilibré</span>`;
-          return `<tr><td>${symbole(c.x)} ${c.nom}</td>
-            <td class="num" data-bulle="${esc(nomsBulle(`${c.nom} : ${nbCartes(c.cartes)} cartes`, c.cartes))}">${nbCartes(c.cartes)} · ${pct(pc, 0)}</td>
-            <td class="num">${c.symboles}</td>
-            <td class="num" data-bulle="${esc(nomsBulle(`Terrains qui produisent du ${c.nom.toLowerCase()} : ${nbCartes(c.sources)}`, c.sources))}">${nbCartes(c.sources)} · ${pct(ps, 0)}</td>
-            <td class="num" data-bulle="${esc(nomsBulle(`Autres sources (cailloux, créatures) : ${nbCartes(c.autres)}`, c.autres))}">${nbCartes(c.autres)}</td>
-            <td>${eq}</td></tr>`;
-        }).join("")}</tbody>
-      </table>
+      ${tableauBaseMana(S, d)}
     </div>
     <div class="panneau">
       <h3 style="margin-top:0">Main de départ</h3>
