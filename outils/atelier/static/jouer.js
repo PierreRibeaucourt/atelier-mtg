@@ -12,6 +12,8 @@ const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toL
 const PARTAGE = window.PARTAGE || null;
 const DECK = PARTAGE ? PARTAGE.deck : new URLSearchParams(location.search).get("deck") || "";
 const CLE = "partie-" + DECK;
+const RETOUR = PARTAGE ? "../" : `/#/deck/${encodeURIComponent(DECK)}/liste`;   // la page du deck
+const TACTILE = matchMedia("(hover: none) and (pointer: coarse)").matches;       // téléphone, tablette
 const ZONES = ["bibliotheque", "main", "champ", "cimetiere", "exil", "commandement"];
 const NOM_ZONE = { bibliotheque: "Bibliothèque", main: "Main", champ: "Champ de bataille", cimetiere: "Cimetière", exil: "Exil", commandement: "Commandement" };
 const DEPUIS = { bibliotheque: "de la bibliothèque", cimetiere: "du cimetière", exil: "de l'exil", commandement: "de la zone de commandement" };
@@ -396,7 +398,7 @@ function tailles() {
 function montageHaut() {
   const pm = (c, lib) => `<div class="compteur" data-c="${c}"><span class="lib">${lib}</span><button type="button" class="btn-pm" data-pm="-1" aria-label="${lib} −1">−</button><b></b><button type="button" class="btn-pm" data-pm="1" aria-label="${lib} +1">+</button></div>`;
   $("#haut").innerHTML = `
-    <a class="retour" href="${PARTAGE ? "../" : `/#/deck/${encodeURIComponent(DECK)}/liste`}" title="${esc(deck.titre)}">${ICO.retour}${esc(deck.titre)}</a>
+    <a class="retour" href="${RETOUR}" title="${esc(deck.titre)}">${ICO.retour}${esc(deck.titre)}</a>
     ${pm("tour", "Tour")}${pm("vie", "Vie")}
     <div class="mana">${MANA.map(([x, lib]) => `<button type="button" data-mana="${x}" title="${lib}"><img src="https://svgs.scryfall.io/card-symbols/${x}.svg" alt="${lib}"><b></b></button>`).join("")}
       <button type="button" class="btn btn-petit btn-discret" id="b-vider">Vider</button></div>
@@ -939,6 +941,28 @@ document.addEventListener("keydown", (ev) => {
 
 addEventListener("resize", () => { if (!E) return; cacherApercu(); apercuEl = null; tailles(); dessiner(); });
 
-demarrer().catch((e) => {
-  document.body.innerHTML = `<p class="erreur">Impossible de lancer la partie : ${esc(e.message || e)}</p>`;
-});
+// la table se joue à la souris : sur un écran tactile, on prévient avant de la dresser (une fois par onglet)
+function avertirTactile(suite) {
+  const jeu = $("#jeu");
+  jeu.style.display = "none";                             // sa largeur fixe élargirait la page au-delà de l'écran
+  const b = ouvrirModale(`<h2>Pas encore adapté aux téléphones et tablettes</h2>
+    <p>La table de jeu est pensée pour un ordinateur, à la souris. Sur un écran tactile, l'affichage et les gestes risquent de mal suivre.</p>
+    <div class="pied"><button type="button" class="btn" data-retour>Faire demi-tour</button><button type="button" class="btn btn-accent" data-continuer>Continuer</button></div>`);
+  apresFermeture = () => { try { sessionStorage.setItem("jouer-tactile", "1"); } catch (_) {} jeu.style.display = ""; suite(); };
+  $("[data-continuer]", b).onclick = fermerModale;
+  $("[data-retour]", b).onclick = () => {
+    apresFermeture = null;
+    if (history.length > 1) return history.back();
+    window.close();                                       // onglet ouvert par « Jouer » : on retrouve la page du deck
+    setTimeout(() => { location.href = RETOUR; }, 300);   // lien ouvert directement : on va à la page du deck
+  };
+}
+
+function lancer() {
+  demarrer().catch((e) => {
+    document.body.innerHTML = `<p class="erreur">Impossible de lancer la partie : ${esc(e.message || e)}</p>`;
+  });
+}
+let prevenu = !TACTILE;
+try { prevenu = prevenu || !!sessionStorage.getItem("jouer-tactile"); } catch (_) {}
+if (prevenu) lancer(); else avertirTactile(lancer);
