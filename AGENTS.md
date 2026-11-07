@@ -68,7 +68,7 @@ Les pages sont préparées dans le dossier `Partage Atelier/`, un dépôt git à
 
 ## Réglages
 
-`reglages.json`, à la racine, est propre à chaque installation et ignoré par git. Toutes ses clés sont facultatives : `{"budget": 5, "github": "MonCompte"}`. Voir `outils/reglages.py`. Relance l'Atelier après une modification.
+`reglages.json`, à la racine, est propre à chaque installation et ignoré par git. Toutes ses clés sont facultatives : `{"budget": 5, "github": "MonCompte", "nom": "Mon nom"}` (`nom` : affiché sur les pages partagées, le compte GitHub par défaut). Voir `outils/reglages.py`. Relance l'Atelier après une modification.
 
 ## Mettre à jour
 

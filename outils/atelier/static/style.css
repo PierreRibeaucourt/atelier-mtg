@@ -478,6 +478,7 @@ button.puce-dispo:hover { border-color: var(--accent); color: var(--accent); }
 
 /* ---- onglet Combos : le deck, ou une carte */
 a.btn { display: inline-flex; align-items: center; text-decoration: none; color: inherit; font: inherit; }
+a.btn-accent { color: var(--accent-texte); }      /* un lien en bouton orange : même texte que les autres boutons orange */
 .combos { border-top: 1px solid var(--bord); margin-top: .4rem; }
 .combo { border-bottom: 1px solid var(--bord); padding: .6rem .25rem; }
 .combo-ligne { display: grid; grid-template-columns: minmax(0, 1fr) auto 7.5rem; gap: .8rem; align-items: center; }
@@ -735,4 +736,41 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .aller-liste { max-height: min(70vh, 560px); overflow: auto; }
 
 /* page partagée (lecture seule) : ni ce qui modifie, ni la recherche, ni la discussion */
-.partage :is(.ecrit, .aller, #lien-recherche, #btn-rafraichir, #etat-maj, #btn-chat, .chat, .ligne-outil) { display: none !important; }
+.partage :is(.ecrit, .aller, #btn-rafraichir, #etat-maj, .ligne-outil) { display: none !important; }
+/* page partagée : à qui est la page, et l'Atelier à télécharger */
+.bandeau-partage { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .45rem 1rem; padding: .5rem 1rem;
+  background: var(--accent-doux); border-bottom: 1px solid var(--bord); font-size: .9rem; text-align: center; }
+.bandeau-partage p { margin: 0; }
+.bandeau-partage p a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.pied-partage { border-top: 1px solid var(--bord); padding: 1.2rem 1rem 1.6rem; text-align: center; font-size: .82rem; color: var(--texte-2); }
+.pied-partage nav { display: flex; flex-wrap: wrap; justify-content: center; gap: .3rem 1.4rem; margin-bottom: .5rem; }
+.pied-partage nav a { color: var(--texte); }
+.pied-partage p { margin: 0 auto; max-width: 720px; }
+/* « L'Atelier MTG » : la page qui présente l'outil (#/a-propos) */
+.a-propos { max-width: 760px; margin: 0 auto; line-height: 1.65; }
+.a-propos h1 { font-size: 2rem; line-height: 1.2; margin: .7rem 0 .5rem; }
+.a-propos h2 { font-size: 1.2rem; margin: 2.4rem 0 .7rem; padding-top: 1.4rem; border-top: 1px solid var(--bord); }
+.a-propos h3 { font-size: 1rem; margin: 1.4rem 0 .3rem; }
+.a-propos p { margin: .6rem 0; }
+.a-propos .chapeau { font-size: 1.15rem; line-height: 1.5; color: var(--texte); border-left: 3px solid var(--accent); padding-left: .9rem; margin: .4rem 0 1rem; }
+.a-propos p a:not(.btn), .a-propos li a { color: var(--accent); }
+.ap-signature { font-size: .85rem; color: var(--texte-2); margin-top: -.3rem !important; }
+.ap-sources, .ap-principes { padding-left: 1.2rem; }
+.ap-sources li, .ap-principes li { margin: .35rem 0; }
+.ap-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .7rem; }
+.ap-carte { background: var(--surface); border: 1px solid var(--bord); border-radius: var(--rayon); padding: .8rem .95rem; }
+.ap-carte:last-child:nth-child(3n+1) { grid-column: 1 / -1; }      /* seule sur sa ligne : toute la largeur */
+.ap-carte h3 { margin: 0 0 .25rem; font-size: .95rem; }
+.ap-carte p { margin: 0; font-size: .88rem; line-height: 1.5; color: var(--texte-2); }
+.ap-depot { margin-left: .8rem; font-size: .88rem; }
+.ap-consigne { display: flex; align-items: center; gap: .6rem; background: var(--surface-2); border: 1px solid var(--bord); border-radius: 8px;
+  padding: .55rem .6rem .55rem .9rem; }
+.ap-consigne code { flex: 1; min-width: 0; font-size: .9rem; overflow-wrap: anywhere; }
+/* page partagée : la recherche et la discussion en vitrine, grisées, avec le lien pour installer l'Atelier */
+.vitrine { position: relative; }
+.vitrine-fond { opacity: .35; filter: grayscale(1); pointer-events: none; user-select: none; }
+.vitrine-invite { position: absolute; z-index: 5; left: 50%; top: 5rem; transform: translateX(-50%); width: min(420px, calc(100% - 2rem));
+  margin: 0; text-align: center; padding: 1.4rem 1.2rem; box-shadow: var(--ombre); }
+.vitrine-invite h2 { margin: 0 0 .4rem; font-size: 1.15rem; }
+.vitrine-invite p { color: var(--texte-2); margin: 0 0 1rem; }
+.chat .vitrine-invite { top: 40%; transform: translate(-50%, -50%); }

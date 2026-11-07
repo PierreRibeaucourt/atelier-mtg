@@ -5,6 +5,7 @@
 - budget : prix maximum par carte, en euros ; les cartes plus chères sont signalées. 5 par défaut, 0 = pas d'alerte.
 - github : compte GitHub où publier les decks partagés (dépôt « decks »). Par défaut, celui du dépôt de l'Atelier
   (remote origin).
+- nom : le nom affiché sur les pages partagées (« Decks de … »). Par défaut, le compte GitHub.
 """
 import json
 import os
@@ -60,3 +61,8 @@ def pour_la_page():
 
 def github():
     return (lire().get("github") or "").strip().lstrip("@") or None
+
+
+def nom():
+    """Le nom affiché sur les pages partagées (« Decks de … ») : la clé nom, sinon le compte GitHub ; None sans les deux."""
+    return (lire().get("nom") or "").strip() or github()

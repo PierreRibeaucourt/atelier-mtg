@@ -108,8 +108,9 @@ def _enregistrer(im, chemin):
     im.convert("RGB").save(chemin, "JPEG", quality=84, optimize=True, progressive=True)
 
 
-def image_deck(chemin, titre, sur_titre, commandants, images, art, identite, lignes):
-    """sur_titre : « Deck Commander · Dimir » ; images : celles des commandants ; lignes : chiffres du deck."""
+def image_deck(chemin, titre, sur_titre, commandants, images, art, identite, lignes, auteur=None):
+    """sur_titre : « Deck Commander · Dimir » ; images : celles des commandants ; lignes : chiffres du deck ;
+    auteur : « par … » sous les chiffres (à qui est le deck)."""
     im = _fond(_image(art)).convert("RGBA")
     cartes = [x for x in (_image(u) for u in images[:2]) if x]
     x_texte = 80
@@ -144,6 +145,9 @@ def image_deck(chemin, titre, sur_titre, commandants, images, art, identite, lig
     for t in lignes:
         d.text((x_texte, y), t, font=f, fill=(236, 232, 226))
         y += 44
+    if auteur:
+        f = _ajuste(d, "par " + auteur, False, 28, larg, 20)
+        d.text((x_texte, y + 6), "par " + auteur, font=f, fill=(190, 184, 175))
     _marque(im)
     _enregistrer(im, chemin)
 
@@ -161,8 +165,8 @@ def image_accueil(chemin, titre, sous_titre, images, arts):
     else:
         im = Image.new("RGBA", (L, H), (26, 24, 22, 255))
     d = ImageDraw.Draw(im)
-    f = _police(True, 64)
-    d.text(((L - d.textlength(titre, font=f)) / 2, 54), titre, font=f, fill=(255, 255, 255))
+    f = _ajuste(d, titre, True, 64, L - 120, 40)
+    d.text(((L - d.textlength(titre, font=f)) / 2, 54 + (64 - f.size) // 2), titre, font=f, fill=(255, 255, 255))
     f = _ajuste(d, sous_titre, False, 30, L - 120, 20)
     d.text(((L - d.textlength(sous_titre, font=f)) / 2, 142), sous_titre, font=f, fill=(225, 220, 212))
     cartes = [x for x in (_image(u) for u in images[:6]) if x]

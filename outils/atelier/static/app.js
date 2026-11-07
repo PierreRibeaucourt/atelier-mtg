@@ -13,6 +13,8 @@ const etat = { decks: [], deck: null, filtre: "" };
 // et tout ce qui modifie (classe « ecrit »), la recherche et la discussion sont masqués
 const PARTAGE = window.PARTAGE || null;
 if (PARTAGE) document.documentElement.classList.add("partage");
+// page partagée : à qui sont ces decks (reglages.json « nom », sinon le compte GitHub qui publie)
+const MES_DECKS = PARTAGE && PARTAGE.auteur ? `Decks de ${PARTAGE.auteur}` : "Mes decks";
 // budget par carte (reglages.json, 5 € par défaut, 0 = pas d'alerte) : les cartes plus chères sont signalées
 const REGLAGES = (PARTAGE && PARTAGE.reglages) || window.REGLAGES || {};
 const BUDGET = REGLAGES.budget === undefined ? 5 : REGLAGES.budget > 0 ? REGLAGES.budget : Infinity;
@@ -128,10 +130,27 @@ const ICONES = {
   partager: '<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 13.3 7.6 4.4M15.8 6.3l-7.6 4.4"/>',
   compacter: '<path d="M4 14h6v6M20 10h-6V4"/><path d="m14 10 7-7M3 21l7-7"/>',
   ouvrir: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>',
+  telecharger: '<path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/>',
 };
 if (PARTAGE) $(".logo").href = PARTAGE.accueil === true ? "#/" : PARTAGE.accueil;
 const ico = (nom) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${ICONES[nom] || ""}</svg>`;
 $$("[data-ico]").forEach((el) => el.insertAdjacentHTML("afterbegin", ico(el.dataset.ico)));
+// page partagée : à qui est la page, et l'Atelier à télécharger pour faire pareil avec ses decks ;
+// en bas, la licence, le code source et la page « C'est quoi, l'Atelier MTG ? » (#/a-propos)
+const TITRE_PARTAGE = document.title;
+if (PARTAGE) {
+  const depot = PARTAGE.atelier ? esc(PARTAGE.atelier) : "";
+  $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-partage">
+    <p>Page ${PARTAGE.auteur ? `de <strong>${esc(PARTAGE.auteur)}</strong>, ` : ""}partagée avec <a href="#/a-propos">l'Atelier MTG</a>. Pour gérer, tester et partager vos propres decks Commander, l'Atelier est gratuit.</p>
+    ${depot ? `<a class="btn btn-accent btn-petit" href="${depot}" target="_blank" rel="noopener">${ico("telecharger")}Télécharger l'Atelier MTG</a>` : ""}
+  </div>`);
+  $(".cadre").insertAdjacentHTML("afterend", `<footer class="pied-partage">
+    <nav><a href="#/a-propos">C'est quoi, l'Atelier MTG ?</a>${depot ? `<a href="${depot}" target="_blank" rel="noopener">Code source sur GitHub</a>
+      <a href="${depot}/blob/main/LICENSE" target="_blank" rel="noopener">Licence MIT</a>` : ""}</nav>
+    <p>Magic: The Gathering est une marque de Wizards of the Coast. L'Atelier MTG n'est ni affilié à Wizards of the Coast ni approuvé par elle.
+      Données des cartes : Scryfall.</p>
+  </footer>`);
+}
 
 // hauteur de la barre du haut : les onglets d'un deck se collent juste dessous
 const hauteurBarre = () => document.documentElement.style.setProperty("--haut-barre", $(".barre").offsetHeight + "px");
@@ -551,7 +570,10 @@ document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { fermer
 // ------------------------------------------------------------------ navigation
 // titre de l'onglet du navigateur, la page d'abord : « Kels · Statistiques », « Recherche · « dragon » · Kels »
 function majTitre() {
-  if (PARTAGE) return;                             // page partagée : le titre écrit par partage.py
+  if (PARTAGE) {                                   // page partagée : le titre écrit par partage.py
+    document.title = location.hash.startsWith("#/a-propos") ? "L'Atelier MTG" : TITRE_PARTAGE;
+    return;
+  }
   const [chemin, qs] = location.hash.replace(/^#\/?/, "").split(/\?(.*)/s);
   const parts = chemin.split("/");
   let t = "Mes decks";
@@ -575,7 +597,9 @@ async function route() {
   $("#lien-recherche").classList.toggle("actif", parts[0] === "recherche");
   vue.classList.toggle("vue-large", parts[0] === "recherche");
   try {
-    if (PARTAGE && PARTAGE.deck) await vueDeck(PARTAGE.deck, (parts[0] === "deck" && parts[2]) || "liste");
+    if (parts[0] === "a-propos") vueAPropos();
+    else if (PARTAGE && parts[0] === "recherche") vueRechercheVitrine();
+    else if (PARTAGE && PARTAGE.deck) await vueDeck(PARTAGE.deck, (parts[0] === "deck" && parts[2]) || "liste");
     else if (PARTAGE && parts[0] === "deck" && parts[1]) location.replace(lienDeck(decodeURIComponent(parts[1])));
     else if (parts[0] === "recherche") await vueRecherche(new URLSearchParams(qs || ""));
     else if (parts[0] === "deck" && parts[1]) await vueDeck(decodeURIComponent(parts[1]), parts[2] || "liste", parts[3] ? decodeURIComponent(parts[3]) : null);
@@ -703,7 +727,7 @@ async function vueAccueil() {
   etat.couleurs ||= [];
   vue.innerHTML = `
     <div class="titre-page">
-      <h1>Mes decks</h1>
+      <h1>${esc(MES_DECKS)}</h1>
       <button class="btn btn-accent ecrit" id="btn-nouveau">${ico("plus")}Nouveau deck</button>
     </div>
     <div class="barre-outils">
@@ -891,7 +915,7 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
   etat.deck = d;
   const cmdsEntete = d.cartes.filter((c) => c.cat === "Commander" && c.info.image);      // deux partenaires : en éventail
   vue.innerHTML = `
-    <nav class="fil" aria-label="Fil d'Ariane"><a href="${PARTAGE ? esc(PARTAGE.accueil) : "#/"}">Mes decks</a><span aria-hidden="true">›</span><span aria-current="page">${esc(d.titre)}</span></nav>
+    <nav class="fil" aria-label="Fil d'Ariane"><a href="${PARTAGE ? esc(PARTAGE.accueil) : "#/"}">${esc(MES_DECKS)}</a><span aria-hidden="true">›</span><span aria-current="page">${esc(d.titre)}</span></nav>
     <div class="entete-deck ${cmdsEntete.length ? "avec-cmd" : ""} ${cmdsEntete.length > 1 ? "duo" : ""}">
       <div class="bandeau" style="background-image:url('${esc(d.art)}')"></div>
       ${cmdsEntete.length ? `<div class="cmds-entete">${cmdsEntete.map((c) =>
@@ -3040,6 +3064,107 @@ async function vueRecherche(params) {
   if (c.r === "1") await lancerRecherche();
 }
 
+// page partagée : la recherche et la discussion en vitrine, grisées, avec le lien pour installer l'Atelier chez soi
+function invitation(titre, texte) {
+  return `<div class="vitrine-invite panneau">
+    <h2>${esc(titre)}</h2>
+    <p>${esc(texte)}</p>
+    ${PARTAGE.atelier ? `<a class="btn btn-accent" href="${esc(PARTAGE.atelier)}" target="_blank" rel="noopener">${ico("telecharger")}Télécharger l'Atelier MTG</a>` : ""}
+  </div>`;
+}
+
+function vueRechercheVitrine() {
+  scrollTo(0, 0);
+  etat.deck = null;
+  rch.deck = null;
+  rch.fonctions = (PARTAGE.api["/api/recherche/fonctions"] || []);
+  rch.crit = { ...RCH_DEFAUTS };
+  rch.eds = new Set();
+  rch.fns = [];
+  vue.innerHTML = `
+    <div class="rch-tete">
+      <nav class="fil" aria-label="Fil d'Ariane"><a href="${esc(PARTAGE.accueil === true ? "#/" : PARTAGE.accueil)}">${esc(MES_DECKS)}</a><span aria-hidden="true">›</span>${PARTAGE.deck ? `<a href="#/">${esc(PARTAGE.deck.replace(/^Deck /, ""))}</a><span aria-hidden="true">›</span>` : ""}<span aria-current="page">Recherche de cartes</span></nav>
+    </div>
+    <div class="vitrine">
+      <div class="vitrine-fond" inert aria-hidden="true">${formulaireRecherche(rch.crit)}</div>
+      ${invitation("Recherche de cartes", "Disponible dans l'Atelier MTG, à installer gratuitement sur son ordinateur.")}
+    </div>`;
+}
+
+// « C'est quoi, l'Atelier MTG ? » : la page qui présente l'outil aux visiteurs d'une page partagée (bandeau et pied de page).
+// L'histoire est celle de l'auteur de l'Atelier, pas forcément celle de la personne qui partage ses decks.
+const AUTEUR_ATELIER = "PierreRibeaucourt";
+const DEPOT_ATELIER = "https://github.com/PierreRibeaucourt/atelier-mtg";
+
+function vueAPropos() {
+  scrollTo(0, 0);
+  etat.deck = null;
+  const depot = esc((PARTAGE && PARTAGE.atelier) || DEPOT_ATELIER);
+  const retour = PARTAGE ? `<a href="${esc(PARTAGE.accueil === true ? "#/" : PARTAGE.accueil)}">${esc(MES_DECKS)}</a><span aria-hidden="true">›</span>`
+    + (PARTAGE.deck ? `<a href="#/">${esc(PARTAGE.deck.replace(/^Deck /, ""))}</a><span aria-hidden="true">›</span>` : "")
+    : `<a href="#/">Mes decks</a><span aria-hidden="true">›</span>`;
+  const consigne = `Installe et lance l'Atelier MTG depuis ${(PARTAGE && PARTAGE.atelier || DEPOT_ATELIER).replace("https://", "")}`;
+  const fonction = (titre, texte) => `<div class="ap-carte"><h3>${titre}</h3><p>${texte}</p></div>`;
+  vue.innerHTML = `
+    <article class="a-propos">
+      <nav class="fil" aria-label="Fil d'Ariane">${retour}<span aria-current="page">L'Atelier MTG</span></nav>
+      <h1>L'Atelier MTG</h1>
+      <p class="chapeau">Le gestionnaire de decks Commander local, sans compte et taillé pour le deckbuilding assisté.</p>
+      <p>L'Atelier est une application locale, qui s'ouvre dans votre navigateur, pensée pour concevoir, tester et faire évoluer
+        des decks Magic: The Gathering en Commander. Pas de publicité, aucun compte en ligne, pas de données hébergées sur un
+        serveur distant : tout s'exécute directement sur votre ordinateur.</p>
+
+      <h2>Genèse du projet</h2>
+      <p class="ap-signature">Par ${esc(AUTEUR_ATELIER)}, créateur de l'Atelier</p>
+      <p>À l'origine, mes listes tenaient sur de simples fichiers texte que j'analysais en ligne de commande avec un LLM et
+        quelques ressources théoriques (ratios de mana, moteurs de pioche, conditions de victoire).</p>
+      <p>Manipuler du code brut a vite montré ses limites. Pour ajuster un <em>cut</em> ou évaluer instantanément l'impact d'une
+        modification, il me fallait une vraie interface graphique qui réunisse les points forts des outils de référence :</p>
+      <ul class="ap-sources">
+        <li><strong>Archidekt</strong> pour la table d'essai et les tests en solitaire ;</li>
+        <li><strong>Magic-Ville et Commander Spellbook</strong> pour la recherche multicritère et les combos ;</li>
+        <li><strong>Cardmarket</strong> pour les cotations du jour ;</li>
+        <li><strong>les règles officielles</strong> pour le contrôle direct des cartes interdites, des brackets et des Game Changers.</li>
+      </ul>
+      <p>L'Atelier est né de cette synthèse : une interface locale fluide pour gérer ses cartes, connectable à la demande à un
+        assistant IA pour auditer un deck, automatiser le classement ou simuler des parties.</p>
+
+      <h2>Fonctionnalités principales</h2>
+      <div class="ap-grille">
+        ${fonction("Gestion et import de decks", "Import d'une liste copiée depuis Moxfield, Archidekt ou MTG Arena. Affichage en vue grille ou texte, tri par type, par tag ou par fonction stratégique.")}
+        ${fonction("Statistiques et budget", "Courbe de mana réelle, mains de départ tirées au hasard, équilibrage des sources de mana et prix Cardmarket du jour, avec une alerte au-delà de votre budget par carte.")}
+        ${fonction("Banc d'essai et simulations", "Simulateur multijoueur pour évaluer la régularité d'un deck sur des centaines de parties, ou table virtuelle pour s'entraîner en solo.")}
+        ${fonction("Moteur de synergies", "Repérage automatique des combos présentes dans la liste, et des cartes qui combotent avec une carte donnée.")}
+        ${fonction("Gestion des versions", "Historique complet des modifications et comparaison avant / après chaque ajustement.")}
+        ${fonction("Copilote IA optionnel", "Connexion directe à Claude Code, avec vos propres accès, pour obtenir des retours critiques, affiner une stratégie ou réorganiser une liste.")}
+        ${fonction("Partage simplifié", "Publication en un clic d'une page de présentation légère, comme celle-ci, à partager avec votre groupe de jeu.")}
+      </div>
+
+      <h2>Philosophie : local, ouvert et transparent</h2>
+      <ul class="ap-principes">
+        <li><strong>Open source et gratuit.</strong> Le code est publié sous <a href="${depot}/blob/main/LICENSE" target="_blank" rel="noopener">licence MIT</a> :
+          accessible, vérifiable et modifiable par tous sur GitHub.</li>
+        <li><strong>Données souveraines.</strong> Vos decks restent sur votre disque dur et rien n'est collecté. Seules sortent les
+          requêtes nécessaires : données, images et prix des cartes (Scryfall), combos et bracket (Commander Spellbook, MTGPics),
+          la discussion avec Claude si vous l'utilisez, et les pages que vous choisissez de partager.</li>
+        <li><strong>IA strictement modulaire.</strong> Tri, statistiques, simulations et jeu en solo restent 100 % opérationnels
+          sans aucune configuration IA.</li>
+      </ul>
+
+      <h2>Installation</h2>
+      <p>Le dépôt de code et les instructions détaillées sont sur GitHub, testés et validés sous Windows.</p>
+      <p><a class="btn btn-accent" href="${depot}" target="_blank" rel="noopener">${ico("telecharger")}Télécharger l'Atelier MTG</a>
+        <a class="ap-depot" href="${depot}" target="_blank" rel="noopener">${depot.replace("https://", "")}</a></p>
+      <h3>Démarrage rapide, avec un assistant IA</h3>
+      <p>Si vous utilisez un agent de développement (Claude Code, Cursor, Copilot…), collez simplement cette consigne :</p>
+      <div class="ap-consigne"><code>${esc(consigne)}</code>
+        <button type="button" class="btn btn-petit btn-discret" id="ap-copier">${ico("copier")}Copier</button></div>
+    </article>`;
+  $("#ap-copier").onclick = async () => {
+    try { await navigator.clipboard.writeText(consigne); toast("Consigne copiée."); } catch (e) { erreur(e); }
+  };
+}
+
 function critIdentite(d) {
   return { coul: lettresWUBRG(d.identite.join(""), "WUBRG") + "C", cm: "1", seules: "1", id: "1", format: "commander" };
 }
@@ -3888,6 +4013,14 @@ async function montageChat() {
         <button class="btn btn-accent" id="chat-envoyer">${ico("envoyer")}Envoyer</button>
       </div>
     </div>`;
+  if (PARTAGE) {                                   // page partagée : le panneau en vitrine, grisé
+    $$(".chat-tete select, #chat-nouvelle, #chat-fil, .chat-saisie", a).forEach((x) => { x.classList.add("vitrine-fond"); x.inert = true; });
+    a.insertAdjacentHTML("beforeend", invitation("Discussion avec Claude",
+      "Disponible dans l'Atelier MTG, à installer gratuitement sur son ordinateur. Il faut aussi Claude Code (abonnement Claude)."));
+    $("#chat-fermer").onclick = () => basculeChat(false);
+    chat.charge = true;
+    return;
+  }
   try { $("#chat-modele").value = localStorage.getItem("chat-modele") || "opus"; } catch (_) { $("#chat-modele").value = "opus"; }
   $("#chat-modele").onchange = (ev) => { try { localStorage.setItem("chat-modele", ev.target.value); } catch (_) {} };
   $("#chat-fermer").onclick = () => basculeChat(false);

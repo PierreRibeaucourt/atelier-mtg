@@ -61,6 +61,17 @@ def compte():
     return depot, f"https://{proprio.lower()}.github.io/{NOM_DEPOT}/"
 
 
+def depot_atelier():
+    """Adresse web du dépôt de l'Atelier (remote origin), pour « Télécharger l'Atelier MTG » sur les pages partagées.
+    git@github-perso:Compte/atelier-mtg.git (alias SSH) → https://github.com/Compte/atelier-mtg ; None si introuvable."""
+    url = _git("remote", "get-url", "origin", dossier=decks.RACINE, ok=True).stdout.strip()
+    m = re.match(r"(?:git@([^:]+):|https://([^/]+)/)([^/]+)/([^/]+?)(?:\.git)?$", url)
+    if not m:
+        return None
+    hote = m.group(1) or m.group(2)
+    return f"https://{'github.com' if 'github' in hote else hote}/{m.group(3)}/{m.group(4)}"
+
+
 def _preparer():
     """Le dépôt local des pages, à jour avec GitHub. Renvoie l'adresse du site."""
     depot, site = compte()
@@ -180,6 +191,7 @@ def capturer(deck, get):
     for r in prendre(racine + "/simulations") or []:
         prendre(racine + "/simulations/" + r["fichier"])
     prendre("/api/jouer/jetons", {"deck": deck})             # pour « Jouer » (dossier jouer/ de la page)
+    prendre("/api/recherche/fonctions")                      # le formulaire de recherche, montré en vitrine
 
     # versions : chaque liste, pour comparer deux versions dans la page (toutes les paires ne tiennent pas en fichier)
     listes = {}
@@ -266,7 +278,9 @@ def _page(dossier, donnees, entete):
     os.makedirs(dossier, exist_ok=True)
     for f in ("app.js", "style.css"):
         shutil.copyfile(os.path.join(STATIQUE, f), os.path.join(dossier, f))
-    donnees = dict(donnees, reglages=reglages.pour_la_page())         # budget par carte : les cartes chères restent signalées
+    donnees = dict(donnees, reglages=reglages.pour_la_page(),         # budget par carte : les cartes chères restent signalées
+                   atelier=depot_atelier(),                           # recherche et discussion en vitrine : où télécharger l'Atelier
+                   auteur=reglages.nom())                             # « Decks de … » à la place de « Mes decks »
     js = "window.PARTAGE = " + json.dumps(donnees, ensure_ascii=False, separators=(",", ":")) + ";\n"
     _verifier(js)
     _ecrire(os.path.join(dossier, "donnees.js"), js)
@@ -323,21 +337,31 @@ def _page_jouer(dossier):
 
 def _accueil(reg, site):
     """La racine du site : les decks partagés, chacun vers sa page."""
+    import recherche
     resumes = sorted((dict(r["resume"]) for r in reg.values()), key=lambda r: r["titre"])
     donnees = dict(accueil=True, date=time.time(), liens={k: v["slug"] + "/" for k, v in reg.items()},
                    cartes={k: v.get("cartes", []) for k, v in reg.items()},           # dans quel deck est Sol Ring ?
-                   api={"/api/decks": resumes, "/api/corbeille": [], "/api/noms-cartes": dict(noms=[], communs=[])})
+                   api={"/api/decks": resumes, "/api/corbeille": [], "/api/noms-cartes": dict(noms=[], communs=[]),
+                        "/api/recherche/fonctions": recherche.fonctions()})
     titres = _liste([r["titre"] for r in resumes])
     n = len(resumes)
+    auteur = _auteur()
+    titre = f"Decks Commander de {auteur}" if auteur else "Mes decks Commander"
     image = _image_partage(DOSSIER, lambda ip, chemin: ip.image_accueil(
-        chemin, "Mes decks Commander", f"{n} deck{'s' if n > 1 else ''} : {titres}" if n else "Aucun deck partagé",
+        chemin, titre, f"{n} deck{'s' if n > 1 else ''} : {titres}" if n else "Aucun deck partagé",
         [r.get("image_cmd") for r in resumes], [r.get("art") for r in resumes]))
     _page(DOSSIER, donnees, dict(
-        titre="Mes decks Commander",
-        description=(f"{n} deck{'s' if n > 1 else ''} Commander : {titres}. Listes, visuels, statistiques et combos de chaque deck."
-                     if n else "Decks Commander."),
+        titre=titre,
+        description=(f"{n} deck{'s' if n > 1 else ''} Commander : {titres}. Listes, visuels, statistiques, combos "
+                     "et table de jeu pour tester chaque deck." if n else "Decks Commander."),
         url=site, image=image and site + image, alt=f"Les commandants des decks {titres}" if n else ""))
     _ecrire(os.path.join(DOSSIER, ".nojekyll"), "")
+
+
+def _auteur():
+    """À qui sont ces decks : « Decks de … » sur les pages partagées (reglages.json : nom, sinon le compte GitHub)."""
+    import reglages
+    return reglages.nom()
 
 
 def _euros(x):
@@ -361,16 +385,19 @@ def construire(deck, get):
                                        f"{nb_gc} Game Changer{'s' if nb_gc > 1 else ''}") if x)]
     dossier = os.path.join(DOSSIER, slug)
     images = [c["info"].get("image") for c in d["cartes"] if c["cat"] == "Commander" and c["info"].get("image")]
+    auteur = _auteur()
     image = _image_partage(dossier, lambda ip, chemin: ip.image_deck(
         chemin, d["titre"], "Deck Commander" + (f" · {couleurs}" if couleurs else ""), cmds, images, d.get("art"),
-        d.get("identite"), chiffres))
+        d.get("identite"), chiffres, auteur))
     description = (f"{genre[0].upper() + genre[1:]} de {d['total']} cartes"
                    + (f" autour de {_liste(cmds)}" if cmds else "") + f", pour {_euros(d['prix_total'])}"
-                   + (f", bracket {b['estime']}" if b.get("estime") else "") + " : liste, visuel, statistiques et combos.")
+                   + (f", bracket {b['estime']}" if b.get("estime") else "")
+                   + " : liste, visuel, statistiques, combos et table de jeu pour le tester."
+                   + (f" Partagé par {auteur}." if auteur else ""))
     url = f"{site}{slug}/"
     _page(dossier, dict(donnees, accueil="../"), dict(
-        titre=f"{d['titre']} : {genre}", description=description, url=url, image=image and url + image,
-        alt=f"{d['titre']} : carte de {_liste(cmds) or 'son commandant'}, couleurs et chiffres du deck"))
+        titre=f"{d['titre']} : {genre}" + (f", par {auteur}" if auteur else ""), description=description, url=url,
+        image=image and url + image, alt=f"{d['titre']} : carte de {_liste(cmds) or 'son commandant'}, couleurs et chiffres du deck"))
     _page_jouer(dossier)
     reg[deck] = dict(slug=slug, date=donnees["date"],
                      resume={k: v for k, v in d.items() if k not in ("cartes", "categories", "erreur_sim")},
