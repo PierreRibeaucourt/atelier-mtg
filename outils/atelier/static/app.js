@@ -137,16 +137,17 @@ if (PARTAGE) $(".logo").href = PARTAGE.accueil === true ? "#/" : PARTAGE.accueil
 const ico = (nom) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${ICONES[nom] || ""}</svg>`;
 $$("[data-ico]").forEach((el) => el.insertAdjacentHTML("afterbegin", ico(el.dataset.ico)));
 // page partagée : à qui est la page, et l'Atelier à télécharger pour faire pareil avec ses decks ;
-// en bas, la licence, le code source et la page « C'est quoi, l'Atelier MTG ? » (#/a-propos)
+// en bas, la licence, le code source et la page « C'est quoi, l'Atelier MTG ? », une seule pour le site : à sa racine
 const TITRE_PARTAGE = document.title;
+const A_PROPOS = (PARTAGE && PARTAGE.accueil && PARTAGE.accueil !== true ? PARTAGE.accueil : "") + "#/a-propos";
 if (PARTAGE) {
   const depot = PARTAGE.atelier ? esc(PARTAGE.atelier) : "";
   $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-partage">
-    <p>Page ${PARTAGE.auteur ? `de <strong>${esc(PARTAGE.auteur)}</strong>, ` : ""}partagée avec <a href="#/a-propos">l'Atelier MTG</a>. Pour gérer, tester et partager vos propres decks Commander, l'Atelier est gratuit.</p>
+    <p>Page ${PARTAGE.auteur ? `de <strong>${esc(PARTAGE.auteur)}</strong>, ` : ""}partagée avec <a href="${A_PROPOS}">l'Atelier MTG</a>. Pour gérer, tester et partager vos propres decks Commander, l'Atelier est gratuit.</p>
     ${depot ? `<a class="btn btn-accent btn-petit" href="${depot}" target="_blank" rel="noopener">${ico("telecharger")}Télécharger l'Atelier MTG</a>` : ""}
   </div>`);
   $(".cadre").insertAdjacentHTML("afterend", `<footer class="pied-partage">
-    <nav><a href="#/a-propos">C'est quoi, l'Atelier MTG ?</a>${depot ? `<a href="${depot}" target="_blank" rel="noopener">Code source sur GitHub</a>
+    <nav><a href="${A_PROPOS}">C'est quoi, l'Atelier MTG ?</a>${depot ? `<a href="${depot}" target="_blank" rel="noopener">Code source sur GitHub</a>
       <a href="${depot}/blob/main/LICENSE" target="_blank" rel="noopener">Licence MIT</a>` : ""}</nav>
     <p>Magic: The Gathering est une marque de Wizards of the Coast. L'Atelier MTG n'est ni affilié à Wizards of the Coast ni approuvé par elle.
       Données des cartes : Scryfall.</p>
@@ -598,7 +599,8 @@ async function route() {
   $("#lien-recherche").classList.toggle("actif", parts[0] === "recherche");
   vue.classList.toggle("vue-large", parts[0] === "recherche");
   try {
-    if (parts[0] === "a-propos") vueAPropos();
+    if (parts[0] === "a-propos" && A_PROPOS !== "#/a-propos") location.replace(A_PROPOS);   // ancien lien, depuis un deck
+    else if (parts[0] === "a-propos") vueAPropos();
     else if (PARTAGE && parts[0] === "recherche") vueRechercheVitrine();
     else if (PARTAGE && PARTAGE.deck) await vueDeck(PARTAGE.deck, (parts[0] === "deck" && parts[2]) || "liste");
     else if (PARTAGE && parts[0] === "deck" && parts[1]) location.replace(lienDeck(decodeURIComponent(parts[1])));
@@ -3106,9 +3108,7 @@ function vueAPropos() {
   scrollTo(0, 0);
   etat.deck = null;
   const depot = esc((PARTAGE && PARTAGE.atelier) || DEPOT_ATELIER);
-  const retour = PARTAGE ? `<a href="${esc(PARTAGE.accueil === true ? "#/" : PARTAGE.accueil)}">${esc(MES_DECKS)}</a><span aria-hidden="true">›</span>`
-    + (PARTAGE.deck ? `<a href="#/">${esc(PARTAGE.deck.replace(/^Deck /, ""))}</a><span aria-hidden="true">›</span>` : "")
-    : `<a href="#/">Mes decks</a><span aria-hidden="true">›</span>`;
+  const retour = `<a href="#/">${esc(MES_DECKS)}</a><span aria-hidden="true">›</span>`;
   const consigne = `Installe et lance l'Atelier MTG depuis ${(PARTAGE && PARTAGE.atelier || DEPOT_ATELIER).replace("https://", "")}`;
   const fonction = (titre, texte) => `<div class="ap-carte"><h3>${titre}</h3><p>${texte}</p></div>`;
   vue.innerHTML = `
