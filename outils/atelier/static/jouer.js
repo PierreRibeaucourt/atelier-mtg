@@ -646,7 +646,7 @@ function chercher() {
       .sort((a, b) => nomDe(E.cartes[a]).localeCompare(nomDe(E.cartes[b]), "fr"));
     $("#grille-bib").innerHTML = ids.map((id) => tuile(E.cartes[id], "data-mid")).join("") || `<p class="muet">Aucune carte.</p>`;
     $$("#grille-bib [data-mid]").forEach((el) => {
-      el.onclick = (ev) => menuDestination(el.dataset.mid, ev.clientX, ev.clientY, "bibliotheque", peindre);
+      el.onclick = (ev) => { ev.stopPropagation(); menuDestination(el.dataset.mid, ev.clientX, ev.clientY, "bibliotheque", peindre); };
     });
   };
   $("#filtre-bib").oninput = peindre;
@@ -671,7 +671,7 @@ function voirZone(z) {
     const ids = [...E.zones[z]].reverse();             // la plus récente d'abord
     $("#grille-zone").innerHTML = ids.map((id) => tuile(E.cartes[id], "data-mid")).join("");
     $$("#grille-zone [data-mid]").forEach((el) => {
-      el.onclick = (ev) => menuDestination(el.dataset.mid, ev.clientX, ev.clientY, z, peindre);
+      el.onclick = (ev) => { ev.stopPropagation(); menuDestination(el.dataset.mid, ev.clientX, ev.clientY, z, peindre); };
     });
   };
   $("[data-non]", b).onclick = fermerModale;

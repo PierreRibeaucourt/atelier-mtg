@@ -139,6 +139,8 @@ kbd { border: 1px solid var(--bord); border-bottom-width: 2px; border-radius: 4p
 .modale-boite h2 { font-size: 1.1rem; margin: 0 0 .8rem; }
 .modale-boite h3 { font-size: .95rem; margin: 1.1rem 0 .5rem; }
 .pied { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1rem; }
+/* les boutons restent visibles en bas d'une longue fenêtre (chercher dans 90 cartes) */
+.modale-boite .pied { position: sticky; z-index: 3; bottom: -1.1rem; margin: .4rem -1.2rem -1.1rem; padding: .6rem 1.2rem 1.1rem; background: var(--surface); }
 .ligne-champs { display: flex; gap: .5rem; align-items: flex-end; flex-wrap: wrap; }
 .ligne-champs label { display: flex; flex-direction: column; gap: .2rem; font-size: .82rem; color: var(--texte-2); }
 .grille-cartes { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: .7rem; }
