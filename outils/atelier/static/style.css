@@ -588,6 +588,19 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; color:
 .rch-bloc .champ, .rch-bloc textarea { width: 100%; color: var(--texte); }
 .rch-bloc textarea { resize: vertical; min-height: 2.6rem; padding: .4rem .55rem; }
 .rch-texte-tete { display: flex; justify-content: space-between; align-items: center; }
+.aide-q { width: 1.25rem; height: 1.25rem; padding: 0; margin-left: .3rem; border: 1px solid var(--bord); border-radius: 50%; background: transparent;
+  color: var(--texte-2); font-size: .75rem; font-weight: 700; line-height: 1; cursor: pointer; vertical-align: 1px; }
+.aide-q:hover { color: var(--accent); border-color: var(--accent); }
+.pense-bete table { width: 100%; border-collapse: collapse; margin: .2rem 0 .4rem; }
+.pense-bete td { padding: .35rem .5rem; border-bottom: 1px solid var(--bord); vertical-align: top; font-size: .9rem; }
+.pense-bete td:first-child { width: 40%; white-space: nowrap; }
+.pense-bete code { font-family: ui-monospace, Consolas, monospace; font-size: .85rem; background: var(--surface-2); padding: .1rem .35rem; border-radius: 4px; }
+.pense-bete ul { margin: .3rem 0 .5rem; padding-left: 1.2rem; font-size: .9rem; }
+.pense-bete li { margin: .15rem 0; }
+.pense-bete h3 { margin-top: 1.1rem; }
+.pb-exemple { border: 0; background: none; padding: 0; cursor: pointer; text-align: left; }
+.pb-exemple:hover code { outline: 1px solid var(--accent); color: var(--accent); }
+@media (max-width: 640px) { .pense-bete td:first-child { white-space: normal; width: auto; } }
 .rch-ligne-champ { display: flex; align-items: center; gap: .4rem; font-size: .85rem; color: var(--texte-2); flex-wrap: wrap; }
 .fen select.champ { width: 100%; }
 .fen-atelier select.champ { width: auto; }

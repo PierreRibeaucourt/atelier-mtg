@@ -214,7 +214,7 @@ function texteMana(ligne) {
 // partout ailleurs (discussion avec Claude, combos, bulles, modales, rapports…) : chaque texte affiché est relu, et
 // « {R}{W} », « {2BB} », « {T} » deviennent des symboles. Une accolade qui n'est pas un symbole reste du texte.
 const JETON = /\{\(\}[a-z]\/[a-z]\)\}|\{[^{}\s]{1,9}\}/gi;
-const SANS_SYMBOLES = "script, style, textarea, input, select, option, svg, [contenteditable]";
+const SANS_SYMBOLES = "script, style, textarea, input, select, option, svg, [contenteditable], .brut";     // .brut : {c} à taper tel quel
 
 function remplacerSymboles(n) {
   const t = n.nodeValue;
@@ -2738,6 +2738,68 @@ function rchNombres(titre, cle, x, c) {
   </section>`;
 }
 
+// pense-bête du champ Texte (bouton « ? ») : la syntaxe de recherche._termes, les symboles, des exemples à cliquer
+const PB_SYNTAXE = [
+  ["pioch carte", "Tous les mots, dans n'importe quel ordre. Un bout de mot suffit : « pioch » trouve piochez, piocher, pioche."],
+  ['"draw a card"', "Cette expression exacte : ces mots, dans cet ordre, espaces et ponctuation compris."],
+  ["!additio", "Exclut les cartes qui contiennent ce mot ou ce bout de mot (additional, additionnel…)."],
+  ['!"additional cost"', "Exclut les cartes qui contiennent cette expression."],
+  ['sacrifice !"additional cost"', "Se combinent : les cartes qui parlent de sacrifier, sauf en coût additionnel."],
+];
+const PB_SYMBOLES = [
+  ["{t}", "{T} engager"], ["{q}", "{Q} dégager"], ["{w} {u} {b} {r} {g}", "{W}{U}{B}{R}{G} blanc, bleu, noir, rouge, vert"],
+  ["{c}", "{C} incolore"], ["{1} {2} {3}…", "{2} mana générique"], ["{x}", "{X} X"], ["{w/u}", "{W/U} hybride"], ["{2/w}", "{2/W} hybride à 2"],
+  ["{w/p}", "{W/P} phyrexian"], ["{s}", "{S} neige"], ["{e}", "{E} énergie"],
+];
+const PB_EXEMPLES = [
+  ['"add {c}{c}" !"add {c}{c}{c}"', "Ajoute exactement deux manas incolores (Sol Ring, Worn Powerstone)"],
+  ['"add {c}{c}"', "Ajoute au moins deux manas incolores (avec Mana Vault, Thran Dynamo)"],
+  ['"add {c}{c}{c}"', "Ajoute au moins trois manas incolores"],
+  ['"add two mana"', "Ajoute deux manas d'une couleur au choix"],
+  ['"add {r}{r}"', "Ajoute deux manas rouges"],
+  ['"add {b}{r}"', "Ajoute un noir et un rouge (Rakdos Signet, Rakdos Carnarium)"],
+  ['"{t}:" add', "S'engage pour produire du mana (texte anglais)"],
+  ['"{t} :" ajoutez', "La même chose en français (espace avant les deux-points)"],
+  ['"each opponent"', "Chaque adversaire (en français : \"chaque adversaire\")"],
+  ['"enters tapped"', "Arrive engagé"],
+  ['"when this creature enters"', "Quand cette créature arrive sur le champ de bataille"],
+  ['"pay {e}"', "Paye de l'énergie"],
+  ["treasure", "Les Trésors (\"tresor\" en français)"],
+];
+
+function penseBeteTexte(form) {
+  const ligne = (code, texte, ex) => `<tr><td>${ex ? `<button type="button" class="pb-exemple" data-exemple="${esc(code)}"><code class="brut">${esc(code)}</code></button>`
+    : `<code class="brut">${esc(code)}</code>`}</td><td>${esc(texte)}</td></tr>`;
+  ouvrirModale(`
+    <h2>Recherche texte</h2>
+    <div class="pense-bete">
+      <table>${PB_SYNTAXE.map(([c, t]) => ligne(c, t)).join("")}</table>
+      <h3>Règles</h3>
+      <ul>
+        <li>Majuscules et accents ne comptent pas ; ’ et ' se valent.</li>
+        <li>Les mots à trouver doivent tous être dans le même texte, anglais ou français. Une exclusion vaut pour les deux.</li>
+        <li>Cases « français » et « anglais » : chercher dans une seule langue ; aucune cochée, les deux.</li>
+        <li>Le texte français n'existe que pour les cartes imprimées en français : en anglais, la recherche est complète.</li>
+        <li>Le champ cherche dans le texte de règles, pas dans le coût : pour le coût, c'est le champ Coût, dans Couleurs.</li>
+        <li>Pas de joker (* ou %) ni de « ou » : une recherche par variante.</li>
+        <li>Titre et Type suivent les mêmes règles.</li>
+        <li>« sans texte » : les cartes sans texte de règles. Ctrl+Entrée dans le champ lance la recherche.</li>
+      </ul>
+      <h3>Symboles</h3>
+      <table>${PB_SYMBOLES.map(([c, t]) => ligne(c, t)).join("")}</table>
+      <p class="muet petit">Anglais : <code class="brut">{T}: Add {C}{C}.</code> Français : <code class="brut">{T} : Ajoutez {C}{C}.</code></p>
+      <h3>Exemples</h3>
+      <table>${PB_EXEMPLES.map(([c, t]) => ligne(c, t, true)).join("")}</table>
+    </div>
+    <div class="form-ligne" style="justify-content:flex-end;margin:1rem 0 0"><button type="button" class="btn" data-act="fermer">Fermer</button></div>`,
+  (b) => {
+    $$("[data-exemple]", b).forEach((x) => {
+      x.onclick = () => { form.elements.texte.value = x.dataset.exemple; fermerModale(); form.elements.texte.focus(); };
+    });
+    $('[data-act="fermer"]', b).onclick = fermerModale;
+  }, { focus: false, large: true });
+}
+
 // la disposition du moteur de Magic-Ville, simplifiée : Couleurs (coût compris) | Types | Recherche texte,
 // puis Valeur de mana, Force, Endurance, Rechercher, Format, Rareté ; en dessous, ce que l'Atelier ajoute, puis les éditions
 function formulaireRecherche(c) {
@@ -2762,7 +2824,7 @@ function formulaireRecherche(c) {
         <div class="rch-cases rch-centre">${rchCase("fr", "français", c)}${rchCase("en", "anglais", c)}</div>
         <label class="rch-ligne">Titre <input class="champ champ-petit" name="nom" type="search" value="${esc(c.nom || "")}"></label>
         <label class="rch-ligne">Type <input class="champ champ-petit" name="type" value="${esc(c.type || "")}" placeholder="gobelin, légendaire, equipment…"></label>
-        <div class="rch-bloc rch-bloc-texte"><span class="rch-texte-tete">Texte ${rchCase("vanilla", "sans texte", c)}</span>
+        <div class="rch-bloc rch-bloc-texte"><span class="rch-texte-tete"><span>Texte <button type="button" class="aide-q" data-act="aide-texte" aria-label="Pense-bête de la recherche texte">?</button></span> ${rchCase("vanilla", "sans texte", c)}</span>
           <textarea class="champ" name="texte" rows="2" placeholder="défaussez, &quot;chaque adversaire&quot;, !additio…">${esc(c.texte || "")}</textarea></div>
       </section>
     </div>
@@ -2975,6 +3037,7 @@ function rendreFormulaire() {
     const a = ev.target.closest("[data-act]");
     if (!a) return;
     if (a.dataset.act === "raz") return nouvelleRecherche();
+    if (a.dataset.act === "aide-texte") return penseBeteTexte(form);
     if (a.dataset.act === "budget") { form.elements.prixmax.value = String(BUDGET); form.elements.prixmax.focus(); return; }
     if (a.dataset.act === "identite" && rch.deck) {
       const id = critIdentite(rch.deck);
