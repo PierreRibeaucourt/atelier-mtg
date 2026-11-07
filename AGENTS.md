@@ -72,7 +72,13 @@ Les pages sont préparées dans le dossier `Partage Atelier/`, un dépôt git à
 
 ## Mettre à jour
 
-`git pull`, puis `python installer.py` (pour les nouvelles dépendances), puis relancer l'Atelier. Les decks ne bougent pas : ils sont ignorés par git.
+L'Atelier se met à jour tout seul (`outils/atelier/mise_a_jour.py`). Au lancement, puis toutes les 20 heures, il lit les étiquettes `vX.Y.Z` du dépôt (`git fetch --tags origin`). Si l'une est plus récente que `outils/atelier/version.py`, un bandeau propose « Mettre à jour » : `git merge --ff-only vX.Y.Z`, dépendances réinstallées si `requirements.txt` a changé, puis redémarrage. Il refuse si des fichiers suivis par git ont été modifiés, ou si Claude répond, une recherche de synergies ou une simulation tourne.
+
+À la main : `git pull`, puis `python installer.py` (pour les nouvelles dépendances), puis relancer l'Atelier. Les decks ne bougent pas : ils sont ignorés par git.
+
+## Publier une version (auteur du dépôt)
+
+`python outils/publier_version.py 1.1.0 "Une ou deux phrases sur les nouveautés."` : change le numéro dans `version.py`, commite « Version 1.1.0 », pose l'étiquette annotée `v1.1.0` (son message s'affiche dans le bandeau des Ateliers installés) et envoie le commit et l'étiquette (`git push origin main v1.1.0`). Commite d'abord le reste. Un envoi sur `main` sans nouvelle étiquette ne propose rien aux Ateliers installés. `--sans-envoi` prépare sans envoyer.
 
 ## Où sont les données
 

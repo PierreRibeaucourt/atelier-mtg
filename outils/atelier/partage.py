@@ -275,12 +275,14 @@ def _page(dossier, donnees, entete):
     """index.html, app.js, style.css et donnees.js : une copie de l'interface, figée avec ses données.
     entete : titre, description, url (adresse absolue de la page), image (adresse absolue de partage.jpg ou None), alt."""
     import reglages
+    from version import __version__
     os.makedirs(dossier, exist_ok=True)
     for f in ("app.js", "style.css"):
         shutil.copyfile(os.path.join(STATIQUE, f), os.path.join(dossier, f))
     donnees = dict(donnees, reglages=reglages.pour_la_page(),         # budget par carte : les cartes chères restent signalées
                    atelier=depot_atelier(),                           # recherche et discussion en vitrine : où télécharger l'Atelier
-                   auteur=reglages.nom())                             # « Decks de … » à la place de « Mes decks »
+                   auteur=reglages.nom(),                             # « Decks de … » à la place de « Mes decks »
+                   version=__version__)                               # la version de l'Atelier qui a publié la page
     js = "window.PARTAGE = " + json.dumps(donnees, ensure_ascii=False, separators=(",", ":")) + ";\n"
     _verifier(js)
     _ecrire(os.path.join(dossier, "donnees.js"), js)

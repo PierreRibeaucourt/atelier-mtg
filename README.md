@@ -35,7 +35,9 @@ cd "Atelier MTG"
 python installer.py --budget 5
 ```
 
-L'installeur crée l'environnement Python (`.venv`), écrit tes réglages, vérifie que l'Atelier démarre et pose un raccourci « Atelier MTG » sur le bureau. On le relance après une mise à jour (`git pull`). Testé sous Windows ; macOS et Linux devraient marcher.
+L'installeur crée l'environnement Python (`.venv`), écrit tes réglages, vérifie que l'Atelier démarre et pose un raccourci « Atelier MTG » sur le bureau. Testé sous Windows ; macOS et Linux devraient marcher.
+
+**Mises à jour.** Quand une nouvelle version est publiée, un bandeau l'annonce en haut de l'Atelier, avec ses nouveautés. « Mettre à jour » l'installe et redémarre l'Atelier ; tes decks et tes réglages ne bougent pas. Pour cela, l'Atelier consulte le dépôt GitHub au lancement, puis une fois par jour (`git fetch`). Si tu as modifié des fichiers de l'Atelier, il ne les écrase pas : la mise à jour se fait alors à la main (`git pull`, puis `python installer.py`).
 
 En option :
 - **la discussion avec Claude** demande Claude Code (l'extension de VS Code, de Cursor ou de Windsurf, ou le programme `claude`) et un abonnement Claude. Chaque message compte dans ta limite d'utilisation ;

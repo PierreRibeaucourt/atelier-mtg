@@ -737,6 +737,11 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 
 /* page partagée (lecture seule) : ni ce qui modifie, ni la recherche, ni la discussion */
 .partage :is(.ecrit, .aller, #btn-rafraichir, #etat-maj, .ligne-outil) { display: none !important; }
+/* nouvelle version de l'Atelier à installer */
+.bandeau-maj { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .45rem 1rem; padding: .5rem 1rem;
+  background: var(--info-doux); border-bottom: 1px solid var(--bord); font-size: .9rem; text-align: center; }
+.bandeau-maj p { margin: 0; }
+.maj-actions { display: flex; align-items: center; gap: .4rem; }
 /* page partagée : à qui est la page, et l'Atelier à télécharger */
 .bandeau-partage { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .45rem 1rem; padding: .5rem 1rem;
   background: var(--accent-doux); border-bottom: 1px solid var(--bord); font-size: .9rem; text-align: center; }

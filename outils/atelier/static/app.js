@@ -15,6 +15,7 @@ const PARTAGE = window.PARTAGE || null;
 if (PARTAGE) document.documentElement.classList.add("partage");
 // page partagée : à qui sont ces decks (reglages.json « nom », sinon le compte GitHub qui publie)
 const MES_DECKS = PARTAGE && PARTAGE.auteur ? `Decks de ${PARTAGE.auteur}` : "Mes decks";
+let versionAtelier = (PARTAGE && PARTAGE.version) || "";       // version.py ; dans l'Atelier, lue par verifierVersion()
 // budget par carte (reglages.json, 5 € par défaut, 0 = pas d'alerte) : les cartes plus chères sont signalées
 const REGLAGES = (PARTAGE && PARTAGE.reglages) || window.REGLAGES || {};
 const BUDGET = REGLAGES.budget === undefined ? 5 : REGLAGES.budget > 0 ? REGLAGES.budget : Infinity;
@@ -3109,6 +3110,7 @@ function vueAPropos() {
     <article class="a-propos">
       <nav class="fil" aria-label="Fil d'Ariane">${retour}<span aria-current="page">L'Atelier MTG</span></nav>
       <h1>L'Atelier MTG</h1>
+      ${versionAtelier ? `<p class="ap-signature">Version ${esc(versionAtelier)}</p>` : ""}
       <p class="chapeau">Le gestionnaire de decks Commander local, sans compte et taillé pour le deckbuilding assisté.</p>
       <p>L'Atelier est une application locale, qui s'ouvre dans votre navigateur, pensée pour concevoir, tester et faire évoluer
         des decks Magic: The Gathering en Commander. Pas de publicité, aucun compte en ligne, pas de données hébergées sur un
@@ -4176,3 +4178,40 @@ if (!PARTAGE) {
 
 route();
 if (!PARTAGE) suivreMaj();
+
+// nouvelle version de l'Atelier (mise_a_jour.py) : un bandeau propose de l'installer ; l'Atelier redémarre et la page se recharge
+async function verifierVersion() {
+  let v;
+  try { v = await api("/api/version"); } catch (_) { return; }
+  versionAtelier = v.version;
+  const d = v.disponible;
+  if (!d || $("#bandeau-maj")) return;
+  try { if (sessionStorage.getItem("maj-plus-tard") === d.version) return; } catch (_) {}
+  $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-maj" id="bandeau-maj">
+    <p><strong>Atelier ${esc(d.version)} disponible</strong>${d.nouveautes ? ` · ${esc(d.nouveautes)}` : ""}</p>
+    <div class="maj-actions">
+      <button class="btn btn-accent btn-petit" id="maj-installer">${ico("telecharger")}Mettre à jour</button>
+      <button class="btn btn-petit btn-discret" id="maj-plus-tard">Plus tard</button>
+    </div>
+  </div>`);
+  const b = $("#bandeau-maj"), actions = $(".maj-actions", b);
+  $("#maj-plus-tard").onclick = () => { try { sessionStorage.setItem("maj-plus-tard", d.version); } catch (_) {} b.remove(); };
+  $("#maj-installer").onclick = async () => {
+    actions.innerHTML = `<span class="chargement">Mise à jour…</span>`;
+    try {
+      const r = await api("/api/mise-a-jour", { method: "POST", body: {} });
+      actions.innerHTML = `<span class="chargement">Redémarrage…</span>`;
+      for (let i = 0; i < 90; i++) {
+        await attendre(1000);
+        try { if ((await api("/api/version")).version === r.version) return location.reload(); } catch (_) {}
+      }
+      actions.innerHTML = `<span class="erreur petit">L'Atelier ne redémarre pas : relance-le depuis le raccourci du bureau.</span>`;
+    } catch (e) {
+      actions.innerHTML = `<span class="erreur petit">${esc(e.message || e)}</span>`;
+    }
+  };
+}
+if (!PARTAGE) {
+  verifierVersion();
+  setInterval(verifierVersion, 3 * 3600 * 1000);
+}

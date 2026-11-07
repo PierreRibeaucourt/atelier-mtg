@@ -707,6 +707,46 @@ def api_discussion_arreter():
     return jsonify(ok=True)
 
 
+# ---------------------------------------------------------------- version et mise à jour (mise_a_jour.py)
+@app.get("/api/version")
+def api_version():
+    import mise_a_jour
+    from version import __version__
+    return jsonify(version=__version__, disponible=mise_a_jour.disponible())
+
+
+def occupe():
+    """Ce qu'un redémarrage couperait : une réponse de Claude, une recherche de synergies, une simulation."""
+    import discussion
+    import simulation
+    import synergies
+    if discussion.en_cours("")["actives"]:
+        return "Claude est en train de répondre"
+    if any(j.get("actif") for j in synergies._jobs.values()):
+        return "Claude cherche des synergies"
+    if any(j.get("statut") == "en_cours" for j in simulation._jobs.values()):
+        return "une simulation tourne"
+    return None
+
+
+@app.post("/api/mise-a-jour")
+def api_mise_a_jour():
+    """Installe la version annoncée, puis redémarre l'Atelier : la page attend la nouvelle version et se recharge."""
+    import mise_a_jour
+    d = mise_a_jour.disponible()
+    if not d:
+        return jsonify(erreur="Aucune nouvelle version à installer."), 400
+    o = occupe()
+    if o:
+        return jsonify(erreur=f"Mise à jour impossible pour l'instant : {o}. Réessaie quand c'est fini."), 409
+    try:
+        mise_a_jour.installer(d["version"])
+    except mise_a_jour.Echec as e:
+        return jsonify(erreur=str(e)), 409
+    mise_a_jour.redemarrer(PORT, os.path.abspath(__file__))
+    return jsonify(version=d["version"])
+
+
 # ---------------------------------------------------------------- lancement
 def port_pris(port):
     with socket.socket() as s:
@@ -806,9 +846,11 @@ if __name__ == "__main__":
     en_fond(ic.mise_a_jour, tous_les_noms())
     import recherche
     en_fond(recherche.demarrer)                    # base de la recherche de cartes : chargée, puis surveillée (nouvelles cartes, prix)
-    if "--essai" not in sys.argv:                  # un Atelier d'essai lancé à côté ne publie rien
+    if "--essai" not in sys.argv:                  # un Atelier d'essai lancé à côté ne publie rien et ne se met pas à jour
+        import mise_a_jour
         import partage
         en_fond(partage.surveiller, app.test_client().get)     # pages partagées remises à jour quand un deck change
+        en_fond(mise_a_jour.surveiller)                        # nouvelle version de l'Atelier : lue une fois par jour
     if "--sans-navigateur" not in sys.argv:
         threading.Timer(1.5, lambda: webbrowser.open(url)).start()
     if barre:
