@@ -8,7 +8,9 @@ const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-const DECK = new URLSearchParams(location.search).get("deck") || "";
+// page partagée (partage.py, dossier jouer/ de la page du deck) : les réponses de l'API sont figées dans ../donnees.js
+const PARTAGE = window.PARTAGE || null;
+const DECK = PARTAGE ? PARTAGE.deck : new URLSearchParams(location.search).get("deck") || "";
 const CLE = "partie-" + DECK;
 const ZONES = ["bibliotheque", "main", "champ", "cimetiere", "exil", "commandement"];
 const NOM_ZONE = { bibliotheque: "Bibliothèque", main: "Main", champ: "Champ de bataille", cimetiere: "Cimetière", exil: "Exil", commandement: "Commandement" };
@@ -37,6 +39,13 @@ try { const t = localStorage.getItem("theme"); if (t) document.documentElement.d
 
 // ------------------------------------------------------------------ données
 async function api(url) {
+  if (PARTAGE) {                                 // même clé que partage.py : chemin décodé, paramètres triés
+    const u = new URL(url, "http://atelier");
+    const p = [...u.searchParams].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    const cle = decodeURIComponent(u.pathname) + (p.length ? "?" + p.map(([k, v]) => `${k}=${v}`).join("&") : "");
+    if (!(cle in PARTAGE.api)) throw new Error("Indisponible sur cette page.");
+    return structuredClone(PARTAGE.api[cle]);
+  }
   const r = await fetch(url);
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.erreur || r.statusText);
@@ -387,7 +396,7 @@ function tailles() {
 function montageHaut() {
   const pm = (c, lib) => `<div class="compteur" data-c="${c}"><span class="lib">${lib}</span><button type="button" class="btn-pm" data-pm="-1" aria-label="${lib} −1">−</button><b></b><button type="button" class="btn-pm" data-pm="1" aria-label="${lib} +1">+</button></div>`;
   $("#haut").innerHTML = `
-    <a class="retour" href="/#/deck/${encodeURIComponent(DECK)}/liste" title="${esc(deck.titre)}">${ICO.retour}${esc(deck.titre)}</a>
+    <a class="retour" href="${PARTAGE ? "../" : `/#/deck/${encodeURIComponent(DECK)}/liste`}" title="${esc(deck.titre)}">${ICO.retour}${esc(deck.titre)}</a>
     ${pm("tour", "Tour")}${pm("vie", "Vie")}
     <div class="mana">${MANA.map(([x, lib]) => `<button type="button" data-mana="${x}" title="${lib}"><img src="https://svgs.scryfall.io/card-symbols/${x}.svg" alt="${lib}"><b></b></button>`).join("")}
       <button type="button" class="btn btn-petit btn-discret" id="b-vider">Vider</button></div>

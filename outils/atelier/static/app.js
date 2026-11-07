@@ -904,7 +904,7 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
           <div class="chiffres" style="margin-top:.5rem">${chiffresDeck(d)}</div>
         </div>
         <div class="actions">
-          <a class="btn ecrit" href="/jouer?deck=${enc(id)}" target="_blank" rel="noopener">${ico("lancer")}Jouer</a>
+          <a class="btn" href="${PARTAGE ? "jouer/" : `/jouer?deck=${enc(id)}`}" target="_blank" rel="noopener">${ico("lancer")}Jouer</a>
           <a class="btn ecrit" href="#/recherche?deck=${enc(id)}">${ico("chercher")}Chercher des cartes</a>
           <button class="btn btn-icone ouvre-menu" id="btn-deck-menu" aria-label="Autres actions sur le deck" title="Autres actions">${ico("plus_de")}</button>
         </div>

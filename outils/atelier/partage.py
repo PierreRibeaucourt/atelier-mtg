@@ -179,6 +179,7 @@ def capturer(deck, get):
     prendre(racine + "/simulation/options")
     for r in prendre(racine + "/simulations") or []:
         prendre(racine + "/simulations/" + r["fichier"])
+    prendre("/api/jouer/jetons", {"deck": deck})             # pour « Jouer » (dossier jouer/ de la page)
 
     # versions : chaque liste, pour comparer deux versions dans la page (toutes les paires ne tiennent pas en fichier)
     listes = {}
@@ -301,6 +302,25 @@ def _page(dossier, donnees, entete):
     _ecrire(os.path.join(dossier, "index.html"), html)
 
 
+def _page_jouer(dossier):
+    """jouer/ : le module « Jouer tout seul » de la page du deck, qui lit les mêmes données (../donnees.js)."""
+    d = os.path.join(dossier, "jouer")
+    os.makedirs(d, exist_ok=True)
+    for f in ("jouer.js", "jouer.css"):
+        shutil.copyfile(os.path.join(STATIQUE, f), os.path.join(d, f))
+    v = {f: _version(os.path.join(d, f)) for f in ("jouer.js", "jouer.css")}
+    with open(os.path.join(STATIQUE, "jouer.html"), encoding="utf-8") as f:
+        html = f.read()
+    html = (html.replace("</title>", '</title>\n  <meta name="robots" content="noindex">', 1)
+            .replace('href="/static/jouer.css"', f'href="jouer.css?v={v["jouer.css"]}"')
+            .replace('<script src="/static/jouer.js"></script>',
+                     f'<script src="../donnees.js?v={_version(os.path.join(dossier, "donnees.js"))}"></script>\n'
+                     f'  <script src="jouer.js?v={v["jouer.js"]}"></script>'))
+    if "/static/" in html:                                   # jouer.html a changé : mieux vaut ne rien publier de cassé
+        raise RuntimeError("La page « Jouer » n'a pas pu être préparée : partage annulé")
+    _ecrire(os.path.join(d, "index.html"), html)
+
+
 def _accueil(reg, site):
     """La racine du site : les decks partagés, chacun vers sa page."""
     resumes = sorted((dict(r["resume"]) for r in reg.values()), key=lambda r: r["titre"])
@@ -351,6 +371,7 @@ def construire(deck, get):
     _page(dossier, dict(donnees, accueil="../"), dict(
         titre=f"{d['titre']} : {genre}", description=description, url=url, image=image and url + image,
         alt=f"{d['titre']} : carte de {_liste(cmds) or 'son commandant'}, couleurs et chiffres du deck"))
+    _page_jouer(dossier)
     reg[deck] = dict(slug=slug, date=donnees["date"],
                      resume={k: v for k, v in d.items() if k not in ("cartes", "categories", "erreur_sim")},
                      cartes=[[c["nom"], c["info"].get("fr") or ""] for c in d["cartes"]])
