@@ -45,6 +45,9 @@ Chaque message commence par [Page : …] : c'est ce que l'utilisateur regarde da
   les résultats par défaut ne changent pas).
 - Rapports de simulation : <dossier du deck>/simulations/*.json. Simulateur : outils/simu.py, simu_cartes.py, simu_moteur.py.
 - Prix : python outils/prix.py "<carte>" ({budget}). Respecte la méthode et les préférences gardées en mémoire.
+- Avant de conseiller un ajout, un retrait, la base de mana ou la répartition d'un deck, lis dans ta mémoire la fiche du deck
+  (deck-*.md) et les articles qui servent (article-*.md : gabarit Magic-Casual, chiffres zombie33, terrains, deck original,
+  brackets) ; appuie-toi sur leurs repères, adaptés au deck et aux préférences de l'utilisateur.
 - Tu peux chercher sur Internet et lire des pages web (listes, articles, nouveautés), sauf EDHREC (ses conditions interdisent
   les accès automatisés) et Cardmarket (protégé contre les robots) : pour les prix, passe par prix.py ou Scryfall."""
 
