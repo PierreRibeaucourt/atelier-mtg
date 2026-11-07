@@ -3123,7 +3123,6 @@ function vueAPropos() {
   scrollTo(0, 0);
   etat.deck = null;
   const depot = esc((PARTAGE && PARTAGE.atelier) || DEPOT_ATELIER);
-  const retour = `<a href="${PARTAGE && PARTAGE.page ? esc(PARTAGE.accueil) : "#/"}">${esc(MES_DECKS)}</a><span aria-hidden="true">›</span>`;
   const capture = (f, alt) => `<img src="${PARTAGE ? CAPTURES_ATELIER : "/a-propos/"}${f}.webp" data-f="${f}" alt="${esc(alt)}"`;
   const consigne = `Installe et lance l'Atelier MTG depuis ${(PARTAGE && PARTAGE.atelier || DEPOT_ATELIER).replace("https://", "")}`;
   const fonction = (titre, texte) => `<div class="ap-carte"><h3>${titre}</h3><p>${texte}</p></div>`;
@@ -3146,7 +3145,6 @@ function vueAPropos() {
       </div>
     </header>
     <article class="a-propos">
-      <nav class="fil" aria-label="Fil d'Ariane">${retour}<span aria-current="page">L'Atelier MTG</span></nav>
       <p class="chapeau">Le gestionnaire de decks Commander local, sans compte et taillé pour le deckbuilding assisté.</p>
       <p>L'Atelier est une application locale, qui s'ouvre dans votre navigateur, pensée pour concevoir, tester et faire évoluer
         des decks Magic: The Gathering en Commander. Pas de publicité, aucun compte en ligne, pas de données hébergées sur un
