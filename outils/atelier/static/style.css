@@ -768,6 +768,15 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .ap-carte h3 { margin: 0 0 .25rem; font-size: .95rem; }
 .ap-carte p { margin: 0; font-size: .88rem; line-height: 1.5; color: var(--texte-2); }
 .ap-depot { margin-left: .8rem; font-size: .88rem; }
+.ap-module { margin: 1.4rem 0 2.6rem; }
+.ap-module h3 { margin: 0 0 .15rem; font-size: 1.05rem; }
+.ap-module p { margin: 0 0 .75rem; }
+/* la capture, cadrée sur le module, à la largeur du texte ; un clic l'agrandit */
+.ap-module figure { margin: 0; padding: 6px; background: var(--surface); border: 1px solid var(--bord); border-radius: 12px; box-shadow: var(--ombre); }
+.ap-module img { display: block; width: 100%; height: auto; border-radius: 7px; cursor: zoom-in; }
+.ap-zoom { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; padding: 2vh 2vw;
+  background: rgba(0,0,0,.86); cursor: zoom-out; }
+.ap-zoom img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
 .ap-consigne { display: flex; align-items: center; gap: .6rem; background: var(--surface-2); border: 1px solid var(--bord); border-radius: 8px;
   padding: .55rem .6rem .55rem .9rem; }
 .ap-consigne code { flex: 1; min-width: 0; font-size: .9rem; overflow-wrap: anywhere; }

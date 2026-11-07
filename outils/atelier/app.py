@@ -240,6 +240,14 @@ def page_jouer():
     return send_from_directory(app.static_folder, "jouer.html")
 
 
+@app.get("/a-propos/<nom>")
+def capture_a_propos(nom):
+    """Captures de la page « C'est quoi, l'Atelier MTG ? » rangées dans le site partagé de ce PC (Partage Atelier/a-propos) :
+    la page les montre avant leur mise en ligne. Ailleurs, 404, et la page les prend sur le site de l'auteur."""
+    import partage
+    return send_from_directory(os.path.join(partage.DOSSIER, "a-propos"), nom)
+
+
 @app.get("/api/jouer/jetons")
 def api_jouer_jetons():
     """Les jetons que créent les cartes du deck (Scryfall, gardés dans cache_jetons.json)."""

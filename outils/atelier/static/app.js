@@ -3103,6 +3103,18 @@ function vueRechercheVitrine() {
 // L'histoire est celle de l'auteur de l'Atelier, pas forcément celle de la personne qui partage ses decks.
 const AUTEUR_ATELIER = "PierreRibeaucourt";
 const DEPOT_ATELIER = "https://github.com/PierreRibeaucourt/atelier-mtg";
+// les captures de la page : sur le site de decks de l'auteur, pas dans le dépôt de code (on y voit des cartes et une discussion)
+const CAPTURES_ATELIER = "https://pierreribeaucourt.github.io/decks/a-propos/";
+const MODULES_ATELIER = [
+  ["decks", "Vos decks, à votre façon", "Créez, importez et éditez vos decks comme partout, avec une vue personnalisable : liste ou visuel, taille des cartes, rangement par type, par tag ou par fonction."],
+  ["versions", "Versions et historique", "Chaque modification est gardée. Enregistrez des versions, comparez deux listes, revenez en arrière."],
+  ["statistiques", "Statistiques et base de mana", "Courbe de mana, types, fonctions des cartes et surtout la répartition des sources de couleur : elle compte les terrains et les cartes de ramp, et dit si chaque couleur est confortable."],
+  ["combos", "Combos", "Les combos du deck sont repérées automatiquement, en croisant plusieurs sources : MTGPics (la base de Magic-Ville) et Commander Spellbook."],
+  ["bracket", "Bracket", "Le bracket est estimé automatiquement selon les règles officielles : Game Changers, combos infinies à deux cartes, tuteurs… et comparé à l'estimation de Commander Spellbook."],
+  ["discussion", "Discussion avec Claude", "Facultative, à droite de l'écran : Claude connaît vos decks et aide à catégoriser les cartes, faire un cut, chercher des idées ou vérifier une interaction."],
+  ["jouer", "Table de jeu", "Jouez vos decks en solo pour tester les mains de départ et les premiers tours : pioche, mulligan, jetons, marqueurs, planeswalkers, tout au clic ou au glisser."],
+  ["recherche", "Recherche avancée", "Une recherche multicritère comme celle de Magic-Ville, avec en plus un filtre de prix Cardmarket et une catégorisation automatique des cartes : ramp, pioche, tuteur, removal…"],
+];
 
 function vueAPropos() {
   scrollTo(0, 0);
@@ -3136,14 +3148,17 @@ function vueAPropos() {
       <p>L'Atelier est né de cette synthèse : une interface locale fluide pour gérer ses cartes, connectable à la demande à un
         assistant IA pour auditer un deck, automatiser le classement ou simuler des parties.</p>
 
-      <h2>Fonctionnalités principales</h2>
+      <h2>Ce qui fait la différence</h2>
+      ${MODULES_ATELIER.map(([f, titre, texte]) => `<section class="ap-module">
+        <h3>${esc(titre)}</h3><p>${esc(texte)}</p>
+        <figure><img src="${PARTAGE ? CAPTURES_ATELIER : "/a-propos/"}${f}.webp" data-f="${f}" alt="${esc(titre)}" loading="lazy"></figure>
+      </section>`).join("")}
+
+      <h2>Et aussi</h2>
       <div class="ap-grille">
-        ${fonction("Gestion et import de decks", "Import d'une liste copiée depuis Moxfield, Archidekt ou MTG Arena. Affichage en vue grille ou texte, tri par type, par tag ou par fonction stratégique.")}
-        ${fonction("Statistiques et budget", "Courbe de mana réelle, mains de départ tirées au hasard, équilibrage des sources de mana et prix Cardmarket du jour, avec une alerte au-delà de votre budget par carte.")}
-        ${fonction("Banc d'essai et simulations", "Simulateur multijoueur pour évaluer la régularité d'un deck sur des centaines de parties, ou table virtuelle pour s'entraîner en solo.")}
-        ${fonction("Moteur de synergies", "Repérage automatique des combos présentes dans la liste, et des cartes qui combotent avec une carte donnée.")}
-        ${fonction("Gestion des versions", "Historique complet des modifications et comparaison avant / après chaque ajustement.")}
-        ${fonction("Copilote IA optionnel", "Connexion directe à Claude Code, avec vos propres accès, pour obtenir des retours critiques, affiner une stratégie ou réorganiser une liste.")}
+        ${fonction("Import en un collage", "Une liste copiée depuis Moxfield, Archidekt ou MTG Arena devient un deck, rangé par catégories.")}
+        ${fonction("Prix et budget", "Prix Cardmarket du jour pour chaque carte et chaque deck, avec une alerte au-delà de votre budget par carte.")}
+        ${fonction("Simulations", "Un simulateur multijoueur joue des centaines de parties pour mesurer la régularité d'un deck et comparer deux versions.")}
         ${fonction("Partage simplifié", "Publication en un clic d'une page de présentation légère, comme celle-ci, à partager avec votre groupe de jeu.")}
       </div>
 
@@ -3167,9 +3182,28 @@ function vueAPropos() {
       <div class="ap-consigne"><code>${esc(consigne)}</code>
         <button type="button" class="btn btn-petit btn-discret" id="ap-copier">${ico("copier")}Copier</button></div>
     </article>`;
+  $$(".ap-module img").forEach((img) => {
+    img.onerror = () => {                       // dans l'Atelier : la capture de ce PC, sinon celle du site de l'auteur
+      if (!PARTAGE && !img.dataset.enLigne) { img.dataset.enLigne = "1"; img.src = CAPTURES_ATELIER + img.dataset.f + ".webp"; }
+      else img.closest(".ap-module figure").remove();                // hors ligne, ou capture introuvable : le texte suffit
+    };
+    img.onclick = () => zoomer(img);
+  });
   $("#ap-copier").onclick = async () => {
     try { await navigator.clipboard.writeText(consigne); toast("Consigne copiée."); } catch (e) { erreur(e); }
   };
+}
+
+// une capture en grand, par-dessus la page ; un clic ou Échap la referme
+function zoomer(img) {
+  const z = document.createElement("div");
+  z.className = "ap-zoom";
+  z.innerHTML = `<img src="${esc(img.src)}" alt="${esc(img.alt)}">`;
+  const touche = (ev) => { if (ev.key === "Escape") fermer(); };
+  const fermer = () => { z.remove(); removeEventListener("keydown", touche); };
+  z.onclick = fermer;
+  addEventListener("keydown", touche);
+  document.body.append(z);
 }
 
 function critIdentite(d) {
