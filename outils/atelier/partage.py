@@ -135,7 +135,7 @@ def _slug(deck, reg):
 
 
 def etat(deck):
-    """{url, date} si le deck est partagé, sinon {}."""
+    """{url, date} si le deck est partagé (plus {erreur} si la dernière mise à jour automatique a échoué), sinon {}."""
     p = _registre().get(deck)
     if not p:
         return {}
@@ -143,7 +143,8 @@ def etat(deck):
         site = compte()[1]
     except Exception:
         return {}
-    return dict(url=site + p["slug"] + "/", date=p["date"])
+    e = _echecs.get(deck)
+    return dict(url=site + p["slug"] + "/", date=p["date"], **({"erreur": e[1]} if e else {}))
 
 
 # ---------------------------------------------------------------- données de la page
@@ -363,7 +364,61 @@ def partager(deck, get):
     with _verrou:
         _preparer()
         _publier("Partage : " + construire(deck, get))
+    _echecs.pop(deck, None)
     return etat(deck)
+
+
+# ---------------------------------------------------------------- mise à jour automatique des pages partagées
+SURVEILLES = (decks.FICHIER, "deck.json", decks.VISUELS, "synergies.json", os.path.join(decks.VERSIONS, "versions.json"))
+CALME = 120            # secondes sans modification avant de republier : une série d'ajouts ne publie qu'une fois
+REESSAI = 900          # après un échec (pas de réseau…), nouvel essai un quart d'heure plus tard
+_echecs = {}           # deck : (heure, message) de la dernière mise à jour automatique ratée
+
+
+def derniere_modif(deck):
+    """Heure de la dernière modification de ce que montre la page : liste, note, impressions, synergies, versions, simulations.
+    Pas la discussion avec Claude, qui ne part jamais."""
+    base, t = os.path.join(decks.RACINE, deck), 0
+    for f in SURVEILLES:
+        try:
+            t = max(t, os.path.getmtime(os.path.join(base, f)))
+        except OSError:
+            pass
+    try:
+        with os.scandir(os.path.join(base, "simulations")) as it:
+            t = max([t] + [e.stat().st_mtime for e in it if e.name.endswith(".json")])
+    except OSError:
+        pass
+    return t
+
+
+def a_republier(maintenant=None):
+    """Les decks partagés modifiés depuis leur publication, au calme depuis CALME secondes, sans échec trop récent."""
+    maintenant = maintenant or time.time()
+    r = []
+    for deck, p in _registre().items():
+        if not os.path.isdir(os.path.join(decks.RACINE, deck)):
+            continue
+        t, e = derniere_modif(deck), _echecs.get(deck)
+        if t > p["date"] and maintenant - t >= CALME and not (e and maintenant - e[0] < REESSAI):
+            r.append(deck)
+    return r
+
+
+def surveiller(get, pause=30):
+    """En fond tant que l'Atelier est ouvert : republie la page d'un deck partagé quand on a fini de le modifier,
+    depuis l'Atelier, le Claude de l'Atelier ou un éditeur. Au lancement, rattrape ce qui a changé Atelier fermé."""
+    while True:
+        time.sleep(pause)
+        try:
+            decks_a_faire = a_republier()
+        except Exception:
+            continue
+        for deck in decks_a_faire:
+            try:
+                partager(deck, get)
+            except Exception as ex:
+                _echecs[deck] = (time.time(), str(ex))
 
 
 def retirer(deck):

@@ -806,6 +806,9 @@ if __name__ == "__main__":
     en_fond(ic.mise_a_jour, tous_les_noms())
     import recherche
     en_fond(recherche.demarrer)                    # base de la recherche de cartes : chargée, puis surveillée (nouvelles cartes, prix)
+    if "--essai" not in sys.argv:                  # un Atelier d'essai lancé à côté ne publie rien
+        import partage
+        en_fond(partage.surveiller, app.test_client().get)     # pages partagées remises à jour quand un deck change
     if "--sans-navigateur" not in sys.argv:
         threading.Timer(1.5, lambda: webbrowser.open(url)).start()
     if barre:

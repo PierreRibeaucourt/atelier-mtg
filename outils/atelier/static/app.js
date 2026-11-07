@@ -959,6 +959,7 @@ function modalePartage(d) {
           <a class="btn" href="${esc(s.url)}" target="_blank" rel="noopener">${ico("ouvrir")}Ouvrir</a>
         </div>
         <p class="muet petit">Mise à jour le ${esc(new Date(s.date * 1000).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" }))}</p>
+        ${s.erreur ? `<p class="erreur petit">${esc(s.erreur)}</p>` : ""}
         <div class="boutons">
           <button class="btn btn-danger" id="pt-retirer">${ico("corbeille")}Ne plus partager</button>
           <button class="btn" id="pt-maj">${ico("rafraichir")}Mettre à jour</button>
