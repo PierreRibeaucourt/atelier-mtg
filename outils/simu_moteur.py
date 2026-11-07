@@ -14,9 +14,15 @@ from collections import Counter
 
 from simu_adversaires import ARCHETYPES, MODELES, TOUR_FINAL
 from simu_cartes import JETABLES, VALEUR_KIND, VALEUR_PERM
+from simu_engage import Engagement
 
 T_MAX = 15
-ORDRE = ["rock", "a_ramp", "wipe1", "wipe", "nightinc", "a_rase",
+# kinds « e_… » : mode engagement (simu_engage.py), seulement pour les decks qui en contiennent
+ORDRE_ENGAG = ["e_kefnet", "e_propagande", "e_couronne", "e_opposition", "e_contemplation", "e_lame", "e_bident", "e_thassa",
+               "e_aura", "e_goad_aura", "e_fealty", "e_saga", "e_tamiyo", "e_sort_tap", "e_vague", "e_pioche_eng", "e_tazeem",
+               "e_crea_tap", "e_tolarian", "e_maeve", "e_sly", "e_archiviste", "e_amirale", "e_turtle", "e_benthid",
+               "e_redirect", "e_menaces", "e_gambit"]
+ORDRE = ["rock", "a_ramp"] + ORDRE_ENGAG + ["wipe1", "wipe", "nightinc", "a_rase",
          "dawn", "vat", "gift", "brink", "sneak", "echoes", "rite", "a_moteur", "clamp", "blade", "a_equip",
          "dt", "fab", "mage", "sidisi", "gate", "ophio", "attrition", "bitter", "soulstoke", "thunderkin", "spitter", "necro", "servant",
          "sheoW", "konrad", "sheoA", "bastion", "butcher", "demon", "wurm", "archon", "gray", "reaper", "opportunist",
@@ -141,7 +147,7 @@ class Adversaire:
         return self.pv > 0
 
 
-class Partie:
+class Partie(Engagement):
     def __init__(self, C, cmd, deck, archetypes, graine, pilote="vite", reglages=None):
         """pilote : « vite » lance tout dès que possible ; « salve » garde ses créatures pour un gros tour (voir tient_salve).
         reglages : voir REGLAGES_DEFAUT (une clé « pilote » dans reglages l'emporte sur le paramètre pilote)."""
@@ -169,6 +175,7 @@ class Partie:
         self.stat = Counter()
         self.pose = {}
         self.main_depart(deck)
+        self.init_engag()
 
     # ================================================================ outils de base
     def kind(self, n):
@@ -256,6 +263,8 @@ class Partie:
             p += self.pv_perdu_tour
         if P.get("hate"):
             kws.add("celerite")
+        if P.get("cmd") and self.kc["kind"] == "tromo" and not P.get("attaque"):   # défense talismanique sauf en attaquant
+            kws.add("hexproof")
         if P.get("nom") == "Thunderblust" and P["compteurs"]:
             kws.add("pietine")
         return p, t, kws
@@ -351,7 +360,7 @@ class Partie:
 
         def valeur(n):
             coul = self.C[n]["mana"]
-            return ((not prete(n)) if self.t == 1 else prete(n), any(c in coul for c in manque), len(coul) > 1, coul != "C")
+            return (bool(coul), (not prete(n)) if self.t == 1 else prete(n), any(c in coul for c in manque), len(coul) > 1, coul != "C")
         n = max(main, key=valeur)
         self.hand.remove(n)
         r = self.C[n].get("regle") or (None, None)
@@ -384,7 +393,7 @@ class Partie:
         marais = any("Swamp" in self.C[x[0]]["types_terrain"] for x in self.terrains)
         self.pool = []
         for n, coul, pret in self.terrains:
-            if not pret:
+            if not pret or not coul:           # terrain qui ne produit pas de mana (Labyrinthe d'Ith)
                 continue
             if coul == "tainted":
                 self.pool.append([("UB" if marais else "C"), False, None])
@@ -394,7 +403,7 @@ class Partie:
                 self.pool.append([coul, False, None])
         for P in self.perms:
             k = P.get("k")
-            if k and k["kind"] == "rock" and (k.get("immediat") or P["entree"] < self.t):
+            if k and (k["kind"] == "rock" or k.get("rock")) and (k.get("immediat") or P["entree"] < self.t):
                 restr = ("type", k["restriction"]) if k.get("restriction") else None
                 for _ in range(k.get("mana_n", 1)):
                     self.pool.append([k["mana"], False, restr])
@@ -465,6 +474,8 @@ class Partie:
                 g -= s["n"]
         if any(s["s"] == "reduc_creatures" for s in k["statiques"]):
             g -= len(self.creatures()) + sum(len(a.creas) for a in self.vivants())
+        if self.engag and k["creature"] and "U" in k["couleurs"]:      # Monument de Kefnet
+            g -= len(self.kperm("e_kefnet"))
         return max(0, g), pips
 
     def paie_carte(self, k, alt=None, extra=0):
@@ -971,6 +982,8 @@ class Partie:
         if not k:
             return False
         kd = k["kind"]
+        if kd.startswith("e_") or kd == "tromo":
+            return self.etb_engag(P, depuis_main)
         if kd == "maraud":
             if k.get("grave") and self.seg_mort:
                 self.pioche(1)
@@ -1061,6 +1074,8 @@ class Partie:
 
     # ================================================================ phase principale
     def veut(self, n, k, kd):
+        if kd.startswith("e_"):
+            return self.veut_engag(n, k, kd)
         if kd in UNIQUES and self.sur(kd):
             return False
         adv_crea = sum(len(a.creas) for a in self.vivants())
@@ -1190,6 +1205,8 @@ class Partie:
             return False
         self.hand.remove(n)
         self.stat["lances"] += 1
+        if self.engag:
+            self.apres_sort_engag(k)
         exile = self.paie_behold(n, k["behold"]) if k.get("behold") else None
         if self.contre_adverse(k):
             self.gy.append(n)
@@ -1239,6 +1256,8 @@ class Partie:
         if not self.paie(g + self.taxe, pips, frozenset(k["sous_types"])):
             return False
         self.stat["lances"] += 1
+        if self.engag:
+            self.apres_sort_engag(k)
         if self.contre_adverse(k):
             self.taxe += 2
             return True
@@ -1268,6 +1287,8 @@ class Partie:
 
     def resout(self, n, k, kd, evoque=False):
         """Résolution d'un sort lancé depuis la main."""
+        if kd.startswith("e_"):
+            return self.resout_engag(n, k, kd)
         if kd == "dt":
             self.gy.append(n)
             self.tuteur()
@@ -1414,6 +1435,8 @@ class Partie:
             if self.paie(*self.C[n]["alt"]["unearth"]):
                 self.quitte_cim(n)
                 self.entre(self.nouveau(self.C[n], hate=True, unearth=True, fin="exil"))
+        if self.engag:
+            self.avant_combat_engag()
 
     def equiper(self):
         """Bottes et Grèves sur le commandant ; équipements de force sur le meilleur attaquant ; Crâne sur une créature X/1 qui part."""
@@ -1722,6 +1745,8 @@ class Partie:
                         break
 
     def fin_de_tour(self):
+        if self.engag:
+            self.fin_tour_engag()
         for P in list(self.perms):
             if P.get("k"):
                 for e in P["k"]["effets"]:
@@ -1761,6 +1786,8 @@ class Partie:
         self.seg_mort = self.opport = False
         self.vat_fait = False
         self.aube_tmp = None
+        if self.engag:
+            self.debut_tour_engag()
         # entretien
         if self.sur("bitter"):
             self.entre(self.jeton("faerie"))
@@ -1793,16 +1820,24 @@ class Partie:
         self.saga_suite()
         self.joue_terrain()
         self.construit_pool()
+        if self.engag:
+            self.sagas_engag()
+            self.landfall_engag()
         self.lancer()
         if self.fin:
             return
         self.avant_combat()
         if self.fin:
             return
-        self.mon_attaque()
+        if self.engag:
+            self.attaque_engag()
+        else:
+            self.mon_attaque()
         if self.fin:
             return
         self.apres_combat()
+        if self.engag:
+            self.landfall_engag()
         self.phase2 = True
         self.lancer()
         self.phase2 = False
@@ -1842,6 +1877,8 @@ class Partie:
             c["neuve"] = True
             a.creas.append(c)
         a.renvois = []
+        if self.engag:
+            self.degagement_adv(a)
         if self.sur("ophio") and not any(P.get("nomj") == "snake" for P in self.perms):
             self.entre(self.jeton("snake"))
         if self.sur("sheoW") and a.creas:
@@ -1953,7 +1990,11 @@ class Partie:
             self.stat["cimetiere_exile"] += 1
         if self.fin or not a.vivant():
             return
-        self.attaque_adv(a, rng)
+        if self.engag:
+            self.attaque_adv_engag(a, rng)
+            self.fin_tour_adv_engag(a)
+        else:
+            self.attaque_adv(a, rng)
         for c in [c for c in a.creas if c.get("rager")]:
             a.creas.remove(c)
         if self.sur("reaper") and self.seg_mort:

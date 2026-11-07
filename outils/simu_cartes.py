@@ -64,7 +64,40 @@ COMPORTEMENTS = {
     "Heartlash Cinder": K("cinder"), "Tibalt's Trickery": K("reactif"), "Gruesome Encore": K("encore"),
     "Stinging Study": K("study"), "Pyroblast": K("reactif", bleu=True), "Red Elemental Blast": K("reactif", bleu=True),
     "Last One Standing": K("wipe"), "Chaos Warp": K("remsort"),
+    # --- Tromokratis : mode engagement (simu_engage.py)
+    "Tromokratis": K("tromo"),
+    "Kefnet's Monument": K("e_kefnet"), "Propaganda": K("e_propagande"), "Hylda's Crown of Winter": K("e_couronne"),
+    "Opposition": K("e_opposition"), "Quiet Contemplation": K("e_contemplation"), "Bloodthirsty Blade": K("e_lame"),
+    "Bident of Thassa": K("e_bident"), "Thassa, God of the Sea": K("e_thassa", creature=False),
+    "Claustrophobia": K("e_aura"), "Bubble Snare": K("e_aura", kicker=True), "Fall from Favor": K("e_aura", monarque=True),
+    "Stunning Strike": K("e_aura", flash=True), "Observed Stasis": K("e_aura", flash=True, neutralise=True),
+    "Psychic Impetus": K("e_goad_aura"), "Fealty to the Realm": K("e_fealty"),
+    "Time of Ice": K("e_saga"), "Kang Dynasty": K("e_saga"), "Summon: Shiva": K("e_saga"), "Scroll of Isildur": K("e_saga"),
+    "Tamiyo, the Moon Sage": K("e_tamiyo"),
+    "Gigadrowse": K("e_sort_tap", mode="giga"), "Icy Blast": K("e_sort_tap", mode="icy"),
+    "Lost in the Maze": K("e_sort_tap", mode="maze"), "Sleep": K("e_sort_tap", mode="sleep"),
+    "Cryptic Command": K("e_sort_tap", mode="cryptic"), "Imaginary Threats": K("e_menaces"),
+    "Borrowing 100,000 Arrows": K("e_pioche_eng"), "Theft of Dreams": K("e_pioche_eng"),
+    "Whelming Wave": K("e_vague", mode="whelming"), "Engulf the Shore": K("e_vague", mode="engulf"),
+    "Cyclonic Rift": K("e_vague", mode="rift"), "Scourge of Fleets": K("e_vague", mode="scourge"),
+    "Slinn Voda, the Rising Deep": K("e_vague", mode="slinn"), "Kederekt Leviathan": K("e_vague", mode="kederekt"),
+    "Stubborn Denial": K("reactif"),
+    "Snaremaster Sprite": K("e_crea_tap", n=1, gel=1, extra=2), "Floodpits Drowner": K("e_crea_tap", n=1, gel=1, noyeur=True),
+    "Freeze in Place": K("e_sort_tap", mode="stun3"), "Impede Momentum": K("e_sort_tap", mode="stun3"),
+    "Grappling Kraken": K("e_tazeem", toujours_gel=True),
+    "Portal Mage": K("e_redirect"), "Misleading Signpost": K("e_redirect", rock=True), "Illusionist's Gambit": K("e_gambit"),
+    "Mesmerizing Benthid": K("e_benthid"),
+    "Merfolk Trickster": K("e_crea_tap", n=1, flash=True), "Frost Trickster": K("e_crea_tap", n=1, gel=1),
+    "Juvenile Mist Dragon": K("e_crea_tap", n="chaque", gel=1), "Frost Titan": K("e_crea_tap", n=1, gel=1, attaque=True),
+    "Breaching Leviathan": K("e_crea_tap", n="tous", gel=1),
+    "Guardian of Tazeem": K("e_tazeem"), "Tolarian Kraken": K("e_tolarian"), "Angler Turtle": K("e_turtle"),
+    "Maeve, Insidious Singer": K("e_maeve"), "Sly Instigator": K("e_sly"),
+    "Archivist of Gondor": K("e_archiviste"), "Azure Fleet Admiral": K("e_amirale"),
 }
+# mana net des sources qui demandent du mana pour en produire (sinon le moteur compte le mana produit sans le coût)
+MANA_NET = {"Apprentice Wizard": 2}           # {U}, {T} : {C}{C}{C}
+# terrains compris par le mode engagement (simu_engage.py) : leurs capacités ne sont pas lues automatiquement
+TERRAINS_ENGAG = {"Maze of Ith", "Mystifying Maze", "Minamo, School at Water's Edge"}
 
 # Valeur d'une de tes créatures : ce que l'adversaire vise en premier, ce que tu évites d'échanger.
 VALEUR_KIND = {"sheoW": 10, "kels": 9, "greven": 9, "butcher": 8, "demon": 8, "konrad": 8, "sheoA": 7, "wurm": 7, "reaper": 7,
@@ -505,7 +538,8 @@ def construire(noms, cmd):
         if k["terrain"]:
             k["kind"] = "terrain"
             k["regle"] = TERRAINS_SPECIAUX.get(n) or an["regle"]
-            k["mana"] = couleurs or "C"
+            # « » : ne produit pas de mana (Labyrinthe d'Ith) ; les fetchs (TERRAINS_SPECIAUX) gardent « C »
+            k["mana"] = (couleurs or "C") if (f["produit"] or n in TERRAINS_SPECIAUX) else ""
             k["types_terrain"] = TYPES_TERRAIN.get(n, {t for t in sous if t in ("Swamp", "Island", "Mountain", "Forest", "Plains")})
             k["base"] = "Basic" in f["type"]
             k["hate_terrain"] = any(a["actions"] and a["actions"][0]["a"] == "pump" and a["actions"][0].get("hate") for a in an["activables"])
@@ -525,6 +559,8 @@ def construire(noms, cmd):
             k["mana_n"] = m.get("n", 1)
             k["restriction"] = m.get("restriction")
             k["immediat"] = not k["creature"] and "enters tapped" not in f["texte"] and not m.get("sac_soi")
+            if n in MANA_NET:
+                k["mana_n"] = MANA_NET[n]
         C[n] = k
     return C, couverture(C)
 
@@ -532,9 +568,12 @@ def construire(noms, cmd):
 def couverture(C):
     """Classe chaque carte : écrite à la main, lue automatiquement, lue en partie, ou jouée sans effet."""
     res = {"specifique": [], "auto": [], "partiel": [], "corps": [], "sans_effet": []}
+    engag = any(k["kind"].startswith("e_") or k["kind"] == "tromo" for k in C.values())
     for n, k in sorted(C.items()):
         if k["terrain"] and (not k["non_lu"] or n in TERRAINS_SPECIAUX):
             res["auto"].append(n)
+        elif k["terrain"] and n in TERRAINS_ENGAG and engag:
+            res["specifique"].append(n)
         elif n in COMPORTEMENTS:
             res["specifique"].append(n)
         elif k["non_lu"] and (k["effets"] or k["statiques"] or k["activables"] or k.get("ephemere")):
