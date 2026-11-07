@@ -647,6 +647,9 @@ function deckDeLaPage() {
     const deck = deckDeLaPage();
     const [ds, cartes] = await Promise.all([listeDecks(),
       q.length >= 2 ? api("/api/recherche/noms?q=" + enc(brut) + (deck ? "&deck=" + enc(deck.id) : "")).catch(() => []) : Promise.resolve([])]);
+    // rien trouvé : la base de cartes est peut-être encore en construction (premier lancement)
+    const enConstruction = q.length >= 2 && !cartes.length
+      && !((await api("/api/recherche/base").catch(() => null)) || { prete: true }).prete;
     if (k !== numero) return;
     const score = (d) => !q ? 0 : sansAccent(d.titre).startsWith(q) ? 0 : sansAccent(d.titre).includes(q) ? 1 : 2;
     const decksTrouves = ds.filter((d) => !q || sansAccent(`${d.titre} ${nomsCommandants(d)}`).includes(q))
@@ -669,9 +672,11 @@ function deckDeLaPage() {
       </a>`;
     const nc = cartes.length;
     liste.innerHTML = (q.length >= 2 ? `<div class="aller-section">Cartes</div>` + (nc ? items.slice(0, nc).map(ligneCarte).join("")
+        : enConstruction ? `<div class="aller-vide petit">La base de cartes se construit : la recherche marchera quand elle sera prête.
+            <a href="${esc(tous(brut))}">Voir l'avancement →</a></div>`
         : `<div class="aller-vide muet petit">Aucune carte.</div>`) : "")
       + (decksTrouves.length ? (q.length >= 2 ? `<div class="aller-section">Decks</div>` : "") + items.slice(nc).map((it, j) => ligneDeck(it, nc + j)).join("") : "")
-      + (q.length >= 2 ? `<div class="aller-pied petit"><a href="${esc(tous(brut))}">Toutes les cartes « ${esc(brut)} » →</a></div>` : "");
+      + (q.length >= 2 && !enConstruction ? `<div class="aller-pied petit"><a href="${esc(tous(brut))}">Toutes les cartes « ${esc(brut)} » →</a></div>` : "");
     liste.hidden = !liste.innerHTML;
   };
   const choisir = (it) => {
