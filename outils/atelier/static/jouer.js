@@ -34,7 +34,9 @@ let signature = "";         // la liste jouée : une partie gardée ne reprend q
 let E = null;               // état de la partie
 let passe = [], futur = []; // annuler / rétablir
 let survol = null;          // carte sous la souris (raccourcis clavier)
-let g = null;               // carte en train d'être glissée
+let g = null;               // carte (ou sélection) en train d'être glissée
+let sel = new Set();        // cartes sélectionnées sur le champ de bataille (lasso, Ctrl+clic) : actions groupées
+let L = null;               // lasso en cours
 const T = { c: 96, m: 130, p: 86 };   // largeur des cartes : champ de bataille, main, piles
 
 try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (_) {}
@@ -292,17 +294,20 @@ function faceCachee(id) {
   faire(c.cachee ? `Retourne face visible ${nomDe(c)}` : `Met ${nomDe(c)} face cachée`, () => { c.cachee = !c.cachee; });
 }
 
+function compter(c, nom, delta) {
+  c.cpt = c.cpt || {};
+  const v = (c.cpt[nom] || 0) + delta;
+  if (v > 0) c.cpt[nom] = v;
+  else delete c.cpt[nom];
+}
+
 function marqueur(id, nom, delta) {
   const c = E.cartes[id];
-  faire(`${nomDe(c)} : ${delta > 0 ? "+" : "−"}1 marqueur ${nom}`, () => {
-    c.cpt = c.cpt || {};
-    const v = (c.cpt[nom] || 0) + delta;
-    if (v > 0) c.cpt[nom] = v;
-    else delete c.cpt[nom];
-  });
+  faire(`${nomDe(c)} : ${delta > 0 ? "+" : "−"}1 marqueur ${nom}`, () => compter(c, nom, delta));
 }
 
 // « - » : enlève un marqueur +1/+1 s'il y en a, sinon pose un -1/-1
+const moinsUnSur = (c) => ((c.cpt || {})["+1/+1"] ? compter(c, "+1/+1", -1) : compter(c, "-1/-1", 1));
 function moinsUn(id) {
   const c = E.cartes[id];
   if ((c.cpt || {})["+1/+1"]) marqueur(id, "+1/+1", -1);
@@ -347,6 +352,34 @@ function creerJetons(def, n) {
 function supprimer(id) {
   const c = E.cartes[id];
   faire(`Retire ${nomDe(c)} de la partie`, () => { retirer(id); delete E.cartes[id]; });
+}
+
+// ------------------------------------------------------------------ sélection : les mêmes actions sur plusieurs cartes
+const selection = () => E.zones.champ.filter((id) => sel.has(id)).sort((a, b) => (E.cartes[a].z || 0) - (E.cartes[b].z || 0));
+const nomsDe = (ids) => ids.map((id) => nomDe(E.cartes[id])).join(", ");
+function peindreSelection() { $$("#champ [data-id]").forEach((el) => el.classList.toggle("choisie", sel.has(el.dataset.id))); }
+function deselectionner() { if (sel.size) { sel.clear(); peindreSelection(); } }
+function toutSelectionner() { sel = new Set(E.zones.champ); peindreSelection(); }
+
+// engage tout le groupe, ou le dégage s'il l'est déjà entièrement
+function engagerGroupe(ids, oui = ids.some((id) => !E.cartes[id].engagee)) {
+  faire(`${oui ? "Engage" : "Dégage"} ${ids.length} cartes : ${nomsDe(ids)}`, () => ids.forEach((id) => { E.cartes[id].engagee = oui; }));
+}
+
+function bougerGroupe(ids, vers, o = {}) {
+  const verbe = { main: "Reprend en main", cimetiere: "Met au cimetière", exil: "Exile", commandement: "Renvoie dans la zone de commandement",
+    bibliotheque: o.dessous ? "Met sous la bibliothèque" : "Met sur la bibliothèque" }[vers];
+  faire(`${verbe} ${ids.length} cartes : ${nomsDe(ids)}`,
+    () => ids.forEach((id, i) => deplacer(id, vers, o.index != null ? { ...o, index: o.index + i } : o)));
+}
+
+function marqueurGroupe(ids, d) {
+  faire(`${d > 0 ? "+1/+1" : "−1/−1"} sur ${ids.length} cartes : ${nomsDe(ids)}`,
+    () => ids.forEach((id) => (d > 0 ? compter(E.cartes[id], "+1/+1", 1) : moinsUnSur(E.cartes[id]))));
+}
+
+function supprimerGroupe(ids) {
+  faire(`Retire ${ids.length} cartes de la partie : ${nomsDe(ids)}`, () => ids.forEach((id) => { retirer(id); delete E.cartes[id]; }));
 }
 
 function defausserHasard() {
@@ -437,7 +470,8 @@ function montageHaut() {
 
 function htmlCarte(c, ou, attr = "data-id", style = "") {
   const img = c.cachee ? "" : imageDe(c);
-  const cls = ["carte", ou === "champ" && c.engagee ? "engagee" : "", c.cachee ? "dos-carte" : img ? "" : "sans-image"].filter(Boolean).join(" ");
+  const cls = ["carte", ou === "champ" && c.engagee ? "engagee" : "", ou === "champ" && sel.has(c.id) ? "choisie" : "",
+    c.cachee ? "dos-carte" : img ? "" : "sans-image"].filter(Boolean).join(" ");
   const pos = ou === "champ" ? `left:${Math.round(c.x)}px;top:${Math.round(c.y)}px;z-index:${c.z || 1};` : "";
   const corps = c.cachee ? "" : img ? `<img src="${esc(img)}" alt="${esc(nomDe(c))}" draggable="false">`
     : `<div class="txt"><b>${esc(nomDe(c))}</b><span>${esc(typeDe(c))}</span>${c.jeton && c.jeton.pt ? `<strong class="pt-txt">${esc(c.jeton.pt)}</strong>` : ""}</div>`;
@@ -470,6 +504,7 @@ function dessiner() {
   $("#b-retablir").disabled = !futur.length;
 
   const ch = $("#champ"), W = ch.clientWidth, H = ch.clientHeight, l = T.c, h = Math.round(l * RATIO);
+  for (const id of sel) if (!E.zones.champ.includes(id)) sel.delete(id);
   ch.innerHTML = E.zones.champ.map((id) => E.cartes[id]).sort((a, b) => (a.z || 0) - (b.z || 0)).map((c) => {
     if (W && H) {                                        // la carte reste entière dans le champ, même engagée ou fenêtre rétrécie
       const dx = c.engagee ? (h - l) / 2 : 0, dy = c.engagee ? (l - h) / 2 : 0;
@@ -535,6 +570,15 @@ function menuCarte(id, x, y) {
   ouvrirMenu(x, y, items);
 }
 
+function menuGroupe(ids, x, y) {
+  ouvrirMenu(x, y, [`${ids.length} cartes sélectionnées`,
+    ["Engager", "T", () => engagerGroupe(ids, true), ids.every((id) => E.cartes[id].engagee)],
+    ["Dégager", "", () => engagerGroupe(ids, false), !ids.some((id) => E.cartes[id].engagee)], null,
+    ["Marqueur +1/+1", "+", () => marqueurGroupe(ids, 1)], ["Marqueur −1/−1", "−", () => marqueurGroupe(ids, -1)], null, "Déplacer vers",
+    ...DESTINATIONS.filter(([v]) => v !== "champ").map(([v, lib, k, o]) => [lib, k, () => bougerGroupe(ids, v, o || {})]), null,
+    ["Retirer de la partie", "Suppr", () => supprimerGroupe(ids)], ["Désélectionner", "Échap", deselectionner]]);
+}
+
 function menuPile(z, x, y) {
   const ids = E.zones[z], vide = !ids.length;
   if (z === "bibliotheque") {
@@ -562,7 +606,8 @@ function menuMain(x, y) {
 
 function menuChamp(x, y) {
   ouvrirMenu(x, y, ["Champ de bataille", ["Dégager tout", "U", () => toutEngager(false)], ["Engager tout", "", () => toutEngager(true)],
-    ["Tour suivant", "N", tourSuivant], null, ["Jetons…", "", fenetreJetons], null, ["Annuler", "Ctrl+Z", annuler, !passe.length]]);
+    ["Tout sélectionner", "Ctrl+A", toutSelectionner, !E.zones.champ.length], ["Tour suivant", "N", tourSuivant], null,
+    ["Jetons…", "", fenetreJetons], null, ["Annuler", "Ctrl+Z", annuler, !passe.length]]);
 }
 
 // ------------------------------------------------------------------ fenêtres
@@ -735,6 +780,8 @@ const RACCOURCIS = [
   ["… retourner (carte double)", "F"], ["… face cachée", "M"], ["… marqueur +1/+1", "+"], ["… marqueur −1/−1", "−"],
   ["… copie en jeton", "C"], ["… voir la carte", "O"], ["… retirer de la partie", "Suppr"],
   ["Clic sur une carte : engager, jouer", "clic"], ["Menu d'une carte ou d'une pile", "clic droit"], ["Vie ±5", "Maj+clic"],
+  ["Sélectionner plusieurs cartes du champ", "glisser"], ["… ajouter ou retirer une carte", "Ctrl+clic"], ["… tout le champ de bataille", "Ctrl+A"],
+  ["… désélectionner", "Échap"], ["Sélection : clic, glisser, touches et menu agissent sur toutes", "—"],
 ];
 
 function aide() {
@@ -783,13 +830,20 @@ function montrerApercu(el, c) {
 }
 
 // ------------------------------------------------------------------ souris : clic, glisser-déposer, clic droit
-function clic(s) {
+function clic(s, ev) {
   if (s.pile === "bibliotheque") return piocher(1);
   if (s.pile === "cimetiere" || s.pile === "exil") return voirZone(s.pile);
   if (!s.id || !E.cartes[s.id]) return;
   const z = zoneDe(s.id);
-  if (z === "champ") engager(s.id);
-  else if (z === "main" || z === "commandement") bouger(s.id, "champ");
+  if (z === "champ") {
+    if (ev.ctrlKey || ev.metaKey || ev.shiftKey) {        // comme sous Windows : Ctrl+clic ajoute ou retire de la sélection
+      if (sel.has(s.id)) sel.delete(s.id); else sel.add(s.id);
+      return peindreSelection();
+    }
+    if (sel.size > 1 && sel.has(s.id)) return engagerGroupe(selection());
+    deselectionner();
+    engager(s.id);
+  } else if (z === "main" || z === "commandement") bouger(s.id, "champ");
 }
 
 const zoneSous = (x, y) => (document.elementFromPoint(x, y) || document.body).closest("[data-zone]");
@@ -806,18 +860,62 @@ document.addEventListener("pointerdown", (ev) => {
   if (ev.button !== 0 || !E || ev.target.closest("#menu, #modale, #haut, #journal, .btn-menu")) return;
   fermerMenu();
   const el = ev.target.closest("[data-id]") || ev.target.closest(".pile[data-zone]");
-  if (!el) return;
+  if (!el) {                                             // place vide du champ de bataille : lasso
+    if (ev.target.closest("#champ")) {
+      const ajout = ev.ctrlKey || ev.metaKey || ev.shiftKey;
+      L = { x0: ev.clientX, y0: ev.clientY, ajout, base: new Set(ajout ? sel : []), bouge: false };
+    }
+    return;
+  }
   let id = el.dataset.id || null, pile = null;
   if (!id) {
     pile = el.dataset.zone;
     const ids = E.zones[pile];
     id = pile === "bibliotheque" ? ids[0] : pile === "commandement" ? null : ids[ids.length - 1];
   }
-  g = { el, id, pile, x0: ev.clientX, y0: ev.clientY, bouge: false };
+  const groupe = el.dataset.id && sel.size > 1 && sel.has(el.dataset.id) && zoneDe(el.dataset.id) === "champ" ? selection() : null;
+  g = { el, id, pile, x0: ev.clientX, y0: ev.clientY, bouge: false, groupe };
 });
 
+const lasso = document.body.appendChild(Object.assign(document.createElement("div"), { id: "lasso", hidden: true }));
+function tirerLasso(ev) {
+  if (!L.bouge) {
+    if (Math.hypot(ev.clientX - L.x0, ev.clientY - L.y0) < 5) return;
+    L.bouge = true;
+    cacherApercu();
+  }
+  const ch = $("#champ").getBoundingClientRect();
+  const x1 = Math.max(ch.left, Math.min(ch.right, ev.clientX)), y1 = Math.max(ch.top, Math.min(ch.bottom, ev.clientY));
+  const r = { x: Math.min(L.x0, x1), y: Math.min(L.y0, y1), w: Math.abs(x1 - L.x0), h: Math.abs(y1 - L.y0) };
+  Object.assign(lasso.style, { left: r.x + "px", top: r.y + "px", width: r.w + "px", height: r.h + "px" });
+  lasso.hidden = false;
+  const dedans = { x: r.x - ch.left, y: r.y - ch.top, w: r.w, h: r.h };
+  sel = new Set([...L.base, ...E.zones.champ.filter((id) => chevauche(dedans, boite(E.cartes[id])))]);
+  peindreSelection();
+}
+
+// la sélection glissée : les cartes gardent leur disposition ; la carte tenue sert de repère
+function souleverGroupe() {
+  const c0 = E.cartes[g.id], l = T.c, h = Math.round(l * RATIO), ch = $("#champ").getBoundingClientRect();
+  g.dx = (g.x0 - ch.left - c0.x) / l;
+  g.dy = (g.y0 - ch.top - c0.y) / h;
+  const f = $("#fantome");
+  f.innerHTML = `<div class="carte ancre" style="--l:${l}px"></div>
+    <div class="groupe" style="left:${-c0.x}px;top:${-c0.y}px">${g.groupe.map((id) => htmlCarte(E.cartes[id], "champ", "data-fantome")).join("")}</div>`;
+  f.classList.add("en-groupe");
+  f.hidden = false;
+  g.groupe.forEach((id) => { const el = $(`#champ [data-id="${id}"]`); if (el) el.classList.add("souleve"); });
+}
+
 document.addEventListener("pointermove", (ev) => {
+  if (L) return tirerLasso(ev);
   if (g) {
+    if (!g.bouge && g.groupe) {
+      if (Math.hypot(ev.clientX - g.x0, ev.clientY - g.y0) < 6) return;
+      g.bouge = true;
+      cacherApercu();
+      souleverGroupe();
+    }
     if (!g.bouge) {
       if (!g.id || Math.hypot(ev.clientX - g.x0, ev.clientY - g.y0) < 6) return;
       g.bouge = true;
@@ -852,16 +950,36 @@ document.addEventListener("pointermove", (ev) => {
 });
 
 document.addEventListener("pointerup", (ev) => {
+  if (L) {
+    const l = L;
+    L = null;
+    lasso.hidden = true;
+    if (!l.bouge && !l.ajout) deselectionner();         // clic sur une place vide : plus rien de sélectionné
+    return;
+  }
   if (!g) return;
   const s = g;
   g = null;
   $$(".cible").forEach((x) => x.classList.remove("cible"));
   $("#fantome").hidden = true;
-  s.el.classList.remove("souleve");
-  if (!s.bouge) return clic(s);
+  $("#fantome").classList.remove("en-groupe");
+  $$(".souleve").forEach((x) => x.classList.remove("souleve"));
+  if (!s.bouge) return clic(s, ev);
   const cible = zoneSous(ev.clientX, ev.clientY);
   if (!cible || !E.cartes[s.id]) return;
   const vers = cible.dataset.zone, id = s.id, c = E.cartes[id], de = zoneDe(id);
+  if (s.groupe) {
+    const ids = s.groupe.filter((x) => E.cartes[x] && zoneDe(x) === "champ");
+    if (vers === "main") return bougerGroupe(ids, "main", { index: rangMain(ev.clientX, null) });
+    if (vers !== "champ") return bougerGroupe(ids, vers, {});
+    // même décalage pour toutes, borné pour que le groupe reste entier dans le champ
+    const r = $("#champ").getBoundingClientRect(), l = T.c, h = Math.round(l * RATIO);
+    let dx = ev.clientX - r.left - s.dx * l - c.x, dy = ev.clientY - r.top - s.dy * h - c.y;
+    const bs = ids.map((x) => boite(E.cartes[x]));
+    dx = Math.max(Math.max(...bs.map((b) => -b.x)), Math.min(Math.min(...bs.map((b) => r.width - b.x - b.w)), dx));
+    dy = Math.max(Math.max(...bs.map((b) => -b.y)), Math.min(Math.min(...bs.map((b) => r.height - b.y - b.h)), dy));
+    return faire(null, () => ids.forEach((x) => { const k = E.cartes[x]; k.x += dx; k.y += dy; k.z = ++E.zmax; }));
+  }
   if (vers === "champ") {
     const r = $("#champ").getBoundingClientRect(), l = T.c, h = Math.round(l * RATIO);
     const x = Math.max(0, Math.min(r.width - l, ev.clientX - r.left - s.dx * l));
@@ -876,10 +994,12 @@ document.addEventListener("pointerup", (ev) => {
 });
 
 addEventListener("blur", () => {
+  if (L) { L = null; lasso.hidden = true; }
   if (!g) return;
-  if (g.el) g.el.classList.remove("souleve");
+  $$(".souleve").forEach((x) => x.classList.remove("souleve"));
   g = null;
   $("#fantome").hidden = true;
+  $("#fantome").classList.remove("en-groupe");
   $$(".cible").forEach((x) => x.classList.remove("cible"));
 });
 
@@ -888,6 +1008,7 @@ document.addEventListener("contextmenu", (ev) => {
   ev.preventDefault();
   cacherApercu();
   const el = ev.target.closest("[data-id]");
+  if (el && sel.size > 1 && sel.has(el.dataset.id) && zoneDe(el.dataset.id) === "champ") return menuGroupe(selection(), ev.clientX, ev.clientY);
   if (el) return menuCarte(el.dataset.id, ev.clientX, ev.clientY);
   const p = ev.target.closest(".pile[data-zone]");
   if (p) return menuPile(p.dataset.zone, ev.clientX, ev.clientY);
@@ -912,7 +1033,7 @@ $("#modale").addEventListener("pointerdown", (ev) => { if (ev.target.id === "mod
 // ------------------------------------------------------------------ clavier
 document.addEventListener("keydown", (ev) => {
   if (!E) return;
-  if (ev.key === "Escape") { fermerMenu(); fermerModale(); basculeJournal(false); return; }
+  if (ev.key === "Escape") { fermerMenu(); fermerModale(); basculeJournal(false); deselectionner(); return; }
   if (ev.target.closest("input, select, textarea") || !$("#modale").hidden) return;
   const k = ev.key.toLowerCase(), ctrl = ev.ctrlKey || ev.metaKey;
   const go = (f) => { ev.preventDefault(); fermerMenu(); f(); };
@@ -921,10 +1042,19 @@ document.addEventListener("keydown", (ev) => {
     if (k === "s") return go(melangerBibliotheque);
     if (k === "f") return go(chercher);
     if (k === "g") return go(nouvellePartie);
+    if (k === "a") return go(toutSelectionner);
     return;
   }
   if (ev.altKey) return;
   const id = survol && E.cartes[survol] ? survol : null;
+  if (id && sel.size > 1 && sel.has(id) && zoneDe(id) === "champ") {   // carte survolée dans la sélection : toute la sélection
+    const ids = selection();
+    const groupe = { t: () => engagerGroupe(ids), h: () => bougerGroupe(ids, "main"), g: () => bougerGroupe(ids, "cimetiere"),
+      e: () => bougerGroupe(ids, "exil"), z: () => bougerGroupe(ids, "commandement"), y: () => bougerGroupe(ids, "bibliotheque"),
+      l: () => bougerGroupe(ids, "bibliotheque", { dessous: true }), "+": () => marqueurGroupe(ids, 1), "-": () => marqueurGroupe(ids, -1),
+      delete: () => supprimerGroupe(ids) };
+    if (groupe[k]) return go(groupe[k]);
+  }
   if (id) {
     const actions = { t: () => (zoneDe(id) === "champ" ? engager(id) : null), b: () => bouger(id, "champ"), h: () => bouger(id, "main"),
       g: () => bouger(id, "cimetiere"), e: () => bouger(id, "exil"), z: () => bouger(id, "commandement"), y: () => bouger(id, "bibliotheque"),
