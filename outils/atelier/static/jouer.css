@@ -128,6 +128,16 @@ kbd { border: 1px solid var(--bord); border-bottom-width: 2px; border-radius: 4p
   background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .carte.choisie { outline: 3px solid var(--accent); outline-offset: 2px; }
 
+/* ---- loyauté d'un planeswalker : le nombre, et − / + au survol */
+.loyaute { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%); display: flex; align-items: center; gap: 3px; z-index: 2; }
+.loyaute b { min-width: 1.9em; text-align: center; background: #111; color: #fff; border: 2px solid #c9b27a; font-size: .85rem; line-height: 1.35;
+  border-radius: 5px 5px 45% 45% / 5px 5px 35% 35%; font-variant-numeric: tabular-nums; box-shadow: 0 1px 3px rgba(0,0,0,.5); }
+.loyaute.zero b { border-color: var(--alerte); color: var(--alerte); }
+.loyaute button { width: 1.25rem; height: 1.25rem; padding: 0; border: 0; border-radius: 50%; background: rgba(10,10,10,.85); color: #fff;
+  font-weight: 700; line-height: 1; cursor: pointer; opacity: 0; transition: opacity .12s; }
+.loyaute button:hover { background: var(--accent); color: var(--accent-texte); }
+.carte:hover .loyaute button { opacity: 1; }
+
 /* ---- aperçu au survol */
 #apercu { position: fixed; z-index: 80; width: 300px; pointer-events: none; border-radius: 15px; overflow: hidden; box-shadow: 0 10px 34px rgba(0,0,0,.5); }
 #apercu img { display: block; width: 100%; }

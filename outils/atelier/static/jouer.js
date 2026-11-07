@@ -116,6 +116,15 @@ const imageDe = (c) => (c.retournee && verso(c) ? verso(c).image : fiche(c).imag
 const typeDe = (c) => (c.retournee && verso(c) ? verso(c).type : fiche(c).type) || "";
 const estJeton = (c) => !!(c.jeton || c.copie);
 
+// planeswalkers : loyauté imprimée (« loyauté 4 » dans fiche.pt, une valeur par face), puis celle de la partie (c.loy)
+const estPW = (c) => !c.cachee && /Planeswalker/.test(typeDe(c));
+function loyauteDepart(c) {
+  const vals = String(fiche(c).pt || "").split(" // ").map((f) => (/loyauté\s+(\S+)/.exec(f) || [])[1]).filter((v) => v != null);
+  const v = c.retournee && verso(c) ? vals[vals.length - 1] : vals[0];
+  return /^\d+$/.test(v || "") ? +v : 0;                 // loyauté X : 0, à régler
+}
+const loyaute = (c) => c.loy ?? loyauteDepart(c);
+
 // force/endurance en jeu, quand des marqueurs ou un modificateur la changent
 function ptActuel(c) {
   const faces = String(fiche(c).pt || "").split(" // ");
@@ -179,7 +188,7 @@ function deplacer(id, vers, o = {}) {
   if (!c) return;
   const de = retirer(id);
   if (estJeton(c) && vers !== "champ") { delete E.cartes[id]; return; }
-  if (de !== vers) Object.assign(c, { engagee: false, cpt: {}, mod: [0, 0], retournee: false, cachee: !!o.cachee });
+  if (de !== vers) Object.assign(c, { engagee: false, cpt: {}, mod: [0, 0], retournee: false, cachee: !!o.cachee, loy: null });
   if (vers === "bibliotheque") {
     if (o.dessous) E.zones.bibliotheque.push(id);
     else { E.zones.bibliotheque.unshift(id); E.revele = false; }
@@ -312,6 +321,23 @@ function moinsUn(id) {
   const c = E.cartes[id];
   if ((c.cpt || {})["+1/+1"]) marqueur(id, "+1/+1", -1);
   else marqueur(id, "-1/-1", 1);
+}
+
+// « + » et « − » : la loyauté d'un planeswalker, des marqueurs +1/+1 et −1/−1 pour le reste
+const plus = (id) => (zoneDe(id) === "champ" && estPW(E.cartes[id]) ? changerLoyaute(id, 1) : marqueur(id, "+1/+1", 1));
+const moins = (id) => (zoneDe(id) === "champ" && estPW(E.cartes[id]) ? changerLoyaute(id, -1) : moinsUn(id));
+
+function poserLoyaute(c, v) {
+  faire(`${nomDe(c)} : loyauté ${v}`, () => { c.loy = v; }, `${nomDe(c)} : loyauté`);   // clics successifs : une seule ligne
+}
+function changerLoyaute(id, d) {
+  const c = E.cartes[id];
+  poserLoyaute(c, Math.max(0, loyaute(c) + d));
+}
+async function fixerLoyaute(id) {
+  const c = E.cartes[id];
+  const v = await demander("Loyauté", loyaute(c));
+  if (v != null && E.cartes[id]) poserLoyaute(c, v);
 }
 
 async function autreMarqueur(id) {
@@ -480,6 +506,11 @@ function htmlCarte(c, ou, attr = "data-id", style = "") {
     const autres = Object.entries(c.cpt || {}).filter(([k]) => k !== "+1/+1" && k !== "-1/-1").map(([k, v]) => `<span class="badge">${esc(k)} ${v}</span>`);
     const pt = ptActuel(c);
     if (autres.length || pt) extra += `<div class="badges">${autres.join("")}${pt ? `<span class="badge pt">${pt}</span>` : ""}</div>`;
+    if (estPW(c)) {
+      const v = loyaute(c);
+      extra += `<div class="loyaute ${v ? "" : "zero"}"><button type="button" data-loy="-1" aria-label="Loyauté −1">−</button>`
+        + `<b title="Loyauté">${v}</b><button type="button" data-loy="1" aria-label="Loyauté +1">+</button></div>`;
+    }
   }
   return `<div class="${cls}" ${attr}="${c.id}" style="${pos}${style}">${corps}${extra}</div>`;
 }
@@ -555,8 +586,10 @@ function menuCarte(id, x, y) {
   if (z === "champ") {
     items.push([c.engagee ? "Dégager" : "Engager", "T", () => engager(id)]);
     if (verso(c)) items.push([c.retournee ? "Remettre au recto" : "Retourner", "F", () => retourner(id)]);
-    items.push([c.cachee ? "Face visible" : "Face cachée", "M", () => faceCachee(id)], null,
-      ["Marqueur +1/+1", "+", () => marqueur(id, "+1/+1", 1)], ["Marqueur −1/−1", "−", () => moinsUn(id)]);
+    items.push([c.cachee ? "Face visible" : "Face cachée", "M", () => faceCachee(id)], null);
+    if (estPW(c)) items.push(["Loyauté +1", "+", () => changerLoyaute(id, 1)], ["Loyauté −1", "−", () => changerLoyaute(id, -1)],
+      ["Loyauté…", "", () => fixerLoyaute(id)]);
+    else items.push(["Marqueur +1/+1", "+", () => marqueur(id, "+1/+1", 1)], ["Marqueur −1/−1", "−", () => moinsUn(id)]);
     for (const k of Object.keys(c.cpt || {}).filter((k) => k !== "+1/+1" && k !== "-1/-1"))
       items.push([`+1 ${k}`, "", () => marqueur(id, k, 1)], [`−1 ${k}`, "", () => marqueur(id, k, -1)]);
     items.push(["Autre marqueur…", "", () => autreMarqueur(id)], ["Force / endurance…", "", () => modifierPT(id)], null,
@@ -777,7 +810,8 @@ const RACCOURCIS = [
   ["Nouvelle partie", "Ctrl+G"], ["Raccourcis", "?"],
   ["Carte survolée : engager / dégager", "T"], ["… vers le champ de bataille", "B"], ["… dans la main", "H"], ["… au cimetière", "G"],
   ["… en exil", "E"], ["… en zone de commandement", "Z"], ["… sur la bibliothèque", "Y"], ["… sous la bibliothèque", "L"],
-  ["… retourner (carte double)", "F"], ["… face cachée", "M"], ["… marqueur +1/+1", "+"], ["… marqueur −1/−1", "−"],
+  ["… retourner (carte double)", "F"], ["… face cachée", "M"], ["… marqueur +1/+1 (planeswalker : loyauté)", "+"],
+  ["… marqueur −1/−1 (planeswalker : loyauté)", "−"],
   ["… copie en jeton", "C"], ["… voir la carte", "O"], ["… retirer de la partie", "Suppr"],
   ["Clic sur une carte : engager, jouer", "clic"], ["Menu d'une carte ou d'une pile", "clic droit"], ["Vie ±5", "Maj+clic"],
   ["Sélectionner plusieurs cartes du champ", "glisser"], ["… ajouter ou retirer une carte", "Ctrl+clic"], ["… tout le champ de bataille", "Ctrl+A"],
@@ -859,6 +893,9 @@ function rangMain(x, sauf) {
 document.addEventListener("pointerdown", (ev) => {
   if (ev.button !== 0 || !E || ev.target.closest("#menu, #modale, #haut, #journal, .btn-menu")) return;
   fermerMenu();
+  const lb = ev.target.closest("[data-loy]");
+  if (lb) return changerLoyaute(lb.closest("[data-id]").dataset.id, +lb.dataset.loy * (ev.shiftKey ? 5 : 1));
+  if (ev.target.closest(".loyaute")) return;
   const el = ev.target.closest("[data-id]") || ev.target.closest(".pile[data-zone]");
   if (!el) {                                             // place vide du champ de bataille : lasso
     if (ev.target.closest("#champ")) {
@@ -1059,7 +1096,7 @@ document.addEventListener("keydown", (ev) => {
     const actions = { t: () => (zoneDe(id) === "champ" ? engager(id) : null), b: () => bouger(id, "champ"), h: () => bouger(id, "main"),
       g: () => bouger(id, "cimetiere"), e: () => bouger(id, "exil"), z: () => bouger(id, "commandement"), y: () => bouger(id, "bibliotheque"),
       l: () => bouger(id, "bibliotheque", { dessous: true }), f: () => retourner(id), m: () => faceCachee(id), c: () => copieJeton(id),
-      o: () => voirCarte(id), "+": () => marqueur(id, "+1/+1", 1), "-": () => moinsUn(id), delete: () => supprimer(id) };
+      o: () => voirCarte(id), "+": () => plus(id), "-": () => moins(id), delete: () => supprimer(id) };
     if (actions[k] && !(k === "b" && zoneDe(id) === "champ")) return go(actions[k]);
   }
   if (k === "n") return go(tourSuivant);
