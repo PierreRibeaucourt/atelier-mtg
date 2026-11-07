@@ -3129,13 +3129,24 @@ function vueAPropos() {
   vue.innerHTML = `
     <article class="a-propos">
       <nav class="fil" aria-label="Fil d'Ariane">${retour}<span aria-current="page">L'Atelier MTG</span></nav>
-      <h1>L'Atelier MTG</h1>
-      ${versionAtelier ? `<p class="ap-signature">Version ${esc(versionAtelier)}</p>` : ""}
+      <header class="ap-tete">
+        <div class="ap-scene" aria-hidden="true">
+          <figure class="ap-ecran e1">${capture("discussion", "")}></figure>
+          <figure class="ap-ecran e2">${capture("statistiques", "")}></figure>
+          <figure class="ap-ecran e3">${capture("decks", "")}></figure>
+        </div>
+        <div class="ap-tete-texte">
+          <h1>L'Atelier <span>MTG</span></h1>
+          <p class="ap-accroche">Vos decks Commander,<br>de la liste à la table.</p>
+          <ul class="ap-puces">${["Base de mana", "Combos", "Bracket", "Table de jeu", "Recherche avancée", "Claude"].map((x) => `<li>${x}</li>`).join("")}</ul>
+          <p class="ap-cta"><a class="btn btn-accent" href="${depot}" target="_blank" rel="noopener">${ico("telecharger")}Télécharger l'Atelier MTG</a></p>
+          <p class="ap-mention"><b>Gratuit</b> · open source · tout reste sur votre PC${versionAtelier ? ` · version ${esc(versionAtelier)}` : ""}</p>
+        </div>
+      </header>
       <p class="chapeau">Le gestionnaire de decks Commander local, sans compte et taillé pour le deckbuilding assisté.</p>
       <p>L'Atelier est une application locale, qui s'ouvre dans votre navigateur, pensée pour concevoir, tester et faire évoluer
         des decks Magic: The Gathering en Commander. Pas de publicité, aucun compte en ligne, pas de données hébergées sur un
         serveur distant : tout s'exécute directement sur votre ordinateur.</p>
-      <figure class="ap-une">${capture("atelier", "L'Atelier MTG : vos decks Commander, de la liste à la table")}></figure>
 
       <h2>Ce qui fait la différence</h2>
       ${MODULES_ATELIER.map(([f, titre, texte]) => `<section class="ap-module">
