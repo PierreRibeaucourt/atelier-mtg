@@ -139,7 +139,7 @@ def _slug(deck, reg):
         return reg[deck]["slug"]
     s = unicodedata.normalize("NFD", deck.removeprefix("Deck ")).encode("ascii", "ignore").decode().lower()
     s = base = re.sub(r"[^a-z0-9]+", "-", s).strip("-") or "deck"
-    pris, i = {v["slug"] for v in reg.values()}, 2
+    pris, i = {v["slug"] for v in reg.values()} | {A_PROPOS}, 2
     while s in pris:
         s, i = f"{base}-{i}", i + 1
     return s
@@ -337,6 +337,23 @@ def _page_jouer(dossier):
     _ecrire(os.path.join(d, "index.html"), html)
 
 
+# « C'est quoi, l'Atelier MTG ? » : une vraie page (a-propos/), pour que son lien ait son propre aperçu ; son image
+# est sur le site de l'auteur de l'Atelier, avec les captures que montre la page
+A_PROPOS = "a-propos"
+IMAGE_ATELIER = "https://pierreribeaucourt.github.io/decks/a-propos/atelier.jpg"
+
+
+def _a_propos(donnees, site):
+    local = os.path.join(DOSSIER, A_PROPOS, "atelier.jpg")         # le site de l'auteur : l'image est là
+    image = f"{site}{A_PROPOS}/atelier.jpg?v={_version(local)}" if os.path.exists(local) else IMAGE_ATELIER
+    _page(os.path.join(DOSSIER, A_PROPOS), dict(donnees, accueil="../", page=A_PROPOS), dict(
+        titre="L'Atelier MTG : gestionnaire de decks Commander, gratuit et local",
+        description=("Concevoir, tester et partager ses decks Commander : statistiques et base de mana, combos, bracket, "
+                     "table de jeu, recherche avancée et discussion avec Claude. Gratuit, open source, tout reste sur "
+                     "votre ordinateur."),
+        url=f"{site}{A_PROPOS}/", image=image, alt="L'Atelier MTG : vos decks Commander, de la liste à la table"))
+
+
 def _accueil(reg, site):
     """La racine du site : les decks partagés, chacun vers sa page."""
     import recherche
@@ -357,6 +374,7 @@ def _accueil(reg, site):
         description=(f"{n} deck{'s' if n > 1 else ''} Commander : {titres}. Listes, visuels, statistiques, combos "
                      "et table de jeu pour tester chaque deck." if n else "Decks Commander."),
         url=site, image=image and site + image, alt=f"Les commandants des decks {titres}" if n else ""))
+    _a_propos(donnees, site)
     _ecrire(os.path.join(DOSSIER, ".nojekyll"), "")
 
 

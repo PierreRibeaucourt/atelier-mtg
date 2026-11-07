@@ -70,7 +70,8 @@ function comparerPartage(fa, fb) {
 }
 
 // lien vers un deck : sa page dans l'Atelier, ou sa page partagée depuis la racine du site
-const lienDeck = (id) => (PARTAGE && PARTAGE.liens && PARTAGE.liens[id]) || `#/deck/${enc(id)}`;
+// page d'un deck partagé ; depuis a-propos/, un dossier plus bas que la racine du site
+const lienDeck = (id) => (PARTAGE && PARTAGE.liens && PARTAGE.liens[id] ? (PARTAGE.page ? "../" : "") + PARTAGE.liens[id] : `#/deck/${enc(id)}`);
 
 function euros(p) {
   return p == null ? "—" : p.toFixed(2).replace(".", ",") + " €";
@@ -137,9 +138,10 @@ if (PARTAGE) $(".logo").href = PARTAGE.accueil === true ? "#/" : PARTAGE.accueil
 const ico = (nom) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${ICONES[nom] || ""}</svg>`;
 $$("[data-ico]").forEach((el) => el.insertAdjacentHTML("afterbegin", ico(el.dataset.ico)));
 // page partagée : à qui est la page, et l'Atelier à télécharger pour faire pareil avec ses decks ;
-// en bas, la licence, le code source et la page « C'est quoi, l'Atelier MTG ? », une seule pour le site : à sa racine
+// en bas, la licence, le code source et la page « C'est quoi, l'Atelier MTG ? », une seule pour le site : a-propos/
 const TITRE_PARTAGE = document.title;
-const A_PROPOS = (PARTAGE && PARTAGE.accueil && PARTAGE.accueil !== true ? PARTAGE.accueil : "") + "#/a-propos";
+const A_PROPOS = !PARTAGE ? "#/a-propos" : PARTAGE.page === "a-propos" ? "./"
+  : (PARTAGE.accueil && PARTAGE.accueil !== true ? PARTAGE.accueil : "") + "a-propos/";
 if (PARTAGE) {
   const depot = PARTAGE.atelier ? esc(PARTAGE.atelier) : "";
   $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-partage">
@@ -599,8 +601,8 @@ async function route() {
   $("#lien-recherche").classList.toggle("actif", parts[0] === "recherche");
   vue.classList.toggle("vue-large", parts[0] === "recherche");
   try {
-    if (parts[0] === "a-propos" && A_PROPOS !== "#/a-propos") location.replace(A_PROPOS);   // ancien lien, depuis un deck
-    else if (parts[0] === "a-propos") vueAPropos();
+    if (PARTAGE && parts[0] === "a-propos" && PARTAGE.page !== "a-propos") location.replace(A_PROPOS);   // ancienne adresse
+    else if (parts[0] === "a-propos" || (PARTAGE && PARTAGE.page === "a-propos" && !parts[0])) vueAPropos();
     else if (PARTAGE && parts[0] === "recherche") vueRechercheVitrine();
     else if (PARTAGE && PARTAGE.deck) await vueDeck(PARTAGE.deck, (parts[0] === "deck" && parts[2]) || "liste");
     else if (PARTAGE && parts[0] === "deck" && parts[1]) location.replace(lienDeck(decodeURIComponent(parts[1])));
@@ -3120,7 +3122,8 @@ function vueAPropos() {
   scrollTo(0, 0);
   etat.deck = null;
   const depot = esc((PARTAGE && PARTAGE.atelier) || DEPOT_ATELIER);
-  const retour = `<a href="#/">${esc(MES_DECKS)}</a><span aria-hidden="true">›</span>`;
+  const retour = `<a href="${PARTAGE && PARTAGE.page ? esc(PARTAGE.accueil) : "#/"}">${esc(MES_DECKS)}</a><span aria-hidden="true">›</span>`;
+  const capture = (f, alt) => `<img src="${PARTAGE ? CAPTURES_ATELIER : "/a-propos/"}${f}.webp" data-f="${f}" alt="${esc(alt)}"`;
   const consigne = `Installe et lance l'Atelier MTG depuis ${(PARTAGE && PARTAGE.atelier || DEPOT_ATELIER).replace("https://", "")}`;
   const fonction = (titre, texte) => `<div class="ap-carte"><h3>${titre}</h3><p>${texte}</p></div>`;
   vue.innerHTML = `
@@ -3132,6 +3135,7 @@ function vueAPropos() {
       <p>L'Atelier est une application locale, qui s'ouvre dans votre navigateur, pensée pour concevoir, tester et faire évoluer
         des decks Magic: The Gathering en Commander. Pas de publicité, aucun compte en ligne, pas de données hébergées sur un
         serveur distant : tout s'exécute directement sur votre ordinateur.</p>
+      <figure class="ap-une">${capture("atelier", "L'Atelier MTG : vos decks Commander, de la liste à la table")}></figure>
 
       <h2>Genèse du projet</h2>
       <p class="ap-signature">Par ${esc(AUTEUR_ATELIER)}, créateur de l'Atelier</p>
@@ -3151,7 +3155,7 @@ function vueAPropos() {
       <h2>Ce qui fait la différence</h2>
       ${MODULES_ATELIER.map(([f, titre, texte]) => `<section class="ap-module">
         <h3>${esc(titre)}</h3><p>${esc(texte)}</p>
-        <figure><img src="${PARTAGE ? CAPTURES_ATELIER : "/a-propos/"}${f}.webp" data-f="${f}" alt="${esc(titre)}" loading="lazy"></figure>
+        <figure>${capture(f, titre)} loading="lazy"></figure>
       </section>`).join("")}
 
       <h2>Et aussi</h2>
@@ -3182,12 +3186,12 @@ function vueAPropos() {
       <div class="ap-consigne"><code>${esc(consigne)}</code>
         <button type="button" class="btn btn-petit btn-discret" id="ap-copier">${ico("copier")}Copier</button></div>
     </article>`;
-  $$(".ap-module img").forEach((img) => {
+  $$(".a-propos img[data-f]").forEach((img) => {
     img.onerror = () => {                       // dans l'Atelier : la capture de ce PC, sinon celle du site de l'auteur
       if (!PARTAGE && !img.dataset.enLigne) { img.dataset.enLigne = "1"; img.src = CAPTURES_ATELIER + img.dataset.f + ".webp"; }
-      else img.closest(".ap-module figure").remove();                // hors ligne, ou capture introuvable : le texte suffit
+      else img.closest("figure").remove();                           // hors ligne, ou capture introuvable : le texte suffit
     };
-    img.onclick = () => zoomer(img);
+    if (img.closest(".ap-module")) img.onclick = () => zoomer(img);
   });
   $("#ap-copier").onclick = async () => {
     try { await navigator.clipboard.writeText(consigne); toast("Consigne copiée."); } catch (e) { erreur(e); }

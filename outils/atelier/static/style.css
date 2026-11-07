@@ -768,6 +768,8 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .ap-carte h3 { margin: 0 0 .25rem; font-size: .95rem; }
 .ap-carte p { margin: 0; font-size: .88rem; line-height: 1.5; color: var(--texte-2); }
 .ap-depot { margin-left: .8rem; font-size: .88rem; }
+.ap-une { margin: 1.4rem 0 .6rem; }
+.ap-une img { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--bord); box-shadow: var(--ombre); }
 .ap-module { margin: 1.4rem 0 2.6rem; }
 .ap-module h3 { margin: 0 0 .15rem; font-size: 1.05rem; }
 .ap-module p { margin: 0 0 .75rem; }
