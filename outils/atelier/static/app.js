@@ -3137,21 +3137,6 @@ function vueAPropos() {
         serveur distant : tout s'exécute directement sur votre ordinateur.</p>
       <figure class="ap-une">${capture("atelier", "L'Atelier MTG : vos decks Commander, de la liste à la table")}></figure>
 
-      <h2>Genèse du projet</h2>
-      <p class="ap-signature">Par ${esc(AUTEUR_ATELIER)}, créateur de l'Atelier</p>
-      <p>À l'origine, mes listes tenaient sur de simples fichiers texte que j'analysais en ligne de commande avec un LLM et
-        quelques ressources théoriques (ratios de mana, moteurs de pioche, conditions de victoire).</p>
-      <p>Manipuler du code brut a vite montré ses limites. Pour ajuster un <em>cut</em> ou évaluer instantanément l'impact d'une
-        modification, il me fallait une vraie interface graphique qui réunisse les points forts des outils de référence :</p>
-      <ul class="ap-sources">
-        <li><strong>Archidekt</strong> pour la table d'essai et les tests en solitaire ;</li>
-        <li><strong>Magic-Ville et Commander Spellbook</strong> pour la recherche multicritère et les combos ;</li>
-        <li><strong>Cardmarket</strong> pour les cotations du jour ;</li>
-        <li><strong>les règles officielles</strong> pour le contrôle direct des cartes interdites, des brackets et des Game Changers.</li>
-      </ul>
-      <p>L'Atelier est né de cette synthèse : une interface locale fluide pour gérer ses cartes, connectable à la demande à un
-        assistant IA pour auditer un deck, automatiser le classement ou simuler des parties.</p>
-
       <h2>Ce qui fait la différence</h2>
       ${MODULES_ATELIER.map(([f, titre, texte]) => `<section class="ap-module">
         <h3>${esc(titre)}</h3><p>${esc(texte)}</p>
@@ -3185,6 +3170,21 @@ function vueAPropos() {
       <p>Si vous utilisez un agent de développement (Claude Code, Cursor, Copilot…), collez simplement cette consigne :</p>
       <div class="ap-consigne"><code>${esc(consigne)}</code>
         <button type="button" class="btn btn-petit btn-discret" id="ap-copier">${ico("copier")}Copier</button></div>
+
+      <h2>Genèse du projet</h2>
+      <p class="ap-signature">Par ${esc(AUTEUR_ATELIER)}, créateur de l'Atelier</p>
+      <p>À l'origine, mes listes tenaient sur de simples fichiers texte que j'analysais en ligne de commande avec un LLM et
+        quelques ressources théoriques (ratios de mana, moteurs de pioche, conditions de victoire).</p>
+      <p>Manipuler du code brut a vite montré ses limites. Pour ajuster un <em>cut</em> ou évaluer instantanément l'impact d'une
+        modification, il me fallait une vraie interface graphique qui réunisse les points forts des outils de référence :</p>
+      <ul class="ap-sources">
+        <li><strong>Archidekt</strong> pour la table d'essai et les tests en solitaire ;</li>
+        <li><strong>Magic-Ville et Commander Spellbook</strong> pour la recherche multicritère et les combos ;</li>
+        <li><strong>Cardmarket</strong> pour les cotations du jour ;</li>
+        <li><strong>les règles officielles</strong> pour le contrôle direct des cartes interdites, des brackets et des Game Changers.</li>
+      </ul>
+      <p>L'Atelier est né de cette synthèse : une interface locale fluide pour gérer ses cartes, connectable à la demande à un
+        assistant IA pour auditer un deck, automatiser le classement ou simuler des parties.</p>
     </article>`;
   $$(".a-propos img[data-f]").forEach((img) => {
     img.onerror = () => {                       // dans l'Atelier : la capture de ce PC, sinon celle du site de l'auteur
