@@ -754,7 +754,8 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 /* « L'Atelier MTG » : la page qui présente l'outil (#/a-propos) */
 .a-propos { max-width: 760px; margin: 0 auto; line-height: 1.65; display: flow-root; }
 .a-propos h1 { font-size: 2rem; line-height: 1.2; margin: .7rem 0 .5rem; }
-.a-propos h2 { font-size: 1.2rem; margin: 2.4rem 0 .7rem; padding-top: 1.4rem; border-top: 1px solid var(--bord); }
+.a-propos h2 { font-size: 1.55rem; font-weight: 800; letter-spacing: -.01em; line-height: 1.25; margin: 2.8rem 0 .9rem; padding-top: 1.6rem;
+  border-top: 1px solid var(--bord); }
 .a-propos h3 { font-size: 1rem; margin: 1.4rem 0 .3rem; }
 .a-propos p { margin: .6rem 0; }
 .a-propos .chapeau { font-size: 1.15rem; line-height: 1.5; color: var(--texte); border-left: 3px solid var(--accent); padding-left: .9rem; margin: .4rem 0 1rem; }
@@ -773,7 +774,7 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .ap-une { margin: 1.4rem 0 .6rem; }
 .ap-une img { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--bord); box-shadow: var(--ombre); }
 .ap-module { margin: 1.4rem 0 2.6rem; }
-.ap-module h3 { margin: 0 0 .15rem; font-size: 1.05rem; }
+.ap-module h3 { margin: 0 0 .15rem; font-size: 1.02rem; color: var(--accent); }
 .ap-module p { margin: 0 0 .75rem; }
 /* la capture, cadrée sur le module, à la largeur du texte ; un clic l'agrandit */
 .ap-module figure { margin: 0; padding: 6px; background: var(--surface); border: 1px solid var(--bord); border-radius: 12px; box-shadow: var(--ombre); }
