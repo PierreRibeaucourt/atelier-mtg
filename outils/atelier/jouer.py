@@ -1,7 +1,7 @@
 """Jouer tout seul (le « playtester ») : ce qu'il faut à la page /jouer en plus de la liste du deck.
 
 Les jetons que créent les cartes du deck viennent de Scryfall : le champ all_parts d'une carte liste ses jetons
-(composant « token »). Une requête /cards/collection par paquet de 75 cartes, puis une pour les jetons eux-mêmes ;
+(composant « token ») et les donjons où elle fait aventurer (composant « combo_piece », type « Dungeon »). Une requête /cards/collection par paquet de 75 cartes, puis une pour les jetons eux-mêmes ;
 le tout est gardé dans cache_jetons.json, donc un deck déjà joué ne redemande rien.
 """
 import json
@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(ICI))
 from prix import ENTETES  # noqa: E402
 
 CACHE = os.path.join(ICI, "cache_jetons.json")
+VERSION = 2                      # 2 : les donjons en plus des jetons (les cartes déjà lues sont relues)
 _verrou = threading.Lock()
 
 
@@ -28,9 +29,17 @@ def _cle(nom):
 def _lire():
     try:
         with open(CACHE, encoding="utf-8") as f:
-            return json.load(f)
+            cache = json.load(f)
     except (OSError, ValueError):
-        return dict(cartes={}, jetons={})
+        cache = dict(cartes={}, jetons={})
+    if cache.get("version") != VERSION:
+        cache.update(version=VERSION, cartes={})
+    return cache
+
+
+def _a_creer(p):
+    """Ce qu'une carte met en jeu sans être dans le deck : ses jetons, et les donjons (aventure, initiative)."""
+    return p.get("component") == "token" or (p.get("component") == "combo_piece" and (p.get("type_line") or "").startswith("Dungeon"))
 
 
 def _ecrire(cache):
@@ -68,7 +77,7 @@ def jetons(noms):
             trouvees = {_cle(c["name"]).lower(): c for c in _collection([{"name": _cle(n)} for n in manquants])}
             for n in manquants:
                 c = trouvees.get(_cle(n).lower()) or {}
-                cache["cartes"][n] = [p["id"] for p in c.get("all_parts") or [] if p.get("component") == "token"]
+                cache["cartes"][n] = [p["id"] for p in c.get("all_parts") or [] if _a_creer(p)]
         ids = list(dict.fromkeys(i for n in noms for i in cache["cartes"].get(n, [])))
         a_charger = [i for i in ids if i not in cache["jetons"]]
         if a_charger:
