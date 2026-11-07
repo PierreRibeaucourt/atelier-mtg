@@ -4213,5 +4213,6 @@ async function verifierVersion() {
 }
 if (!PARTAGE) {
   verifierVersion();
+  setTimeout(verifierVersion, 30000);                // l'Atelier lit le dépôt quelques secondes après son lancement
   setInterval(verifierVersion, 3 * 3600 * 1000);
 }

@@ -100,13 +100,15 @@ def disponible():
 
 
 def surveiller():
-    """En fond tant que l'Atelier est ouvert : une lecture peu après le lancement, puis toutes les INTERVALLE secondes."""
-    time.sleep(20)
+    """En fond tant que l'Atelier est ouvert : une lecture peu après chaque lancement, puis toutes les INTERVALLE secondes."""
+    time.sleep(5)
+    force = True
     while True:
         try:
-            verifier()
+            verifier(force=force)
         except Exception:
             pass
+        force = False
         time.sleep(3600)
 
 
