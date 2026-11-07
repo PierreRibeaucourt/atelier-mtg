@@ -752,7 +752,7 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .pied-partage nav a { color: var(--texte); }
 .pied-partage p { margin: 0 auto; max-width: 720px; }
 /* « L'Atelier MTG » : la page qui présente l'outil (#/a-propos) */
-.a-propos { max-width: 760px; margin: 0 auto; line-height: 1.65; }
+.a-propos { max-width: 760px; margin: 0 auto; line-height: 1.65; display: flow-root; }
 .a-propos h1 { font-size: 2rem; line-height: 1.2; margin: .7rem 0 .5rem; }
 .a-propos h2 { font-size: 1.2rem; margin: 2.4rem 0 .7rem; padding-top: 1.4rem; border-top: 1px solid var(--bord); }
 .a-propos h3 { font-size: 1rem; margin: 1.4rem 0 .3rem; }
@@ -768,6 +768,8 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .ap-carte h3 { margin: 0 0 .25rem; font-size: .95rem; }
 .ap-carte p { margin: 0; font-size: .88rem; line-height: 1.5; color: var(--texte-2); }
 .ap-depot { margin-left: .8rem; font-size: .88rem; }
+.ap-portrait { float: right; width: min(40%, 230px); margin: .2rem 0 .8rem 1.5rem; }
+.ap-portrait img { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--bord); box-shadow: var(--ombre); }
 .ap-une { margin: 1.4rem 0 .6rem; }
 .ap-une img { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--bord); box-shadow: var(--ombre); }
 .ap-module { margin: 1.4rem 0 2.6rem; }

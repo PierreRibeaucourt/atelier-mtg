@@ -3173,6 +3173,7 @@ function vueAPropos() {
 
       <h2>Genèse du projet</h2>
       <p class="ap-signature">Par ${esc(AUTEUR_ATELIER)}, créateur de l'Atelier</p>
+      <figure class="ap-portrait">${capture("auteur", `${AUTEUR_ATELIER}, en partie de Magic`)}></figure>
       <p>À l'origine, mes listes tenaient sur de simples fichiers texte que j'analysais en ligne de commande avec un LLM et
         quelques ressources théoriques (ratios de mana, moteurs de pioche, conditions de victoire).</p>
       <p>Manipuler du code brut a vite montré ses limites. Pour ajuster un <em>cut</em> ou évaluer instantanément l'impact d'une
