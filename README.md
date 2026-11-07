@@ -2,7 +2,7 @@
 
 Une interface locale pour gérer ses decks Magic: The Gathering au format Commander. On y consulte et modifie les listes, on suit les prix, on vérifie le bracket, on simule des parties et on en discute avec Claude.
 
-Tout tourne sur ton PC, à l'adresse http://127.0.0.1:5000. Rien n'est mis en ligne.
+Tout tourne sur ton PC, à l'adresse http://127.0.0.1:5000. Rien n'est mis en ligne. Gratuit et libre, sous licence MIT.
 
 ## Ce qu'on peut faire
 
@@ -116,3 +116,7 @@ Les combos viennent de trois sources :
 - Fonctions des cartes : [Scryfall Tagger](https://tagger.scryfall.com). Noms français des extensions : moteur de recherche de [Magic-Ville](https://www.magic-ville.com).
 
 Magic: The Gathering est une marque de Wizards of the Coast. Ce projet n'est ni affilié à Wizards of the Coast ni approuvé par elle.
+
+## Licence
+
+Le code est sous licence MIT ([LICENSE](LICENSE)) : chacun peut l'utiliser gratuitement, le modifier et le redistribuer, même pour un usage commercial, en gardant la mention de l'auteur et la licence. Elle ne couvre que le code : les textes et images des cartes appartiennent à Wizards of the Coast, et les données viennent des sources ci-dessus, avec leurs propres conditions.
