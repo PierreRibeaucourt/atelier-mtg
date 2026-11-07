@@ -234,6 +234,20 @@ def accueil():
     return send_from_directory(app.static_folder, "index.html")
 
 
+@app.get("/jouer")
+def page_jouer():
+    """Jouer tout seul (playtester) : une page à part, /jouer?deck=Deck Kels (code : jouer.py, static/jouer.*)."""
+    return send_from_directory(app.static_folder, "jouer.html")
+
+
+@app.get("/api/jouer/jetons")
+def api_jouer_jetons():
+    """Les jetons que créent les cartes du deck (Scryfall, gardés dans cache_jetons.json)."""
+    import jouer
+    deck = request.args.get("deck", "")
+    return jsonify(jetons=jouer.jetons(decks.noms(decks.lire(decks.chemin(deck)), maybe=False)))
+
+
 @app.get("/reglages.js")
 def reglages_js():
     """Les réglages de cette installation (reglages.json) pour l'interface : budget par carte."""

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jouer — Atelier MTG</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='11.5' cy='7' r='2.8' fill='%23f97316'/%3E%3Ccircle cx='18.5' cy='3.6' r='2' fill='%23f97316'/%3E%3Ccircle cx='19.8' cy='9.6' r='1.6' fill='%23f97316'/%3E%3Cpath d='M8 27.5 6.6 30.6M24 27.5l1.4 3.1' stroke='%239a3412' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpath d='M5 15h22c1 1.9 1.5 3.7 1.5 5.7 0 4.6-5.4 7.8-12.5 7.8S3.5 25.3 3.5 20.7c0-2 .5-3.8 1.5-5.7z' fill='%23c2410c'/%3E%3Crect x='2' y='11.5' width='28' height='5.2' rx='2.6' fill='%239a3412'/%3E%3Cpath d='M8 19.5c1.5 3.5 4.2 5 8 5' stroke='%23fdba74' stroke-width='1.6' fill='none' stroke-linecap='round' opacity='.7'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/jouer.css">
+</head>
+<body>
+  <div id="jeu">
+    <header id="haut"></header>
+    <main id="champ" data-zone="champ" aria-label="Champ de bataille"></main>
+    <section id="bas">
+      <div id="zone-main" data-zone="main">
+        <div class="titre-zone"><span id="titre-main">Main</span><button type="button" class="btn-menu" data-menu="main" aria-label="Actions sur la main"></button></div>
+        <div id="main"></div>
+      </div>
+      <div class="piles">
+        <div class="pile" id="p-bibliotheque" data-zone="bibliotheque"></div>
+        <div class="pile" id="p-cimetiere" data-zone="cimetiere"></div>
+        <div class="pile" id="p-exil" data-zone="exil"></div>
+        <div class="pile" id="p-commandement" data-zone="commandement"></div>
+      </div>
+    </section>
+  </div>
+  <aside id="journal" hidden></aside>
+  <div id="apercu" hidden><img alt=""></div>
+  <div id="menu" class="menu" hidden></div>
+  <div id="modale" class="modale" hidden></div>
+  <div id="toast" class="toast" hidden></div>
+  <div id="fantome" hidden></div>
+  <script src="/static/jouer.js"></script>
+</body>
+</html>
