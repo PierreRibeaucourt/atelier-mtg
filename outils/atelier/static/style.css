@@ -166,6 +166,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .segments button:hover { background: var(--surface-2); color: var(--texte); }
 .segments button.actif { background: var(--accent-doux); color: var(--accent); font-weight: 600; }
 .champ-petit { width: auto; padding: .3rem .5rem; }
+#taille { width: 6.5rem; accent-color: var(--accent); }
 .vide { text-align: center; padding: 2rem 1rem; }
 
 /* ---- liste des cartes */
@@ -198,6 +199,22 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .prix-v { flex-shrink: 0; color: var(--texte-2); font-size: .78rem; font-variant-numeric: tabular-nums; }
 .prix-v.cher { color: var(--alerte); font-weight: 600; }
 .etale-main { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+
+/* vue Visuel d'un deck, façon Magic-Ville : les catégories s'enchaînent, un trait les sépare, cartes à la taille choisie (--l) */
+.flot { --gx: .7rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(var(--l), 100%), 1fr)); gap: .35rem var(--gx);
+  margin-top: .5rem; overflow-x: clip; }
+.flot .carte-v { position: relative; padding-top: 1.85rem; }
+.flot .carte-v::before { content: ""; position: absolute; left: 0; right: calc(-1 * var(--gx)); top: 1.4rem; height: 2px; background: var(--bord); }
+.flot .carte-v.fin::before { right: 0; }
+.flot-titre { position: absolute; z-index: 2; left: 0; top: 0; line-height: 1.35rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: min(calc(var(--n) * (100% + var(--gx)) - var(--gx)), var(--reste, 100vw)); }
+.flot-titre .muet { font-weight: 400; }
+.flot .empile .couche { width: 100%; left: calc(var(--k) * 3.5px); top: calc(var(--k) * -3.5px); }
+.flot .legende-v { margin-top: .25rem; font-size: .8rem; }
+.flot.serre .prix-v:not(.cher) { display: none; }
+/* le Maybeboard à part, sous le deck */
+.flot-maybe { margin-top: 2.2rem; padding-top: .9rem; border-top: 1px dashed var(--bord); }
+.groupe-maybe { margin-top: 2.2rem; }
 
 /* commandant dans l'en-tête du deck, à cheval sur le bandeau ; deux partenaires en éventail */
 .cmds-entete { position: absolute; z-index: 1; left: 1.1rem; top: 44px; display: flex; --l: 150px; }

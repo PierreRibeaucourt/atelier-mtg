@@ -1082,6 +1082,8 @@ function ongletListe(el, d) {
     ${!d.cartes.length ? `<div class="panneau vide"><p>Ce deck est vide.</p><button class="btn btn-accent ecrit" id="vide-ajouter">${ico("plus")}Ajouter des cartes</button></div>` : `
     <div class="barre-outils">
       ${segments("affichage", [["liste", "Liste", "liste"], ["visuel", "Visuel", "cartes"]], AFFICHAGE)}
+      <label class="outil petit muet" id="outil-taille" ${PREF.get("affichage", AFFICHAGE) === "visuel" ? "" : "hidden"}>Taille
+        <input type="range" id="taille" min="80" max="220" step="5" value="${tailleCartes()}" aria-label="Taille des cartes"></label>
       <label class="outil petit muet">Ranger par
         <select class="champ champ-petit" id="rangement">${[["type", "type"], ["tags", "tags"], ["fonction", "fonction"]].map(([v, l]) =>
           `<option value="${v}" ${PREF.get("rangement", "type") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
@@ -1104,8 +1106,18 @@ function ongletListe(el, d) {
       x.classList.toggle("actif", x === b);
       x.setAttribute("aria-pressed", x === b);
     });
+    $("#outil-taille", el).hidden = PREF.get("affichage", AFFICHAGE) !== "visuel";
     rendre();
   }));
+  // la taille change en direct ; les images sont rechoisies (petite ou grande) au relâcher
+  $("#taille", el).oninput = (ev) => {
+    $$(".flot", zone).forEach((g) => {
+      g.style.setProperty("--l", ev.target.value + "px");
+      g.classList.toggle("serre", +ev.target.value < SERRE);
+    });
+    ajusterTitres(zone);
+  };
+  $("#taille", el).onchange = (ev) => { PREF.set("taille-cartes", ev.target.value); rendre(); };
   $("#tri", el).onchange = (ev) => { PREF.set("tri", ev.target.value); rendre(); };
   $("#rangement", el).onchange = (ev) => { PREF.set("rangement", ev.target.value); rendre(); };
   $("#filtre", el).oninput = (ev) => { etat.filtre = ev.target.value; rendre(); };
@@ -1131,19 +1143,52 @@ function rendreGroupes(zone, d) {
   if (!groupes.length) { etat.ordre = []; zone.innerHTML = `<p class="muet">Aucune carte ne correspond à « ${esc(etat.filtre)} ».</p>`; return; }
   groupes.forEach((g) => g.cartes.sort(tri));
   etat.ordre = groupes.flatMap((g) => g.cartes.map((c) => c.index));     // pour « carte précédente / suivante » dans la fiche
-  zone.innerHTML = groupes.map((g) => {
-    // vue Visuel : les commandants sont dans l'en-tête du deck (sauf s'ils n'ont pas d'image)
-    const cartes = visuel && g.cat === "Commandant" ? g.cartes.filter((c) => !c.info.image) : g.cartes;
-    if (!cartes.length) return "";
+  const entete = (g, cartes) => {
     const n = cartes.reduce((s, c) => s + c.n, 0);
     const prix = cartes.reduce((s, c) => s + (c.info.prix || 0) * c.n, 0);
-    return `<div class="groupe">
-      <div class="groupe-titre"><span class="nb-groupe">${n}</span> ${esc(g.cat)} <span class="muet petit">${euros(prix)}</span></div>
-      ${visuel ? `<div class="etale ${cartes.some((c) => c.n > 1) ? "avec-piles" : ""}">${cartes.map(carteVisuelle).join("")}</div>`
-        : cartes.map((c) => ligneCarte(c, rangement)).join("")}
-    </div>`;
-  }).join("");
+    return [`<span class="nb-groupe">${n}</span> ${esc(g.cat)} <span class="muet petit">${euros(prix)}</span>`, `${n} ${g.cat} · ${euros(prix)}`];
+  };
+  if (visuel) {
+    // vue Visuel façon Magic-Ville : les catégories s'enchaînent sans changer de ligne, le titre au-dessus de la première carte ;
+    // le Maybeboard à part, sous le deck
+    const t = tailleCartes();
+    const flot = (gs, cls = "") => !gs.length ? "" : `<div class="flot ${cls} ${t < SERRE ? "serre" : ""}" style="--l:${t}px">${gs.map((g) => {
+      // les commandants sont dans l'en-tête du deck (sauf s'ils n'ont pas d'image)
+      const cartes = g.cat === "Commandant" ? g.cartes.filter((c) => !c.info.image) : g.cartes;
+      if (!cartes.length) return "";
+      const [html, titre] = entete(g, cartes);
+      const tete = `<span class="flot-titre" style="--n:${cartes.length}" title="${esc(titre)}">${html}</span>`;
+      return cartes.map((c, i) => carteVisuelle(c, i ? "" : tete, i === cartes.length - 1, t)).join("");
+    }).join("")}</div>`;
+    zone.innerHTML = flot(groupes.filter((g) => g.cat !== "Maybeboard"))
+      + flot(groupes.filter((g) => g.cat === "Maybeboard"), "flot-maybe");
+    ajusterTitres(zone);
+    return;
+  }
+  zone.innerHTML = groupes.map((g) => `<div class="groupe ${g.cat === "Maybeboard" ? "groupe-maybe" : ""}">
+      <div class="groupe-titre">${entete(g, g.cartes)[0]}</div>
+      ${g.cartes.map((c) => ligneCarte(c, rangement)).join("")}
+    </div>`).join("");
 }
+
+const SERRE = 130;                       // en dessous, la légende garde le nom et seuls les prix au-dessus du budget
+function tailleCartes() {
+  const t = +PREF.get("taille-cartes", 115);
+  return t >= 80 && t <= 220 ? t : 115;
+}
+
+// un titre de catégorie qui commence en fin de ligne s'arrête au bord (avec « … ») au lieu d'être coupé net
+function ajusterTitres(zone) {
+  $$(".flot", zone).forEach((g) => {
+    const droite = g.getBoundingClientRect().right;
+    $$(".flot-titre", g).forEach((x) => x.style.setProperty("--reste", Math.max(0, droite - x.getBoundingClientRect().left) + "px"));
+  });
+}
+let ajustement = 0;
+addEventListener("resize", () => {
+  cancelAnimationFrame(ajustement);
+  ajustement = requestAnimationFrame(() => { const z = $("#groupes"); if (z) ajusterTitres(z); });
+});
 
 function badgesAlerte(c) {
   return (c.alertes || []).map((a) => `<span class="badge badge-alerte" title="${esc(TITRE_ALERTE[a] || "")}">${esc(a)}</span>`).join("");
@@ -1171,25 +1216,27 @@ function ligneCarte(c, rangement) {
 }
 
 // vue « étalée » façon Magic-Ville : les images, empilées quand il y a plusieurs exemplaires
-function imageCarte(f, cls, style = "") {
+function imageCarte(f, cls, style = "", taille = 170) {
   const src = f.petite || f.image;
   if (!src) return `<span class="${cls} sans-image" ${style}>${esc(f.nom || "?")}</span>`;
-  const srcset = f.petite && f.image ? `srcset="${esc(f.petite)} 146w, ${esc(f.image)} 488w" sizes="170px"` : "";
+  const srcset = f.petite && f.image ? `srcset="${esc(f.petite)} 146w, ${esc(f.image)} 488w" sizes="${taille}px"` : "";
   return `<img class="${cls}" ${style} src="${esc(src)}" ${srcset} alt="" loading="lazy">`;
 }
 
-function carteVisuelle(c) {
+// tete : titre de la catégorie (sur sa première carte) ; fin : dernière carte de la catégorie
+function carteVisuelle(c, tete = "", fin = false, taille = 170) {
   const f = c.info || {};
   const nb = Math.min(c.n, 4);
   const cher = (f.prix || 0) > BUDGET;
+  const t = Math.round(taille * 1.1);
   const couches = [];
-  for (let k = nb - 1; k >= 1; k--) couches.push(imageCarte(f, "couche", `style="--k:${k}"`));
+  for (let k = nb - 1; k >= 1; k--) couches.push(imageCarte(f, "couche", `style="--k:${k}"`, t));
   const marques = [
     f.gc ? `<span class="marque marque-gc" title="Game Changer">GC</span>` : "",
     ...(c.alertes || []).map((a) => `<span class="marque marque-alerte" title="${esc(TITRE_ALERTE[a] || "")}">${esc(a)}</span>`),
   ].join("");
-  return `<div class="carte-v">
-    <button type="button" class="pile" data-carte="${c.index}" data-survol="${c.index}" aria-label="${esc(c.nom)} : fiche et actions">${couches.join("")}${imageCarte(f, "recto")}${marques ? `<span class="marques">${marques}</span>` : ""}</button>
+  return `<div class="carte-v ${tete ? "debut" : ""} ${fin ? "fin" : ""} ${nb > 1 ? "empile" : ""}">${tete}
+    <button type="button" class="pile" data-carte="${c.index}" data-survol="${c.index}" aria-label="${esc(c.nom)} : fiche et actions">${couches.join("")}${imageCarte(f, "recto", "", t)}${marques ? `<span class="marques">${marques}</span>` : ""}</button>
     <div class="legende-v" title="${esc(c.nom + (f.fr && f.fr !== c.nom ? " — " + f.fr : ""))}">
       ${c.n > 1 ? `<span class="qte-v">${c.n}</span>` : ""}<span class="nom-v">${esc(nomAffiche(c))}</span>
       <span class="prix-v ${cher ? "cher" : ""}">${euros(f.prix)}</span>
