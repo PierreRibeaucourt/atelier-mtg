@@ -694,21 +694,29 @@ a.btn-accent { color: var(--accent-texte); }      /* un lien en bouton orange : 
 .rch-prix .prix.cher { color: var(--alerte); }
 .rch-badges { display: inline-flex; flex-wrap: wrap; gap: .25rem; }
 .badge-fn { background: transparent; border: 1px solid var(--bord); }
-.rch-actions { margin-left: auto; display: inline-flex; align-items: center; gap: .3rem; }
+.rch-actions { display: flex; flex-direction: column; align-items: flex-start; gap: .3rem; }
+/* liste étroite (discussion ouverte, petit écran) : sans en-têtes, les noms et le coût en haut, le reste dessous */
+@container rch (max-width: 780px) {
+  .rch-cols { display: none; }
+  .rch-liste.avec-images .rch-carte { grid-template-columns: 76px minmax(0, 1fr) auto;
+    grid-template-areas: "img vo cout" "img vf vf" "img det det" "img prix prix"; grid-template-rows: auto; }
+  .rch-vignette img, .rch-vignette .sans-image { width: 76px; }
+  .rch-typecourt { display: none; }
+  .rch-prix, .rch-actions { flex-direction: row; flex-wrap: wrap; align-items: center; }
+}
 .rch-carte-v { display: flex; flex-direction: column; }
 .rch-actions-v { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .3rem; }
 .rch-actions-v .badge { align-self: center; }
 .marque-ok { background: var(--bon); color: var(--accent-texte); }
 .marque-maybe { background: var(--surface); color: var(--texte-2); }
-@media (max-width: 600px) {
-  .rch-liste.avec-images .rch-carte { grid-template-columns: 60px minmax(0, 1fr); }
-  .rch-vignette img, .rch-vignette .sans-image { width: 60px; }
-  .rch-actions { margin-left: 0; }
-}
-.rch-deck .champ { width: auto; min-width: 14rem; }
-.rch-outils label { display: inline-flex; align-items: center; gap: .4rem; }
-.moteur .champ-petit, .rch-outils .champ-petit, .rch-pages .champ-petit { padding: .3rem .5rem; }
+.rch-deck .champ { width: auto; }
+.rch-outils label, .rch-deck label { display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap; }
+.moteur .champ-petit, .rch-outils .champ-petit, .rch-pages .champ-petit, .rch-deck .champ-petit { padding: .3rem .5rem; }
 .moteur select.champ-petit { padding: .35rem .5rem; }
+/* barres de la recherche : tous les contrôles à la même hauteur */
+.rch-entete .champ-petit, .rch-entete .btn-petit, .rch-bas .champ-petit, .rch-bas .btn-petit, .rch-deck .champ-petit { height: 2rem; }
+.rch-entete .btn-petit, .rch-bas .btn-petit { min-width: 2rem; }
+.rch-entete .segments button { height: calc(2rem - 2px); }
 .rch-nombres .champ { width: 3.8rem; }
 @media (max-width: 700px) { .lien-recherche .long, #btn-rafraichir { display: none; } .lien-recherche { padding: .4rem .5rem; } }
 /* fiche d'une carte trouvée : un seul bloc pour ajouter, les liens à part */
