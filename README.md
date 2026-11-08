@@ -15,6 +15,7 @@ Tout tourne sur ton PC, à l'adresse http://127.0.0.1:5000. Rien n'est mis en li
 - **Statistiques.** Consulter la courbe de mana, les couleurs, les types, les fonctions et les tags comparés à un gabarit de deck et la base de mana. Tirer une main de départ.
 - **Aperçu des cartes citées.** Partout dans l'Atelier (listes, combos, versions, bracket, simulation, discussion avec Claude), survoler le nom d'une carte, en français ou en anglais, affiche son image et son prix. Les noms d'un seul mot qui sont aussi des mots courants (« Sacrifice », « Foudre ») ne sont reconnus que dans le deck ouvert ou écrits en gras.
 - **Prix.** Afficher le prix Cardmarket du jour, celui de l'édition la moins chère, avec un lien vers Cardmarket.
+- **Achats.** L'onglet « Achats » d'un deck sépare les cartes qu'on a déjà de celles à acheter, avec le coût de ce qui manque : l'amélioration d'un deck, ou le deck entier pour un nouveau. Dans la fiche d'une carte, « Je l'ai » / « À acheter » change son état. « Copier pour Cardmarket » copie ce qui manque au format des listes de wants (« 1 Sol Ring », une carte par ligne). Un deck créé dans l'Atelier part de zéro ; un deck d'avant cette fonction est considéré comme déjà monté. Ces informations restent sur ce PC (`achats.json` dans le dossier du deck) et ne sont jamais partagées.
 - **Combos.** Deux vues. « Le deck » montre les combos déjà présentes dans le deck. « Une carte » montre les autres cartes qui combotent avec elle, avec ou sans le filtre des couleurs du commandant, leur prix et un bouton pour les mettre au Maybeboard. Les combos viennent de MTGPics, de Commander Spellbook et, à la demande, d'une analyse des synergies par Claude (voir plus bas).
 - **Bracket.** Repérer les Game Changers de la liste officielle. Afficher l'estimation de bracket de Commander Spellbook.
 - **Versions.** Enregistrer des versions nommées, consulter l'historique automatique, comparer deux versions.
@@ -63,7 +64,7 @@ Chaque deck est un dossier `Deck <nom>` placé à la racine. Il contient sa list
 1x Coal Stoker [Maybeboard]
 ```
 
-L'Atelier range aussi dans ce dossier l'historique, les versions, les simulations, les réglages de jeu (`pilote.json`) et la discussion. Les dossiers de decks ne sont pas dans ce dépôt (voir `.gitignore`).
+L'Atelier range aussi dans ce dossier l'historique, les versions, les simulations, les réglages de jeu (`pilote.json`), la discussion et les cartes qu'on a déjà (`achats.json`). Les dossiers de decks ne sont pas dans ce dépôt (voir `.gitignore`).
 
 ## Recherche de cartes
 

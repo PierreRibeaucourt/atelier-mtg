@@ -86,7 +86,7 @@ Tout ceci est ignoré par git et ne doit jamais être commité, poussé ni effac
 - `Deck <nom>/`, un dossier par deck, à la racine :
   - `archidekt.txt`, la liste de référence au format Archidekt (`1x Nom [Catégorie]`) ;
   - l'historique et les versions ;
-  - `simulations/`, `pilote.json` (réglages du simulateur) et `discussion.json`.
+  - `simulations/`, `pilote.json` (réglages du simulateur), `discussion.json` et `achats.json` (cartes possédées : le reste est à acheter).
 - `Corbeille Atelier/` : les decks supprimés, récupérables.
 - `Partage Atelier/` : les pages partagées. `reglages.json` : les réglages.
 - Les caches, dans `outils/` et `outils/atelier/` : base des cartes, prix, combos. Ils se reconstruisent tout seuls.

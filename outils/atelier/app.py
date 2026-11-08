@@ -378,6 +378,18 @@ def api_export(deck):
     return Response(decks.exporter(decks.lire(decks.chemin(deck)), fmt, nom_export), mimetype="text/plain; charset=utf-8")
 
 
+@app.get("/api/decks/<path:deck>/achats")
+def api_achats(deck):
+    """Cartes que j'ai pour ce deck : {possedees: {nom: exemplaires}} ; le reste est à acheter. Reste sur ce PC."""
+    return jsonify(possedees=decks.possedees(deck))
+
+
+@app.post("/api/decks/<path:deck>/achats")
+def api_marquer(deck):
+    """{possedees: {nom: exemplaires que j'ai}}, ajoutées à celles déjà notées."""
+    return jsonify(possedees=decks.marquer(deck, request.get_json().get("possedees", {})))
+
+
 @app.get("/api/decks/<path:deck>/partage")
 def api_partage(deck):
     """Page partagée du deck sur GitHub Pages : {url, date}, ou {} s'il n'est pas partagé."""

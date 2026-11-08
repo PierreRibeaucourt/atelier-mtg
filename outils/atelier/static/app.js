@@ -133,6 +133,7 @@ const ICONES = {
   compacter: '<path d="M4 14h6v6M20 10h-6V4"/><path d="m14 10 7-7M3 21l7-7"/>',
   ouvrir: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>',
   telecharger: '<path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/>',
+  coche: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
 };
 if (PARTAGE) $(".logo").href = PARTAGE.accueil === true ? "#/" : PARTAGE.accueil;
 const ico = (nom) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${ICONES[nom] || ""}</svg>`;
@@ -915,7 +916,9 @@ function modaleNouveauDeck() {
 }
 
 // ------------------------------------------------------------------ page d'un deck
-const ONGLETS = [["liste", "Liste"], ["stats", "Statistiques"], ["combos", "Combos"], ["versions", "Versions"], ["bracket", "Bracket"], ["simulation", "Simulation"]];
+const ONGLETS = [["liste", "Liste"], ["stats", "Statistiques"], ["combos", "Combos"], ["versions", "Versions"], ["bracket", "Bracket"], ["simulation", "Simulation"],
+  ...(PARTAGE ? [] : [["achats", "Achats"]])];                    // ce que j'ai et ce qu'il me manque : reste sur ce PC
+ICONES.achats = ICONES.panier;
 
 async function vueDeck(id, onglet, extra = null, donnees = null) {
   if (!etat.deck || etat.deck.id !== id) {
@@ -957,6 +960,7 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
     ...(PARTAGE ? [] : [["Partager le deck…", () => modalePartage(d), "", "partager"], null]),
     "Copier la liste pour",
     ...EXPORTS.map(([fmt, lib]) => [lib, () => copierListe(fmt, lib), "", "copier"]),
+    ...(PARTAGE ? [] : [["Cardmarket (à acheter)", () => copierCardmarket(d), "", "panier"]]),
     ...(PARTAGE ? [] : [null, ["Supprimer ce deck…", () => supprimerDeck(d), "btn-danger", "corbeille"]]),
   ]);
   const contenu = $("#contenu");
@@ -965,6 +969,7 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
   if (onglet === "combos") return ongletCombos(contenu, d, extra);
   if (onglet === "simulation") return ongletSimulation(contenu, d, extra);
   if (onglet === "versions" || onglet === "historique") return ongletVersions(contenu, d);
+  if (onglet === "achats" && !PARTAGE) return ongletAchats(contenu, d);
   ongletListe(contenu, d);
 }
 
@@ -977,6 +982,108 @@ async function copierListe(fmt, lib) {
     await navigator.clipboard.writeText(txt);
     toast(`Liste copiée : ${lib}.`);
   } catch (e) { erreur(e); }
+}
+
+// ------------------------------------------------------------------ cartes que j'ai, cartes à acheter (achats.json : sur ce PC seulement)
+const possedeesDeck = (d) => api(`/api/decks/${enc(d.id)}/achats`).then((r) => r.possedees);
+const marquerPossedees = (d, changements) =>
+  api(`/api/decks/${enc(d.id)}/achats`, { method: "POST", body: { possedees: changements } }).then((r) => r.possedees);
+
+// exemplaires qu'il faut (toutes les lignes de la carte hors Maybeboard ; au Maybeboard, les siennes) et que j'ai
+const besoinCarte = (d, c) => d.cartes.filter((x) => x.nom === c.nom && (x.cat === "Maybeboard") === (c.cat === "Maybeboard"))
+  .reduce((s, x) => s + x.n, 0);
+const jAi = (c, poss, n) => Math.min(n, poss[c.nom] ?? (estBase(c) ? n : 0));      // un terrain de base : je l'ai
+
+// le deck sans le Maybeboard, une ligne par carte : à acheter et déjà là, les plus chères d'abord
+function bilanAchats(d, poss) {
+  const par = new Map();
+  for (const c of d.cartes) if (c.cat !== "Maybeboard" && !par.has(c.nom)) par.set(c.nom, c);
+  const acheter = [], ai = [];
+  for (const c of par.values()) {
+    const total = besoinCarte(d, c), j = jAi(c, poss, total);
+    if (j) ai.push({ c, n: j, total });
+    if (total > j) acheter.push({ c, n: total - j, total });
+  }
+  const tri = (a, b) => (b.c.info.prix || 0) - (a.c.info.prix || 0) || a.c.nom.localeCompare(b.c.nom);
+  return { acheter: acheter.sort(tri), ai: ai.sort(tri) };
+}
+const nbAchats = (l) => l.reduce((s, x) => s + x.n, 0);
+const coutAchats = (l) => l.reduce((s, x) => s + (x.c.info.prix || 0) * x.n, 0);
+const WANTS_CARDMARKET = "https://www.cardmarket.com/fr/Magic/Wants";
+
+// liste de wants Cardmarket (« Ajouter une decklist ») : « 2 Nom anglais », une carte par ligne, seulement ce qui manque
+async function copierCardmarket(d) {
+  try {
+    const { acheter } = bilanAchats(d, await possedeesDeck(d));
+    if (!acheter.length) return toast("Rien à acheter.");
+    await navigator.clipboard.writeText(acheter.map((x) => `${x.n} ${x.c.nom}`).join("\n") + "\n");
+    const n = nbAchats(acheter);
+    toast(`Copié pour Cardmarket : ${n} carte${n > 1 ? "s" : ""}.`);
+  } catch (e) { erreur(e); }
+}
+
+// fiche d'une carte : « Je l'ai » ou « À acheter », un clic pour passer de l'un à l'autre
+function boutonAchat(b, d, c, poss) {
+  const n = besoinCarte(d, c), j = jAi(c, poss, n);
+  b.className = "badge" + (j >= n ? " badge-ok" : "");
+  b.innerHTML = j >= n ? ico("coche") + "Je l'ai" : ico("panier") + (j ? `J'en ai ${j} / ${n}` : "À acheter");
+  b.setAttribute("aria-pressed", j >= n);
+  b.hidden = false;
+}
+
+async function basculerAchat(b, d, c) {
+  try {
+    const n = besoinCarte(d, c), poss = await possedeesDeck(d);
+    const nouv = await marquerPossedees(d, { [c.nom]: jAi(c, poss, n) >= n ? 0 : n });
+    boutonAchat(b, d, c, nouv);
+    if ($("#contenu .achats")) ongletAchats($("#contenu"), d, nouv);
+  } catch (e) { erreur(e); }
+}
+
+// onglet Achats : ce qu'il reste à acheter (et combien ça coûte), ce que j'ai déjà
+async function ongletAchats(el, d, poss = null) {
+  if (!poss) {
+    el.innerHTML = `<p class="chargement">Chargement…</p>`;
+    try { poss = await possedeesDeck(d); } catch (e) { el.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; return; }
+  }
+  const { acheter, ai } = bilanAchats(d, poss);
+  etat.ordre = [...new Set([...acheter, ...ai].map((x) => x.c.index))];
+  const ligne = (x, achat) => {
+    const c = x.c, f = c.info || {}, cher = (f.prix || 0) > BUDGET, lib = achat ? "Je l'ai" : "À acheter";
+    return `<div class="ligne ligne-carte ligne-achat" data-carte="${c.index}">
+      <span class="qte">${x.n > 1 ? x.n + "×" : ""}</span>
+      <span class="nom"><span class="en" data-image="${esc(f.image)}" data-legende="${esc(legendeCarte(c))}" ${cher ? 'data-cher="1"' : ""}>${esc(c.nom)}</span>${f.fr && f.fr !== c.nom ? `<span class="fr">${esc(f.fr)}</span>` : ""}</span>
+      ${mana(f.cout)}
+      ${f.prix_lien ? `<a class="prix ${cher ? "cher" : ""}" href="${esc(f.prix_lien)}" target="_blank" rel="noopener">${euros(f.prix)}</a>` : `<span class="prix muet">${euros(f.prix)}</span>`}
+      <button type="button" class="btn-menu" data-bascule="${esc(c.nom)}" data-v="${achat ? x.total : 0}" aria-label="${lib} : ${esc(c.nom)}" title="${lib}">${ico(achat ? "coche" : "panier")}</button>
+    </div>`;
+  };
+  el.innerHTML = `<div class="achats">
+    <section class="groupe">
+      <div class="groupe-titre"><span class="nb-groupe">${nbAchats(acheter)}</span> À acheter <span class="achats-cout">${euros(coutAchats(acheter))}</span>
+        ${acheter.length ? `<span class="achats-outils">
+          <button type="button" class="btn btn-petit" id="ach-copier">${ico("copier")}Copier pour Cardmarket</button>
+          <a class="lien-discret" href="${WANTS_CARDMARKET}" target="_blank" rel="noopener">Wants ↗</a>
+          <button type="button" class="btn-menu" id="ach-tout" aria-label="Je les ai toutes" title="Je les ai toutes">${ico("coche")}</button></span>` : ""}</div>
+      ${acheter.length ? acheter.map((x) => ligne(x, true)).join("") : `<p class="muet petit">Rien à acheter.</p>`}
+    </section>
+    <section class="groupe">
+      <div class="groupe-titre"><span class="nb-groupe">${nbAchats(ai)}</span> J'ai déjà <span class="muet petit">${euros(coutAchats(ai))}</span></div>
+      ${ai.length ? ai.map((x) => ligne(x, false)).join("") : `<p class="muet petit">Aucune.</p>`}
+    </section>
+  </div>`;
+  const marquer = async (changements) => {
+    try { ongletAchats(el, d, await marquerPossedees(d, changements)); } catch (e) { erreur(e); }
+  };
+  el.onclick = (ev) => {
+    const b = ev.target.closest("[data-bascule]");
+    if (b) return marquer({ [b.dataset.bascule]: +b.dataset.v });
+    if (ev.target.closest("#ach-copier")) return copierCardmarket(d);
+    if (ev.target.closest("#ach-tout")) return marquer(Object.fromEntries(acheter.map((x) => [x.c.nom, x.total])));
+    if (ev.target.closest("a")) return;
+    const m = ev.target.closest("[data-carte]");
+    if (m) ouvrirCarte(d.cartes[+m.dataset.carte]);
+  };
 }
 
 // page du deck publiée sur GitHub Pages (partage.py) : lien, mise à jour, retrait
@@ -1334,6 +1441,7 @@ function ouvrirCarte(c) {
         <div class="petit muet">${esc(f.fr_type || f.type || "")}${f.pt ? " · " + esc(f.pt) : ""}${cmd ? " · commandant" : maybe ? " · Maybeboard" : ""}</div>
         <div class="chiffres">
           <span class="badge ${cher ? "badge-cher" : ""}" title="Le moins cher, toutes éditions (prix Cardmarket du jour)">${euros(f.prix)}${f.prix_edition ? ` · ${esc(f.prix_edition)}` : ""}</span>
+          ${PARTAGE ? "" : `<button type="button" class="badge" data-act="achat" hidden></button>`}
           ${f.gc ? `<span class="badge badge-gc">Game Changer</span>` : ""}
           ${badgesAlerte(c)}
           ${sim ? `<span class="badge badge-sim" title="${esc(sim[1] + (c.sim.non_lu.length ? " :\n• " + c.sim.non_lu.join("\n• ") : ""))}">${sim[0]}</span>` : ""}
@@ -1374,10 +1482,13 @@ function ouvrirCarte(c) {
     </div>`, (b) => {
     const retrouver = (nd) => nd && nd.cartes.find((x) => x.nom === c.nom);
     $("#fc-fermer", b).onclick = fermerModale;
+    const achat = $('[data-act="achat"]', b);
+    if (achat) possedeesDeck(d).then((poss) => boutonAchat(achat, d, c, poss)).catch(() => {});
     b.addEventListener("click", async (ev) => {
       const x = ev.target.closest("[data-act]");
       if (!x || x.disabled) return;
       const act = x.dataset.act;
+      if (act === "achat") return basculerAchat(x, d, c);
       if (act === "prec" || act === "suiv") return ouvrirCarte(d.cartes[ordre[pos + (act === "suiv" ? 1 : -1)]]);
       if (act === "tags") return modaleTags(c, true);
       if (act === "version") return modaleVersion(c);
@@ -1407,7 +1518,7 @@ async function modifier(op, c, extra = {}, message = "Enregistré.") {
   try {
     const d = await api(`/api/decks/${enc(etat.deck.id)}/modifier`, { method: "POST", body: { op, index: c ? c.index : undefined, nom_actuel: c ? c.nom : undefined, ...extra } });
     const y = scrollY;
-    await vueDeck(d.id, "liste", null, d);
+    await vueDeck(d.id, location.hash.split("/")[3] === "achats" ? "achats" : "liste", null, d);
     scrollTo(0, y);
     api("/api/decks").then((x) => { etat.decks = x; }).catch(() => {});
     if (message) toast(message);

@@ -198,6 +198,42 @@ def note(deck):
     return json.load(open(p, encoding="utf-8")).get("note", "") if os.path.exists(p) else ""
 
 
+# ---------------------------------------------------------------- cartes que j'ai, cartes à acheter
+# achats.json, à côté de la liste (jamais partagé) : {"possedees": {"Sol Ring": 1, "Mountain": 0}}, combien d'exemplaires
+# j'ai de chaque carte pour ce deck. Une carte absente : à acheter (un terrain de base : je l'ai). Une carte retirée du
+# deck reste notée : si elle revient, je l'ai toujours.
+ACHATS = "achats.json"
+
+
+def _ecrire_achats(deck, poss):
+    with open(os.path.join(RACINE, deck, ACHATS), "w", encoding="utf-8", newline="\n") as f:
+        json.dump(dict(possedees=poss), f, ensure_ascii=False, indent=1)
+
+
+def possedees(deck):
+    """{nom: exemplaires que j'ai}. La première fois, toutes les cartes du deck (hors Maybeboard) : un deck d'avant cette
+    fonction est déjà monté. Un deck créé dans l'Atelier part de zéro (creer écrit un fichier vide)."""
+    p = os.path.join(RACINE, deck, ACHATS)
+    if os.path.exists(p):
+        return json.load(open(p, encoding="utf-8")).get("possedees", {})
+    poss = Counter()
+    if os.path.exists(chemin(deck)):
+        for e in lire(chemin(deck)):
+            if categorie(e) != "Maybeboard":
+                poss[e["nom"]] += e["n"]
+    _ecrire_achats(deck, dict(poss))
+    return dict(poss)
+
+
+def marquer(deck, changements):
+    """changements : {nom: exemplaires que j'ai}. Renvoie toutes les cartes que j'ai."""
+    poss = possedees(deck)
+    for nom, n in changements.items():
+        poss[str(nom)] = max(0, int(n))
+    _ecrire_achats(deck, poss)
+    return poss
+
+
 def comptes(entrees):
     jeu = [e for e in entrees if categorie(e) != "Maybeboard"]
     cmd = next((e["nom"] for e in entrees if categorie(e) == "Commander"), None)
@@ -322,6 +358,7 @@ def creer(nom, commandant="", liste=""):
     os.makedirs(p)
     with open(os.path.join(p, FICHIER), "w", encoding="utf-8", newline="\n") as f:
         f.write(texte(entrees) if entrees else "")
+    _ecrire_achats(dossier, {})                             # nouveau deck : tout est à acheter
     return dossier
 
 
