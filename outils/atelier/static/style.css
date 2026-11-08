@@ -659,25 +659,39 @@ a.btn-accent { color: var(--accent-texte); }      /* un lien en bouton orange : 
 .rch-bas { display: flex; justify-content: center; margin-top: .8rem; }
 .rch-base { text-align: center; margin-top: 1rem; }
 .rch-liste:not(.etale) { border-top: 1px solid var(--bord); }
-.rch-carte { display: grid; grid-template-columns: minmax(0, 1fr); gap: .9rem; padding: .7rem .3rem; border-bottom: 1px solid var(--bord); }
-.rch-liste.avec-images .rch-carte { grid-template-columns: 80px minmax(0, 1fr); }
+/* liste façon Magic-Ville : en-têtes Coul. · Nom VO · Nom VF · Type · Coût · Prix, puis une ligne par carte alignée dessous ;
+   sous les noms (sur leurs deux colonnes) le type complet, le texte et la force/endurance à droite */
+.rch-liste.avec-images { container: rch / inline-size; border-top: 0; }
+.rch-cols, .rch-liste.avec-images .rch-carte { display: grid; column-gap: .9rem;
+  grid-template-columns: 112px minmax(0, 1fr) minmax(0, 1fr) minmax(6rem, 9rem) minmax(5.5rem, 8rem) minmax(7.5rem, 9rem); }
+.rch-cols { margin-bottom: .2rem; }
+.rch-col { display: flex; align-items: center; justify-content: center; gap: .35em; border: 0; border-radius: 4px; padding: .35rem .5rem;
+  background: var(--texte); color: var(--fond); font: inherit; font-size: .74rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  cursor: pointer; white-space: nowrap; }
+.rch-col:not(:first-child) { justify-content: flex-start; }
+.rch-col:hover { background: var(--accent); color: var(--accent-texte); }
+.rch-col.actif { box-shadow: inset 0 -3px 0 var(--accent); }
+.rch-carte { padding: .8rem 0; border-bottom: 1px solid var(--bord); }
+.rch-liste.avec-images .rch-carte { grid-template-areas: "img vo vf type cout prix" "img det det . . prix"; grid-template-rows: auto 1fr;
+  row-gap: .3rem; align-items: start; }
 .rch-carte:hover { background: var(--surface); }
-.rch-vignette { border: 0; padding: 0; background: none; cursor: pointer; align-self: start; }
-.rch-vignette img, .rch-vignette .sans-image { display: block; width: 80px; aspect-ratio: 488 / 680; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
-.rch-corps { min-width: 0; }
-.rch-haut { display: flex; justify-content: space-between; align-items: baseline; gap: .6rem; }
-.rch-noms { display: flex; flex-wrap: wrap; align-items: baseline; gap: .1rem .7rem; min-width: 0; }
-.rch-nom { border: 0; background: none; padding: 0; font: inherit; font-weight: 650; font-size: 1.02rem; color: var(--texte); cursor: pointer; text-align: left; }
-.rch-nom:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
-.rch-vf { color: var(--texte-2); }
-.rch-type { font-size: .85rem; color: var(--texte-2); margin-top: .1rem; }
-.rch-pt { color: var(--texte); font-weight: 700; margin-left: .45rem; }
-.rch-texte { font-size: .88rem; margin-top: .35rem; max-width: 72ch; }
+.rch-vignette { grid-area: img; justify-self: center; border: 0; padding: 0; background: none; cursor: pointer; }
+.rch-vignette img, .rch-vignette .sans-image { display: block; width: 100px; aspect-ratio: 488 / 680; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.rch-vo { grid-area: vo; min-width: 0; } .rch-vf { grid-area: vf; min-width: 0; }
+.rch-typecourt { grid-area: type; font-size: .9rem; color: var(--texte-2); }
+.rch-cm { grid-area: cout; } .rch-cm .cout img { width: 17px; height: 17px; }
+.rch-nom { border: 0; background: none; padding: 0; font: inherit; font-weight: 600; font-size: 1rem; color: var(--accent); cursor: pointer; text-align: left; }
+.rch-nom:hover { text-decoration: underline; text-underline-offset: 3px; }
+.rch-detail { grid-area: det; min-width: 0; }
+.rch-type { font-size: .85rem; color: var(--texte-2); }
+.rch-texte { font-size: .88rem; margin-top: .3rem; }
 .rch-texte p { margin: 0 0 .2rem; }
-.rch-pied { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .9rem; margin-top: .45rem; font-size: .85rem; }
-.rch-pied .prix { font-weight: 600; font-variant-numeric: tabular-nums; text-decoration: none; }
-.rch-pied .prix:hover { text-decoration: underline; }
-.rch-pied .prix.cher { color: var(--alerte); }
+.rch-pt { text-align: right; font-size: .88rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* colonne de droite : le prix, puis Deck et Maybe */
+.rch-prix { grid-area: prix; display: flex; flex-direction: column; align-items: flex-start; gap: .4rem; font-size: .85rem; }
+.rch-prix .prix { font-weight: 600; font-variant-numeric: tabular-nums; text-decoration: none; }
+.rch-prix .prix:hover { text-decoration: underline; }
+.rch-prix .prix.cher { color: var(--alerte); }
 .rch-badges { display: inline-flex; flex-wrap: wrap; gap: .25rem; }
 .badge-fn { background: transparent; border: 1px solid var(--bord); }
 .rch-actions { margin-left: auto; display: inline-flex; align-items: center; gap: .3rem; }

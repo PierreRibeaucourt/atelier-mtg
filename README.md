@@ -72,6 +72,7 @@ La page « Recherche de cartes » (barre du haut, ou bouton « Chercher des cart
 - **Couleurs** : un clic sur une couleur la permet (« peut »), un deuxième l'impose (« doit »), un troisième la retire. La carte a au moins une des couleurs choisies, toutes celles qui « doivent », et aucune autre : pour en permettre d'autres, on les choisit aussi. « Identité de couleur » regarde l'identité plutôt que les couleurs de la carte. Le bouton « Couleurs de … » choisit les couleurs du commandant du deck lié.
 - **Recherche texte** : en français, en anglais ou les deux. Tous les mots doivent y être ; `"…"` cherche une expression exacte, `!mot` exclut un mot.
 - **Valeur de mana, Force, Endurance, Format, Rareté, Éditions** (avec « Nouvelles cartes uniquement »), **Cartes spéciales** et **Types spéciaux**.
+- **Résultats** en liste, disposés comme ceux de Magic-Ville : nom anglais, nom français, type, coût et prix, puis le texte et la force/endurance ou la loyauté. Un clic sur un en-tête trie, un deuxième inverse l'ordre. Ou bien en images.
 
 En plus de Magic-Ville :
 - le prix (le moins cher, toutes éditions) ;

@@ -3619,7 +3619,7 @@ function rendreResultats(z, r) {
         <button class="btn btn-petit" id="rch-sens" title="Inverser l'ordre">${sens === "desc" ? "↓" : "↑"}</button>
       </div>
     </div>
-    ${r.total ? `<div class="rch-liste ${vueImages ? "etale" : "avec-images"}">${r.cartes.map((x, i) => (vueImages ? carteImageRch(x, i) : ligneRch(x, i))).join("")}</div>`
+    ${r.total ? `<div class="rch-liste ${vueImages ? "etale" : "avec-images"}">${vueImages ? "" : enteteRch(c, sens)}${r.cartes.map((x, i) => (vueImages ? carteImageRch(x, i) : ligneRch(x, i))).join("")}</div>`
       : `<div class="panneau vide"><p>Aucune carte.</p></div>`}
     <div class="rch-bas">${paginationRch(r)}</div>
     <p class="muet petit rch-base">${baseTexte(r.base)}</p>`;
@@ -3637,11 +3637,16 @@ function rendreResultats(z, r) {
     rendreResultats(z, r);
   }));
   $("#rch-tri", z).onchange = (ev) => { location.hash = "#/recherche?" + critVersHash({ ...rch.crit, ordre: ev.target.value, sens: "", page: "" }); };
-  $("#rch-sens", z).onclick = () => {
+  const inverser = () => {
     const def = RCH_TRI_DESC[rch.crit.ordre] ? "desc" : "asc";
     const nouveau = sens === "desc" ? "asc" : "desc";
     location.hash = "#/recherche?" + critVersHash({ ...rch.crit, sens: nouveau === def ? "" : nouveau, page: "" });
   };
+  $("#rch-sens", z).onclick = inverser;
+  $$(".rch-col", z).forEach((b) => b.addEventListener("click", () => {          // en-têtes de la liste : trier, ou inverser
+    if (b.classList.contains("actif")) return inverser();
+    location.hash = "#/recherche?" + critVersHash({ ...rch.crit, ordre: b.dataset.tri, sens: "", page: "" });
+  }));
   $$(".rch-page", z).forEach((p) => p.addEventListener("change", () => {
     const n = Math.max(1, Math.min(r.pages, Math.round(+p.value) || 1));
     location.hash = lienPage(n);
@@ -3718,24 +3723,40 @@ function texteCarteRch(x) {
   return (t || "").split("\n").map((l) => l.trim() === "//" ? "<hr>" : l.trim() ? `<p>${texteMana(l)}</p>` : "").join("");
 }
 
+// liste façon Magic-Ville : sous les en-têtes Coul. · Nom VO · Nom VF · Type · Coût (un clic trie, un second inverse) et
+// Prix (à la place des éditions) ; sous les noms, le type complet, le texte, puis force/endurance ou loyauté à droite
+const COLONNES_RCH = [["couleur", "Coul."], ["nom", "Nom VO"], ["nomfr", "Nom VF"], ["type", "Type"], ["cout", "Coût"], ["prix", "Prix"]];
+const TYPE_COURT = { "Créatures": "Créature", "Planeswalkers": "Planeswalker", "Batailles": "Bataille", "Éphémères": "Éphémère",
+  "Rituels": "Rituel", "Artefacts": "Artefact", "Enchantements": "Enchantement", "Terrains": "Terrain" };
+
+function enteteRch(c, sens) {
+  return `<div class="rch-cols">${COLONNES_RCH.map(([k, l]) => {
+    const actif = (c.ordre || "couleur") === k;
+    return `<button type="button" class="rch-col ${actif ? "actif" : ""}" data-tri="${k}" aria-pressed="${actif}">${l}${actif ? `<span aria-label="${sens === "desc" ? "décroissant" : "croissant"}">${sens === "desc" ? "↓" : "↑"}</span>` : ""}</button>`;
+  }).join("")}</div>`;
+}
+
 function ligneRch(x, i) {
   const cher = (x.prix || 0) > BUDGET;
   const typeAff = rch.crit.fr !== "" && x.type_fr ? x.type_fr : x.type;
+  const apercu = `data-image="${esc(x.image)}" data-legende="${esc(`${x.fr || x.nom} — ${prixRch(x)}`)}" ${cher ? 'data-cher="1"' : ""}`;
+  const badges = badgesRch(x);
   return `<article class="rch-carte" data-i="${i}">
-    <button type="button" class="rch-vignette" data-act="ouvrir" data-image="${esc(x.image)}" data-legende="${esc(`${x.fr || x.nom} — ${prixRch(x)}`)}" ${cher ? 'data-cher="1"' : ""} aria-label="Fiche de ${esc(x.nom)}">
+    <button type="button" class="rch-vignette" data-act="ouvrir" ${apercu} aria-label="Fiche de ${esc(x.nom)}">
       ${x.petite ? `<img src="${esc(x.petite)}" alt="" loading="lazy">` : `<span class="sans-image">${esc(x.nom)}</span>`}</button>
-    <div class="rch-corps">
-      <div class="rch-haut">
-        <div class="rch-noms" data-image="${esc(x.image)}" data-legende="${esc(`${x.fr || x.nom} — ${prixRch(x)}`)}" ${cher ? 'data-cher="1"' : ""}><button type="button" class="rch-nom" data-act="ouvrir">${esc(x.nom)}</button>${x.fr && x.fr !== x.nom ? `<span class="rch-vf">${esc(x.fr)}</span>` : ""}</div>
-        ${mana(x.cout)}
-      </div>
-      <div class="rch-type">${esc(typeAff)}${x.pt ? ` <span class="rch-pt">${esc(x.pt)}</span>` : ""}</div>
+    <div class="rch-vo"><button type="button" class="rch-nom" data-act="ouvrir" ${apercu}>${esc(x.nom)}</button></div>
+    <div class="rch-vf">${x.fr && x.fr !== x.nom ? `<button type="button" class="rch-nom" data-act="ouvrir" ${apercu}>${esc(x.fr)}</button>` : ""}</div>
+    <div class="rch-typecourt">${esc(TYPE_COURT[typeCarte(x.type)] || "")}</div>
+    <div class="rch-cm">${mana(x.cout)}</div>
+    <div class="rch-prix">
+      <a class="prix ${cher ? "cher" : ""}" href="${esc(lienCardmarket(x.nom))}" target="_blank" rel="noopener" title="Cardmarket">${prixRch(x)}</a>
+      ${badges ? `<span class="rch-badges">${badges}</span>` : ""}
+      ${rch.deck ? `<span class="rch-actions">${etatDeckRch(x)}</span>` : ""}
+    </div>
+    <div class="rch-detail">
+      <div class="rch-type">${esc(typeAff)}</div>
       ${x.texte || x.texte_fr ? `<div class="rch-texte fs-texte">${texteCarteRch(x)}</div>` : ""}
-      <div class="rch-pied">
-        <a class="prix ${cher ? "cher" : ""}" href="${esc(lienCardmarket(x.nom))}" target="_blank" rel="noopener" title="Cardmarket">${prixRch(x)}</a>
-        <span class="rch-badges">${badgesRch(x)}</span>
-        <span class="rch-actions">${etatDeckRch(x)}</span>
-      </div>
+      ${x.pt ? `<div class="rch-pt">${esc(x.pt.replace(/loyauté (\S+)/g, "Loy. $1"))}</div>` : ""}
     </div>
   </article>`;
 }
