@@ -416,10 +416,14 @@ def analyser(nom, f, permanent=True):
                                        t=int(m.group(4)), autres=bool(m.group(1))))
         elif "it deals double that damage" in l:
             d["statiques"].append(dict(s="double_degats"))
+        elif "that entered this turn would deal damage" in l and "twice that much damage" in l:   # Neriv
+            d["statiques"].append(dict(s="double_neuves"))
         elif re.match(r"^attacking creatures you control have double strike", l):
             d["statiques"].append(dict(s="double_frappe"))
         elif m := re.match(r"^(\w+ )?spells you cast cost \{(\d+)\} less", l):
             d["statiques"].append(dict(s="reduction", couleur=(m.group(1) or "").strip(), n=int(m.group(2))))
+        elif m := re.match(r"^(\w+) spells and (\w+) spells you cast cost \{(\d+)\} less", l):   # Banneret
+            d["statiques"].append(dict(s="reduction", couleur=m.group(1), autre=m.group(2), n=int(m.group(3))))
         elif re.match(r"^~ costs \{1\} less to cast for each creature on the battlefield", l):
             d["statiques"].append(dict(s="reduc_creatures"))
         elif m := re.match(r"^equipped creature gets \+(\d+)/([+-]\d+)", l):

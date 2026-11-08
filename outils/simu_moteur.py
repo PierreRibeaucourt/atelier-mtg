@@ -165,6 +165,7 @@ class Partie(Engagement):
         self.tresors, self.pool = 0, []
         self.taxe, self.cmd_tour = 0, None
         self.imprint, self.saga, self.E, self.t = None, 0, 0, 0
+        self.en_mon_tour = False
         self.seg_mort = self.opport = False
         self.sacs = 0
         self.pv_perdu_tour = 0
@@ -284,9 +285,15 @@ class Partie(Engagement):
         k = P.get("k")
         return P.get("jeton_pur") or P.get("fin") or (k and (k["kind"] in JETABLES or k.get("ephemere")) and not P.get("cmd"))
 
+    def neriv(self, P):
+        """2 si la créature P est arrivée ce tour (sur ton tour) et que Neriv est en jeu, sinon 1."""
+        if P is None or P.get("entree") != self.t or not self.en_mon_tour:
+            return 1
+        return 2 if any(s["s"] == "double_neuves" for _, s in self.statiques()) else 1
+
     def vue(self, P):
         p, t, kws = self.stats(P)
-        mult = 2 if any(s["s"] == "double_degats" for _, s in self.statiques()) else 1
+        mult = (2 if any(s["s"] == "double_degats" for _, s in self.statiques()) else 1) * self.neriv(P)
         return dict(P=P, p=p * mult, pbase=p, t=t, vol="vol" in kws, menace="menace" in kws, contact="contact" in kws,
                     pietine="pietine" in kws, celerite="celerite" in kws, peur="peur" in kws, marais="marais" in kws,
                     ne_bloque_pas=any(s["s"] == "pas_bloquer" for s in (P["k"]["statiques"] if P.get("k") else [])),
@@ -469,8 +476,9 @@ class Partie(Engagement):
     def cout(self, k, alt=None):
         g, pips = alt or k["cout"]
         for Q, s in self.statiques():
-            if s["s"] == "reduction" and (not s["couleur"] or COULEUR.get(s["couleur"]) in k["couleurs"]
-                                         or s["couleur"].capitalize() in k["sous_types"]):
+            if s["s"] == "reduction" and (not s["couleur"] or any(
+                    COULEUR.get(c) in k["couleurs"] or c.capitalize() in k["sous_types"]
+                    for c in (s["couleur"], s.get("autre")) if c)):
                 g -= s["n"]
         if any(s["s"] == "reduc_creatures" for s in k["statiques"]):
             g -= len(self.creatures()) + sum(len(a.creas) for a in self.vivants())
@@ -804,6 +812,8 @@ class Partie(Engagement):
         if self.fin:
             return
         mult = 2 if src is not None and self.est_crea(src) and any(s["s"] == "double_degats" for _, s in self.statiques()) else 1
+        if src is not None and self.est_crea(src):
+            mult *= self.neriv(src)
         if a == "detruit":
             self.tue_une(nonblack=e.get("nonblack", False), exil=e.get("exil", False))
         elif a == "degats":
@@ -1126,7 +1136,7 @@ class Partie(Engagement):
                 continue
             if k["kind"] in ("soulstoke", "echoes"):
                 return True
-            if any(x["s"] in ("double_degats", "double_frappe") for x in k["statiques"]):
+            if any(x["s"] in ("double_degats", "double_frappe", "double_neuves") for x in k["statiques"]):
                 return True
             if any(e["quand"] in ("autre_entre", "toute_entre") and e["a"] in ("degats_force", "degats", "draine", "perd")
                    for e in k["effets"]):
@@ -1139,6 +1149,7 @@ class Partie(Engagement):
         entree = sum(1 for P in self.perms if P.get("k") and any(
             e["quand"] in ("autre_entre", "toute_entre") and e["a"] == "degats_force" for e in P["k"]["effets"]))
         mult = 2 if any(x["s"] == "double_degats" for _, x in self.statiques()) else 1
+        nv = 2 if any(x["s"] == "double_neuves" for _, x in self.statiques()) else 1     # Neriv : les nouvelles doublent
         nb = 0
         force = sum(v["p"] for v in self.mes_vues() if not v["malade"])
         for n in sorted((n for n in self.hand if self.kind(n) in SALVE or n in self.R["garder"]),
@@ -1146,7 +1157,7 @@ class Partie(Engagement):
             k = self.C[n]
             if self.paie_carte(k):
                 nb += 1
-                force += k["p"] * (entree * mult + (1 if k.get("celerite") else 0))
+                force += k["p"] * (entree * mult * nv + (nv if k.get("celerite") else 0))
         self.pool, self.tresors = pool, tres
         self.stat[f"depense{self.t}"] = dep
         return nb, force
@@ -2038,7 +2049,9 @@ class Partie(Engagement):
     def jouer(self, T=T_MAX):
         suivi = {}
         for t in range(1, T + 1):
+            self.en_mon_tour = True
             self.mon_tour(t)
+            self.en_mon_tour = False
             for a in self.adv:
                 if self.fin:
                     break
