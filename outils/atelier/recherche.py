@@ -671,11 +671,12 @@ def _ok_motif(syms, motif):
     return place(0, set(range(len(carte))))
 
 
-def _ok_couleurs(cc, sel, incolore, toutes, seules):
+def _ok_couleurs(cc, sel, incolore, toutes, seules, oblig=frozenset()):
+    """oblig : les couleurs choisies que la carte doit avoir (second clic sur la couleur), les autres choisies sont permises."""
     if not sel and not incolore:
         return True
     ok = (sel <= cc and (not incolore or not cc)) if toutes else (bool(cc & sel) or (incolore and not cc))
-    return ok and (not seules or cc <= sel)
+    return ok and oblig <= cc and (not seules or cc <= sel)
 
 
 def _compare(v, eq, mn, mx):
@@ -747,10 +748,15 @@ def _filtre(p, b):
             tests.append(f)
 
     # Couleurs
-    sel, incolore = _lettres(g("coul"), COULEURS), "C" in g("coul").upper()
+    # chaque couleur choisie « peut » (au moins une d'elles) ou « doit » (oblig), et aucune autre couleur que celles
+    # choisies (pour en permettre d'autres, on les choisit aussi). cm=2 (ancienne case « Toutes ») : toutes obligatoires.
+    oblig = _lettres(g("oblig"), COULEURS)
+    sel, incolore = _lettres(g("coul"), COULEURS) | oblig, "C" in g("coul").upper()
+    if g("cm") == "2":
+        oblig = set(sel)
     if sel or incolore:
-        toutes, seules, ident = g("cm") == "2", oui("seules"), oui("id")
-        tests.append(lambda x: _ok_couleurs(set(x["ci"] if ident else x["co"]), sel, incolore, toutes, seules))
+        ident = oui("id")
+        tests.append(lambda x: _ok_couleurs(set(x["ci"] if ident else x["co"]), sel, incolore, False, True, oblig))
 
     # Types
     types = [TYPES[t] for t in g("types").split(",") if t in TYPES]

@@ -539,7 +539,6 @@ a.btn-accent { color: var(--accent-texte); }      /* un lien en bouton orange : 
 /* Couleurs : les symboles répartis sur la largeur, puis le coût */
 .fen-couleurs .rch-symboles { display: flex; justify-content: space-around; }
 .fen-couleurs .rch-sym .sym { width: 30px; height: 30px; }
-.rch-cout .champ { width: 7.5rem; }
 /* Types : deux colonnes lues de haut en bas, puis « Au moins un / Tous » et les types spéciaux sur une ligne */
 .rch-types { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(4, auto); grid-auto-flow: column; gap: .15rem .6rem; }
 .rch-ligne-types { align-items: center; }
@@ -587,6 +586,16 @@ a.btn-accent { color: var(--accent-texte); }      /* un lien en bouton orange : 
 .rch-sym { border: 1px solid transparent; background: transparent; border-radius: 999px; padding: 3px; cursor: pointer; line-height: 0; opacity: .32; filter: grayscale(.7); }
 .rch-sym:hover { opacity: .75; filter: none; }
 .rch-sym.actif { opacity: 1; filter: none; border-color: var(--accent); background: var(--accent-doux); }
+.rch-sym.oblig { background: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+/* sous une couleur choisie : « peut » ou « doit » (la place est gardée, rien ne bouge au clic) */
+.fen-couleurs .rch-symboles { padding-bottom: 1.05rem; }
+/* rangée du haut : sa hauteur est celle de la Recherche texte ; les menus du bas (cartes et types spéciaux) se calent en bas,
+   les symboles au milieu de ce qui reste */
+.fen-couleurs .rch-symboles, .fen-couleurs > :last-child, .fen-types .rch-types, .fen-types > :last-child { margin-top: auto; }
+.fen-couleurs .rch-sym { position: relative; }
+.fen-couleurs .rch-sym[data-etat]:not([data-etat=""])::after { content: attr(data-etat); position: absolute; top: calc(100% + 3px); left: 50%;
+  transform: translateX(-50%); font-size: .72rem; line-height: 1; color: var(--texte-2); white-space: nowrap; }
+.fen-couleurs .rch-sym.oblig[data-etat]::after { color: var(--accent); font-weight: 650; }
 .rch-sym .sym { width: 22px; height: 22px; vertical-align: 0; }
 .rch-sym:focus-visible, .rch-bascule:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .rch-bascules { display: flex; flex-wrap: wrap; gap: .3rem; }

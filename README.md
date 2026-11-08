@@ -69,7 +69,7 @@ L'Atelier range aussi dans ce dossier l'historique, les versions, les simulation
 ## Recherche de cartes
 
 La page « Recherche de cartes » (barre du haut, ou bouton « Chercher des cartes » d'un deck) reprend le moteur de Magic-Ville :
-- **Couleurs** : au moins une ou toutes, uniquement celles choisies, identité de couleur. Le bouton « Couleurs de … » coche les couleurs du commandant du deck lié. La fenêtre prend aussi le coût, à la place de la fenêtre Manas de Magic-Ville : un coût exact (`2BR`, `U?` plus un mana générique quelconque, `1**` deux manas colorés quelconques) et « Un seul symbole par couleur ».
+- **Couleurs** : un clic sur une couleur la permet (« peut »), un deuxième l'impose (« doit »), un troisième la retire. La carte a au moins une des couleurs choisies, toutes celles qui « doivent », et aucune autre : pour en permettre d'autres, on les choisit aussi. « Identité de couleur » regarde l'identité plutôt que les couleurs de la carte. Le bouton « Couleurs de … » choisit les couleurs du commandant du deck lié.
 - **Recherche texte** : en français, en anglais ou les deux. Tous les mots doivent y être ; `"…"` cherche une expression exacte, `!mot` exclut un mot.
 - **Valeur de mana, Force, Endurance, Format, Rareté, Éditions** (avec « Nouvelles cartes uniquement »), **Cartes spéciales** et **Types spéciaux**.
 
