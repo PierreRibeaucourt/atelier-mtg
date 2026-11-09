@@ -1731,7 +1731,7 @@ function rechercheCarte(zone, { surChoix, surAjout = null, deck = () => etat.dec
     const deja = d && d.cartes.some((c) => c.nom === x.nom);
     const hors = d && d.identite && (x.couleurs || []).some((k) => !d.identite.includes(k));
     const cher = (x.prix || 0) > BUDGET;
-    const plus = !surAjout ? "" : deja && !/Basic/.test(x.type || "") ? `<span class="res-plus"></span>`
+    const plus = !surAjout ? "" : deja && !/\bBasic\b/.test(x.type || "") ? `<span class="res-plus"></span>`
       : `<button type="button" class="res-plus" data-plus="${i}" title="Ajouter au deck" aria-label="Ajouter ${esc(x.nom)} au deck">${ico("plus")}</button>`;
     return `<div class="res-ligne"><button type="button" class="res-carte ${i === actif ? "choisi" : ""}" data-i="${i}" role="option"
         data-image="${esc(x.image)}" data-legende="${esc(legende(x))}" ${cher ? 'data-cher="1"' : ""}>
