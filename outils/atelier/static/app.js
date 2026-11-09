@@ -144,14 +144,15 @@ const ICONES = {
 if (PARTAGE) $(".logo").href = PARTAGE.accueil === true ? "#/" : PARTAGE.accueil;
 const ico = (nom) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${ICONES[nom] || ""}</svg>`;
 $$("[data-ico]").forEach((el) => el.insertAdjacentHTML("afterbegin", ico(el.dataset.ico)));
-// page partagée : à qui est la page, et l'Atelier à télécharger pour faire pareil avec ses decks ;
-// en bas, la licence, le code source et la page « C'est quoi, l'Atelier MTG ? », une seule pour le site : a-propos/
+// page partagée : à qui est la page, et l'Atelier à télécharger pour faire pareil avec ses decks (sauf sur a-propos/,
+// dont l'en-tête a déjà son bouton « Télécharger ») ; en bas, la licence, le code source et la page « C'est quoi,
+// l'Atelier MTG ? », une seule pour le site : a-propos/
 const TITRE_PARTAGE = document.title;
 const A_PROPOS = !PARTAGE ? "#/a-propos" : PARTAGE.page === "a-propos" ? "./"
   : (PARTAGE.accueil && PARTAGE.accueil !== true ? PARTAGE.accueil : "") + "a-propos/";
 if (PARTAGE) {
   const depot = PARTAGE.atelier ? esc(PARTAGE.atelier) : "";
-  $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-partage">
+  if (PARTAGE.page !== "a-propos") $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-partage">
     <p>Page ${PARTAGE.auteur ? `de <strong>${esc(PARTAGE.auteur)}</strong>, ` : ""}partagée avec <a href="${A_PROPOS}">l'Atelier MTG</a>. Pour gérer, tester et partager vos propres decks Commander, l'Atelier est gratuit.</p>
     ${depot ? `<a class="btn btn-accent btn-petit" href="${depot}" target="_blank" rel="noopener">${ico("telecharger")}Télécharger l'Atelier MTG</a>` : ""}
   </div>`);
