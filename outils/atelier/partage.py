@@ -468,7 +468,7 @@ def a_republier(maintenant=None):
         if not os.path.isdir(os.path.join(decks.RACINE, deck)):
             continue
         t, e = derniere_modif(deck), _echecs.get(deck)
-        if t > p["date"] and maintenant - t >= CALME and not (e and maintenant - e[0] < REESSAI):
+        if (t > p["date"] or p.get("a_refaire")) and maintenant - t >= CALME and not (e and maintenant - e[0] < REESSAI):
             r.append(deck)
     return r
 
@@ -487,6 +487,18 @@ def surveiller(get, pause=30):
                 partager(deck, get)
             except Exception as ex:
                 _echecs[deck] = (time.time(), str(ex))
+
+
+def renommer(ancien, nouveau):
+    """Le deck a changé de nom : sa page garde son adresse (le lien déjà envoyé marche toujours) et sera republiée
+    avec le nouveau titre par surveiller()."""
+    with _verrou:
+        reg = _registre()
+        if ancien not in reg:
+            return
+        reg[nouveau] = dict(reg.pop(ancien), a_refaire=True)       # construire() réécrit l'entrée, sans a_refaire
+        _ecrire(REGISTRE, json.dumps(reg, ensure_ascii=False, indent=1))
+    _echecs.pop(ancien, None)
 
 
 def retirer(deck):

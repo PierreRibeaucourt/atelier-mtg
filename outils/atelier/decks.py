@@ -334,15 +334,20 @@ def modifier(deck, op, d):
     return entrees
 
 
-# ---------------------------------------------------------------- créer, supprimer, récupérer un deck
-def creer(nom, commandant="", liste=""):
-    """Nouveau dossier « Deck <nom> » avec son archidekt.txt (vide, ou la liste collée). Renvoie le nom du dossier."""
+# ---------------------------------------------------------------- créer, renommer, supprimer, récupérer un deck
+def _dossier(nom):
+    """Le dossier « Deck <nom> » d'un nom tapé, après vérification du nom."""
     nom = " ".join(nom.split())
-    if not nom:
+    if not nom.removeprefix("Deck ").strip():
         raise ValueError("donne un nom au deck")
     if NOM_INTERDIT.search(nom) or nom.endswith("."):
         raise ValueError('le nom ne peut pas contenir < > : " / \\ | ? * ni finir par un point')
-    dossier = nom if nom.startswith("Deck ") else "Deck " + nom
+    return nom if nom.startswith("Deck ") else "Deck " + nom
+
+
+def creer(nom, commandant="", liste=""):
+    """Nouveau dossier « Deck <nom> » avec son archidekt.txt (vide, ou la liste collée). Renvoie le nom du dossier."""
+    dossier = _dossier(nom)
     p = os.path.join(RACINE, dossier)
     if os.path.exists(p):
         raise ValueError(f"le deck « {dossier} » existe déjà")
@@ -359,6 +364,23 @@ def creer(nom, commandant="", liste=""):
     with open(os.path.join(p, FICHIER), "w", encoding="utf-8", newline="\n") as f:
         f.write(texte(entrees) if entrees else "")
     _ecrire_achats(dossier, {})                             # nouveau deck : tout est à acheter
+    return dossier
+
+
+def renommer(deck, nom):
+    """Renomme le dossier du deck : liste, historique, versions, simulations, discussion et achats suivent.
+    Renvoie le nouveau nom du dossier."""
+    src = os.path.dirname(chemin(deck))
+    dossier = _dossier(nom)
+    if dossier == deck:
+        return deck
+    if os.path.exists(os.path.join(RACINE, dossier)) and dossier.lower() != deck.lower():   # changer une majuscule : permis
+        raise ValueError(f"le deck « {dossier} » existe déjà")
+    try:
+        os.rename(src, os.path.join(RACINE, dossier))
+    except PermissionError:
+        raise RuntimeError("Windows refuse de renommer le dossier : un de ses fichiers est ouvert ailleurs "
+                           "(éditeur, Explorateur). Ferme-le et réessaie.") from None
     return dossier
 
 

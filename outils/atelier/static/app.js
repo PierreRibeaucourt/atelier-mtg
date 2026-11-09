@@ -961,7 +961,7 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
     "Copier la liste pour",
     ...EXPORTS.map(([fmt, lib]) => [lib, () => copierListe(fmt, lib), "", "copier"]),
     ...(PARTAGE ? [] : [["Cardmarket (à acheter)", () => copierCardmarket(d), "", "panier"]]),
-    ...(PARTAGE ? [] : [null, ["Supprimer ce deck…", () => supprimerDeck(d), "btn-danger", "corbeille"]]),
+    ...(PARTAGE ? [] : [null, ["Renommer…", () => modaleRenommer(d), "", "crayon"], ["Supprimer ce deck…", () => supprimerDeck(d), "btn-danger", "corbeille"]]),
   ]);
   const contenu = $("#contenu");
   if (onglet === "stats") return ongletStats(contenu, d);
@@ -1126,6 +1126,51 @@ function modalePartage(d) {
     const s = await api(`/api/decks/${enc(d.id)}/partage`).catch(() => ({}));
     if (s.url) rendre(s); else publier();
   }, { focus: false });
+}
+
+function modaleRenommer(d) {
+  ouvrirModale(`
+    <h2>Renommer le deck</h2>
+    <label class="bloc">Nom du deck<input class="champ" id="rn-nom" maxlength="60" value="${esc(d.titre)}"></label>
+    <div class="boutons"><button class="btn" id="annuler">Annuler</button><button class="btn btn-accent" id="ok">Renommer</button></div>`, (b) => {
+    const champ = $("#rn-nom", b), ok = $("#ok", b);
+    const valider = async () => {
+      if (ok.disabled) return;
+      try {
+        ok.disabled = true;
+        const r = await api(`/api/decks/${enc(d.id)}/renommer`, { method: "POST", body: { nom: champ.value } });
+        fermerModale();
+        if (r.id === d.id) return;
+        renommerPrefs(d.id, r.id);
+        if (chat.cle === d.id) { chat.cle = r.id; PREF.set("chat-discussion", r.id); }
+        etat.deck = null;
+        etat.decks = await api("/api/decks");
+        remplirChoixDiscussion(etat.decks);
+        location.hash = `#/deck/${enc(r.id)}${location.hash.split("/")[3] ? "/" + location.hash.split("/")[3] : ""}`;
+        toast("Deck renommé.");
+      } catch (e) { erreur(e); ok.disabled = false; }
+    };
+    $("#annuler", b).onclick = fermerModale;
+    ok.onclick = valider;
+    champ.onkeydown = (ev) => { if (ev.key === "Enter") valider(); };
+  });
+  $("#rn-nom").select();
+}
+
+// ce que le navigateur retient d'un deck (dernière recherche, partie de « Jouer ») suit son nouveau nom
+function renommerPrefs(ancien, nouveau) {
+  try {
+    for (const k of Object.keys(localStorage)) {
+      let v = localStorage.getItem(k);
+      const k2 = k === "pref-" + cleDerniere(ancien) ? "pref-" + cleDerniere(nouveau) : k === "partie-" + ancien ? "partie-" + nouveau : k;
+      if (k.startsWith("pref-rch-derniere")) {
+        const p = new URLSearchParams(v);
+        if (p.get("deck") === ancien) { p.set("deck", nouveau); v = p.toString(); }
+      }
+      if (k2 !== k) localStorage.removeItem(k);
+      localStorage.setItem(k2, v);
+    }
+  } catch (_) {}
 }
 
 async function supprimerDeck(d) {

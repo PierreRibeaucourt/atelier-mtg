@@ -312,6 +312,25 @@ def api_supprimer(deck):
     return jsonify(corbeille=decks.supprimer(deck))
 
 
+@app.post("/api/decks/<path:deck>/renommer")
+def api_renommer(deck):
+    """{nom} : le nouveau nom. Pas pendant que Claude, une analyse ou une simulation travaille sur ce deck. La page
+    partagée garde son adresse et se republie avec le nouveau titre."""
+    for module, quoi in (("discussion", "Claude répond dans sa discussion"), ("synergies", "l'analyse des synergies tourne"),
+                         ("mtgpics", "la recherche des combos tourne")):
+        m = sys.modules.get(module)                         # module pas encore chargé : rien ne tourne
+        if m and (m._jobs.get(deck) or {}).get("actif"):
+            raise RuntimeError(f"Pas maintenant : {quoi}. Réessaie quand c'est fini.")
+    m = sys.modules.get("simulation")
+    if m and any(j["deck"] == deck and j["statut"] == "en_cours" for j in list(m._jobs.values())):
+        raise RuntimeError("Pas maintenant : une simulation de ce deck tourne. Réessaie quand elle est finie.")
+    nouveau = decks.renommer(deck, (request.get_json() or {}).get("nom", ""))
+    if nouveau != deck:
+        import partage
+        partage.renommer(deck, nouveau)
+    return jsonify(id=nouveau)
+
+
 @app.get("/api/recherche-cartes")
 def api_recherche_cartes():
     """Decks qui contiennent une carte dont le nom (anglais ou français) contient le texte : {deck: [noms]}."""
