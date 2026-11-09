@@ -852,6 +852,21 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .ap-consigne { display: flex; align-items: center; gap: .6rem; background: var(--surface-2); border: 1px solid var(--bord); border-radius: 8px;
   padding: .55rem .6rem .55rem .9rem; }
 .ap-consigne code { flex: 1; min-width: 0; font-size: .9rem; overflow-wrap: anywhere; }
+/* questions fréquentes : une question par ligne, la réponse se déplie au clic ; le + tourne en × */
+.a-propos .ap-faq-groupe { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--texte-2); margin: 1.8rem 0 .1rem; }
+.a-propos h2 + .ap-faq-groupe { margin-top: .4rem; }
+.ap-faq { border-bottom: 1px solid var(--bord); }
+.ap-faq summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: 0; padding: .65rem 0;
+  color: var(--texte); font-weight: 600; line-height: 1.4; }
+.ap-faq summary::-webkit-details-marker { display: none; }
+.ap-faq summary:hover { color: var(--accent); }
+.ap-faq summary .ico { flex: none; color: var(--texte-2); transition: transform .15s; }
+.ap-faq[open] summary .ico { transform: rotate(45deg); }
+.ap-faq-rep { padding: 0 2rem .7rem 0; color: var(--texte-2); }
+.ap-faq-rep p { margin: 0 0 .5rem; }
+.ap-lexique { margin: 0 0 .3rem; padding-left: 1.2rem; }
+.ap-lexique li { margin: .15rem 0; }
+.ap-lexique dfn { font-style: normal; font-weight: 700; color: var(--texte); }   /* pas <b> : un mot en gras serait pris pour un nom de carte (Cut) */
 /* page partagée : la recherche et la discussion en vitrine, grisées, avec le lien pour installer l'Atelier */
 .vitrine { position: relative; }
 .vitrine-fond { opacity: .35; filter: grayscale(1); pointer-events: none; user-select: none; }
