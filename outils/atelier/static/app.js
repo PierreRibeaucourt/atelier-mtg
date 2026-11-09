@@ -18,8 +18,12 @@ const MES_DECKS = PARTAGE && PARTAGE.auteur ? `Decks de ${PARTAGE.auteur}` : "Me
 let versionAtelier = (PARTAGE && PARTAGE.version) || "";       // version.py ; dans l'Atelier, lue par verifierVersion()
 // budget par carte (reglages.json, 5 € par défaut, 0 = pas d'alerte) : les cartes plus chères sont signalées
 const REGLAGES = (PARTAGE && PARTAGE.reglages) || window.REGLAGES || {};
-const BUDGET = REGLAGES.budget === undefined ? 5 : REGLAGES.budget > 0 ? REGLAGES.budget : Infinity;
-const BUDGET_TXT = String(BUDGET).replace(".", ",") + " €";
+let BUDGET, BUDGET_TXT;                            // changés par la page Options sans recharger
+function majBudget(b) {
+  BUDGET = b == null ? 5 : b > 0 ? b : Infinity;
+  BUDGET_TXT = String(BUDGET).replace(".", ",") + " €";
+}
+majBudget(REGLAGES.budget);
 
 // préférences d'affichage gardées d'une visite à l'autre (si le navigateur le permet)
 const PREF = {
@@ -134,6 +138,8 @@ const ICONES = {
   ouvrir: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>',
   telecharger: '<path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/>',
   coche: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+  moins: '<path d="M5 12h14"/>',
+  options: '<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
 };
 if (PARTAGE) $(".logo").href = PARTAGE.accueil === true ? "#/" : PARTAGE.accueil;
 const ico = (nom) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${ICONES[nom] || ""}</svg>`;
@@ -588,6 +594,8 @@ function majTitre() {
   } else if (parts[0] === "recherche") {
     const p = new URLSearchParams(qs || "");
     t = ["Recherche", p.get("nom") && `« ${p.get("nom")} »`, (p.get("deck") || "").replace(/^Deck /, "")].filter(Boolean).join(" · ");
+  } else if (parts[0] === "options") {
+    t = "Options";
   }
   document.title = t + " — Atelier MTG";
 }
@@ -600,7 +608,8 @@ async function route() {
   const [chemin, qs] = location.hash.replace(/^#\/?/, "").split(/\?(.*)/s);
   const parts = chemin.split("/");
   $("#lien-recherche").classList.toggle("actif", parts[0] === "recherche");
-  vue.classList.toggle("vue-large", parts[0] === "recherche");
+  $("#lien-options").classList.toggle("actif", parts[0] === "options");
+  vue.classList.toggle("vue-large", parts[0] === "recherche" || parts[0] === "options");
   vue.classList.remove("vue-pleine");                       // la page « C'est quoi » la remet : son en-tête prend toute la largeur
   try {
     if (PARTAGE && parts[0] === "a-propos" && PARTAGE.page !== "a-propos") location.replace(A_PROPOS);   // ancienne adresse
@@ -609,6 +618,7 @@ async function route() {
     else if (PARTAGE && PARTAGE.deck) await vueDeck(PARTAGE.deck, (parts[0] === "deck" && parts[2]) || "liste");
     else if (PARTAGE && parts[0] === "deck" && parts[1]) location.replace(lienDeck(decodeURIComponent(parts[1])));
     else if (parts[0] === "recherche") await vueRecherche(new URLSearchParams(qs || ""));
+    else if (!PARTAGE && parts[0] === "options") await vueOptions();
     else if (parts[0] === "deck" && parts[1]) await vueDeck(decodeURIComponent(parts[1]), parts[2] || "liste", parts[3] ? decodeURIComponent(parts[3]) : null);
     else await vueAccueil();
   } catch (e) {
@@ -1171,6 +1181,222 @@ function renommerPrefs(ancien, nouveau) {
       localStorage.setItem(k2, v);
     }
   } catch (_) {}
+}
+
+// ------------------------------------------------------------------ options : réglages de ce PC (reglages.json), démarrage, classeur
+async function vueOptions() {
+  vue.innerHTML = `<nav class="fil" aria-label="Fil d'Ariane"><a href="#/">Mes decks</a><span aria-hidden="true">›</span><span aria-current="page">Options</span></nav>
+    <section class="panneau options" id="opt-general"><p class="chargement">Chargement…</p></section>
+    <section class="panneau options" id="opt-classeur"></section>`;
+  optionsGenerales($("#opt-general"), await api("/api/options"));
+  classeurOptions($("#opt-classeur"));
+}
+
+// chaque champ s'enregistre quand on le quitte (ou Entrée), la case tout de suite
+function optionsGenerales(el, o) {
+  const budget = (b) => (b == null ? "" : String(b).replace(".", ","));
+  el.innerHTML = `<h2>Général</h2>
+    <label class="opt-ligne"><span>Nom affiché</span><input class="champ" name="nom" maxlength="60" value="${esc(o.nom)}" placeholder="${esc(o.github)}"></label>
+    <label class="opt-ligne"><span>Budget par carte</span><span class="opt-euros"><input class="champ" name="budget" inputmode="decimal" value="${budget(o.budget)}" placeholder="${budget(o.budget_defaut)}">€</span></label>
+    <label class="opt-ligne"><span>Compte GitHub</span><input class="champ" name="github" maxlength="39" value="${esc(o.github)}" autocomplete="off" spellcheck="false"></label>
+    ${o.demarrage == null ? "" : `<label class="opt-case"><input type="checkbox" name="demarrage" ${o.demarrage ? "checked" : ""}>Lancer l'Atelier au démarrage de Windows</label>`}`;
+  el.onchange = async (ev) => {
+    const c = ev.target;
+    if (!c.name) return;
+    try {
+      const r = await api("/api/options", { method: "POST", body: { [c.name]: c.type === "checkbox" ? c.checked : c.value } });
+      Object.assign(o, r);
+      majBudget(r.budget);
+      $('[name="nom"]', el).placeholder = r.github;
+      toast("Enregistré.");
+    } catch (e) { erreur(e); }
+    if (c.type === "checkbox") c.checked = !!o.demarrage;
+    else c.value = c.name === "budget" ? budget(o.budget) : o[c.name];       // la valeur gardée (nettoyée, ou l'ancienne)
+  };
+  el.onkeydown = (ev) => { if (ev.key === "Enter" && ev.target.matches("input.champ")) ev.target.blur(); };
+}
+
+// le classeur, présenté comme les résultats de la recherche : en-têtes Coul. · Nom VO · Nom VF · Type · Coût · Qté · Prix
+// (un clic trie, un second inverse), 30 cartes par page, en liste ou en images ; la couleur rangée comme Magic-Ville :
+// W, U, B, R, G, bicolores, multicolores, incolores, puis les terrains
+const COLONNES_CLASSEUR = [["couleur", "Coul."], ["nom", "Nom VO"], ["nomfr", "Nom VF"], ["type", "Type"], ["ccm", "Coût"], ["n", "Qté"], ["prix", "Prix"]];
+const TRI_CLASSEUR_DESC = { prix: true, n: true };          // sens naturel : les plus chères, les plus nombreuses d'abord
+const PAR_PAGE_CLASSEUR = 30;                               // comme la recherche
+function cleCouleur(f) {
+  if (/\bLand\b/.test(f.type || "")) return [8];
+  const c = (f.couleurs || []).map((k) => "WUBRG".indexOf(k)).filter((i) => i >= 0).sort();
+  return !c.length ? [7] : c.length === 1 ? c : [c.length > 2 ? 6 : 5, ...c];
+}
+const cmpListes = (a, b) => {
+  for (let i = 0; i < Math.max(a.length, b.length); i++) if ((a[i] ?? -1) !== (b[i] ?? -1)) return (a[i] ?? -1) - (b[i] ?? -1);
+  return 0;
+};
+const mvCarte = (x) => x.info.mv ?? 0;
+const estTerrainInfo = (x) => (/\bLand\b/.test(x.info.type || "") ? 1 : 0);
+const TRI_CLASSEUR = {
+  nom: () => 0,                                              // le nom départage toujours
+  nomfr: (a, b) => sansAccent(a.info.fr || a.nom).localeCompare(sansAccent(b.info.fr || b.nom)),
+  couleur: (a, b) => cmpListes(cleCouleur(a.info), cleCouleur(b.info)) || mvCarte(a) - mvCarte(b),
+  ccm: (a, b) => estTerrainInfo(a) - estTerrainInfo(b) || mvCarte(a) - mvCarte(b),        // les terrains à la fin
+  type: (a, b) => ORDRE_TYPES.indexOf(typeCarte(a.info.type)) - ORDRE_TYPES.indexOf(typeCarte(b.info.type)) || mvCarte(a) - mvCarte(b),
+  prix: (a, b) => (a.info.prix ?? -1) - (b.info.prix ?? -1),
+  n: (a, b) => a.n - b.n,
+};
+
+// une carte du classeur au format des résultats de la recherche : même présentation, même fiche
+const carteClasseur = (x) => {
+  const f = x.info || {};
+  return { nom: x.nom, n: x.n, fr: f.fr, cout: f.cout, type: f.type, type_fr: f.fr_type, pt: f.pt, texte: f.texte, texte_fr: f.fr_texte,
+    prix: f.prix, prix_lien: f.prix_lien, image: f.image, petite: f.petite, image_dos: (f.dos && f.dos.image) || "", gc: f.gc,
+    legal: !["banned", "not_legal"].includes(f.legal), couleurs: f.couleurs || [] };
+};
+
+const qteClasseur = (x) => `<span class="cl-qte">
+    <button type="button" class="btn-menu" data-n="${x.n - 1}" aria-label="Un de moins : ${esc(x.nom)}" title="Un de moins">${ico("moins")}</button>
+    <span class="cl-n">${x.n}</span>
+    <button type="button" class="btn-menu" data-n="${x.n + 1}" aria-label="Un de plus : ${esc(x.nom)}" title="Un de plus">${ico("plus")}</button></span>`;
+
+function ligneClasseur(x, i) {
+  const cher = (x.prix || 0) > BUDGET;
+  const apercu = `data-image="${esc(x.image)}" data-legende="${esc(`${x.fr || x.nom} — ${prixRch(x)}`)}" ${cher ? 'data-cher="1"' : ""}`;
+  const texte = (x.texte_fr || x.texte || "").split("\n").map((l) => l.trim() === "//" ? "<hr>" : l.trim() ? `<p>${texteMana(l)}</p>` : "").join("");
+  return `<article class="rch-carte" data-i="${i}" data-nom="${esc(x.nom)}">
+    <button type="button" class="rch-vignette" data-act="ouvrir" ${apercu} aria-label="Fiche de ${esc(x.nom)}">
+      ${x.petite ? `<img src="${esc(x.petite)}" alt="" loading="lazy">` : `<span class="sans-image">${esc(x.nom)}</span>`}</button>
+    <div class="rch-vo"><button type="button" class="rch-nom" data-act="ouvrir" ${apercu}>${esc(x.nom)}</button></div>
+    <div class="rch-vf">${x.fr && x.fr !== x.nom ? `<button type="button" class="rch-nom" data-act="ouvrir" ${apercu}>${esc(x.fr)}</button>` : ""}</div>
+    <div class="rch-typecourt">${esc(TYPE_COURT[typeCarte(x.type)] || "")}</div>
+    <div class="rch-cm">${mana(x.cout)}</div>
+    ${qteClasseur(x)}
+    <div class="rch-prix"><a class="prix ${cher ? "cher" : ""}" href="${esc(x.prix_lien || lienCardmarket(x.nom))}" target="_blank" rel="noopener" title="Cardmarket">${prixRch(x)}</a></div>
+    <div class="rch-detail">
+      <div class="rch-type">${esc(x.type_fr || x.type || "")}</div>
+      ${texte ? `<div class="rch-texte fs-texte">${texte}</div>` : ""}
+      ${x.pt ? `<div class="rch-pt">${esc(x.pt.replace(/loyauté (\S+)/g, "Loy. $1"))}</div>` : ""}
+    </div>
+  </article>`;
+}
+
+function carteImageClasseur(x, i) {
+  const cher = (x.prix || 0) > BUDGET;
+  return `<div class="carte-v rch-carte-v" data-i="${i}" data-nom="${esc(x.nom)}">
+    <button type="button" class="pile" data-act="ouvrir" aria-label="${esc(x.nom)} : fiche">${imageCarte({ petite: x.petite, image: x.image, nom: x.nom }, "recto")}</button>
+    <div class="legende-v"><span class="nom-v" title="${esc(x.nom + (x.fr && x.fr !== x.nom ? " — " + x.fr : ""))}">${esc(x.fr || x.nom)}</span><span class="prix-v ${cher ? "cher" : ""}">${prixRch(x)}</span></div>
+    <div class="rch-actions-v">${qteClasseur(x)}</div>
+  </div>`;
+}
+
+// le classeur : les cartes qu'on a en dehors des decks (Classeur/classeur.txt, sur ce PC seulement)
+async function classeurOptions(el) {
+  let cartes = [], vus = [], page = 1;
+  let tri = PREF.get("tri-classeur", "nom");
+  if (!TRI_CLASSEUR[tri]) tri = "nom";
+  let sens = PREF.get("sens-classeur", TRI_CLASSEUR_DESC[tri] ? "desc" : "asc");
+  let vueImages = PREF.get("vue-classeur", "liste") === "images";
+  el.innerHTML = `<div class="opt-titre"><h2>Classeur</h2>
+      <button type="button" class="btn btn-petit btn-discret" id="cl-copier">${ico("copier")}Copier la liste</button></div>
+    <div class="cl-outils"><div id="cl-ajout"></div><input class="champ" id="cl-filtre" type="search" placeholder="Filtrer…" aria-label="Filtrer le classeur"></div>
+    <details class="cl-coller"><summary>Coller une liste</summary>
+      <textarea class="champ" id="cl-liste" rows="6" placeholder="1 Sol Ring&#10;2 Lightning Bolt&#10;…"></textarea>
+      <div class="boutons"><button class="btn btn-accent btn-petit" id="cl-ajouter">Ajouter au classeur</button></div></details>
+    <div id="cl-res"><p class="chargement">Chargement…</p></div>`;
+  const res = $("#cl-res", el), filtre = $("#cl-filtre", el);
+  const nb = (l) => l.reduce((s, x) => s + x.n, 0);
+  const entete = () => `<div class="rch-cols">${COLONNES_CLASSEUR.map(([k, l]) => {
+    const actif = tri === k;
+    return `<button type="button" class="rch-col ${actif ? "actif" : ""}" data-tri="${k}" aria-pressed="${actif}">${l}${actif ? `<span aria-label="${sens === "desc" ? "décroissant" : "croissant"}">${sens === "desc" ? "↓" : "↑"}</span>` : ""}</button>`;
+  }).join("")}</div>`;
+  const rendre = () => {
+    const q = sansAccent(filtre.value.trim()), dir = sens === "desc" ? -1 : 1;
+    vus = cartes.filter((x) => !q || sansAccent(x.nom + " " + (x.info.fr || "")).includes(q))
+      .sort((a, b) => dir * TRI_CLASSEUR[tri](a, b) || (tri === "nom" ? dir : 1) * a.nom.localeCompare(b.nom)).map(carteClasseur);
+    const pages = Math.max(1, Math.ceil(vus.length / PAR_PAGE_CLASSEUR));
+    page = Math.min(Math.max(1, page), pages);
+    const debut = (page - 1) * PAR_PAGE_CLASSEUR, r = { page, pages }, n = nb(vus);
+    res.innerHTML = `
+      <div class="rch-entete">
+        <div class="rch-compte"><strong>${sepMilliers(n)} carte${n > 1 ? "s" : ""}</strong> <span class="muet">· ${euros(vus.reduce((s, x) => s + (x.prix || 0) * x.n, 0))}</span></div>
+        ${paginationRch(r)}
+        <div class="rch-outils"><div class="segments" role="group" aria-label="Affichage">${[["liste", "Liste"], ["images", "Images"]].map(([k, l]) =>
+          `<button type="button" data-vue="${k}" class="${(k === "images") === vueImages ? "actif" : ""}" aria-pressed="${(k === "images") === vueImages}">${l}</button>`).join("")}</div></div>
+      </div>
+      ${vus.length ? `<div class="rch-liste ${vueImages ? "etale" : "avec-images cl-table"}">${vueImages ? "" : entete()}${vus.slice(debut, debut + PAR_PAGE_CLASSEUR)
+        .map((x, j) => (vueImages ? carteImageClasseur : ligneClasseur)(x, debut + j)).join("")}</div>`
+        : `<div class="panneau vide"><p>Aucune carte.</p></div>`}
+      ${pages > 1 ? `<div class="rch-bas">${paginationRch(r)}</div>` : ""}`;
+  };
+  const modifier = async (corps) => {
+    const avant = nb(cartes);
+    const r = await api("/api/classeur", { method: "POST", body: corps });
+    cartes = r.cartes;
+    rendre();
+    return { n: nb(cartes) - avant, inconnues: r.inconnues };
+  };
+  res.onclick = async (ev) => {
+    const col = ev.target.closest(".rch-col");
+    if (col) {                                               // en-tête : trier, ou inverser l'ordre
+      if (col.dataset.tri === tri) sens = sens === "desc" ? "asc" : "desc";
+      else { tri = col.dataset.tri; sens = TRI_CLASSEUR_DESC[tri] ? "desc" : "asc"; }
+      PREF.set("tri-classeur", tri);
+      PREF.set("sens-classeur", sens);
+      page = 1;
+      return rendre();
+    }
+    const v = ev.target.closest("[data-vue]");
+    if (v) {
+      vueImages = v.dataset.vue === "images";
+      PREF.set("vue-classeur", v.dataset.vue);
+      return rendre();
+    }
+    const p = ev.target.closest("[data-page]");
+    if (p) {
+      const bas = !!p.closest(".rch-bas");
+      page = +p.dataset.page;
+      rendre();
+      if (bas) res.scrollIntoView({ block: "start" });
+      return;
+    }
+    const b = ev.target.closest("[data-n]");
+    if (b) {
+      b.disabled = true;
+      try { await modifier({ nom: b.closest("[data-nom]").dataset.nom, n: +b.dataset.n }); } catch (e) { erreur(e); b.disabled = false; }
+      return;
+    }
+    const o = ev.target.closest('[data-act="ouvrir"]');
+    if (o) ficheRecherche(+o.closest("[data-i]").dataset.i, { liste: vus, deck: null });
+  };
+  res.onchange = (ev) => {
+    if (!ev.target.matches(".rch-page")) return;
+    page = +ev.target.value || 1;
+    rendre();
+  };
+  filtre.oninput = () => { page = 1; rendre(); };
+  const rech = rechercheCarte($("#cl-ajout", el), { deck: () => null, placeholder: "Ajouter une carte…",
+    surChoix: async (x) => {
+      try { await modifier({ liste: "1 " + x.nom }); toast(`${x.fr || x.nom} : dans le classeur.`); rech.vider(); } catch (e) { erreur(e); }
+    } });
+  $("#cl-ajouter", el).onclick = async (ev) => {
+    const t = $("#cl-liste", el), b = ev.currentTarget;
+    if (!t.value.trim()) return;
+    b.disabled = true;
+    try {
+      const { n, inconnues } = await modifier({ liste: t.value });
+      t.value = inconnues.join("\n");                 // les introuvables restent, à corriger
+      toast([n && `${n} carte${n > 1 ? "s" : ""} ajoutée${n > 1 ? "s" : ""}.`,
+        inconnues.length && `Introuvable${inconnues.length > 1 ? "s" : ""} : ${inconnues.join(", ")}`].filter(Boolean).join(" "));
+    } catch (e) { erreur(e); }
+    b.disabled = false;
+  };
+  $("#cl-copier", el).onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(cartes.map((x) => `${x.n} ${x.nom}`).join("\n") + "\n");
+      toast("Liste copiée.");
+    } catch (e) { erreur(e); }
+  };
+  try {
+    cartes = (await api("/api/classeur")).cartes;
+    rendre();
+  } catch (e) { res.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
 }
 
 async function supprimerDeck(d) {

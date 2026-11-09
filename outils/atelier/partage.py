@@ -49,8 +49,8 @@ def compte():
     import reglages
     proprio = reglages.github()
     if not proprio:            # pas de valeur par défaut : un dépôt cloné pointe vers le compte de son auteur, pas le tien
-        raise RuntimeError("Indique ton compte GitHub dans reglages.json, à la racine de l'Atelier : "
-                           '{"github": "TonCompte"} (voir README, « Partager un deck »)')
+        raise RuntimeError("Indique ton compte GitHub dans les Options de l'Atelier (en haut à droite), "
+                           "puis vois le README, « Partager un deck »")
     url = _git("remote", "get-url", "origin", dossier=decks.RACINE, ok=True).stdout.strip()
     m = re.match(r"(?:git@([^:]+):|https://([^/]+)/)([^/]+)/[^/]+?(?:\.git)?$", url)
     if m and m.group(3).lower() == proprio.lower():          # le compte de l'Atelier : même accès (SSH ou HTTPS)

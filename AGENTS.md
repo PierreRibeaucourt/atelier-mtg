@@ -68,7 +68,9 @@ Les pages sont préparées dans le dossier `Partage Atelier/`, un dépôt git à
 
 ## Réglages
 
-`reglages.json`, à la racine, est propre à chaque installation et ignoré par git. Toutes ses clés sont facultatives : `{"budget": 5, "github": "MonCompte", "nom": "Mon nom"}` (`nom` : affiché sur les pages partagées, le compte GitHub par défaut). Voir `outils/reglages.py`. Relance l'Atelier après une modification.
+`reglages.json`, à la racine, est propre à chaque installation et ignoré par git. Toutes ses clés sont facultatives : `{"budget": 5, "github": "MonCompte", "nom": "Mon nom"}` (`nom` : affiché sur les pages partagées, le compte GitHub par défaut). Voir `outils/reglages.py`. La page Options de l'Atelier (en haut à droite) les modifie et les applique tout de suite ; après une modification du fichier à la main, relance l'Atelier.
+
+La page Options règle aussi le lancement au démarrage de Windows (raccourci « Atelier MTG » du dossier Démarrage, sans ouvrir d'onglet) et le classeur : `Classeur/classeur.txt`, les cartes qu'on a en dehors des decks, « 1 Nom anglais » par ligne (les lignes `#` du début sont des notes gardées). Voir `outils/atelier/classeur.py`.
 
 ## Mettre à jour
 
@@ -88,7 +90,7 @@ Tout ceci est ignoré par git et ne doit jamais être commité, poussé ni effac
   - l'historique et les versions ;
   - `simulations/`, `pilote.json` (réglages du simulateur), `discussion.json` et `achats.json` (cartes possédées : le reste est à acheter).
 - `Corbeille Atelier/` : les decks supprimés, récupérables.
-- `Partage Atelier/` : les pages partagées. `reglages.json` : les réglages.
+- `Partage Atelier/` : les pages partagées. `reglages.json` : les réglages. `Classeur/` : le classeur.
 - Les caches, dans `outils/` et `outils/atelier/` : base des cartes, prix, combos. Ils se reconstruisent tout seuls.
 
 Sauvegarder ses decks, c'est copier les dossiers `Deck …`.

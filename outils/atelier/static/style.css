@@ -519,6 +519,7 @@ a.btn-accent { color: var(--accent-texte); }      /* un lien en bouton orange : 
 
 /* ---- recherche de cartes (moteur façon Magic-Ville) */
 .lien-recherche.actif { color: var(--accent); font-weight: 600; }
+#lien-options.actif { color: var(--accent); }
 .rch-deck { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; }
 .rch-deck .identite { margin-left: 0; }
 .rch-deck a { color: var(--accent); }
@@ -767,7 +768,7 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .aller-liste { max-height: min(70vh, 560px); overflow: auto; }
 
 /* page partagée (lecture seule) : ni ce qui modifie, ni la recherche, ni la discussion */
-.partage :is(.ecrit, .aller, #btn-rafraichir, #etat-maj, .ligne-outil) { display: none !important; }
+.partage :is(.ecrit, .aller, #btn-rafraichir, #etat-maj, .ligne-outil, #lien-options) { display: none !important; }
 /* nouvelle version de l'Atelier à installer */
 .bandeau-maj { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .45rem 1rem; padding: .5rem 1rem;
   background: var(--info-doux); border-bottom: 1px solid var(--bord); font-size: .9rem; text-align: center; }
@@ -870,3 +871,31 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 @media (max-width: 700px) { .ligne-achat { grid-template-columns: 2rem minmax(0, 1fr) 4.2rem 2rem; } }
 button.badge { border: 0; font-family: inherit; cursor: pointer; }
 button.badge:hover { box-shadow: inset 0 0 0 1px currentColor; }
+
+/* ---- options : réglages de ce PC, puis le classeur (cartes qu'on a hors des decks) */
+.options h2 { margin-top: 0; }
+.opt-ligne { display: grid; grid-template-columns: 10.5rem minmax(0, 18rem); align-items: center; gap: .3rem 1rem; margin: .55rem 0; }
+.opt-euros { display: inline-flex; align-items: center; gap: .45rem; }
+.opt-euros .champ { width: 6rem; }
+.opt-case { display: flex; align-items: center; gap: .5rem; margin-top: .9rem; cursor: pointer; }
+.opt-titre { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem 1rem; }
+.opt-titre h2 { margin: 0; }
+.opt-titre .btn { margin-left: auto; align-self: center; }
+.cl-outils { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 16rem); gap: .6rem; margin-top: .8rem; align-items: start; }
+.cl-coller { margin: .2rem 0 0; }
+.cl-coller summary { cursor: pointer; color: var(--texte-2); }
+.cl-coller textarea { margin-top: .4rem; }
+/* le classeur en tableau, comme les résultats de la recherche, avec une colonne Qté (− n +) avant le prix */
+.rch-liste.cl-table .rch-cols, .rch-liste.cl-table .rch-carte {
+  grid-template-columns: 112px minmax(0, 1fr) minmax(0, 1fr) minmax(6rem, 9rem) minmax(5.5rem, 8rem) 6.5rem minmax(5.5rem, 7rem); }
+.rch-liste.cl-table .rch-carte { grid-template-areas: "img vo vf type cout qte prix" "img det det . . qte prix"; }
+.cl-qte { grid-area: qte; display: inline-flex; align-items: center; align-self: start; }
+.cl-qte .btn-menu { width: 1.7rem; }
+.cl-n { min-width: 1.5rem; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
+.rch-actions-v .cl-qte { margin: 0 auto; }
+@container rch (max-width: 780px) {
+  .rch-liste.cl-table .rch-carte { grid-template-columns: 76px minmax(0, 1fr) auto;
+    grid-template-areas: "img vo cout" "img vf vf" "img det det" "img prix qte"; }
+  .rch-liste.cl-table .rch-prix { align-self: center; }
+}
+@media (max-width: 600px) { .opt-ligne, .cl-outils { grid-template-columns: minmax(0, 1fr); } }

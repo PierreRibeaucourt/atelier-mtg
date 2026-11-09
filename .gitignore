@@ -1,6 +1,8 @@
 # Données personnelles : les decks (listes, photos, historique, versions, simulations, discussions) restent sur ce PC
 Deck */
 Corbeille Atelier/
+# le classeur : les cartes qu'on a en dehors des decks (page Options)
+Classeur/
 # pages partagées : leur propre dépôt (decks), publié sur GitHub Pages
 Partage Atelier/
 outils/atelier/discussion.json

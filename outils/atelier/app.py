@@ -34,7 +34,9 @@ app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0      # le navigateur revérifie app.
 
 
 def tous_les_noms():
-    noms = set()
+    """Les cartes des decks et du classeur : leurs fiches, noms français et prix sont tenus à jour."""
+    import classeur
+    noms = set(classeur.cartes())
     for d in decks.dossiers():
         p = os.path.join(decks.RACINE, d, decks.FICHIER)
         if os.path.exists(p):
@@ -280,6 +282,77 @@ def reglages_js():
     import json
     import reglages
     return Response("window.REGLAGES = " + json.dumps(reglages.pour_la_page()) + ";\n", mimetype="text/javascript")
+
+
+# ---------------------------------------------------------------- options (reglages.json, démarrage de Windows) et classeur
+@app.get("/api/options")
+def api_options():
+    import reglages
+    r = reglages.lire()
+    return jsonify(nom=r.get("nom") or "", github=r.get("github") or "", budget=r.get("budget"), budget_defaut=reglages.BUDGET_DEFAUT,
+                   demarrage=demarrage())
+
+
+@app.post("/api/options")
+def api_options_ecrire():
+    """Ce qui change : nom, github, budget (vide = 5 € par défaut, 0 = pas d'alerte), demarrage (true / false)."""
+    import reglages
+    d = request.get_json() or {}
+    ch = {}
+    if "nom" in d:
+        ch["nom"] = " ".join(str(d["nom"]).split())[:60] or None
+    if "github" in d:
+        g = str(d["github"]).strip().lstrip("@")
+        if g and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]{0,38}", g):
+            raise ValueError("Un compte GitHub ne contient que des lettres, des chiffres et des tirets.")
+        ch["github"] = g or None
+    if "budget" in d:
+        b = str(d["budget"]).replace("€", "").replace(",", ".").strip()
+        try:
+            v = float(b) if b else None
+        except ValueError:
+            raise ValueError("Le budget est un nombre d'euros.") from None
+        if v is not None and not 0 <= v <= 100000:
+            raise ValueError("Le budget est un nombre d'euros.")
+        ch["budget"] = None if v is None else int(v) if v == int(v) else v
+    if ch:
+        reglages.ecrire(**ch)
+        ic.BUDGET = reglages.budget()                       # tout de suite, sans relancer l'Atelier
+    if "demarrage" in d:
+        regler_demarrage(bool(d["demarrage"]))
+    return api_options()
+
+
+@app.get("/api/classeur")
+def api_classeur():
+    """Les cartes du classeur (Classeur/classeur.txt), avec nom français, prix et image."""
+    import classeur
+    c = classeur.cartes()
+    I = ic.infos(list(c))
+    return jsonify(cartes=[dict(nom=n, n=k, info=I.get(n) or {}) for n, k in sorted(c.items(), key=lambda x: x[0].lower())])
+
+
+@app.post("/api/classeur")
+def api_classeur_modifier():
+    """{liste : texte collé} ajoute ces cartes, noms corrigés comme à la création d'un deck ; {nom, n} : le nombre
+    d'exemplaires de cette carte (0 = retirée). Renvoie le classeur, et les noms introuvables."""
+    import classeur
+    d = request.get_json() or {}
+    inconnues = []
+    if "liste" in d:
+        ajouts = classeur.lire_liste(str(d["liste"]))
+        I = ic.infos(list(ajouts))
+        propres = {}
+        for nom, n in ajouts.items():
+            if I.get(nom):
+                propres[I[nom]["nom"]] = propres.get(I[nom]["nom"], 0) + n
+            else:
+                inconnues.append(nom)
+        classeur.ajouter(propres)
+        en_fond(lambda: (ic.noms_francais(list(propres)), ic.rafraichir_prix(list(propres))))
+    elif "nom" in d:
+        classeur.fixer(str(d["nom"]), int(d.get("n", 0)))
+    return jsonify(cartes=api_classeur().get_json()["cartes"], inconnues=inconnues)
 
 
 @app.errorhandler(Exception)
@@ -867,6 +940,39 @@ def enregistrer_lien():
             winreg.SetValueEx(k, "", 0, winreg.REG_SZ, f'"{pyw}" "{os.path.abspath(__file__)}" --sans-navigateur')
     except OSError:
         pass
+
+
+# Windows : l'Atelier lancé à l'ouverture de session (raccourci « Atelier MTG » du dossier Démarrage), sans ouvrir d'onglet
+def _raccourci_demarrage():
+    return os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "Atelier MTG.lnk")
+
+
+def demarrage():
+    """True ou False ; None si l'option n'existe pas sur ce PC."""
+    return os.path.isfile(_raccourci_demarrage()) if pythonw() and os.environ.get("APPDATA") else None
+
+
+def regler_demarrage(oui):
+    lien = _raccourci_demarrage()
+    if not oui:
+        if os.path.isfile(lien):
+            os.remove(lien)
+        return
+    pyw = pythonw()
+    if not pyw or not os.environ.get("APPDATA"):
+        raise RuntimeError("Le lancement au démarrage n'existe que sous Windows.")
+    import subprocess
+    icone = os.path.join(ICI, "atelier.ico")
+    env = dict(os.environ, LIEN=lien, CIBLE=pyw, ARGS=f'"{os.path.abspath(__file__)}" --sans-navigateur', DOSSIER=decks.RACINE,
+               ICONE=icone if os.path.isfile(icone) else pyw)
+    r = subprocess.run(["powershell", "-NoProfile", "-Command",
+                        "$s = (New-Object -ComObject WScript.Shell).CreateShortcut($env:LIEN); $s.TargetPath = $env:CIBLE; "
+                        "$s.Arguments = $env:ARGS; $s.WorkingDirectory = $env:DOSSIER; $s.IconLocation = $env:ICONE; "
+                        "$s.Description = 'Atelier MTG'; $s.Save()"],
+                       env=env, capture_output=True, text=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if r.returncode or not os.path.isfile(lien):
+        raise RuntimeError("Windows refuse de créer le raccourci de démarrage : "
+                           + ((r.stderr or r.stdout or "").strip().splitlines() or ["?"])[-1])
 
 
 def relancer_sans_console():
