@@ -37,6 +37,7 @@ DUREE = 7 * 86400                      # la base est refaite au moins chaque sem
 VERIFICATION = 6 * 3600                # toutes les 6 h, l'Atelier demande à Scryfall la liste des éditions (une requête)
 RECENTES = 150                         # éditions surveillées : sorties depuis moins de 150 jours, ou à venir (spoilers)
 PAR_PAGE = 30                          # comme Magic-Ville
+PAR_PAGE_CHOIX = (30, 60, 120, 240)    # « Par page » des listes de cartes (par= dans la requête)
 COULEURS = "WUBRG"
 
 # ---------------------------------------------------------------- ce que proposent les fenêtres
@@ -906,10 +907,12 @@ def chercher(p, deck=None):
         lignes = [(x, imp) for x in res for imp in x["pr"] if _ok_impression(imp, eds, rar, b)]
     else:
         lignes = [(x, None) for x in res]
-    pages = max(1, -(-len(lignes) // PAR_PAGE))
+    par = int(_nombre(p.get("par")) or PAR_PAGE)
+    par = par if par in PAR_PAGE_CHOIX else PAR_PAGE
+    pages = max(1, -(-len(lignes) // par))
     page = min(max(1, int(_nombre(p.get("page")) or 1)), pages)
-    morceau = lignes[(page - 1) * PAR_PAGE: page * PAR_PAGE]
-    return dict(total=total, lignes=len(lignes), page=page, pages=pages, par_page=PAR_PAGE,
+    morceau = lignes[(page - 1) * par: page * par]
+    return dict(total=total, lignes=len(lignes), page=page, pages=pages, par_page=par,
                 cartes=[_sortie(x, b, dans, imp, jour) for x, imp in morceau], base=etat_base())
 
 

@@ -657,7 +657,10 @@ a.btn-accent { color: var(--accent-texte); }      /* un lien en bouton orange : 
 .rch-outils { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 .rch-pages { display: inline-flex; align-items: center; gap: .4rem; }
 .rch-pages .champ { width: 4.2rem; }
-.rch-bas { display: flex; justify-content: center; margin-top: .8rem; }
+/* bas de liste : la pagination au milieu, « Par page » à droite */
+.rch-bas { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: .6rem; margin-top: .8rem; }
+.rch-par { justify-self: end; }
+@media (max-width: 600px) { .rch-bas { grid-template-columns: minmax(0, 1fr); justify-items: center; } .rch-bas > div:first-child:empty { display: none; } .rch-par { justify-self: center; } }
 .rch-base { text-align: center; margin-top: 1rem; }
 .rch-liste:not(.etale) { border-top: 1px solid var(--bord); }
 /* liste façon Magic-Ville : en-têtes Coul. · Nom VO · Nom VF · Type · Coût · Prix, puis une ligne par carte alignée dessous ;
@@ -710,12 +713,14 @@ a.btn-accent { color: var(--accent-texte); }      /* un lien en bouton orange : 
 .rch-actions-v .badge { align-self: center; }
 .marque-ok { background: var(--bon); color: var(--accent-texte); }
 .marque-maybe { background: var(--surface); color: var(--texte-2); }
-.rch-deck .champ { width: auto; }
-.rch-outils label, .rch-deck label { display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap; }
-.moteur .champ-petit, .rch-outils .champ-petit, .rch-pages .champ-petit, .rch-deck .champ-petit { padding: .3rem .5rem; }
+.rch-deck .champ, .rch-par .champ { width: auto; }
+.rch-outils label, .rch-deck label, .rch-par label { display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap; }
+.moteur .champ-petit, .rch-outils .champ-petit, .rch-pages .champ-petit, .rch-deck .champ-petit, .rch-par .champ-petit,
+  .sg-filtres .champ-petit { padding: .3rem .5rem; }
 .moteur select.champ-petit { padding: .35rem .5rem; }
 /* barres de la recherche : tous les contrôles à la même hauteur */
-.rch-entete .champ-petit, .rch-entete .btn-petit, .rch-bas .champ-petit, .rch-bas .btn-petit, .rch-deck .champ-petit { height: 2rem; }
+.rch-entete .champ-petit, .rch-entete .btn-petit, .rch-bas .champ-petit, .rch-bas .btn-petit, .rch-deck .champ-petit,
+  .sg-filtres .champ-petit { height: 2rem; }
 .rch-entete .btn-petit, .rch-bas .btn-petit { min-width: 2rem; }
 .rch-entete .segments button { height: calc(2rem - 2px); }
 .rch-nombres .champ { width: 3.8rem; }

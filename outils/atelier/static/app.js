@@ -1226,7 +1226,14 @@ function optionsGenerales(el, o) {
 // W, U, B, R, G, bicolores, multicolores, incolores, puis les terrains
 const COLONNES_CLASSEUR = [["couleur", "Coul."], ["nom", "Nom VO"], ["nomfr", "Nom VF"], ["type", "Type"], ["ccm", "Coût"], ["n", "Qté"], ["prix", "Prix"]];
 const TRI_CLASSEUR_DESC = { prix: true, n: true };          // sens naturel : les plus chères, les plus nombreuses d'abord
-const PAR_PAGE_CLASSEUR = 30;                               // comme la recherche
+// cartes par page des listes (recherche, classeur, suggestions) : un seul réglage, choisi en bas de liste
+const PAR_PAGE_CHOIX = [30, 60, 120, 240];                  // 30 : comme Magic-Ville ; mêmes valeurs côté serveur (recherche.py)
+const parPage = () => { const n = +PREF.get("par-page", 30); return PAR_PAGE_CHOIX.includes(n) ? n : 30; };
+const choixParPage = () => `<label class="petit muet">Par page <select class="champ champ-petit" data-par-page>${PAR_PAGE_CHOIX.map((n) =>
+  `<option value="${n}" ${n === parPage() ? "selected" : ""}>${n}</option>`).join("")}</select></label>`;
+// le bas d'une liste : la pagination au milieu, « Par page » à droite (dès qu'il y a plus de cartes que le plus petit choix)
+const basDeListe = (p, total) => (p.pages > 1 || total > PAR_PAGE_CHOIX[0]
+  ? `<div class="rch-bas"><div></div><div>${paginationRch(p)}</div><div class="rch-par">${total > PAR_PAGE_CHOIX[0] ? choixParPage() : ""}</div></div>` : "");
 function cleCouleur(f) {
   if (/\bLand\b/.test(f.type || "")) return [8];
   const c = (f.couleurs || []).map((k) => "WUBRG".indexOf(k)).filter((i) => i >= 0).sort();
@@ -1315,9 +1322,9 @@ async function classeurOptions(el) {
     const q = sansAccent(filtre.value.trim()), dir = sens === "desc" ? -1 : 1;
     vus = cartes.filter((x) => !q || sansAccent(x.nom + " " + (x.info.fr || "")).includes(q))
       .sort((a, b) => dir * TRI_CLASSEUR[tri](a, b) || (tri === "nom" ? dir : 1) * a.nom.localeCompare(b.nom)).map(carteClasseur);
-    const pages = Math.max(1, Math.ceil(vus.length / PAR_PAGE_CLASSEUR));
+    const par = parPage(), pages = Math.max(1, Math.ceil(vus.length / par));
     page = Math.min(Math.max(1, page), pages);
-    const debut = (page - 1) * PAR_PAGE_CLASSEUR, r = { page, pages }, n = nb(vus);
+    const debut = (page - 1) * par, r = { page, pages }, n = nb(vus);
     res.innerHTML = `
       <div class="rch-entete">
         <div class="rch-compte"><strong>${sepMilliers(n)} carte${n > 1 ? "s" : ""}</strong> <span class="muet">· ${euros(vus.reduce((s, x) => s + (x.prix || 0) * x.n, 0))}</span></div>
@@ -1325,10 +1332,10 @@ async function classeurOptions(el) {
         <div class="rch-outils"><div class="segments" role="group" aria-label="Affichage">${[["liste", "Liste"], ["images", "Images"]].map(([k, l]) =>
           `<button type="button" data-vue="${k}" class="${(k === "images") === vueImages ? "actif" : ""}" aria-pressed="${(k === "images") === vueImages}">${l}</button>`).join("")}</div></div>
       </div>
-      ${vus.length ? `<div class="rch-liste ${vueImages ? "etale" : "avec-images cl-table"}">${vueImages ? "" : entete()}${vus.slice(debut, debut + PAR_PAGE_CLASSEUR)
+      ${vus.length ? `<div class="rch-liste ${vueImages ? "etale" : "avec-images cl-table"}">${vueImages ? "" : entete()}${vus.slice(debut, debut + par)
         .map((x, j) => (vueImages ? carteImageClasseur : ligneClasseur)(x, debut + j)).join("")}</div>`
         : `<div class="panneau vide"><p>Aucune carte.</p></div>`}
-      ${pages > 1 ? `<div class="rch-bas">${paginationRch(r)}</div>` : ""}`;
+      ${basDeListe(r, vus.length)}`;
   };
   const modifier = async (corps) => {
     const avant = nb(cartes);
@@ -1371,6 +1378,7 @@ async function classeurOptions(el) {
     if (o) ficheRecherche(+o.closest("[data-i]").dataset.i, { liste: vus, deck: null });
   };
   res.onchange = (ev) => {
+    if (ev.target.matches("[data-par-page]")) { PREF.set("par-page", ev.target.value); page = 1; return rendre(); }
     if (!ev.target.matches(".rch-page")) return;
     page = +ev.target.value || 1;
     rendre();
@@ -3899,6 +3907,7 @@ async function lancerRecherche() {
   z.innerHTML = `<p class="chargement">Recherche…</p>`;
   let r;
   const tout = new URLSearchParams(Object.entries(c).filter(([key, v]) => v != null && !key.startsWith("_")));     // valeurs par défaut comprises
+  tout.set("par", parPage());                            // cartes par page : réglage du navigateur, pas dans l'adresse
   try { r = await api("/api/recherche?" + tout); }
   catch (e) {
     if (k !== rch.numero) return;
@@ -3966,7 +3975,7 @@ function rendreResultats(z, r) {
     </div>
     ${r.total ? `<div class="rch-liste ${vueImages ? "etale" : "avec-images"}">${vueImages ? "" : enteteRch(c, sens)}${r.cartes.map((x, i) => (vueImages ? carteImageRch(x, i) : ligneRch(x, i))).join("")}</div>`
       : `<div class="panneau vide"><p>Aucune carte.</p></div>`}
-    <div class="rch-bas">${paginationRch(r)}</div>
+    ${basDeListe(r, r.lignes)}
     <p class="muet petit rch-base">${baseTexte(r.base)}</p>`;
   if (r.base) {                                          // base refaite depuis : la liste des éditions peut avoir changé
     if (rch.dateBase && r.base.date !== rch.dateBase) rch.editions = null;
@@ -3991,6 +4000,12 @@ function rendreResultats(z, r) {
   $$(".rch-col", z).forEach((b) => b.addEventListener("click", () => {          // en-têtes de la liste : trier, ou inverser
     if (b.classList.contains("actif")) return inverser();
     location.hash = "#/recherche?" + critVersHash({ ...rch.crit, ordre: b.dataset.tri, sens: "", page: "" });
+  }));
+  $$("[data-par-page]", z).forEach((s) => s.addEventListener("change", () => {      // la 1re page, avec le nouveau nombre
+    PREF.set("par-page", s.value);
+    rch.crit.page = "";
+    history.replaceState(null, "", "#/recherche?" + critVersHash(rch.crit));
+    lancerRecherche();
   }));
   $$(".rch-page", z).forEach((p) => p.addEventListener("change", () => {
     const n = Math.max(1, Math.min(r.pages, Math.round(+p.value) || 1));
