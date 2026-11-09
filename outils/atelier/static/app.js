@@ -5038,11 +5038,11 @@ async function verifierVersion() {
   // une ligne sous l'en-tête : la version, ses nouveautés (en entier au survol), les deux boutons ; pendant la mise à
   // jour, la barre garde sa hauteur (une roue à la place des boutons, un trait qui défile dessous)
   $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-maj" id="bandeau-maj" role="status">
-    <p class="maj-texte"><strong>Nouvelle version ${esc(d.version)}</strong>${d.nouveautes
+    <p class="maj-texte"><strong><span class="maj-large">Nouvelle version</span><span class="maj-etroit">Version</span> ${esc(d.version)}</strong>${d.nouveautes
       ? `<span class="maj-nouveautes" title="${esc(d.nouveautes)}">${esc(d.nouveautes)}</span>` : ""}</p>
     <div class="maj-actions">
       <button class="btn btn-accent btn-petit" id="maj-installer">${ico("telecharger")}Mettre à jour</button>
-      <button class="btn btn-petit btn-discret" id="maj-plus-tard">Plus tard</button>
+      <button class="btn btn-petit btn-discret" id="maj-plus-tard" aria-label="Plus tard">${ico("fermer")}<span class="maj-large">Plus tard</span></button>
     </div>
   </div>`);
   const b = $("#bandeau-maj"), actions = $(".maj-actions", b);

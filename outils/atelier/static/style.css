@@ -797,7 +797,16 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 @keyframes maj-roue { to { transform: rotate(1turn); } }
 @keyframes maj-trait { from { transform: translateX(-100%); } to { transform: translateX(360%); } }
 @media (prefers-reduced-motion: reduce) { .maj-etape::before, .bandeau-maj.en-cours::after { animation: none; } }
-@media (max-width: 600px) { .bandeau-maj { justify-content: space-between; } .maj-nouveautes { display: none; } }
+/* sur téléphone : « Version X » à gauche, « Mettre à jour » et une croix (Plus tard) à droite */
+.maj-etroit, #maj-plus-tard .ico { display: none; }
+@media (max-width: 600px) {
+  .bandeau-maj { justify-content: space-between; gap: .75rem; padding: .35rem .6rem .35rem 1rem; }
+  .maj-nouveautes, .maj-large { display: none; }
+  .maj-etroit { display: inline; }
+  .maj-actions { gap: .15rem; }
+  #maj-plus-tard { padding-left: .45rem; padding-right: .45rem; }
+  #maj-plus-tard .ico { display: inline-block; margin: 0; }
+}
 /* page partagée : à qui est la page, et l'Atelier à télécharger */
 .bandeau-partage { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .45rem 1rem; padding: .5rem 1rem;
   background: var(--accent-doux); border-bottom: 1px solid var(--bord); font-size: .9rem; text-align: center; }
