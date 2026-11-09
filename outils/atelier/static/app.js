@@ -822,13 +822,12 @@ async function vueAccueil() {
   }));
 }
 
-// accueil : sans le Maybeboard ; en-tête d'un deck : avec
-function chiffresDeck(d, accueil = false) {
+// les chiffres d'un deck (accueil et en-tête du deck) ; le Maybeboard n'y figure pas
+function chiffresDeck(d) {
   const complet = d.total === 100;
   const al = Object.entries(d.alertes || {});
   return `
     <span class="badge ${complet ? "badge-ok" : "badge-alerte"}">${d.total} / 100 cartes</span>
-    ${d.maybe && !accueil ? `<span class="badge">${d.maybe} en Maybeboard</span>` : ""}
     <span class="badge">${euros(d.prix_total)}</span>
     ${d.bracket ? `<span class="badge badge-bracket" title="${esc((d.bracket_raisons || []).join("\n"))}">${ico("bracket")}Bracket ${d.bracket}</span>` : ""}
     <span class="badge ${d.gc.length ? "badge-gc" : ""}" title="${esc(d.gc.join(", "))}">${d.gc.length} Game Changer${d.gc.length > 1 ? "s" : ""}</span>
@@ -847,7 +846,7 @@ function carteDeck(d, noms) {
       <div class="corps">
         <div class="titre">${esc(d.titre)} <span class="identite">${identiteHtml(d.identite)}</span></div>
         <div class="muet petit">${esc(nomsCommandants(d) || "pas encore de commandant")}</div>
-        <div class="chiffres">${chiffresDeck(d, true)}</div>
+        <div class="chiffres">${chiffresDeck(d)}</div>
         ${d.note ? `<div class="petit muet">${esc(d.note)}</div>` : ""}
         ${contientHtml(noms)}
       </div>
