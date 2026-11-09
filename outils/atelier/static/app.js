@@ -3793,6 +3793,7 @@ const CAPTURES_ATELIER = "https://pierreribeaucourt.github.io/decks/a-propos/";
 const CLAUDE_BUREAU = "https://code.claude.com/docs/fr/desktop-quickstart";
 const MODULES_ATELIER = [
   ["decks", "Vos decks, à votre façon", "Créez, importez et éditez vos decks comme partout, avec une vue personnalisable : liste ou visuel, taille des cartes, rangement par type, par tag ou par fonction."],
+  ["suggestions", "Suggestions de cartes", "Des cartes proposées pour votre deck, d'après son commandant et les cartes déjà dedans : celles qui suivent ses thèmes, celles qui complètent une combo, explication comprise, et celles qui attendent dans votre classeur. Toujours dans vos couleurs et votre budget, triées par intérêt, avec des filtres par type, fonction, coût et prix. Le calcul se fait sans IA."],
   ["versions", "Versions et historique", "Chaque modification est gardée. Enregistrez des versions, comparez deux listes, revenez en arrière."],
   ["statistiques", "Statistiques et base de mana", "Courbe de mana, types, fonctions des cartes et surtout la répartition des sources de couleur : elle compte les terrains et les cartes de ramp, et dit si chaque couleur est confortable."],
   ["combos", "Combos", "Les combos du deck sont repérées automatiquement, en croisant plusieurs sources : MTGPics (la base de Magic-Ville) et Commander Spellbook."],
@@ -3815,7 +3816,7 @@ const FAQ_ATELIER = [
     ["Faut-il payer pour Claude ?",
       "Claude est facultatif : sans lui, tout le reste fonctionne. Pour s'en servir, il faut un abonnement Claude payant (Pro ou plus), car le compte gratuit ne donne pas accès à Claude Code."],
     ["Va-t-il épuiser mon abonnement ?",
-      "Il ne travaille que quand vous lui écrivez, ou quand vous demandez l'analyse des synergies d'un deck : rien ne tourne en arrière-plan. Les combos, le bracket, les statistiques et les fonctions des cartes ne passent pas par lui. « Compacter » résume une longue discussion pour qu'elle consomme moins."],
+      "Il ne travaille que quand vous lui écrivez, ou quand vous demandez l'analyse des synergies d'un deck : rien ne tourne en arrière-plan. Les suggestions, les combos, le bracket, les statistiques et les fonctions des cartes ne passent pas par lui. « Compacter » résume une longue discussion pour qu'elle consomme moins."],
   ]],
   ["Vos cartes et vos données", [
     ["Comment entrent mes cartes ?",
@@ -3873,7 +3874,7 @@ function vueAPropos(installation = false) {
         <div class="ap-tete-texte">
           <h1>L'Atelier <span>MTG</span></h1>
           <p class="ap-accroche">Vos decks Commander,<br>de la liste à la table.</p>
-          <ul class="ap-puces">${["Base de mana", "Combos", "Bracket", "Table de jeu", "Recherche avancée", "Claude"].map((x) => `<li>${x}</li>`).join("")}</ul>
+          <ul class="ap-puces">${["Suggestions", "Base de mana", "Combos", "Bracket", "Table de jeu", "Recherche avancée", "Claude"].map((x) => `<li>${x}</li>`).join("")}</ul>
           <p class="ap-cta"><a class="btn btn-accent" href="${INSTALLER}" id="ap-installer">${ico("telecharger")}Installer l'Atelier MTG</a></p>
           <p class="ap-mention"><b>Gratuit</b> · open source · tout reste sur votre PC${versionAtelier ? ` · version ${esc(versionAtelier)}` : ""}</p>
         </div>
