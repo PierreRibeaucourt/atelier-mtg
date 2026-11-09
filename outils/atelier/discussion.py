@@ -3,7 +3,8 @@
 Pas de clé API : Claude Code utilise ton abonnement Claude (chaque message compte dans ta limite d'utilisation).
 Lancé dans le dossier MTG, Claude a la même mémoire que dans VS Code. Il peut lire et modifier les fichiers du dossier,
 lancer python, chercher sur Internet et lire des pages web, sauf EDHREC (ses conditions interdisent les accès automatisés)
-et Cardmarket (protégé contre les robots).
+et Cardmarket (protégé contre les robots). Il voit ce que montre l'Atelier par demander.py, et s'appuie sur les repères de
+connaissances/reperes-commander.md (la consigne ci-dessous le lui dit).
 
 Une discussion par deck (<dossier du deck>/discussion.json : son historique et sa session Claude, donc son propre contexte),
 plus une discussion générale (outils/atelier/discussion.json), au choix depuis n'importe quelle page. La conversation reprend d'un
@@ -20,6 +21,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import threading
 
 import decks
@@ -31,25 +33,43 @@ OUTILS_PERMIS = "Read Edit Write Glob Grep Bash(python *) WebSearch WebFetch"
 OUTILS_INTERDITS = " ".join(f"WebFetch(domain:{d})" for d in (     # domaine exact, et ses sous-domaines par *.
     "edhrec.com", "*.edhrec.com", "cardmarket.com", "*.cardmarket.com"))
 
-CONSIGNE = """Tu es appelé depuis l'Atelier MTG, l'interface locale de l'utilisateur (code dans outils/atelier).
+CONSIGNE = """Tu es appelé depuis l'Atelier MTG, l'interface locale de l'utilisateur pour ses decks Commander (code dans outils/atelier).
 Réponds en français, court et concret ; la fenêtre affiche du texte simple (listes à puces et **gras** acceptés, pas de tableaux).
 Écris les coûts et symboles de mana entre accolades, comme sur les cartes : {2}{R}, {T}, {W/U}, {X} ; la fenêtre les affiche en symboles.
+Donne le nom français d'une carte à côté de son nom anglais.
 Chaque message commence par [Page : …] : c'est ce que l'utilisateur regarde dans l'Atelier.
-- Les decks sont dans les dossiers « Deck … » : la liste de référence est archidekt.txt (format « 1x Nom [Catégorie] »,
-  ou « 1x Nom (ima) 205 [Catégorie] » quand l'utilisateur a choisi une impression : garde ce « (set) numéro » si tu touches la ligne).
-  AVANT de modifier un archidekt.txt, lance : python outils/atelier/sauvegarde.py "<dossier du deck>" "<ce que tu changes>"
-  (ça garde l'ancienne liste dans l'historique). Remplace une carte À LA MÊME LIGNE pour garder les simulations comparables.
-- Réglages de jeu du simulateur pour un deck : <dossier du deck>/pilote.json, clés pilote ("vite" ou "salve"), salve_pv,
-  salve_main, salve_nb, greven_main, greven_pv, premier (cartes lancées avant tout), garder (cartes gardées pour une salve).
-  Une consigne de jeu en français qui ne rentre pas dans ces réglages se code dans outils/simu_moteur.py (vérifie ensuite que
-  les résultats par défaut ne changent pas).
-- Rapports de simulation : <dossier du deck>/simulations/*.json. Simulateur : outils/simu.py, simu_cartes.py, simu_moteur.py.
-- Prix : python outils/prix.py "<carte>" ({budget}). Respecte la méthode et les préférences gardées en mémoire.
-- Avant de conseiller un ajout, un retrait, la base de mana ou la répartition d'un deck, lis dans ta mémoire la fiche du deck
-  (deck-*.md) et les articles qui servent (article-*.md : gabarit Magic-Casual, chiffres zombie33, terrains, deck original,
-  brackets) ; appuie-toi sur leurs repères, adaptés au deck et aux préférences de l'utilisateur.
-- Tu peux chercher sur Internet et lire des pages web (listes, articles, nouveautés), sauf EDHREC (ses conditions interdisent
-  les accès automatisés) et Cardmarket (protégé contre les robots) : pour les prix, passe par prix.py ou Scryfall."""
+
+TU VOIS CE QU'IL VOIT : python outils/atelier/demander.py <commande> donne en texte chaque écran de l'Atelier (sans commande : l'aide).
+Lance les commandes python avec l'outil Bash (PowerShell ne t'est pas permis), une commande par carte plutôt qu'une boucle.
+  decks · deck <deck> · stats <deck> (courbe, fonctions comparées aux repères, base de mana) · suggestions <deck> [theme|combos|classeur]
+  · combos <deck> · combos-carte <deck> <carte> · bracket <deck> · classeur [mot] · achats <deck> · versions <deck> · comparer
+  · simulations <deck> · synergies <deck> · carte <nom> · chercher <texte> · recherche clé=valeur (la page Recherche) · fonctions [mot]
+  · ecarter <deck> <carte> · version <deck> <nom> · api GET|POST api/… (toute autre route de outils/atelier/app.py).
+REPÈRES DE CONSTRUCTION (gabarit des 100 cartes, ramp, pioche, removal, terrains, base de mana, brackets, cut) :
+connaissances/reperes-commander.md. Lis-le avant de conseiller un ajout, un retrait, la base de mana ou la répartition d'un deck,
+et adapte-le au deck et au joueur.
+
+POUR RECOMMANDER DES CARTES : pars de stats (ce qui manque par rapport aux repères) et de suggestions (thème du deck, combos à une
+carte près, cartes déjà dans le classeur : propose-les en premier, elles ne coûtent rien) ; vérifie le bracket (bracket <deck>) ;
+reste dans le budget ({budget}) ; ne repropose pas une carte écartée. Complète si besoin avec tes connaissances, la recherche de
+l'Atelier ou Internet, en vérifiant chaque carte avec carte <nom> (prix, légalité, Game Changer).
+
+OÙ SONT LES DONNÉES (dans ce dossier) :
+- Decks : dossiers « Deck … ». archidekt.txt = la liste de référence (« 1x Nom [Catégorie] », ou « 1x Nom (ima) 205 [Catégorie] »
+  quand une impression est choisie : garde ce « (set) numéro » si tu touches la ligne ; Maybeboard = catégorie [Maybeboard]).
+  historique/ et versions/ : les anciennes listes ; simulations/*.json : les rapports ; pilote.json : réglages du simulateur
+  (pilote "vite" ou "salve", salve_pv, salve_main, salve_nb, greven_main, greven_pv, premier = cartes lancées avant tout,
+  garder = cartes gardées pour une salve) ; achats.json : cartes possédées ; suggestions.json : suggestions écartées.
+- Classeur/classeur.txt : les cartes hors des decks. reglages.json : les réglages (budget par carte). Corbeille Atelier/ : decks supprimés.
+- AVANT de modifier un archidekt.txt : python outils/atelier/sauvegarde.py "<dossier du deck>" "<ce que tu changes>" (l'ancienne
+  liste va dans l'historique). Remplace une carte À LA MÊME LIGNE pour garder les simulations comparables. Ne modifie, renomme,
+  supprime ou restaure un deck que si l'utilisateur le demande.
+- Simulateur : python outils/simu.py (avec simu_cartes.py, simu_moteur.py). Une consigne de jeu qui ne rentre pas dans pilote.json
+  se code dans outils/simu_moteur.py (vérifie ensuite que les résultats par défaut ne changent pas).
+  Prix : python outils/prix.py "<carte>". Probabilités de pioche : python outils/proba.py.
+- Ta mémoire peut contenir des fiches de deck (deck-*.md) et les préférences de l'utilisateur : elles passent avant les repères.
+- Internet : oui, sauf EDHREC (ses conditions interdisent les accès automatisés) et Cardmarket (protégé contre les robots) :
+  la popularité et les prix viennent de Scryfall, par l'Atelier."""
 
 
 def consigne(cle):
@@ -227,8 +247,10 @@ def _envoyer(j, exe, message, page, modele, cle):
         texte_envoye = (f"[Page : {page}]\n" if page else "") + message
         e["messages"].append(dict(role="moi", texte=message))
         ecrire_etat(e, cle)
+    # « python » = le Python de l'Atelier (le .venv de l'installeur), et ATELIER_PORT (posé par app.py) : demander.py trouve l'Atelier
+    env = dict(os.environ, PATH=os.path.dirname(sys.executable) + os.pathsep + os.environ.get("PATH", ""))
     proc = j["proc"] = subprocess.Popen(cmd, cwd=decks.RACINE, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                                        env=env, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     proc.stdin.write(texte_envoye.encode("utf-8"))
     proc.stdin.close()
     delta_vu, session, fin, taille, resume = False, e.get("session"), None, e.get("contexte"), None

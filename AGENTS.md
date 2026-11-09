@@ -109,6 +109,8 @@ Sauvegarder ses decks, c'est copier les dossiers `Deck …`.
 
 ## Règles pour l'assistant
 
+- **Voir ce que voit l'utilisateur.** `python outils/atelier/demander.py` (sans argument : l'aide) donne en texte chaque écran de l'Atelier lancé : decks, statistiques, suggestions, combos, bracket, classeur, achats, versions, simulations, recherche de cartes, et toute autre route par `api`. Pour conseiller un deck, pars de `stats` et de `suggestions`, et vérifie chaque carte avec `carte`.
+- **Repères de construction.** `connaissances/reperes-commander.md` : gabarit des 100 cartes, ramp, pioche, removal, terrains, base de mana, brackets, cut. Les préférences du joueur passent avant.
 - **Prix.** Ils viennent de Scryfall, qui republie chaque jour ceux de Cardmarket. N'interroge jamais Cardmarket automatiquement : il bloque les robots, et ses protections ne se contournent pas.
 - **EDHREC.** N'interroge pas EDHREC automatiquement : ses conditions d'utilisation l'interdisent. La popularité vient du rang EDHREC que Scryfall inclut dans ses données.
 - **Scryfall.** Respecte ses limites : 10 requêtes par seconde au plus, moins pour les recherches. Le code attend déjà entre deux requêtes.
@@ -117,7 +119,9 @@ Sauvegarder ses decks, c'est copier les dossiers `Deck …`.
 - **Organisation du code** :
   - `outils/atelier/app.py`, le serveur et ses routes ;
   - `outils/atelier/static/`, l'interface, en JavaScript sans framework ;
-  - `outils/atelier/*.py`, les modules (decks, prix, bracket, combos, recherche, simulation, discussion, partage) ;
+  - `outils/atelier/*.py`, les modules (decks, prix, bracket, combos, suggestions, recherche, simulation, discussion, partage) ;
+  - `outils/atelier/demander.py`, l'Atelier en ligne de commande pour les assistants ;
+  - `connaissances/`, les repères de construction d'un deck ;
   - `outils/simu*.py`, le simulateur ;
   - `outils/prix.py` et `outils/proba.py`, des outils en ligne de commande.
 - **Contribution.** Ce dépôt est celui de son auteur. Pour contribuer, travaille dans un fork : ne pousse rien sur le dépôt d'origine.

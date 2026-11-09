@@ -29,7 +29,7 @@ Tout tourne sur ton PC, à l'adresse http://127.0.0.1:5000. Rien n'est mis en li
 - **Versions.** Enregistrer des versions nommées, consulter l'historique automatique, comparer deux versions.
 - **Simulation.** Jouer des parties à 4 joueurs contre des archétypes d'adversaires (méthode de Monte-Carlo). Comparer deux versions d'un deck, avec la marge d'erreur.
 - **Jouer tout seul.** Le bouton « Jouer » d'un deck ouvre une table de jeu dans un nouvel onglet, comme le playtester d'Archidekt. On y trouve la main, le champ de bataille, la bibliothèque, le cimetière, l'exil et la zone de commandement. On pioche et on joue au clic ou en glissant les cartes, on les engage, on pose des marqueurs et des jetons (ceux que créent les cartes du deck, d'après Scryfall, et les donjons où elles font aventurer). On sélectionne plusieurs cartes du champ de bataille en glissant autour d'elles, ou par Ctrl+clic, pour les engager, les déplacer ou les envoyer ailleurs d'un coup. Les planeswalkers arrivent avec leur loyauté, réglée par − et + sur la carte. On peut aussi faire un mulligan, regarder ou meuler X cartes, chercher dans la bibliothèque, annuler, et suivre la partie dans un journal. Les raccourcis clavier sont ceux d'Archidekt (touche ?). Tout est manuel : rien n'applique les règles. La partie en cours est gardée dans le navigateur. La table se joue sur ordinateur, à la souris ; sur un téléphone ou une tablette, elle prévient qu'elle n'y est pas encore adaptée. Le code est à part : `jouer.py` et `static/jouer.*`.
-- **Discussion avec Claude.** Une discussion par deck, avec son propre contexte, plus une discussion générale, via Claude Code. On la choisit en haut du panneau, depuis n'importe quelle page : ouvrir un deck passe à sa discussion, et elle reste affichée pendant la recherche de cartes. Claude peut lire et modifier les decks, lancer les outils Python, chercher sur Internet et lire des pages web, sauf EDHREC et Cardmarket ; une étape qui lui est refusée apparaît en rouge. « Compacter » résume la conversation pour qu'elle coûte moins de tokens.
+- **Discussion avec Claude.** Une discussion par deck, avec son propre contexte, plus une discussion générale, via Claude Code. On la choisit en haut du panneau, depuis n'importe quelle page : ouvrir un deck passe à sa discussion, et elle reste affichée pendant la recherche de cartes. Claude peut lire et modifier les decks, lancer les outils Python, chercher sur Internet et lire des pages web, sauf EDHREC et Cardmarket ; une étape qui lui est refusée apparaît en rouge. « Compacter » résume la conversation pour qu'elle coûte moins de tokens. Claude voit ce que montre l'Atelier (statistiques, suggestions, combos, bracket, classeur, achats, versions, recherche) grâce à `outils/atelier/demander.py`, et s'appuie sur des repères de construction tirés d'articles de référence (`connaissances/reperes-commander.md`) : ses conseils partent des mêmes chiffres que l'interface.
 - **Partage.** Publier la page d'un deck sur GitHub Pages et envoyer le lien (voir plus bas).
 
 ## Installation
@@ -123,11 +123,14 @@ Les combos viennent de trois sources :
   `python outils/proba.py --deck 99 --cibles 38 --vues 7 --min 2 --max 4`
 - **Simulation, ou comparaison de deux listes** sur les mêmes parties :
   `python outils/simu.py "Deck X/archidekt.txt" "Deck X/autre_liste.txt" --tables Mixte -n 2000`
+- **Ce que montre l'Atelier, en texte** (l'Atelier doit être lancé) : statistiques, suggestions, combos, bracket, classeur… La liste des commandes : `python outils/atelier/demander.py`.
+  `python outils/atelier/demander.py suggestions kels combos`
 
 ## Sources
 
 - Données des cartes, images et prix : [Scryfall](https://scryfall.com), qui republie chaque jour les prix Cardmarket.
 - Combos et estimation de bracket : [Commander Spellbook](https://commanderspellbook.com) et [MTGPics](https://www.mtgpics.com).
+- Repères de construction suivis par Claude : articles de Magic-Casual, de zombie33 (Magic-Ville) et règles des brackets de Wizards of the Coast, réécrits dans `connaissances/reperes-commander.md`, avec leurs liens.
 - Fonctions des cartes : [Scryfall Tagger](https://tagger.scryfall.com). Noms français des extensions : moteur de recherche de [Magic-Ville](https://www.magic-ville.com).
 
 Magic: The Gathering est une marque de Wizards of the Coast. Ce projet n'est ni affilié à Wizards of the Coast ni approuvé par elle.

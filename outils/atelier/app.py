@@ -1064,6 +1064,7 @@ if __name__ == "__main__":
                 webbrowser.open(f"http://127.0.0.1:{p}")
             sys.exit(0)
     url = f"http://127.0.0.1:{PORT}"
+    os.environ["ATELIER_PORT"] = str(PORT)         # pour demander.py, que Claude lance depuis la discussion
     en_fond(ic.mise_a_jour, tous_les_noms())
     import recherche
     en_fond(recherche.demarrer)                    # base de la recherche de cartes : chargée, puis surveillée (nouvelles cartes, prix)
