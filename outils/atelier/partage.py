@@ -101,7 +101,8 @@ def _preparer():
         _git("reset", "-q", "origin/main")
         _git("checkout", "-q", "--", ".")
     elif distant:
-        if _git("rebase", "-q", "origin/main", ok=True).returncode:
+        # --autostash : une modification restée en attente (publication interrompue…) ne bloque pas les suivantes
+        if _git("rebase", "-q", "--autostash", "origin/main", ok=True).returncode:
             _git("rebase", "--abort", ok=True)
             raise RuntimeError("Le dépôt des pages a changé sur GitHub et ne se fusionne pas : à régler à la main")
     return site
@@ -498,6 +499,8 @@ def renommer(ancien, nouveau):
             return
         reg[nouveau] = dict(reg.pop(ancien), a_refaire=True)       # construire() réécrit l'entrée, sans a_refaire
         _ecrire(REGISTRE, json.dumps(reg, ensure_ascii=False, indent=1))
+        _git("add", "decks.json", ok=True)                         # enregistré ici, envoyé avec la prochaine publication
+        _git("commit", "-q", "-m", f"Renommage : {ancien.removeprefix('Deck ')} → {nouveau.removeprefix('Deck ')}", ok=True)
     _echecs.pop(ancien, None)
 
 
