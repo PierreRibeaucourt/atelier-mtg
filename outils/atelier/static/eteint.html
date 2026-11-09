@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Atelier MTG</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='11.5' cy='7' r='2.8' fill='%23f97316'/%3E%3Ccircle cx='18.5' cy='3.6' r='2' fill='%23f97316'/%3E%3Ccircle cx='19.8' cy='9.6' r='1.6' fill='%23f97316'/%3E%3Cpath d='M8 27.5 6.6 30.6M24 27.5l1.4 3.1' stroke='%239a3412' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpath d='M5 15h22c1 1.9 1.5 3.7 1.5 5.7 0 4.6-5.4 7.8-12.5 7.8S3.5 25.3 3.5 20.7c0-2 .5-3.8 1.5-5.7z' fill='%23c2410c'/%3E%3Crect x='2' y='11.5' width='28' height='5.2' rx='2.6' fill='%239a3412'/%3E%3Cpath d='M8 19.5c1.5 3.5 4.2 5 8 5' stroke='%23fdba74' stroke-width='1.6' fill='none' stroke-linecap='round' opacity='.7'/%3E%3C/svg%3E">
+  <!-- Page gardée par le navigateur (sw.js) : elle s'affiche quand l'Atelier n'est pas lancé, puis se recharge dès qu'il répond.
+       data-lancer="1" (écrit par app.py) : le lien atelier-mtg:// est enregistré sur ce PC et lance l'Atelier. -->
+  <style>
+    :root { --fond: #f6f5f2; --surface: #fff; --bord: #e2dfd8; --texte: #1f1d1a; --texte-2: #6b665e; --accent: #c2410c; --accent-texte: #fff;
+      color-scheme: light; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) { --fond: #161513; --surface: #1f1e1b; --bord: #383530; --texte: #ece9e3; --texte-2: #a39d93;
+        --accent: #f26b2c; --accent-texte: #1a0d05; color-scheme: dark; }
+    }
+    :root[data-theme="dark"] { --fond: #161513; --surface: #1f1e1b; --bord: #383530; --texte: #ece9e3; --texte-2: #a39d93;
+      --accent: #f26b2c; --accent-texte: #1a0d05; color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px; background: var(--fond); color: var(--texte);
+      font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    main { width: min(100%, 26rem); padding: 2rem 1.75rem; text-align: center; background: var(--surface); border: 1px solid var(--bord);
+      border-radius: 12px; }
+    svg { width: 56px; height: 56px; }
+    h1 { margin: .4rem 0 .2rem; font-size: 1.35rem; }
+    p { margin: 0; color: var(--texte-2); }
+    a.btn { display: inline-block; margin-top: 1.4rem; padding: .6rem 1.2rem; border-radius: 8px; background: var(--accent); color: var(--accent-texte);
+      font-weight: 600; text-decoration: none; }
+    a.btn:hover { filter: brightness(1.08); }
+    a.btn[aria-disabled="true"] { opacity: .6; pointer-events: none; }
+    .sans-lien { margin-top: 1.2rem; }
+    [hidden] { display: none !important; }
+  </style>
+  <script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (_) {}</script>
+</head>
+<body data-lancer="">
+  <main>
+    <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="11.5" cy="7" r="2.8" fill="#f97316"/><circle cx="18.5" cy="3.6" r="2" fill="#f97316"/><circle cx="19.8" cy="9.6" r="1.6" fill="#f97316"/><path d="M8 27.5 6.6 30.6M24 27.5l1.4 3.1" stroke="#9a3412" stroke-width="2.4" stroke-linecap="round"/><path d="M5 15h22c1 1.9 1.5 3.7 1.5 5.7 0 4.6-5.4 7.8-12.5 7.8S3.5 25.3 3.5 20.7c0-2 .5-3.8 1.5-5.7z" fill="#c2410c"/><rect x="2" y="11.5" width="28" height="5.2" rx="2.6" fill="#9a3412"/><path d="M8 19.5c1.5 3.5 4.2 5 8 5" stroke="#fdba74" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".7"/></svg>
+    <h1>Atelier MTG</h1>
+    <p>L'Atelier n'est pas lancé.</p>
+    <a class="btn" id="lancer" href="atelier-mtg://lancer" hidden>Lancer l'Atelier</a>
+    <p class="sans-lien" id="sans-lien" hidden>Lance-le avec le raccourci « Atelier MTG » du bureau.</p>
+  </main>
+  <script>
+    const lien = document.body.dataset.lancer === "1";
+    const b = document.getElementById("lancer");
+    b.hidden = !lien;
+    document.getElementById("sans-lien").hidden = lien;
+    let attente = null;
+    b.addEventListener("click", () => {                 // le temps qu'il démarre ; sans réponse (lancement refusé), on peut recliquer
+      b.setAttribute("aria-disabled", "true");
+      b.textContent = "Lancement…";
+      clearTimeout(attente);
+      attente = setTimeout(() => { b.removeAttribute("aria-disabled"); b.textContent = "Lancer l'Atelier"; }, 30000);
+    });
+    // dès que l'Atelier répond (lancé d'ici ou autrement), la page demandée s'affiche
+    const sonder = () => fetch("/reglages.js", { cache: "no-store" })
+      .then((r) => (r.ok ? location.reload() : setTimeout(sonder, 1500)), () => setTimeout(sonder, 1500));
+    sonder();
+  </script>
+</body>
+</html>

@@ -4465,3 +4465,8 @@ if (!PARTAGE) {
   setTimeout(verifierVersion, 30000);                // l'Atelier lit le dépôt quelques secondes après son lancement
   setInterval(verifierVersion, 3 * 3600 * 1000);
 }
+// le navigateur garde la page « L'Atelier n'est pas lancé » (avec de quoi le lancer) pour quand l'adresse ne répond plus (sw.js)
+if (!PARTAGE && "serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+  caches.open("atelier-eteint").then((c) => c.add("/eteint")).catch(() => {});     // sa version du jour : bouton Lancer ou non
+}

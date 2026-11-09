@@ -234,6 +234,24 @@ def accueil():
     return send_from_directory(app.static_folder, "index.html")
 
 
+@app.get("/sw.js")
+def service_worker():
+    """Gardé par le navigateur : quand l'Atelier n'est pas lancé, l'adresse montre /eteint (voir static/sw.js)."""
+    r = send_from_directory(app.static_folder, "sw.js", mimetype="text/javascript", max_age=0)
+    r.headers["Cache-Control"] = "no-cache"
+    return r
+
+
+@app.get("/eteint")
+def page_eteint():
+    """« L'Atelier n'est pas lancé », avec le bouton qui le lance si le lien atelier-mtg:// est enregistré sur ce PC."""
+    with open(os.path.join(app.static_folder, "eteint.html"), encoding="utf-8") as f:
+        html = f.read()
+    if lien_enregistre():
+        html = html.replace('data-lancer=""', 'data-lancer="1"', 1)
+    return Response(html, mimetype="text/html", headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/jouer")
 def page_jouer():
     """Jouer tout seul (playtester) : une page à part, /jouer?deck=Deck Kels (code : jouer.py, static/jouer.*)."""
@@ -810,6 +828,47 @@ def icone_possible():
         return False
 
 
+# Windows : le lien atelier-mtg:// lance l'Atelier dans la barre d'état, sans ouvrir d'onglet (la page « L'Atelier n'est
+# pas lancé » le propose, puis se recharge). Dans le registre de l'utilisateur, sans droits d'administrateur. La commande
+# ne reçoit pas l'adresse du lien : un site qui l'appellerait ne peut rien faire d'autre que lancer l'Atelier.
+LIEN = r"Software\Classes\atelier-mtg"
+
+
+def lien_enregistre():
+    if os.name != "nt":
+        return False
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, LIEN + r"\shell\open\command"):
+            return True
+    except OSError:
+        return False
+
+
+def pythonw():
+    """Windows : le Python sans fenêtre qui lance l'Atelier dans la barre d'état ; None s'il n'y en a pas, ou sans icône
+    possible (on ne pourrait plus l'arrêter)."""
+    pyw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
+    return pyw if os.name == "nt" and os.path.isfile(pyw) and icone_possible() else None
+
+
+def enregistrer_lien():
+    pyw = pythonw()
+    if not pyw:
+        return
+    import winreg
+    try:
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, LIEN) as k:
+            winreg.SetValueEx(k, "", 0, winreg.REG_SZ, "URL:Atelier MTG")
+            winreg.SetValueEx(k, "URL Protocol", 0, winreg.REG_SZ, "")
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, LIEN + r"\shell\open") as k:      # « Ouvrir Atelier MTG ? », pas « Python »
+            winreg.SetValueEx(k, "FriendlyAppName", 0, winreg.REG_SZ, "Atelier MTG")
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, LIEN + r"\shell\open\command") as k:
+            winreg.SetValueEx(k, "", 0, winreg.REG_SZ, f'"{pyw}" "{os.path.abspath(__file__)}" --sans-navigateur')
+    except OSError:
+        pass
+
+
 def relancer_sans_console():
     """Windows : relance l'Atelier avec pythonw, sans fenêtre ; il vit dans la barre d'état. False si c'est impossible."""
     pyw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
@@ -862,6 +921,7 @@ def barre_etat(url):
 
 
 if __name__ == "__main__":
+    os.chdir(decks.RACINE)                         # comme le raccourci et « Atelier MTG.bat », même lancé par le lien atelier-mtg://
     # dans la barre d'état : lancé sans console (raccourci du bureau), ou avec --barre (« Atelier MTG.bat »)
     barre = SANS_CONSOLE or "--barre" in sys.argv
     if barre and not SANS_CONSOLE:                 # lancé dans une console : on repart sans elle
@@ -879,7 +939,8 @@ if __name__ == "__main__":
             PORT = p
             break
         if atelier_sur(p):                         # l'Atelier est déjà ouvert : on montre sa page
-            webbrowser.open(f"http://127.0.0.1:{p}")
+            if "--sans-navigateur" not in sys.argv:
+                webbrowser.open(f"http://127.0.0.1:{p}")
             sys.exit(0)
     url = f"http://127.0.0.1:{PORT}"
     en_fond(ic.mise_a_jour, tous_les_noms())
@@ -890,6 +951,7 @@ if __name__ == "__main__":
         import partage
         en_fond(partage.surveiller, app.test_client().get)     # pages partagées remises à jour quand un deck change
         en_fond(mise_a_jour.surveiller)                        # nouvelle version de l'Atelier : lue une fois par jour
+        enregistrer_lien()
     if "--sans-navigateur" not in sys.argv:
         threading.Timer(1.5, lambda: webbrowser.open(url)).start()
     if barre:
