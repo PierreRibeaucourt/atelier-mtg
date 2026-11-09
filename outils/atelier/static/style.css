@@ -778,10 +778,26 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 /* page partagée (lecture seule) : ni ce qui modifie, ni la recherche, ni la discussion */
 .partage :is(.ecrit, .aller, #btn-rafraichir, #etat-maj, .ligne-outil, #lien-options) { display: none !important; }
 /* nouvelle version de l'Atelier à installer */
-.bandeau-maj { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .45rem 1rem; padding: .5rem 1rem;
-  background: var(--info-doux); border-bottom: 1px solid var(--bord); font-size: .9rem; text-align: center; }
-.bandeau-maj p { margin: 0; }
-.maj-actions { display: flex; align-items: center; gap: .4rem; }
+/* une ligne fine, de la couleur de l'en-tête, avec une pastille orange ; les nouveautés sur une ligne (en entier au survol) */
+.bandeau-maj { position: relative; display: flex; align-items: center; justify-content: center; gap: .4rem 1rem; padding: .35rem 1rem;
+  background: var(--surface); border-bottom: 1px solid var(--bord); font-size: .87rem; min-height: 2.6rem; }
+.maj-texte { display: flex; align-items: center; gap: .6rem; min-width: 0; margin: 0; }
+.maj-texte strong { white-space: nowrap; }
+.maj-texte strong::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+  margin-right: .5rem; vertical-align: .12em; }
+.maj-nouveautes { min-width: 0; max-width: 62ch; color: var(--texte-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.maj-actions { display: flex; align-items: center; gap: .4rem; flex: none; min-height: 2rem; }
+/* mise à jour en cours : une roue à la place des boutons, un trait orange qui défile sous la barre */
+.maj-etape { display: inline-flex; align-items: center; gap: .5rem; color: var(--texte-2); }
+.maj-etape::before { content: ""; width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--bord); border-top-color: var(--accent);
+  animation: maj-roue .8s linear infinite; }
+.bandeau-maj.en-cours { overflow: hidden; }
+.bandeau-maj.en-cours::after { content: ""; position: absolute; bottom: 0; left: 0; width: 28%; height: 2px; background: var(--accent);
+  animation: maj-trait 1.3s ease-in-out infinite; }
+@keyframes maj-roue { to { transform: rotate(1turn); } }
+@keyframes maj-trait { from { transform: translateX(-100%); } to { transform: translateX(360%); } }
+@media (prefers-reduced-motion: reduce) { .maj-etape::before, .bandeau-maj.en-cours::after { animation: none; } }
+@media (max-width: 600px) { .bandeau-maj { justify-content: space-between; } .maj-nouveautes { display: none; } }
 /* page partagée : à qui est la page, et l'Atelier à télécharger */
 .bandeau-partage { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .45rem 1rem; padding: .5rem 1rem;
   background: var(--accent-doux); border-bottom: 1px solid var(--bord); font-size: .9rem; text-align: center; }

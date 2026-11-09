@@ -5035,27 +5035,32 @@ async function verifierVersion() {
   const d = v.disponible;
   if (!d || $("#bandeau-maj")) return;
   try { if (sessionStorage.getItem("maj-plus-tard") === d.version) return; } catch (_) {}
-  $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-maj" id="bandeau-maj">
-    <p><strong>Atelier ${esc(d.version)} disponible</strong>${d.nouveautes ? ` · ${esc(d.nouveautes)}` : ""}</p>
+  // une ligne sous l'en-tête : la version, ses nouveautés (en entier au survol), les deux boutons ; pendant la mise à
+  // jour, la barre garde sa hauteur (une roue à la place des boutons, un trait qui défile dessous)
+  $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-maj" id="bandeau-maj" role="status">
+    <p class="maj-texte"><strong>Nouvelle version ${esc(d.version)}</strong>${d.nouveautes
+      ? `<span class="maj-nouveautes" title="${esc(d.nouveautes)}">${esc(d.nouveautes)}</span>` : ""}</p>
     <div class="maj-actions">
       <button class="btn btn-accent btn-petit" id="maj-installer">${ico("telecharger")}Mettre à jour</button>
       <button class="btn btn-petit btn-discret" id="maj-plus-tard">Plus tard</button>
     </div>
   </div>`);
   const b = $("#bandeau-maj"), actions = $(".maj-actions", b);
+  const etape = (t) => { b.classList.add("en-cours"); actions.innerHTML = `<span class="maj-etape">${t}</span>`; };
+  const echec = (t) => { b.classList.remove("en-cours"); actions.innerHTML = `<span class="erreur petit">${esc(t)}</span>`; };
   $("#maj-plus-tard").onclick = () => { try { sessionStorage.setItem("maj-plus-tard", d.version); } catch (_) {} b.remove(); };
   $("#maj-installer").onclick = async () => {
-    actions.innerHTML = `<span class="chargement">Mise à jour…</span>`;
+    etape("Mise à jour…");
     try {
       const r = await api("/api/mise-a-jour", { method: "POST", body: {} });
-      actions.innerHTML = `<span class="chargement">Redémarrage…</span>`;
+      etape("Redémarrage…");
       for (let i = 0; i < 90; i++) {
         await attendre(1000);
         try { if ((await api("/api/version")).version === r.version) return location.reload(); } catch (_) {}
       }
-      actions.innerHTML = `<span class="erreur petit">L'Atelier ne redémarre pas : relance-le depuis le raccourci du bureau.</span>`;
+      echec("L'Atelier ne redémarre pas : relance-le depuis le raccourci du bureau.");
     } catch (e) {
-      actions.innerHTML = `<span class="erreur petit">${esc(e.message || e)}</span>`;
+      echec(e.message || e);
     }
   };
 }
