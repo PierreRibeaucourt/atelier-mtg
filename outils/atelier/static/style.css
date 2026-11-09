@@ -57,7 +57,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* « Aller à un deck » : une recherche plutôt qu'une liste, pour tenir avec 100 decks */
 .aller { position: relative; flex: 0 1 380px; min-width: 0; }
 .aller .champ { padding: .4rem .7rem; }
-.aller-liste { position: absolute; top: calc(100% + 6px); left: 0; width: max(100%, 420px); max-width: calc(100vw - 16px); z-index: 45; background: var(--surface);
+.aller-liste { position: absolute; top: calc(100% + 6px); left: 0; width: max(100%, 420px); max-width: calc(100vw - 16px); z-index: 45;
+  max-height: calc(100vh - 64px); overflow-y: auto; background: var(--surface);
   border: 1px solid var(--bord); border-radius: 10px; box-shadow: var(--ombre); padding: .3rem; }
 .aller-item { display: grid; grid-template-columns: 3.4rem minmax(0, 1fr); grid-template-rows: auto auto; column-gap: .5rem; padding: .4rem .55rem;
   border-radius: 7px; text-decoration: none; }
@@ -258,7 +259,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 
 /* ---- menu contextuel, modale, aperçu, toast */
-.menu { position: fixed; z-index: 66; min-width: 220px; background: var(--surface); border: 1px solid var(--bord); border-radius: 8px; box-shadow: var(--ombre); padding: .3rem; }
+.menu { position: fixed; z-index: 66; min-width: 220px; overflow-y: auto; background: var(--surface); border: 1px solid var(--bord); border-radius: 8px; box-shadow: var(--ombre); padding: .3rem; }
 .menu button { display: flex; align-items: center; gap: .55rem; width: 100%; text-align: left; border: 0; background: transparent; padding: .45rem .7rem; border-radius: 6px; cursor: pointer; }
 .menu button:hover { background: var(--surface-2); }
 .menu-titre { padding: .35rem .7rem .15rem; font-size: .78rem; color: var(--texte-2); }
@@ -333,7 +334,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .form-ligne { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: .75rem; }
 .boutons { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1rem; }
 @media (max-width: 560px) { .fiche { grid-template-columns: 1fr; } .fiche-image, .fiche-image > img { width: 160px; } }
-.apercu { position: fixed; z-index: 60; width: 244px; pointer-events: none; }
+/* sur un écran bas, l'image rapetisse pour tenir entière avec sa légende */
+.apercu { position: fixed; z-index: 60; width: min(244px, calc((100vh - 70px) * 488 / 680)); pointer-events: none; }
 .apercu img { display: block; width: 100%; aspect-ratio: 488 / 680; border-radius: 11px; box-shadow: 0 8px 30px rgba(0,0,0,.35); background: var(--surface-2); }
 .apercu .legende { margin-top: .35rem; padding: .3rem .6rem; border-radius: 6px; background: var(--texte); color: var(--fond); font-size: .85rem;
   text-align: center; font-variant-numeric: tabular-nums; box-shadow: var(--ombre); }
@@ -343,7 +345,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* fiche texte au survol d'une carte (vue Visuel), façon Magic-Ville */
 .fiche-survol { position: fixed; z-index: 62; width: 330px; max-width: calc(100vw - 16px); background: var(--surface); color: var(--texte);
   border: 1px solid var(--bord); border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.35); padding: .7rem .85rem; pointer-events: none;
-  font-size: .9rem; line-height: 1.4; }
+  font-size: .9rem; line-height: 1.4; max-height: calc(100vh - 16px); overflow: hidden; }
 .fs-tete { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
 .fs-nom { font-size: 1.05rem; font-weight: 650; }
 .fs-en { font-size: .78rem; color: var(--texte-2); }
@@ -357,7 +359,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   font-size: .82rem; font-variant-numeric: tabular-nums; }
 .fs-pied .cher { color: var(--alerte); font-weight: 600; }
 .bulle { position: fixed; z-index: 65; max-width: 320px; padding: .45rem .65rem; border-radius: 6px; background: var(--texte); color: var(--fond);
-  font-size: .8rem; line-height: 1.35; white-space: pre-line; pointer-events: none; box-shadow: var(--ombre); }
+  font-size: .8rem; line-height: 1.35; white-space: pre-line; pointer-events: none; box-shadow: var(--ombre);
+  max-height: calc(100vh - 16px); overflow: hidden; }
 .toast { position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%); z-index: 70; background: var(--texte); color: var(--fond);
   padding: .6rem 1rem; border-radius: 8px; box-shadow: var(--ombre); }
 
