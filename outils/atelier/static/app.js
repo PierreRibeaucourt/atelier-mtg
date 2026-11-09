@@ -4844,7 +4844,7 @@ async function montageChat() {
     </div>
     <div class="chat-fil" id="chat-fil" aria-live="polite"></div>
     <div class="chat-saisie">
-      <textarea id="chat-saisie" placeholder="Ton message…"></textarea>
+      <textarea id="chat-saisie" placeholder="Écris à Claude…"></textarea>
       <div class="form-ligne" style="margin:0;justify-content:space-between">
         <button class="btn btn-petit btn-discret" id="chat-compacter" title="/compact">${ico("compacter")}Compacter <span class="muet" id="chat-contexte"></span></button>
         <button class="btn btn-accent" id="chat-envoyer">${ico("envoyer")}Envoyer</button>
@@ -4903,7 +4903,7 @@ function afficheEnCours(s) {
 function boutonDiscussion(actives) {
   const b = $("#btn-chat");
   b.classList.toggle("travaille", actives.length > 0);
-  b.innerHTML = ico("discussion") + `<span class="txt">${esc(!actives.length ? "Discussion"
+  b.innerHTML = ico("discussion") + `<span class="txt">${esc(!actives.length ? "Demander à Claude"
     : actives.length > 1 ? `Claude répond (${actives.length})…` : `Claude répond${actives[0] ? " · " + nomDiscussion(actives[0]) : ""}…`)}</span>`;
 }
 
