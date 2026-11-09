@@ -70,20 +70,52 @@ Du plus solide au plus fragile :
 - Petit budget : checklands, painlands, temples (un regard, très bons en Commander), terrains qui demandent de révéler un
   terrain, tri-lands en 4 ou 5 couleurs, Verger exotique (Exotic Orchard), Étendues sauvages en évolution (Evolving Wilds).
 - Plus chers : fetchlands, shocklands, dual lands, bondlands (excellents en multijoueur), fastlands (surtout en duel).
-- Bouncelands : à éviter, sauf avec des effets de « landfall ».
+- Bouncelands : à éviter, sauf avec des effets de « landfall ». Ils aident à avoir 3 manas au tour 3 ou 4 au tour 4,
+  mais une main dont les seuls terrains sont des bouncelands ne produit aucun mana (zombie33).
+- Ce que coûte un terrain engagé, mesuré par zombie33 en mana disponible sur les premiers tours : parmi les terrains
+  bicolores, les fastlands donnent le plus de mana aux tours 1 à 3 et les checklands aux tours 4 et 5 ; les battlelands
+  font mieux que les terrains qui demandent de révéler un terrain.
 - Répartition : la part des sources d'une couleur suit à peu près la part de cette couleur dans les coûts, avec plus de
   sources dégagées pour les couleurs des premiers tours.
 - Seul le manque compte : avoir trop de sources d'une couleur secondaire n'est pas un défaut. L'Atelier mesure le confort
   de chaque couleur, à la manière de Frank Karsten : la chance d'avoir assez de sources au tour où on lance chaque sort,
   avec un objectif de 90 %. Il compte les artefacts et les créatures de mana comme des sources.
 
-## Main de départ et mulligan
+## Optimiser par le calcul : main de départ, mulligan, courbe (d'après zombie33)
 
-- Viser la régularité moyenne plutôt que les débuts parfaits.
-- Raisons de refaire sa main : trop peu de terrains, trop de terrains, pas les bonnes couleurs, ou rien à jouer.
-- L'Atelier donne la chance d'avoir 2 à 4 terrains dans une main de 7. En multijoueur, chacun pioche dès son premier tour.
-- Le coût moyen d'un deck dépend du nombre de terrains et de l'archétype. Une courbe optimisée seulement pour les
-  premiers tours pousse à jouer trop de terrains, car elle ignore les tours où on en pioche trop.
+Les calculs de zombie33 portent sur des decks de 40 et 60 cartes en duel, et supposent que seuls les terrains
+produisent du mana, qu'on pioche une carte par tour et qu'on ne va chercher aucune carte. Un deck Commander, avec son
+ramp, ses tuteurs et sa pioche, sort de ce cadre : ses chiffres ne se transposent pas (nombre de terrains pour 40 ou
+60 cartes, vitesse des formats). Ses principes, si.
+
+- **Bien choisir ce qu'on optimise.** Un objectif mal posé donne une réponse absurde : pour être sûr d'avoir deux
+  terrains au tour 2, il faudrait 54 terrains sur 60 (le piège du « roi Midas »). Trois objectifs sont possibles :
+  - maximiser les débuts parfaits (les decks tout ou rien) ;
+  - optimiser la moyenne : son choix, et le bon quand on joue beaucoup de parties avec le même deck ;
+  - limiter les parties ratées, selon le risque qu'on accepte.
+- **Trois horizons.** La main de départ s'optimise facilement, les premiers tours demandent des hypothèses sur le deck,
+  la partie entière ne se calcule presque pas : c'est le rôle des simulations.
+- **Un deck, c'est aussi sa façon de faire mulligan.** On optimise ensemble les cartes et les règles pour garder ou
+  refaire sa main. La bonne décision n'est pas forcément la même selon qu'on commence ou non, et la règle de mulligan
+  en vigueur peut changer le nombre de terrains idéal.
+- **Les quatre raisons de refaire sa main** : pas assez de mana, trop de mana, pas les bonnes couleurs, ou une main
+  qui n'aura rien à faire dans les premiers tours. Le nombre et le type des terrains passent en premier.
+- **Avoir 2 à 4 terrains dans sa main de 7** est un des objectifs qu'il étudie ; c'est celui que mesure l'Atelier
+  (onglet Statistiques). En multijoueur, chacun pioche dès son premier tour.
+- **Le tour fondamental.** C'est le tour où le deck gagne en théorie : où l'aggro tue, où la combo est réunie, où le
+  contrôle prend un avantage décisif. C'est sur les tours qui y mènent que la courbe de mana compte.
+- **N'optimiser que les premiers tours pousse à jouer trop de terrains**, parce qu'on oublie les tours suivants, où
+  l'on en pioche trop.
+- **Le coût moyen dépend aussi de la stratégie.** À nombre de terrains égal, les decks aggro et contrôle n'ont pas le
+  même coût moyen (mesuré sur plus de 1 300 decks du haut des tournois Standard, de 2010 à 2020). Ses conventions pour
+  le calculer : un mana phyrexian compte 0, un sort qui peut se lancer gratuitement compte 0, X vaut 1. L'Atelier, lui,
+  prend la valeur de mana imprimée.
+- **Tester seul a du sens pour un deck qui interagit peu** : moins il dépend de l'adversaire, plus une partie jouée
+  seul (en « goldfish », avec la table de jeu de l'Atelier) mesure bien sa vitesse.
+- **Les cartes qui creusent** forment deux familles : celles qui regardent le dessus de la bibliothèque et en gardent
+  une partie (Opt, Preordain, Foresee…), et celles qui révèlent plusieurs cartes pour en prendre une partie (Impulse,
+  Commune with Nature, Grisly Salvage, Dig Through Time…). Brainstorm est faible sans moyen de mélanger la
+  bibliothèque ensuite.
 
 ## Brackets
 
@@ -134,5 +166,6 @@ La liste des Game Changers change régulièrement : l'Atelier la relit chaque jo
 - Magic-Casual, « Comment créer un deck Commander (EDH) ? » (2020) : https://magic-casual.fr/comment-creer-deck-edh/
 - Magic-Casual, « Comment bien choisir ses terrains pour son deck Magic ? » (2019) : https://magic-casual.fr/comment-choisir-terrains-deck-magic/
 - Magic-Casual, « 5 méthodes pour créer un deck EDH unique et original » : https://magic-casual.fr/comment-creer-un-deck-edh-original-et-unique/
-- zombie33, « L'Art d'optimiser les decks », Magic-Ville, en 4 parties : https://www.magic-ville.com/fr/gazette/show_article?ref=594
+- zombie33, « L'Art d'optimiser les decks », Magic-Ville, en 4 parties :
+  https://www.magic-ville.com/fr/gazette/show_article?ref=594 (puis ref=596, 597 et 598)
 - Wizards of the Coast, « Introducing Commander Brackets Beta » (11 février 2025) : https://magic.wizards.com/en/news/announcements/introducing-commander-brackets-beta
