@@ -144,17 +144,20 @@ const ICONES = {
 if (PARTAGE) $(".logo").href = PARTAGE.accueil === true ? "#/" : PARTAGE.accueil;
 const ico = (nom) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${ICONES[nom] || ""}</svg>`;
 $$("[data-ico]").forEach((el) => el.insertAdjacentHTML("afterbegin", ico(el.dataset.ico)));
-// page partagée : à qui est la page, et l'Atelier à télécharger pour faire pareil avec ses decks (sauf sur a-propos/,
-// dont l'en-tête a déjà son bouton « Télécharger ») ; en bas, la licence, le code source et la page « C'est quoi,
+// page partagée : à qui est la page, et l'Atelier à installer pour faire pareil avec ses decks (sauf sur a-propos/,
+// dont l'en-tête a déjà son bouton « Installer ») ; en bas, la licence, le code source et la page « C'est quoi,
 // l'Atelier MTG ? », une seule pour le site : a-propos/
 const TITRE_PARTAGE = document.title;
 const A_PROPOS = !PARTAGE ? "#/a-propos" : PARTAGE.page === "a-propos" ? "./"
   : (PARTAGE.accueil && PARTAGE.accueil !== true ? PARTAGE.accueil : "") + "a-propos/";
+// « Installer l'Atelier MTG » : la section Installation de cette page, pas GitHub (un débutant y attend un fichier à
+// télécharger, il y trouve du code)
+const INSTALLER = !PARTAGE ? "#/a-propos/installation" : PARTAGE.page === "a-propos" ? "#installation" : A_PROPOS + "#installation";
 if (PARTAGE) {
   const depot = PARTAGE.atelier ? esc(PARTAGE.atelier) : "";
   if (PARTAGE.page !== "a-propos") $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-partage">
     <p>Page ${PARTAGE.auteur ? `de <strong>${esc(PARTAGE.auteur)}</strong>, ` : ""}partagée avec <a href="${A_PROPOS}">l'Atelier MTG</a>. Pour gérer, tester et partager vos propres decks Commander, l'Atelier est gratuit.</p>
-    ${depot ? `<a class="btn btn-accent btn-petit" href="${depot}" target="_blank" rel="noopener">${ico("telecharger")}Télécharger l'Atelier MTG</a>` : ""}
+    <a class="btn btn-accent btn-petit" href="${INSTALLER}">${ico("telecharger")}Installer l'Atelier MTG</a>
   </div>`);
   $(".cadre").insertAdjacentHTML("afterend", `<footer class="pied-partage">
     <nav><a href="${A_PROPOS}">C'est quoi, l'Atelier MTG ?</a>${depot ? `<a href="${depot}" target="_blank" rel="noopener">Code source sur GitHub</a>
@@ -614,7 +617,8 @@ async function route() {
   vue.classList.remove("vue-pleine");                       // la page « C'est quoi » la remet : son en-tête prend toute la largeur
   try {
     if (PARTAGE && parts[0] === "a-propos" && PARTAGE.page !== "a-propos") location.replace(A_PROPOS);   // ancienne adresse
-    else if (parts[0] === "a-propos" || (PARTAGE && PARTAGE.page === "a-propos" && !parts[0])) vueAPropos();
+    else if (parts[0] === "a-propos") vueAPropos(parts[1] === "installation");
+    else if (PARTAGE && PARTAGE.page === "a-propos" && (!parts[0] || parts[0] === "installation")) vueAPropos(parts[0] === "installation");
     else if (PARTAGE && parts[0] === "recherche") vueRechercheVitrine();
     else if (PARTAGE && PARTAGE.deck) await vueDeck(PARTAGE.deck, (parts[0] === "deck" && parts[2]) || "liste");
     else if (PARTAGE && parts[0] === "deck" && parts[1]) location.replace(lienDeck(decodeURIComponent(parts[1])));
@@ -3478,7 +3482,7 @@ function invitation(titre, texte) {
   return `<div class="vitrine-invite panneau">
     <h2>${esc(titre)}</h2>
     <p>${esc(texte)}</p>
-    ${PARTAGE.atelier ? `<a class="btn btn-accent" href="${esc(PARTAGE.atelier)}" target="_blank" rel="noopener">${ico("telecharger")}Télécharger l'Atelier MTG</a>` : ""}
+    <a class="btn btn-accent" href="${INSTALLER}">${ico("telecharger")}Installer l'Atelier MTG</a>
   </div>`;
 }
 
@@ -3506,6 +3510,8 @@ const AUTEUR_ATELIER = "PierreRibeaucourt";
 const DEPOT_ATELIER = "https://github.com/PierreRibeaucourt/atelier-mtg";
 // les captures de la page : sur le site de decks de l'auteur, pas dans le dépôt de code (on y voit des cartes et une discussion)
 const CAPTURES_ATELIER = "https://pierreribeaucourt.github.io/decks/a-propos/";
+// pour qui n'a pas encore d'assistant IA : Claude Code dans l'application de bureau, sans terminal (guide en français)
+const CLAUDE_BUREAU = "https://code.claude.com/docs/fr/desktop-quickstart";
 const MODULES_ATELIER = [
   ["decks", "Vos decks, à votre façon", "Créez, importez et éditez vos decks comme partout, avec une vue personnalisable : liste ou visuel, taille des cartes, rangement par type, par tag ou par fonction."],
   ["versions", "Versions et historique", "Chaque modification est gardée. Enregistrez des versions, comparez deux listes, revenez en arrière."],
@@ -3536,7 +3542,7 @@ const FAQ_ATELIER = [
     ["Comment entrent mes cartes ?",
       "On colle une liste copiée depuis Moxfield, Archidekt ou MTG Arena. La liste d'un deck préconstruit se trouve sur ces sites. Les cartes rangées hors des decks se collent de la même façon dans le classeur."],
     ["Et sur mon téléphone ?",
-      "L'Atelier s'ouvre sur le PC. Pour emporter un deck, « Partager » le publie en ligne, sur une page comme celle-ci : elle se lit sur téléphone et se met à jour toute seule quand le deck change. Il faut un compte GitHub (gratuit)."],
+      "L'Atelier s'ouvre sur le PC. Pour emporter un deck, « Partager » le publie en ligne, sur une page comme celle-ci : elle se lit sur téléphone et se met à jour toute seule quand le deck change. Il faut un compte GitHub, gratuit : c'est lui qui héberge votre page."],
     ["Puis-je partir avec mes decks ?",
       "Oui. Chaque deck est un dossier sur votre disque, avec sa liste en texte (format Archidekt, tags compris), son historique et ses versions. Le menu « … » copie la liste pour Archidekt, Moxfield, MTG Arena ou MTGO."],
   ]],
@@ -3568,7 +3574,8 @@ const FAQ_ATELIER = [
 // espaces insécables de la typographie française : « ? » ou « » » jamais seuls en début de ligne
 const insecables = (t) => t.replace(/ ([?!:;»])/g, " $1").replace(/« /g, "« ");
 
-function vueAPropos() {
+// installation : arriver directement à la section Installation (bouton « Installer l'Atelier MTG » d'une autre page)
+function vueAPropos(installation = false) {
   scrollTo(0, 0);
   etat.deck = null;
   const depot = esc((PARTAGE && PARTAGE.atelier) || DEPOT_ATELIER);
@@ -3588,7 +3595,7 @@ function vueAPropos() {
           <h1>L'Atelier <span>MTG</span></h1>
           <p class="ap-accroche">Vos decks Commander,<br>de la liste à la table.</p>
           <ul class="ap-puces">${["Base de mana", "Combos", "Bracket", "Table de jeu", "Recherche avancée", "Claude"].map((x) => `<li>${x}</li>`).join("")}</ul>
-          <p class="ap-cta"><a class="btn btn-accent" href="${depot}" target="_blank" rel="noopener">${ico("telecharger")}Télécharger l'Atelier MTG</a></p>
+          <p class="ap-cta"><a class="btn btn-accent" href="${INSTALLER}" id="ap-installer">${ico("telecharger")}Installer l'Atelier MTG</a></p>
           <p class="ap-mention"><b>Gratuit</b> · open source · tout reste sur votre PC${versionAtelier ? ` · version ${esc(versionAtelier)}` : ""}</p>
         </div>
       </div>
@@ -3624,14 +3631,20 @@ function vueAPropos() {
           sans aucune configuration IA.</li>
       </ul>
 
-      <h2>Installation</h2>
-      <p>Le code et les instructions détaillées sont sur GitHub. L'Atelier est testé sous Windows ; il devrait marcher aussi sous macOS et Linux.</p>
-      <p><a class="btn btn-accent" href="${depot}" target="_blank" rel="noopener">${ico("telecharger")}Télécharger l'Atelier MTG</a>
-        <a class="ap-depot" href="${depot}" target="_blank" rel="noopener">${depot.replace("https://", "")}</a></p>
-      <h3>Démarrage rapide, avec un assistant IA</h3>
-      <p>Si vous utilisez un assistant IA qui agit sur votre ordinateur (Claude Code, Cursor, Copilot…), collez simplement cette consigne :</p>
+      <h2 id="installation">Installation</h2>
+      <p>L'Atelier s'installe une fois sur votre ordinateur, puis s'ouvre par un raccourci sur le bureau. Il est testé sous
+        Windows ; il devrait marcher aussi sous macOS et Linux.</p>
+      <h3>Le plus simple : avec un assistant IA</h3>
+      <p>Collez cette consigne à un assistant IA qui agit sur votre ordinateur (Claude Code, Cursor, Copilot…) : il installe
+        tout et vous pose trois questions.</p>
       <div class="ap-consigne"><code>${esc(consigne)}</code>
         <button type="button" class="btn btn-petit btn-discret" id="ap-copier">${ico("copier")}Copier</button></div>
+      <p>Pas encore d'assistant IA ? Installez <a href="${CLAUDE_BUREAU}" target="_blank" rel="noopener">l'application Claude
+        pour ordinateur</a> (abonnement Pro ou plus), ouvrez son onglet Code, choisissez le dossier où ranger l'Atelier, puis
+        collez-y la consigne.</p>
+      <h3>À la main</h3>
+      <p>Il faut Python 3.10 ou plus récent, et git. Les commandes sont sur GitHub :
+        <a class="ap-depot" href="${depot}" target="_blank" rel="noopener">${depot.replace("https://", "")}</a></p>
 
       <h2>Questions fréquentes</h2>
       ${FAQ_ATELIER.map(([groupe, questions]) => `<h3 class="ap-faq-groupe">${groupe}</h3>
@@ -3664,6 +3677,10 @@ function vueAPropos() {
   $("#ap-copier").onclick = async () => {
     try { await navigator.clipboard.writeText(consigne); toast("Consigne copiée."); } catch (e) { erreur(e); }
   };
+  // un saut, pas un défilement animé : les captures qui se chargent en chemin le feraient s'arrêter trop tôt
+  const aInstallation = () => $("#installation").scrollIntoView();
+  $("#ap-installer").onclick = (ev) => { ev.preventDefault(); aInstallation(); };      // même page : sans la redessiner
+  if (installation) aInstallation();
 }
 
 // une capture en grand, par-dessus la page ; un clic ou Échap la referme
