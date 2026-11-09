@@ -15,9 +15,16 @@ Tout tourne sur ton PC, à l'adresse http://127.0.0.1:5000. Rien n'est mis en li
 - **Statistiques.** Consulter la courbe de mana, les couleurs, les types, les fonctions et les tags comparés à un gabarit de deck et la base de mana. Tirer une main de départ.
 - **Aperçu des cartes citées.** Partout dans l'Atelier (listes, combos, versions, bracket, simulation, discussion avec Claude), survoler le nom d'une carte, en français ou en anglais, affiche son image et son prix. Les noms d'un seul mot qui sont aussi des mots courants (« Sacrifice », « Foudre ») ne sont reconnus que dans le deck ouvert ou écrits en gras.
 - **Prix.** Afficher le prix Cardmarket du jour, celui de l'édition la moins chère, avec un lien vers Cardmarket.
+- **Suggestions.** L'onglet « Suggestions » d'un deck propose des cartes à y ajouter, présentées comme les résultats de la recherche, avec une colonne Intérêt (de 1 à 5). Elles sont calculées sur la base locale, sans autre service :
+  - **Thème** : les fonctions de Scryfall Tagger fréquentes dans le deck mais rares ailleurs (le commandant compte triple) et les types de créature dominants (« Élémentaux », « Chaque joueur sacrifie »). Les cartes qui y répondent le mieux passent d'abord, puis les plus jouées (rang EDHREC republié par Scryfall) ;
+  - **Combos** : les combos de Commander Spellbook à qui il ne manque qu'une carte. L'étiquette « Combo avec … » déplie l'explication de Spellbook (en anglais) : cartes, résultat, prérequis, mana, étapes ;
+  - **Classeur** : les cartes qu'on a déjà et qui touchent au deck ;
+  - **Tout** : les trois groupes ensemble.
+
+  Ne sont proposées que les cartes légales, dans les couleurs du commandant, sous le budget par carte, hors terrains et hors du deck et du Maybeboard. Des filtres se cumulent avec le groupe choisi : texte, type, fonction, coût, prix maximum. Les cartes Universes Beyond (créées pour Marvel, Final Fantasy…, d'après Scryfall) portent le badge UB. « Écarter » ne la propose plus pour ce deck ; « Reproposer », en bas de la liste, la remet. Ces refus restent sur ce PC (`suggestions.json` dans le dossier du deck).
 - **Achats.** L'onglet « Achats » d'un deck sépare les cartes qu'on a déjà de celles à acheter, avec le coût de ce qui manque : l'amélioration d'un deck, ou le deck entier pour un nouveau. Dans la fiche d'une carte, « Je l'ai » / « À acheter » change son état. « Copier pour Cardmarket » copie ce qui manque au format des listes de wants (« 1 Sol Ring », une carte par ligne). Un deck créé dans l'Atelier part de zéro ; un deck d'avant cette fonction est considéré comme déjà monté. Ces informations restent sur ce PC (`achats.json` dans le dossier du deck) et ne sont jamais partagées.
 - **Options.** Le bouton en haut à droite règle le nom affiché sur les pages partagées, le budget par carte, le compte GitHub et le lancement de l'Atelier au démarrage de Windows. Il gère aussi le classeur : les cartes qu'on a en dehors des decks, à ajouter en les cherchant ou en collant une liste. Il se présente comme les résultats de la recherche, en liste ou en images : un clic sur un en-tête (couleur, nom, type, coût, quantité, prix) trie, un clic sur une carte ouvre sa fiche. Il reste sur ce PC (`Classeur/classeur.txt`).
-- **Combos.** Deux vues. « Le deck » montre les combos déjà présentes dans le deck. « Une carte » montre les autres cartes qui combotent avec elle, avec ou sans le filtre des couleurs du commandant, leur prix et un bouton pour les mettre au Maybeboard. Les combos viennent de MTGPics, de Commander Spellbook et, à la demande, d'une analyse des synergies par Claude (voir plus bas).
+- **Combos.** Deux vues. « Le deck » montre les combos déjà présentes dans le deck. Le bouton « Trouver d'autres combos » ouvre les suggestions sur les cartes qui complètent une combo du deck. « Une carte » montre les autres cartes qui combotent avec elle, avec ou sans le filtre des couleurs du commandant, leur prix et un bouton pour les mettre au Maybeboard. Les combos viennent de MTGPics, de Commander Spellbook et, à la demande, d'une analyse des synergies par Claude (voir plus bas).
 - **Bracket.** Repérer les Game Changers de la liste officielle. Afficher l'estimation de bracket de Commander Spellbook.
 - **Versions.** Enregistrer des versions nommées, consulter l'historique automatique, comparer deux versions.
 - **Simulation.** Jouer des parties à 4 joueurs contre des archétypes d'adversaires (méthode de Monte-Carlo). Comparer deux versions d'un deck, avec la marge d'erreur.
@@ -67,7 +74,7 @@ Chaque deck est un dossier `Deck <nom>` placé à la racine. Il contient sa list
 1x Coal Stoker [Maybeboard]
 ```
 
-L'Atelier range aussi dans ce dossier l'historique, les versions, les simulations, les réglages de jeu (`pilote.json`), la discussion et les cartes qu'on a déjà (`achats.json`). Les dossiers de decks ne sont pas dans ce dépôt (voir `.gitignore`).
+L'Atelier range aussi dans ce dossier l'historique, les versions, les simulations, les réglages de jeu (`pilote.json`), la discussion, les cartes qu'on a déjà (`achats.json`) et les suggestions écartées (`suggestions.json`). Les dossiers de decks ne sont pas dans ce dépôt (voir `.gitignore`).
 
 ## Recherche de cartes
 
@@ -80,7 +87,7 @@ La page « Recherche de cartes » (barre du haut, ou bouton « Chercher des cart
 En plus de Magic-Ville :
 - le prix (le moins cher, toutes éditions) ;
 - les Game Changers, et les cartes qui peuvent être commandant ou partenaire ;
-- le tri par popularité (EDHREC) ou par nouveauté ;
+- le tri par popularité (EDHREC) ou par nouveauté, et, quand un deck est lié, par pertinence pour ce deck (comme ses suggestions) ;
 - l'ajout direct au deck lié ;
 - une fenêtre **Fonctions** avec les étiquettes de [Scryfall Tagger](https://tagger.scryfall.com), un classement fait à la main par la communauté de Scryfall. Les plus utiles sont traduites et se cochent d'un clic (ramp, pioche, tuteur, removal…). Les 4 600 autres se cherchent par leur nom anglais (pinger, blood artist ability…), avec leur nombre de cartes. Quand on en choisit plusieurs, la carte doit les avoir toutes.
 

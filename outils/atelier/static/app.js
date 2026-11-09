@@ -931,7 +931,8 @@ function modaleNouveauDeck() {
 }
 
 // ------------------------------------------------------------------ page d'un deck
-const ONGLETS = [["liste", "Liste"], ["stats", "Statistiques"], ["combos", "Combos"], ["versions", "Versions"], ["bracket", "Bracket"], ["simulation", "Simulation"],
+const ONGLETS = [["liste", "Liste"], ...(PARTAGE ? [] : [["suggestions", "Suggestions"]]),          // la base de cartes est sur ce PC
+  ["stats", "Statistiques"], ["combos", "Combos"], ["versions", "Versions"], ["bracket", "Bracket"], ["simulation", "Simulation"],
   ...(PARTAGE ? [] : [["achats", "Achats"]])];                    // ce que j'ai et ce qu'il me manque : reste sur ce PC
 ICONES.achats = ICONES.panier;
 
@@ -985,6 +986,7 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
   if (onglet === "simulation") return ongletSimulation(contenu, d, extra);
   if (onglet === "versions" || onglet === "historique") return ongletVersions(contenu, d);
   if (onglet === "achats" && !PARTAGE) return ongletAchats(contenu, d);
+  if (onglet === "suggestions" && !PARTAGE) return ongletSuggestions(contenu, d, extra);
   ongletListe(contenu, d);
 }
 
@@ -997,6 +999,270 @@ async function copierListe(fmt, lib) {
     await navigator.clipboard.writeText(txt);
     toast(`Liste copiée : ${lib}.`);
   } catch (e) { erreur(e); }
+}
+
+// ------------------------------------------------------------------ suggestions : cartes à proposer pour le deck (suggestions.py)
+// thème du deck, combos à une carte près, classeur ; présentées comme les résultats de la recherche,
+// avec une colonne Intérêt (un clic sur un en-tête trie, un second inverse), en liste ou en images
+ICONES.suggestions = '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.1v.1h5v-.1c0-.8.4-1.6 1.1-2.1A6 6 0 0 0 12 3z"/>';
+const GROUPES_SUGG = [["theme", "Thème"], ["combos", "Combos"], ["classeur", "Classeur"], ["tout", "Tout"]];
+const COLONNES_SUGG = [["couleur", "Coul."], ["nom", "Nom VO"], ["nomfr", "Nom VF"], ["type", "Type"], ["ccm", "Coût"], ["note", "Intérêt"], ["prix", "Prix"]];
+const TRI_SUGG_DESC = { note: true };                      // sens naturel : les plus intéressantes d'abord
+const TRI_SUGG = {
+  nom: () => 0,                                            // le nom départage toujours
+  nomfr: (a, b) => sansAccent(a.fr || a.nom).localeCompare(sansAccent(b.fr || b.nom)),
+  couleur: (a, b) => cmpListes(cleCouleur(a), cleCouleur(b)) || (a.mv || 0) - (b.mv || 0),
+  ccm: (a, b) => (a.mv || 0) - (b.mv || 0),
+  type: (a, b) => ORDRE_TYPES.indexOf(typeCarte(a.type)) - ORDRE_TYPES.indexOf(typeCarte(b.type)) || (a.mv || 0) - (b.mv || 0),
+  note: (a, b) => a.note - b.note,
+  prix: (a, b) => (a.prix ?? -1) - (b.prix ?? -1),
+};
+
+// l'intérêt de la carte pour le deck, de 1 à 5 traits
+const jaugeSugg = (note) => {
+  const n = Math.max(1, Math.round(note * 5));
+  return `<span class="sg-jauge" role="img" aria-label="Intérêt : ${n} sur 5">${[1, 2, 3, 4, 5].map((k) => `<i class="${k <= n ? "plein" : ""}"></i>`).join("")}</span>`;
+};
+
+const badgesSugg = (x, d) => [
+  badgesRch(x, d),
+  x.ub ? `<span class="badge" title="Universes Beyond">UB</span>` : "",
+  x.classeur ? `<span class="badge badge-ok">Classeur${x.classeur > 1 ? " ×" + x.classeur : ""}</span>` : "",
+].join("");
+
+function actionsSugg(x, images = false) {                  // en images : « Écarter » en icône, pour tenir sous la carte
+  if (x.dans === "deck") return `<span class="badge badge-ok">✓ dans le deck</span>`;
+  return `${x.dans === "maybe" ? `<span class="badge">Maybeboard</span>` : ""}
+    <button type="button" class="btn btn-petit" data-act="ajouter" title="Ajouter au deck">${ico("plus")}Deck</button>
+    ${x.dans === "maybe" ? "" : `<button type="button" class="btn btn-petit btn-discret" data-act="maybe" title="Ajouter au Maybeboard">${ico("maybe")}Maybe</button>`}
+    <button type="button" class="btn btn-petit btn-discret ${images ? "btn-icone" : ""}" data-act="ecarter" title="Ne plus proposer" ${images ? 'aria-label="Écarter"' : ""}>${ico("fermer")}${images ? "" : "Écarter"}</button>`;
+}
+
+// la seule étiquette d'une suggestion : « Combo avec … » (Commander Spellbook), qui déplie l'explication de la combo
+function comboSugg(x) {
+  const combos = x.combos || [];
+  if (!combos.length) return "";
+  const autres = combos[0].cartes.filter((n) => !combos[0].manque.includes(n));
+  const titre = `Combo avec ${esc(autres.join(" + "))}${combos.length > 1 ? ` (+${combos.length - 1})` : ""}`;
+  if (!combos.some((c) => c.description)) return `<div class="sg-combo"><span class="sg-puce">${titre}</span></div>`;
+  return `<details class="sg-combo"><summary class="sg-puce">${titre}</summary>${combos.map((c) => `<div class="sg-combo-bloc">
+    <div><strong>${c.cartes.map((n) => nc(n)).join(" + ")}</strong>
+      ${c.tag ? `<span class="badge">${esc(c.tag)}${c.bracket ? ` · bracket ${c.bracket}` : ""}</span>` : ""}</div>
+    ${c.produit.length ? `<div class="petit muet">${c.produit.map(esc).join(" · ")}</div>` : ""}
+    ${detailsCombo(c)}</div>`).join("")}</details>`;
+}
+
+function ligneSugg(x, i, d) {
+  const cher = (x.prix || 0) > BUDGET;
+  const apercu = `data-image="${esc(x.image)}" data-legende="${esc(`${x.fr || x.nom} — ${prixRch(x)}`)}" ${cher ? 'data-cher="1"' : ""}`;
+  const texte = (x.texte_fr || x.texte || "").split("\n").map((l) => l.trim() === "//" ? "<hr>" : l.trim() ? `<p>${texteMana(l)}</p>` : "").join("");
+  const badges = badgesSugg(x, d);
+  return `<article class="rch-carte" data-i="${i}">
+    <button type="button" class="rch-vignette" data-act="ouvrir" ${apercu} aria-label="Fiche de ${esc(x.nom)}">
+      ${x.petite ? `<img src="${esc(x.petite)}" alt="" loading="lazy">` : `<span class="sans-image">${esc(x.nom)}</span>`}</button>
+    <div class="rch-vo"><button type="button" class="rch-nom" data-act="ouvrir" ${apercu}>${esc(x.nom)}</button></div>
+    <div class="rch-vf">${x.fr && x.fr !== x.nom ? `<button type="button" class="rch-nom" data-act="ouvrir" ${apercu}>${esc(x.fr)}</button>` : ""}</div>
+    <div class="rch-typecourt">${esc(TYPE_COURT[typeCarte(x.type)] || "")}</div>
+    <div class="rch-cm">${mana(x.cout)}</div>
+    <div class="sg-note">${jaugeSugg(x.note)}</div>
+    <div class="rch-prix">
+      <a class="prix ${cher ? "cher" : ""}" href="${esc(lienCardmarket(x.nom))}" target="_blank" rel="noopener" title="Cardmarket">${prixRch(x)}</a>
+      ${badges ? `<span class="rch-badges">${badges}</span>` : ""}
+      <span class="rch-actions">${actionsSugg(x)}</span>
+    </div>
+    <div class="rch-detail">
+      ${comboSugg(x)}
+      <div class="rch-type">${esc(x.type_fr || x.type || "")}</div>
+      ${texte ? `<div class="rch-texte fs-texte">${texte}</div>` : ""}
+      ${x.pt ? `<div class="rch-pt">${esc(x.pt.replace(/loyauté (\S+)/g, "Loy. $1"))}</div>` : ""}
+    </div>
+  </article>`;
+}
+
+function carteImageSugg(x, i) {
+  const cher = (x.prix || 0) > BUDGET;
+  const marques = [
+    x.gc ? `<span class="marque marque-gc" title="Game Changer">GC</span>` : "",
+    x.ub ? `<span class="marque" title="Universes Beyond">UB</span>` : "",
+    x.classeur ? `<span class="marque marque-ok">classeur</span>` : "",
+    x.dans === "deck" ? `<span class="marque marque-ok">✓ deck</span>` : x.dans === "maybe" ? `<span class="marque marque-maybe">maybe</span>` : "",
+  ].join("");
+  return `<div class="carte-v rch-carte-v" data-i="${i}">
+    <button type="button" class="pile" data-act="ouvrir" aria-label="${esc(x.nom)} : fiche">${imageCarte({ petite: x.petite, image: x.image, nom: x.nom }, "recto")}${marques ? `<span class="marques">${marques}</span>` : ""}</button>
+    <div class="legende-v"><span class="nom-v" title="${esc(x.nom + (x.fr && x.fr !== x.nom ? " — " + x.fr : ""))}">${esc(x.fr || x.nom)}</span><span class="prix-v ${cher ? "cher" : ""}">${prixRch(x)}</span></div>
+    ${x.dans === "deck" ? "" : `<div class="rch-actions-v">${actionsSugg(x, true)}</div>`}
+  </div>`;
+}
+
+// filtres de l'onglet, cumulables entre eux et avec le groupe : texte, type, fonction, coût, prix maximum
+const TYPES_SUGG = [["Creature", "Créatures"], ["Planeswalker", "Planeswalkers"], ["Instant", "Éphémères"], ["Sorcery", "Rituels"],
+  ["Artifact", "Artefacts"], ["Enchantment", "Enchantements"], ["Battle", "Batailles"]];
+const COUTS_SUGG = [["0-1", "0 ou 1"], ["2", "2"], ["3", "3"], ["4", "4"], ["5", "5"], ["6+", "6 et plus"]];
+const FILTRES_SUGG_VIDES = { q: "", type: "", fn: "", mv: "", prix: "" };
+
+function passeFiltresSugg(x, f) {
+  if (f.type && !(x.type || "").includes(f.type)) return false;
+  if (f.fn && !(x.fonctions || []).includes(f.fn)) return false;
+  if (f.mv) {
+    const mv = x.mv || 0;
+    if (f.mv === "0-1" ? mv > 1 : f.mv === "6+" ? mv < 6 : mv !== +f.mv) return false;
+  }
+  const pmax = parseFloat(String(f.prix).replace(",", "."));
+  if (!Number.isNaN(pmax) && !(x.prix != null && x.prix <= pmax)) return false;
+  if (f.q && !sansAccent([x.nom, x.fr, x.type, x.type_fr, x.texte, x.texte_fr].join(" ")).includes(sansAccent(f.q.trim()))) return false;
+  return true;
+}
+
+const optionsSugg = (vide, liste) => `<option value="">${vide}</option>${liste.map(([k, l]) => `<option value="${esc(k)}">${esc(l)}</option>`).join("")}`;
+
+// demande : un groupe à ouvrir (#/deck/<deck>/suggestions/combos, le renvoi de l'onglet Combos)
+async function ongletSuggestions(el, d, demande = null) {
+  el.innerHTML = `<p class="chargement">Calcul des suggestions…</p>`;
+  let r;
+  try { r = await api(`/api/decks/${enc(d.id)}/suggestions`); }
+  catch (e) { el.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; return; }
+  if (!el.isConnected) return;
+  let groupe = PREF.get("groupe-sugg", "theme"), page = 1, vus = [];
+  if (GROUPES_SUGG.some(([k]) => k === demande)) {
+    groupe = demande;
+    PREF.set("groupe-sugg", groupe);
+    history.replaceState(null, "", `#/deck/${enc(d.id)}/suggestions`);        // recharger la page garde le groupe choisi ensuite
+  }
+  if (!GROUPES_SUGG.some(([k]) => k === groupe)) groupe = "theme";
+  let tri = PREF.get("tri-sugg", "note");
+  if (!TRI_SUGG[tri]) tri = "note";
+  let sens = PREF.get("sens-sugg", TRI_SUGG_DESC[tri] ? "desc" : "asc");
+  let vueImages = PREF.get("vue-sugg", "liste") === "images";
+  const filtres = { ...FILTRES_SUGG_VIDES };
+  const fonctions = ORDRE_FONCTIONS.filter((f) => r.cartes.some((x) => (x.fonctions || []).includes(f))).map((f) => [f, f]);
+  // au-dessus de la liste, deux lignes : les groupes (avec leur nombre de cartes) et Liste | Images, puis les filtres ;
+  // les filtres ne se redessinent pas (le champ texte garde la main pendant qu'on tape)
+  el.innerHTML = `
+    <div class="sg-tete"></div>
+    <div class="sg-filtres">
+      <input class="champ champ-petit" type="search" data-f="q" placeholder="Filtrer…" aria-label="Filtrer : nom, type, texte">
+      <select class="champ champ-petit" data-f="type" aria-label="Type">${optionsSugg("Type", TYPES_SUGG)}</select>
+      <select class="champ champ-petit" data-f="fn" aria-label="Fonction">${optionsSugg("Fonction", fonctions)}</select>
+      <select class="champ champ-petit" data-f="mv" aria-label="Valeur de mana">${optionsSugg("Coût", COUTS_SUGG)}</select>
+      <label class="sg-prix"><input class="champ champ-petit" type="text" inputmode="decimal" data-f="prix" placeholder="Prix max" aria-label="Prix maximum, en euros"> €</label>
+      <button type="button" class="lien-discret" data-effacer hidden>Effacer</button>
+    </div>
+    <div class="sg-res"></div>`;
+  const tete = $(".sg-tete", el), zone = $(".sg-res", el), barre = $(".sg-filtres", el);
+  const entete = () => `<div class="rch-cols">${COLONNES_SUGG.map(([k, l]) => {
+    const actif = tri === k;
+    return `<button type="button" class="rch-col ${actif ? "actif" : ""}" data-tri="${k}" aria-pressed="${actif}">${l}${actif ? `<span aria-label="${sens === "desc" ? "décroissant" : "croissant"}">${sens === "desc" ? "↓" : "↑"}</span>` : ""}</button>`;
+  }).join("")}</div>`;
+  const rendre = () => {
+    const filtrees = r.cartes.filter((x) => passeFiltresSugg(x, filtres));
+    const nb = (g) => (g === "tout" ? filtrees.length : filtrees.filter((x) => x.groupes.includes(g)).length);
+    if (!nb(groupe)) groupe = "tout";
+    const dir = sens === "desc" ? -1 : 1;
+    vus = filtrees.filter((x) => groupe === "tout" || x.groupes.includes(groupe))
+      .sort((a, b) => dir * TRI_SUGG[tri](a, b) || (tri === "nom" ? dir : 1) * a.nom.localeCompare(b.nom));
+    const par = parPage(), pages = Math.max(1, Math.ceil(vus.length / par));
+    page = Math.min(Math.max(1, page), pages);
+    const debut = (page - 1) * par, p = { page, pages };
+    tete.innerHTML = `<div class="segments" role="group" aria-label="Suggestions">${GROUPES_SUGG.map(([k, l]) => {
+      const n = nb(k);
+      return `<button type="button" data-groupe="${k}" class="${k === groupe ? "actif" : ""}" aria-pressed="${k === groupe}" ${n ? "" : "disabled"}>${l} <span class="sg-n">${n}</span></button>`;
+    }).join("")}</div>
+      <div class="segments" role="group" aria-label="Affichage">${[["liste", "Liste"], ["images", "Images"]].map(([k, l]) =>
+        `<button type="button" data-vue="${k}" class="${(k === "images") === vueImages ? "actif" : ""}" aria-pressed="${(k === "images") === vueImages}">${l}</button>`).join("")}</div>`;
+    $("[data-effacer]", barre).hidden = Object.entries(filtres).every(([k, v]) => v === FILTRES_SUGG_VIDES[k]);
+    zone.innerHTML = `
+      ${vus.length ? `<div class="rch-liste ${vueImages ? "etale" : "avec-images cl-table"}">${vueImages ? "" : entete()}${vus.slice(debut, debut + par)
+        .map((x, j) => (vueImages ? carteImageSugg(x, debut + j) : ligneSugg(x, debut + j, d))).join("")}</div>`
+        : `<div class="panneau vide"><p>Aucune suggestion.</p></div>`}
+      ${basDeListe(p, vus.length)}
+      ${r.ecartees.length ? `<details class="sg-ecartees"><summary>Écartées (${r.ecartees.length})</summary>
+        <ul>${r.ecartees.map((n) => `<li><span class="nc" data-apercu="${esc(n)}">${esc(n)}</span>
+          <button type="button" class="lien-discret" data-repropose="${esc(n)}">Reproposer</button></li>`).join("")}</ul></details>` : ""}`;
+  };
+  barre.addEventListener("input", (ev) => {
+    const c = ev.target.closest("[data-f]");
+    if (!c) return;
+    filtres[c.dataset.f] = c.value;
+    page = 1;
+    rendre();
+  });
+  $("[data-effacer]", barre).onclick = () => {
+    Object.assign(filtres, FILTRES_SUGG_VIDES);
+    $$("[data-f]", barre).forEach((c) => { c.value = ""; });
+    page = 1;
+    rendre();
+  };
+  // ajoutée depuis la ligne ou depuis la fiche : la ligne le montre, l'en-tête du deck compte la carte
+  const apresAjout = (res) => {
+    if (!res) return;
+    const ch = $(".entete-deck .chiffres");
+    if (ch) ch.innerHTML = chiffresDeck(res);
+    if (el.isConnected) rendre();
+  };
+  el.onclick = async (ev) => {
+    const col = ev.target.closest(".rch-col");
+    if (col) {                                               // en-tête : trier, ou inverser l'ordre
+      if (col.dataset.tri === tri) sens = sens === "desc" ? "asc" : "desc";
+      else { tri = col.dataset.tri; sens = TRI_SUGG_DESC[tri] ? "desc" : "asc"; }
+      PREF.set("tri-sugg", tri);
+      PREF.set("sens-sugg", sens);
+      page = 1;
+      return rendre();
+    }
+    const g = ev.target.closest("[data-groupe]");
+    if (g) {
+      groupe = g.dataset.groupe;
+      PREF.set("groupe-sugg", groupe);
+      page = 1;
+      return rendre();
+    }
+    const v = ev.target.closest("[data-vue]");
+    if (v) {
+      vueImages = v.dataset.vue === "images";
+      PREF.set("vue-sugg", v.dataset.vue);
+      return rendre();
+    }
+    const pg = ev.target.closest("[data-page]");
+    if (pg) {
+      const bas = !!pg.closest(".rch-bas");
+      page = +pg.dataset.page;
+      rendre();
+      if (bas) el.scrollIntoView({ block: "start" });
+      return;
+    }
+    const rp = ev.target.closest("[data-repropose]");
+    if (rp) {
+      rp.disabled = true;
+      try {
+        await api(`/api/decks/${enc(d.id)}/suggestions/ecarter`, { method: "POST", body: { nom: rp.dataset.repropose, ecarter: false } });
+        return ongletSuggestions(el, d);
+      } catch (e) { erreur(e); rp.disabled = false; }
+      return;
+    }
+    const a = ev.target.closest("[data-act]");
+    if (!a || a.tagName === "A") return;
+    const x = vus[+a.closest("[data-i]").dataset.i];
+    if (!x) return;
+    if (a.dataset.act === "ouvrir") return ficheRecherche(+a.closest("[data-i]").dataset.i, { liste: vus, deck: d, apres: apresAjout });
+    a.disabled = true;
+    if (a.dataset.act === "ecarter") {
+      try {
+        r.ecartees = (await api(`/api/decks/${enc(d.id)}/suggestions/ecarter`, { method: "POST", body: { nom: x.nom } })).ecartees;
+        r.cartes = r.cartes.filter((y) => y !== x);
+        rendre();
+      } catch (e) { erreur(e); a.disabled = false; }
+      return;
+    }
+    const res = await ajouterRecherche(x, { maybe: a.dataset.act === "maybe", deck: d });
+    if (res) apresAjout(res); else a.disabled = false;
+  };
+  zone.onchange = (ev) => {
+    if (ev.target.matches("[data-par-page]")) { PREF.set("par-page", ev.target.value); page = 1; return rendre(); }
+    if (!ev.target.matches(".rch-page")) return;
+    page = +ev.target.value || 1;
+    rendre();
+  };
+  rendre();
 }
 
 // ------------------------------------------------------------------ cartes que j'ai, cartes à acheter (achats.json : sur ce PC seulement)
@@ -2594,15 +2860,17 @@ function blocCombo(c, presque) {
     <div><strong>${c.cartes.map((n) => presque && c.manque.includes(n) ? `<span style="color:var(--accent)">${nc(n)} (manque)</span>` : nc(n)).join(" + ")}</strong>
       ${c.tag ? `<span class="badge" title="Bracket de la combo selon Commander Spellbook">${esc(c.tag)}${c.bracket ? ` · bracket ${c.bracket}` : ""}</span>` : ""}</div>
     <div class="petit muet" style="margin-top:.25rem">${c.produit.map(esc).join(" · ")}</div>
-    <details><summary>Comment ça marche</summary>
-      ${c.prerequis ? `<p class="petit"><strong>Il faut :</strong> ${esc(c.prerequis)}</p>` : ""}
-      ${c.prerequis2 ? `<p class="petit">${esc(c.prerequis2)}</p>` : ""}
-      ${c.mana ? `<p class="petit"><strong>Mana :</strong> ${esc(c.mana)}</p>` : ""}
-      <p class="petit" style="white-space:pre-wrap">${esc(c.description)}</p>
-      ${c.lien ? `<a class="petit" href="${esc(c.lien)}" target="_blank" rel="noopener">Voir sur Commander Spellbook ↗</a>` : ""}
-    </details>
+    <details><summary>Comment ça marche</summary>${detailsCombo(c)}</details>
   </div>`;
 }
+
+// prérequis, mana et étapes d'une combo de Commander Spellbook (en anglais, comme sur le site)
+const detailsCombo = (c) => `
+  ${c.prerequis ? `<p class="petit"><strong>Il faut :</strong> ${esc(c.prerequis)}</p>` : ""}
+  ${c.prerequis2 ? `<p class="petit">${esc(c.prerequis2)}</p>` : ""}
+  ${c.mana ? `<p class="petit"><strong>Mana :</strong> ${esc(c.mana)}</p>` : ""}
+  <p class="petit" style="white-space:pre-wrap">${esc(c.description)}</p>
+  ${c.lien ? `<a class="petit" href="${esc(c.lien)}" target="_blank" rel="noopener">Voir sur Commander Spellbook ↗</a>` : ""}`;
 
 async function ongletBracket(el, d, force = false) {
   el.innerHTML = `<p class="chargement">Analyse du bracket…</p>`;
@@ -2826,9 +3094,12 @@ async function vueCombosCarte(zone, d, carte = null) {
 
 async function ongletCombos(el, d, carte = null) {
   el.innerHTML = `
-    <div class="segments ecrit" role="group" style="margin-bottom:1rem">
-      <button type="button" data-vue="deck">${ico("liste")}Le deck</button>
-      <button type="button" data-vue="carte">${ico("cartes")}Une carte</button>
+    <div class="cb-tete">
+      <div class="segments ecrit" role="group">
+        <button type="button" data-vue="deck">${ico("liste")}Le deck</button>
+        <button type="button" data-vue="carte">${ico("cartes")}Une carte</button>
+      </div>
+      ${PARTAGE ? "" : `<a class="btn btn-accent cb-sugg" href="#/deck/${enc(d.id)}/suggestions/combos">${ico("chercher")}Trouver d'autres combos</a>`}
     </div>
     <div id="cb-vue"></div>`;
   if (PARTAGE) carte = null;                     // page partagée : les combos du deck seulement
@@ -3126,6 +3397,7 @@ const RCH_RARETES = [["M", "Mythique"], ["R", "Rare"], ["U", "Inhabituelle"], ["
 const RCH_TRIS = [["couleur", "Couleur"], ["nom", "Nom VO"], ["nomfr", "Nom VF"], ["type", "Type"], ["cout", "Coût"], ["prix", "Prix"],
   ["pop", "Popularité"], ["date", "Nouveautés"]];
 const RCH_TRI_DESC = { date: true };                 // sens naturel : les plus récentes d'abord
+const RCH_TRI_DECK = [["pertinence", "Pertinence"]];   // avec un deck lié : son thème, puis la popularité (suggestions.py)
 // fonctions proposées d'un clic ; les autres (4 600 étiquettes de Scryfall Tagger) se cherchent dans le champ
 const FN_RAPIDES = ["ramp", "pioche", "tuteur", "spot", "balayage", "contresort", "recursion", "reanimation", "sacrifice", "mort",
   "jetons", "celerite", "burn", "defausse", "wheel", "protection", "blink"];
@@ -3969,7 +4241,7 @@ function rendreResultats(z, r) {
       <div class="rch-outils">
         <div class="segments" role="group" aria-label="Affichage">${[["liste", "Liste"], ["images", "Images"]].map(([k, l]) =>
           `<button type="button" data-vue="${k}" class="${(k === "images") === vueImages ? "actif" : ""}" aria-pressed="${(k === "images") === vueImages}">${l}</button>`).join("")}</div>
-        <label class="petit muet">Trier par <select class="champ champ-petit" id="rch-tri">${RCH_TRIS.map(([k, l]) => `<option value="${k}" ${c.ordre === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+        <label class="petit muet">Trier par <select class="champ champ-petit" id="rch-tri">${[...RCH_TRIS, ...(rch.deck ? RCH_TRI_DECK : [])].map(([k, l]) => `<option value="${k}" ${c.ordre === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
         <button class="btn btn-petit" id="rch-sens" title="Inverser l'ordre">${sens === "desc" ? "↓" : "↑"}</button>
       </div>
     </div>
@@ -4296,7 +4568,7 @@ function ficheRecherche(i, ctx = null) {
         a.disabled = true;
         const res = await ajouterRecherche(x, { maybe: dest === "maybe" && x.dans !== "maybe", tags, n: Math.max(1, +($("#rf-n", b) || {}).value || 1),
           edition: x.versionChoisie ? editionVersion(x.versionChoisie) : null, deck: d });
-        if (res) ficheRecherche(i, ctx); else a.disabled = false;
+        if (res) { ficheRecherche(i, ctx); if (ctx && ctx.apres) ctx.apres(res); } else a.disabled = false;      // apres : la liste d'où vient la fiche
       }
     });
     $("#rf-tags", b)?.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); $('[data-act="ajouter"]', b).click(); } });

@@ -898,7 +898,12 @@ def chercher(p, deck=None):
         tests.append(lambda x: dans.get(x["_cle"]) not in ("deck", "commandant"))
     res = [x for x in b["cartes"] if all(t(x) for t in tests)]
     ordre = p.get("ordre") or "couleur"
-    res.sort(key=TRIS.get(ordre, TRIS["couleur"]), reverse=(p.get("sens") == "desc"))
+    if ordre == "pertinence" and deck:               # pour le deck lié : son thème, puis la popularité (suggestions.py)
+        import suggestions
+        notes = suggestions.pertinences(deck)
+        res.sort(key=lambda x: (-notes.get(x["_cle"], 0), x["rk"] is None, x["rk"] or 0), reverse=(p.get("sens") == "desc"))
+    else:
+        res.sort(key=TRIS.get(ordre, TRIS["couleur"]), reverse=(p.get("sens") == "desc"))
     total = len(res)
     jour = ic.aujourdhui()
     if p.get("versions") == "1":                     # « Toutes les versions » : une ligne par impression

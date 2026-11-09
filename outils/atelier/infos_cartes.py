@@ -351,6 +351,24 @@ def est_gc(nom):
     return nom in gc or _cle(nom) in {_cle(g) for g in gc}
 
 
+# ---------------------------------------------------------------- Universes Beyond
+def universes_beyond(force=False):
+    """Cartes créées pour Universes Beyond (Marvel, Final Fantasy…), sans les cartes de Magic rééditées dans ces produits
+    (Sol Ring) : les suggestions les signalent. Une vingtaine de pages Scryfall, rafraîchies chaque semaine."""
+    cache = _charge()
+    ub = cache.get("ub") or {}
+    if force or not ub.get("noms") or time.time() - ub.get("maj", 0) > 7 * 86400:
+        noms, r = [], get("https://api.scryfall.com/cards/search", {"q": "is:ub not:reprint", "unique": "cards"})
+        while r:
+            noms += [c["name"] for c in r.get("data", [])]
+            r = get(r["next_page"]) if r.get("has_more") else None
+        if noms:
+            with _verrou:
+                cache["ub"] = dict(noms=sorted(noms), maj=time.time())
+            _sauve()
+    return cache.get("ub") or {}
+
+
 # ---------------------------------------------------------------- recherche pour ajouter une carte
 def chercher(texte):
     """Cartes dont le nom (anglais ou français) contient le texte : [{nom, fr, cout, type, image, gc, prix?}].
@@ -405,6 +423,7 @@ def mise_a_jour(noms, force_prix=False):
         infos(noms)
         etat.update(tache="Game Changers", fait=0, total=1)
         game_changers()
+        universes_beyond()
         noms_francais(noms)
         rafraichir_prix(noms, force=force_prix)
     except Exception as e:                       # pas de réseau, Scryfall indisponible : l'Atelier marche avec le cache

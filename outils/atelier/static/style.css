@@ -920,3 +920,36 @@ button.badge:hover { box-shadow: inset 0 0 0 1px currentColor; }
   .rch-liste.cl-table .rch-prix { align-self: center; }
 }
 @media (max-width: 600px) { .opt-ligne, .cl-outils { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---- onglet Suggestions : les groupes et Liste | Images, les filtres, puis la liste du classeur avec une colonne Intérêt */
+.sg-tete { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1rem; margin-bottom: .6rem; }
+.sg-tete .segments { flex-wrap: wrap; }
+.sg-filtres { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin-bottom: .9rem; }
+.sg-filtres input[type="search"] { flex: 0 1 13rem; min-width: 0; }
+.sg-filtres select { width: auto; }
+.sg-prix { display: inline-flex; align-items: center; gap: .3rem; color: var(--texte-2); }
+.sg-prix .champ { width: 5.5rem; }
+.sg-n { color: var(--texte-2); font-variant-numeric: tabular-nums; margin-left: .1rem; }
+.actif > .sg-n { color: inherit; }
+.sg-note { grid-area: qte; align-self: start; padding-top: .3rem; }
+.sg-jauge { display: inline-flex; gap: 3px; }
+.sg-jauge i { width: 6px; height: 14px; border-radius: 2px; background: var(--bord); }
+.sg-jauge i.plein { background: var(--accent); }
+/* onglet Combos : Le deck | Une carte, et à droite « Trouver d'autres combos » (Suggestions › Combos) */
+.cb-tete { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem 1rem; margin-bottom: 1rem; }
+.cb-sugg { text-decoration: none; }
+/* « Combo avec … » : l'étiquette déplie l'explication de Commander Spellbook */
+.sg-combo { margin-bottom: .35rem; }
+.sg-puce { display: inline-flex; align-items: center; gap: .3rem; margin: 0; font-size: .78rem; line-height: 1.5; padding: 0 .55rem;
+  border-radius: 999px; color: var(--texte); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+summary.sg-puce { list-style: none; cursor: pointer; color: var(--texte); }
+summary.sg-puce::-webkit-details-marker { display: none; }
+summary.sg-puce::after { content: "▸"; color: var(--accent); transition: transform .15s; }
+.sg-combo[open] > summary.sg-puce::after { transform: rotate(90deg); }
+summary.sg-puce:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.sg-combo-bloc { margin: .45rem 0 .2rem; padding: .5rem .75rem; border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0;
+  background: var(--surface); font-size: .9rem; }
+.sg-combo-bloc p { margin: .3rem 0 0; }
+.sg-combo-bloc .badge { margin-left: .3rem; }
+.sg-ecartees { margin-top: 1.2rem; }
+.sg-ecartees ul { list-style: none; padding: 0; margin: .4rem 0 0; display: flex; flex-direction: column; gap: .15rem; font-size: .9rem; }

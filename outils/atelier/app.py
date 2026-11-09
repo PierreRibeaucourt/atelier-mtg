@@ -500,6 +500,21 @@ def api_marquer(deck):
     return jsonify(possedees=decks.marquer(deck, request.get_json().get("possedees", {})))
 
 
+@app.get("/api/decks/<path:deck>/suggestions")
+def api_suggestions(deck):
+    """Cartes à proposer pour le deck : thème, combos à une carte près, classeur (base locale)."""
+    import suggestions
+    return jsonify(suggestions.calculer(deck))
+
+
+@app.post("/api/decks/<path:deck>/suggestions/ecarter")
+def api_suggestions_ecarter(deck):
+    """{nom, ecarter} : « Ne plus proposer » cette carte pour ce deck (ecarter=false la repropose)."""
+    import suggestions
+    d = request.get_json()
+    return jsonify(ecartees=suggestions.ecarter(deck, d["nom"], d.get("ecarter", True)))
+
+
 @app.get("/api/decks/<path:deck>/partage")
 def api_partage(deck):
     """Page partagée du deck sur GitHub Pages : {url, date}, ou {} s'il n'est pas partagé."""
