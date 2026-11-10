@@ -3877,16 +3877,22 @@ const DEPOT_ATELIER = "https://github.com/PierreRibeaucourt/atelier-mtg";
 const CAPTURES_ATELIER = "https://pierreribeaucourt.github.io/decks/a-propos/";
 // pour qui n'a pas encore d'assistant IA : Claude Code dans l'application de bureau, sans terminal (guide en français)
 const CLAUDE_BUREAU = "https://code.claude.com/docs/fr/desktop-quickstart";
-const MODULES_ATELIER = [
+// [capture, titre, texte] ; « Les bases » : ce qu'on attend de tout gestionnaire de decks
+const MODULES_BASES = [
   ["decks", "Vos decks, à votre façon", "Créez, importez et éditez vos decks comme partout, avec une vue personnalisable : liste ou visuel, taille des cartes, rangement par type, par tag ou par fonction."],
-  ["suggestions", "Suggestions de cartes", "Des cartes proposées pour votre deck, d'après son commandant et les cartes déjà dedans : celles qui suivent ses thèmes, celles qui complètent une combo, explication comprise, et celles qui attendent dans votre classeur. Toujours dans vos couleurs et votre budget, triées par intérêt, avec des filtres par type, fonction, coût et prix. Le calcul se fait sans IA."],
-  ["versions", "Versions et historique", "Chaque modification est gardée. Enregistrez des versions, comparez deux listes, revenez en arrière."],
-  ["statistiques", "Statistiques et base de mana", "Courbe de mana, types, fonctions des cartes et surtout la répartition des sources de couleur : elle compte les terrains et les cartes de ramp, et dit si chaque couleur est confortable."],
-  ["combos", "Combos", "Les combos du deck sont repérées automatiquement, en croisant plusieurs sources : MTGPics (la base de Magic-Ville) et Commander Spellbook."],
-  ["bracket", "Bracket", "Le bracket est estimé automatiquement selon les règles officielles : Game Changers, combos infinies à deux cartes, tuteurs… et comparé à l'estimation de Commander Spellbook."],
-  ["discussion", "Discussion avec Claude", "Facultative, à droite de l'écran : Claude voit vos decks et tout ce que montre l'Atelier (statistiques, suggestions, combos, bracket, classeur), et s'appuie sur des repères de construction reconnus. Il aide à catégoriser les cartes, faire un cut, chercher des idées ou vérifier une interaction. Aucune clé d'API à créer : elle passe par Claude Code et votre abonnement Claude payant (Pro ou plus), dont elle consomme simplement l'usage normal."],
-  ["jouer", "Table de jeu", "Jouez vos decks en solo pour tester les mains de départ et les premiers tours : pioche, mulligan, jetons, marqueurs, planeswalkers, tout au clic ou au glisser."],
   ["recherche", "Recherche avancée", "Une recherche multicritère comme celle de Magic-Ville, avec en plus un filtre de prix Cardmarket et une catégorisation automatique des cartes : ramp, pioche, tuteur, removal…"],
+  ["jouer", "Table de jeu", "Jouez vos decks en solo pour tester les mains de départ et les premiers tours : pioche, mulligan, jetons, marqueurs, planeswalkers, tout au clic ou au glisser."],
+  ["versions", "Versions et historique", "Chaque modification est gardée. Enregistrez des versions, comparez deux listes, revenez en arrière."],
+];
+// « Ce qui fait la différence » : ce que les autres outils n'ont pas, du plus marquant au moins marquant
+const MODULES_ATOUTS = [
+  ["simulateur", "Simulateur de parties", "Un simulateur multijoueur joue des centaines de parties contre trois adversaires types (aggro, contrôle, jetons, combo…) pour mesurer la vitesse et la régularité de votre deck : taux de victoire, causes de défaite, dégâts par source. Deux versions du deck jouent les mêmes parties : on voit si un changement aide vraiment."],
+  ["bracket", "Bracket", "Le bracket est estimé automatiquement selon les règles officielles : Game Changers, combos infinies à deux cartes, tuteurs… et comparé à l'estimation de Commander Spellbook."],
+  ["statistiques", "Statistiques et base de mana", "Courbe de mana, types, fonctions des cartes et surtout la répartition des sources de couleur : elle compte les terrains et les cartes de ramp, et dit si chaque couleur est confortable."],
+  ["suggestions", "Suggestions de cartes", "Des cartes proposées pour votre deck, d'après son commandant et les cartes déjà dedans : celles qui suivent ses thèmes, celles qui complètent une combo, explication comprise, et celles qui attendent dans votre classeur. Toujours dans vos couleurs et votre budget, triées par intérêt, avec des filtres par type, fonction, coût et prix. Le calcul se fait sans IA."],
+  ["budget", "Prix Cardmarket et budget", "Le prix indicatif Cardmarket du jour pour chaque carte et chaque deck, avec une alerte au-delà de votre budget par carte. Les cartes qui vous manquent se copient au format des listes de souhaits de Cardmarket : collez-les sur le site, il calcule le panier."],
+  ["combos", "Combos", "Les combos du deck sont repérées automatiquement, en croisant plusieurs sources : MTGPics (la base de Magic-Ville) et Commander Spellbook."],
+  ["discussion", "Discussion avec Claude", "Facultative, à droite de l'écran : Claude voit vos decks et tout ce que montre l'Atelier (statistiques, suggestions, combos, bracket, classeur), et s'appuie sur des repères de construction reconnus. Il aide à catégoriser les cartes, faire un cut, chercher des idées ou vérifier une interaction. Aucune clé d'API à créer : elle passe par Claude Code et votre abonnement Claude payant (Pro ou plus), dont elle consomme simplement l'usage normal."],
 ];
 // les questions des visiteurs (joueurs experts, débutants, non-informaticiens), repliées ; une réponse en HTML commence par « < »
 const FAQ_ATELIER = [
@@ -3948,6 +3954,10 @@ function vueAPropos(installation = false) {
   const capture = (f, alt) => `<img src="${PARTAGE ? CAPTURES_ATELIER : "/a-propos/"}${f}.webp" data-f="${f}" alt="${esc(alt)}"`;
   const consigne = `Installe et lance l'Atelier MTG depuis ${(PARTAGE && PARTAGE.atelier || DEPOT_ATELIER).replace("https://", "")}`;
   const fonction = (titre, texte) => `<div class="ap-carte"><h3>${titre}</h3><p>${texte}</p></div>`;
+  const modules = (liste) => liste.map(([f, titre, texte]) => `<section class="ap-module">
+        <h3>${esc(titre)}</h3><p>${esc(texte)}</p>
+        <figure>${capture(f, titre)} loading="lazy"></figure>
+      </section>`).join("");
   vue.classList.add("vue-pleine");
   vue.innerHTML = `
     <header class="ap-tete">
@@ -3972,17 +3982,15 @@ function vueAPropos(installation = false) {
         des decks Magic: The Gathering en Commander. Pas de publicité, aucun compte en ligne, pas de données hébergées sur un
         serveur distant : tout s'exécute directement sur votre ordinateur.</p>
 
+      <h2>Les bases : un outil complet</h2>
+      ${modules(MODULES_BASES)}
+
       <h2>Ce qui fait la différence</h2>
-      ${MODULES_ATELIER.map(([f, titre, texte]) => `<section class="ap-module">
-        <h3>${esc(titre)}</h3><p>${esc(texte)}</p>
-        <figure>${capture(f, titre)} loading="lazy"></figure>
-      </section>`).join("")}
+      ${modules(MODULES_ATOUTS)}
 
       <h2>Et aussi</h2>
       <div class="ap-grille">
         ${fonction("Import en un collage", "Une liste copiée depuis Moxfield, Archidekt ou MTG Arena devient un deck, rangé par catégories.")}
-        ${fonction("Prix et budget", "Prix indicatif Cardmarket du jour pour chaque carte et chaque deck, avec une alerte au-delà de votre budget par carte.")}
-        ${fonction("Simulations", "Un simulateur multijoueur joue des centaines de parties pour mesurer la régularité d'un deck et comparer deux versions.")}
         ${fonction("Partage simplifié", "Publication en un clic d'une page de présentation légère, comme celle-ci, à partager avec votre groupe de jeu.")}
       </div>
 

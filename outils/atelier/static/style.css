@@ -827,7 +827,7 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .ap-signature { font-size: .85rem; color: var(--texte-2); margin-top: -.3rem !important; }
 .ap-sources, .ap-principes { padding-left: 1.2rem; }
 .ap-sources li, .ap-principes li { margin: .35rem 0; }
-.ap-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .7rem; }
+.ap-grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .7rem; }   /* auto-fit : peu de cartes = toute la largeur */
 .ap-carte { background: var(--surface); border: 1px solid var(--bord); border-radius: var(--rayon); padding: .8rem .95rem; }
 .ap-carte:last-child:nth-child(3n+1) { grid-column: 1 / -1; }      /* seule sur sa ligne : toute la largeur */
 .ap-carte h3 { margin: 0 0 .25rem; font-size: .95rem; }
