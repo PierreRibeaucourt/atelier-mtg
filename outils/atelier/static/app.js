@@ -625,7 +625,8 @@ async function route() {
     else if (parts[0] === "a-propos") vueAPropos(parts[1] === "installation");
     else if (PARTAGE && PARTAGE.page === "a-propos" && (!parts[0] || parts[0] === "installation")) vueAPropos(parts[0] === "installation");
     else if (PARTAGE && parts[0] === "recherche") vueRechercheVitrine();
-    else if (PARTAGE && PARTAGE.deck) await vueDeck(PARTAGE.deck, (parts[0] === "deck" && parts[2]) || "liste");
+    else if (PARTAGE && PARTAGE.deck) await vueDeck(PARTAGE.deck, (parts[0] === "deck" && parts[2]) || "liste",
+      parts[0] === "deck" && parts[2] === "suggestions" && parts[3] ? parts[3] : null);   // « Trouver d'autres combos »
     else if (PARTAGE && parts[0] === "deck" && parts[1]) location.replace(lienDeck(decodeURIComponent(parts[1])));
     else if (parts[0] === "recherche") await vueRecherche(new URLSearchParams(qs || ""));
     else if (!PARTAGE && parts[0] === "options") await vueOptions();
@@ -942,7 +943,7 @@ function modaleNouveauDeck() {
 }
 
 // ------------------------------------------------------------------ page d'un deck
-const ONGLETS = [["liste", "Liste"], ...(PARTAGE ? [] : [["suggestions", "Suggestions"]]),          // la base de cartes est sur ce PC
+const ONGLETS = [["liste", "Liste"], ["suggestions", "Suggestions"],      // en page partagée : figées, sans le classeur
   ["stats", "Statistiques"], ["combos", "Combos"], ["versions", "Versions"], ["bracket", "Bracket"], ["simulation", "Simulation"],
   ...(PARTAGE ? [] : [["achats", "Achats"]])];                    // ce que j'ai et ce qu'il me manque : reste sur ce PC
 ICONES.achats = ICONES.panier;
@@ -997,7 +998,7 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
   if (onglet === "simulation") return ongletSimulation(contenu, d, extra);
   if (onglet === "versions" || onglet === "historique") return ongletVersions(contenu, d);
   if (onglet === "achats" && !PARTAGE) return ongletAchats(contenu, d);
-  if (onglet === "suggestions" && !PARTAGE) return ongletSuggestions(contenu, d, extra);
+  if (onglet === "suggestions") return ongletSuggestions(contenu, d, extra);
   ongletListe(contenu, d);
 }
 
@@ -1016,7 +1017,8 @@ async function copierListe(fmt, lib) {
 // thème du deck, combos à une carte près, classeur ; présentées comme les résultats de la recherche,
 // avec une colonne Intérêt (un clic sur un en-tête trie, un second inverse), en liste ou en images
 ICONES.suggestions = '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.1v.1h5v-.1c0-.8.4-1.6 1.1-2.1A6 6 0 0 0 12 3z"/>';
-const GROUPES_SUGG = [["theme", "Thème"], ["combos", "Combos"], ["classeur", "Classeur"], ["tout", "Tout"]];
+// le classeur reste sur ce PC : pas de groupe Classeur dans une page partagée
+const GROUPES_SUGG = [["theme", "Thème"], ["combos", "Combos"], ...(PARTAGE ? [] : [["classeur", "Classeur"]]), ["tout", "Tout"]];
 const COLONNES_SUGG = [["couleur", "Coul."], ["nom", "Nom VO"], ["nomfr", "Nom VF"], ["type", "Type"], ["ccm", "Coût"], ["note", "Intérêt"], ["prix", "Prix"]];
 const TRI_SUGG_DESC = { note: true };                      // sens naturel : les plus intéressantes d'abord
 const TRI_SUGG = {
@@ -1043,6 +1045,7 @@ const badgesSugg = (x, d) => [
 
 function actionsSugg(x, images = false) {                  // en images : « Écarter » en icône, pour tenir sous la carte
   if (x.dans === "deck") return `<span class="badge badge-ok">✓ dans le deck</span>`;
+  if (PARTAGE) return x.dans === "maybe" ? `<span class="badge">Maybeboard</span>` : "";       // page partagée : à lire seulement
   return `${x.dans === "maybe" ? `<span class="badge">Maybeboard</span>` : ""}
     <button type="button" class="btn btn-petit" data-act="ajouter" title="Ajouter au deck">${ico("plus")}Deck</button>
     ${x.dans === "maybe" ? "" : `<button type="button" class="btn btn-petit btn-discret" data-act="maybe" title="Ajouter au Maybeboard">${ico("maybe")}Maybe</button>`}
@@ -1101,7 +1104,7 @@ function carteImageSugg(x, i) {
   return `<div class="carte-v rch-carte-v" data-i="${i}">
     <button type="button" class="pile" data-act="ouvrir" aria-label="${esc(x.nom)} : fiche">${imageCarte({ petite: x.petite, image: x.image, nom: x.nom }, "recto")}${marques ? `<span class="marques">${marques}</span>` : ""}</button>
     <div class="legende-v"><span class="nom-v" title="${esc(x.nom + (x.fr && x.fr !== x.nom ? " — " + x.fr : ""))}">${esc(x.fr || x.nom)}</span><span class="prix-v ${cher ? "cher" : ""}">${prixRch(x)}</span></div>
-    ${x.dans === "deck" ? "" : `<div class="rch-actions-v">${actionsSugg(x, true)}</div>`}
+    ${x.dans === "deck" || PARTAGE ? "" : `<div class="rch-actions-v">${actionsSugg(x, true)}</div>`}
   </div>`;
 }
 
@@ -3110,7 +3113,7 @@ async function ongletCombos(el, d, carte = null) {
         <button type="button" data-vue="deck">${ico("liste")}Le deck</button>
         <button type="button" data-vue="carte">${ico("cartes")}Une carte</button>
       </div>
-      ${PARTAGE ? "" : `<a class="btn btn-accent cb-sugg" href="#/deck/${enc(d.id)}/suggestions/combos">${ico("chercher")}Trouver d'autres combos</a>`}
+      <a class="btn btn-accent cb-sugg" href="#/deck/${enc(d.id)}/suggestions/combos">${ico("chercher")}Trouver d'autres combos</a>
     </div>
     <div id="cb-vue"></div>`;
   if (PARTAGE) carte = null;                     // page partagée : les combos du deck seulement
@@ -4528,7 +4531,7 @@ function ficheRecherche(i, ctx = null) {
         ${v ? "" : boutonVerso(x.image_dos ? { image: x.image_dos, nom: "", type: "" } : null)}
         <div class="fc-version">
           ${v ? `<span class="petit muet">${esc(v.edition)}${v.annee ? " · " + esc(v.annee) : ""}${v.lang === "fr" ? " · en français" : ""}</span>` : x.edition ? `<span class="petit muet">${esc(x.edition.nom)} · ${esc(x.edition.annee)}</span>` : ""}
-          <button type="button" class="lien-discret" data-act="version">${x.versions > 1 ? `${x.versions} versions` : "Changer la version"}</button>
+          <button type="button" class="lien-discret ecrit" data-act="version">${x.versions > 1 ? `${x.versions} versions` : "Changer la version"}</button>
         </div></div>
       <div class="fc-infos">
         <div class="fc-tete">
@@ -4543,9 +4546,9 @@ function ficheRecherche(i, ctx = null) {
         <div id="rf-assemble"></div>
         ${x.texte_fr || x.texte ? `<div class="texte fs-texte">${texte(x.texte_fr || x.texte)}</div>` : ""}
         ${x.texte_fr && x.texte ? `<details class="petit"><summary>Texte anglais</summary><div class="fs-texte" style="margin-top:.4rem">${texte(x.texte)}</div></details>` : ""}
-        ${d ? blocAjoutRch(x, d) : ""}
+        ${d && !PARTAGE ? blocAjoutRch(x, d) : ""}
         <div class="fc-liens">
-          ${d ? `<a href="#/deck/${enc(d.id)}/combos/${enc(x.nom)}">${ico("combos")}Combos avec cette carte</a>` : ""}
+          ${d && !PARTAGE ? `<a href="#/deck/${enc(d.id)}/combos/${enc(x.nom)}">${ico("combos")}Combos avec cette carte</a>` : ""}
           <a href="${esc(lienCardmarket(x.nom))}" id="rf-cardmarket" target="_blank" rel="noopener">${ico("panier")}Cardmarket ↗</a>
           <a href="${esc(lienGatherer(x.nom))}" id="rf-gatherer" target="_blank" rel="noopener">${ico("livre")}Gatherer ↗</a>
         </div>

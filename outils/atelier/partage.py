@@ -1,8 +1,8 @@
 """Partager un deck : une copie de sa page, à consulter seulement, publiée sur GitHub Pages.
 
 La page reprend l'interface de l'Atelier (static/) avec les réponses de l'API figées dans donnees.js :
-liste, visuel, fiches des cartes, statistiques, combos du deck, versions, bracket et rapports de simulation.
-Rien d'autre ne part : ni les discussions, ni les autres decks.
+liste, visuel, fiches des cartes, statistiques, suggestions (thème et combos), combos du deck, versions, bracket et
+rapports de simulation. Rien d'autre ne part : ni les discussions, ni les autres decks, ni le classeur.
 
 Les pages sont rangées dans « Partage Atelier/ », un dépôt git à part (hors du dépôt de l'Atelier), poussé vers
 le dépôt « decks » du même compte GitHub que l'Atelier, avec la même identité git. Adresse d'un deck :
@@ -193,6 +193,13 @@ def capturer(deck, get):
         prendre(racine + "/simulations/" + r["fichier"])
     prendre("/api/jouer/jetons", {"deck": deck})             # pour « Jouer » (dossier jouer/ de la page)
     prendre("/api/recherche/fonctions")                      # le formulaire de recherche, montré en vitrine
+    # suggestions : thème et combos seulement. Le classeur reste privé : ni son groupe, ni les exemplaires possédés ;
+    # les cartes écartées non plus.
+    sg = prendre(racine + "/suggestions")
+    if sg:
+        sg = dict(ecartees=[], cartes=[dict(x, groupes=[g for g in x["groupes"] if g != "classeur"], classeur=0)
+                                       for x in sg["cartes"] if any(g != "classeur" for g in x["groupes"])])
+        api[_cle(racine + "/suggestions")] = sg
 
     # versions : chaque liste, pour comparer deux versions dans la page (toutes les paires ne tiennent pas en fichier)
     listes = {}
@@ -212,7 +219,9 @@ def capturer(deck, get):
 
     # cartes citées : aperçu au survol des noms qu'on peut croiser dans la page
     dans = {c["nom"] for c in d["cartes"]}
-    cites = dans | set(noms_v) | {n for c in (cb or {}).get("combos", []) for n in c["cartes"]} | set((b or {}).get("gc_liste") or [])
+    suggerees = {n for x in (sg or {}).get("cartes", []) for n in [x["nom"], *(m for c in x.get("combos", []) for m in c["cartes"])]}
+    cites = (dans | set(noms_v) | {n for c in (cb or {}).get("combos", []) for n in c["cartes"]} | set((b or {}).get("gc_liste") or [])
+             | suggerees)
     import recherche
     nc = recherche.noms_cites()
     if nc:
