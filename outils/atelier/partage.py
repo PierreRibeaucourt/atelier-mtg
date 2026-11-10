@@ -27,6 +27,7 @@ from collections import Counter
 import decks
 import github
 import infos_cartes as ic
+from version import __version__
 
 ICI = os.path.dirname(os.path.abspath(__file__))
 STATIQUE = os.path.join(ICI, "static")
@@ -404,7 +405,6 @@ def _page(dossier, donnees, entete):
     entete : titre, description, url (adresse absolue de la page), image (adresse absolue de partage.jpg ou None), alt ;
     et pour une page à montrer aux moteurs de recherche : indexer, tete (lignes HTML en plus dans <head>)."""
     import reglages
-    from version import __version__
     os.makedirs(dossier, exist_ok=True)
     for f in ("app.js", "style.css"):
         shutil.copyfile(os.path.join(STATIQUE, f), os.path.join(dossier, f))
@@ -575,7 +575,7 @@ def construire(deck, get):
         titre=f"{d['titre']} : {genre}" + (f", par {auteur}" if auteur else ""), description=description, url=url,
         image=image and url + image, alt=f"{d['titre']} : carte de {_liste(cmds) or 'son commandant'}, couleurs et chiffres du deck"))
     _page_jouer(dossier)
-    reg[deck] = dict(slug=slug, date=donnees["date"],
+    reg[deck] = dict(slug=slug, date=donnees["date"], version=__version__,       # version : voir a_republier()
                      resume={k: v for k, v in d.items() if k not in ("cartes", "categories", "erreur_sim")},
                      cartes=[[c["nom"], c["info"].get("fr") or ""] for c in d["cartes"]])
     _ecrire(REGISTRE, json.dumps(reg, ensure_ascii=False, indent=1))
@@ -617,21 +617,34 @@ def derniere_modif(deck):
 
 
 def a_republier(maintenant=None):
-    """Les decks partagés modifiés depuis leur publication, au calme depuis CALME secondes, sans échec trop récent."""
+    """Les decks partagés à republier, sans échec trop récent : modifiés depuis leur publication (au calme depuis CALME
+    secondes), ou publiés par une autre version de l'Atelier (ou avant qu'elle soit notée), pour que leur page ait
+    l'interface et les liens de celle-ci. Ceux-là attendent que la base de cartes soit chargée : la page s'en sert."""
+    import recherche
     maintenant = maintenant or time.time()
+    base_prete = None
     r = []
     for deck, p in _registre().items():
         if not os.path.isdir(os.path.join(decks.RACINE, deck)):
             continue
         t, e = derniere_modif(deck), _echecs.get(deck)
-        if (t > p["date"] or p.get("a_refaire")) and maintenant - t >= CALME and not (e and maintenant - e[0] < REESSAI):
-            r.append(deck)
+        if e and maintenant - e[0] < REESSAI:
+            continue
+        if t > p["date"] or p.get("a_refaire"):
+            if maintenant - t >= CALME:
+                r.append(deck)
+        elif p.get("version") != __version__:
+            if base_prete is None:
+                base_prete = recherche.etat_base()["prete"]
+            if base_prete:
+                r.append(deck)
     return r
 
 
 def surveiller(get, pause=30):
     """En fond tant que l'Atelier est ouvert : republie la page d'un deck partagé quand on a fini de le modifier,
-    depuis l'Atelier, le Claude de l'Atelier ou un éditeur. Au lancement, rattrape ce qui a changé Atelier fermé."""
+    depuis l'Atelier, le Claude de l'Atelier ou un éditeur. Au lancement, rattrape ce qui a changé Atelier fermé, et
+    après une mise à jour de l'Atelier, republie toutes les pages."""
     while True:
         time.sleep(pause)
         try:
