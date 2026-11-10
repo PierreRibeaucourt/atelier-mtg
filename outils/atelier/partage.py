@@ -402,8 +402,7 @@ def _image_partage(dossier, dessiner):
 def _page(dossier, donnees, entete):
     """index.html, app.js, style.css et donnees.js : une copie de l'interface, figée avec ses données.
     entete : titre, description, url (adresse absolue de la page), image (adresse absolue de partage.jpg ou None), alt ;
-    et pour une page à montrer aux moteurs de recherche : indexer, canonique (une autre adresse que url), tete (lignes
-    HTML en plus dans <head>)."""
+    et pour une page à montrer aux moteurs de recherche : indexer, tete (lignes HTML en plus dans <head>)."""
     import reglages
     from version import __version__
     os.makedirs(dossier, exist_ok=True)
@@ -424,7 +423,7 @@ def _page(dossier, donnees, entete):
     e = {k: att(x) if isinstance(x, str) else x for k, x in entete.items()}
     meta = [f'<title>{e["titre"]}</title>',
             f'<meta name="description" content="{e["description"]}">',
-            f'<link rel="canonical" href="{e.get("canonique") or e["url"]}">']
+            f'<link rel="canonical" href="{e["url"]}">']
     if not e.get("indexer"):
         meta.append('<meta name="robots" content="noindex">')         # pour qui a le lien, pas pour les moteurs de recherche
     meta += ['<meta property="og:type" content="website">',
@@ -471,9 +470,9 @@ def _page_jouer(dossier):
     _ecrire(os.path.join(d, "index.html"), html)
 
 
-# « C'est quoi, l'Atelier MTG ? » : une vraie page (a-propos/), pour que son lien ait son propre aperçu ; son image
-# est sur le site de l'auteur de l'Atelier, avec les captures que montre la page. Chaque site de decks en a une copie,
-# qui renvoie les moteurs de recherche vers la page d'accueil de l'Atelier (site_atelier.py), la même page.
+# « C'est quoi, l'Atelier MTG ? » : la page d'accueil de l'Atelier (site_atelier.py), la même pour tous les sites de
+# decks. Son image et ses captures sont sur le site de decks de l'auteur de l'Atelier, dans a-propos/. Ce dossier, où
+# chaque site avait sa copie de la page, ne garde qu'une redirection vers elle, pour les liens déjà partagés.
 A_PROPOS = "a-propos"
 IMAGE_ATELIER = "https://pierreribeaucourt.github.io/decks/a-propos/atelier.jpg"
 ACCUEIL_ATELIER = "https://pierreribeaucourt.github.io/atelier-mtg/"
@@ -484,12 +483,31 @@ DESCRIPTION_ATELIER = ("Concevoir, tester et partager ses decks Commander : stat
 ALT_ATELIER = "L'Atelier MTG : vos decks Commander, de la liste à la table"
 
 
-def _a_propos(donnees, site):
-    local = os.path.join(DOSSIER, A_PROPOS, "atelier.jpg")         # le site de l'auteur : l'image est là
-    image = f"{site}{A_PROPOS}/atelier.jpg?v={_version(local)}" if os.path.exists(local) else IMAGE_ATELIER
-    _page(os.path.join(DOSSIER, A_PROPOS), dict(donnees, accueil="../", page=A_PROPOS), dict(
-        titre=TITRE_ATELIER, description=DESCRIPTION_ATELIER, url=f"{site}{A_PROPOS}/", image=image, alt=ALT_ATELIER,
-        indexer=True, canonique=ACCUEIL_ATELIER))       # pas noindex : il contredirait la canonique
+def _a_propos():
+    """a-propos/ d'un site qui l'a déjà : la redirection vers la page d'accueil de l'Atelier (avec #installation), sans
+    les fichiers de l'ancienne copie ; les captures de l'auteur restent."""
+    d = os.path.join(DOSSIER, A_PROPOS)
+    if not os.path.isdir(d):
+        return
+    for f in ("app.js", "style.css", "donnees.js"):
+        try:
+            os.remove(os.path.join(d, f))
+        except OSError:
+            pass
+    _ecrire(os.path.join(d, "index.html"), f"""<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>L'Atelier MTG</title>
+  <link rel="canonical" href="{ACCUEIL_ATELIER}">
+  <meta http-equiv="refresh" content="0; url={ACCUEIL_ATELIER}">
+  <script>location.replace({json.dumps(ACCUEIL_ATELIER)} + location.hash);</script>
+</head>
+<body>
+  <p><a href="{ACCUEIL_ATELIER}">L'Atelier MTG</a></p>
+</body>
+</html>
+""")
 
 
 def _accueil(reg, site):
@@ -512,7 +530,7 @@ def _accueil(reg, site):
         description=(f"{n} deck{'s' if n > 1 else ''} Commander : {titres}. Listes, visuels, statistiques, combos "
                      "et table de jeu pour tester chaque deck." if n else "Decks Commander."),
         url=site, image=image and site + image, alt=f"Les commandants des decks {titres}" if n else ""))
-    _a_propos(donnees, site)
+    _a_propos()
     _ecrire(os.path.join(DOSSIER, ".nojekyll"), "")
 
 
