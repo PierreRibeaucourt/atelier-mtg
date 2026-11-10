@@ -823,7 +823,7 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .a-propos h3 { font-size: 1rem; margin: 1.4rem 0 .3rem; }
 .a-propos p { margin: .6rem 0; }
 .a-propos .chapeau { font-size: 1.15rem; line-height: 1.5; color: var(--texte); border-left: 3px solid var(--accent); padding-left: .9rem; margin: .4rem 0 1rem; }
-.a-propos p a:not(.btn), .a-propos li a { color: var(--accent); }
+.a-propos p a:not(.btn), .a-propos li a:not(.btn) { color: var(--accent); }
 .ap-signature { font-size: .85rem; color: var(--texte-2); margin-top: -.3rem !important; }
 .ap-sources, .ap-principes { padding-left: 1.2rem; }
 .ap-sources li, .ap-principes li { margin: .35rem 0; }
@@ -881,9 +881,33 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .ap-zoom { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; padding: 2vh 2vw;
   background: rgba(0,0,0,.86); cursor: zoom-out; }
 .ap-zoom img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
-.ap-consigne { display: flex; align-items: center; gap: .6rem; background: var(--surface-2); border: 1px solid var(--bord); border-radius: 8px;
-  padding: .55rem .6rem .55rem .9rem; }
-.ap-consigne code { flex: 1; min-width: 0; font-size: .9rem; overflow-wrap: anywhere; }
+/* installation : trois façons, une par onglet ; la carte de l'onglet choisi dessous */
+.ap-onglets { display: inline-flex; gap: 4px; padding: 4px; margin-top: .4rem; background: var(--surface); border: 1px solid var(--bord);
+  border-radius: 10px; }
+.ap-onglets [role=tab] { display: inline-flex; align-items: center; gap: .5rem; padding: .5rem 1rem; border: 0; border-radius: 7px;
+  background: none; color: var(--texte-2); font: inherit; font-weight: 600; cursor: pointer; }
+.ap-onglets [role=tab]:hover { color: var(--texte); }
+.ap-onglets [role=tab][aria-selected=true] { background: var(--texte); color: var(--fond); }
+.ap-onglets .ico { width: 1.15em; height: 1.15em; }
+.ap-onglets .ap-logo { fill: currentColor; stroke: none; }
+.ap-install { margin-top: .7rem; background: var(--surface); border: 1px solid var(--bord); border-radius: var(--rayon); padding: 1.1rem 1.3rem 1.3rem; }
+.a-propos .ap-install-pour { margin: 0 0 .9rem; font-size: .85rem; color: var(--texte-2); }
+.ap-install ol { margin: 0; padding-left: 1.25rem; display: grid; gap: .65rem; }
+.ap-install li::marker { color: var(--accent); font-weight: 700; }
+.ap-install li > code { font-size: .88em; }
+.ap-install li .ap-install-action { display: flex; width: fit-content; margin-top: .55rem; }
+.ap-commande { display: flex; align-items: stretch; margin-top: .5rem; border-radius: 8px; overflow: hidden; background: #191714;
+  border: 1px solid var(--bord); }
+.ap-commande code { flex: 1; min-width: 0; align-self: center; padding: .65rem .85rem; color: #f2ede6; font-size: .85rem; line-height: 1.55;
+  white-space: pre-wrap; overflow-wrap: anywhere; }
+.ap-commande button { flex: none; border: 0; padding: 0 .85rem; background: var(--accent); color: var(--accent-texte); font-family: inherit; font-weight: 600; font-size: .85rem;
+  cursor: pointer; }
+.ap-commande button:hover { filter: brightness(1.08); }
+.a-propos .ap-install-sous { margin-top: 1rem; font-size: .9rem; color: var(--texte-2); }
+@media (max-width: 600px) {                        /* téléphone : les trois onglets sur toute la largeur */
+  .ap-onglets { display: flex; }
+  .ap-onglets [role=tab] { flex: 1; justify-content: center; padding: .5rem .4rem; gap: .35rem; font-size: .88rem; }
+}
 #installation { scroll-margin-top: var(--haut-barre, 56px); }        /* bouton « Installer » : le titre sous la barre du haut */
 .ap-depot { white-space: nowrap; }                                   /* l'adresse du dépôt d'un seul tenant */
 /* questions fréquentes : une question par ligne, la réponse se déplie au clic ; le + tourne en × */

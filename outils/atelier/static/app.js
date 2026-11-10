@@ -139,6 +139,7 @@ const ICONES = {
   telecharger: '<path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/>',
   coche: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
   moins: '<path d="M5 12h14"/>',
+  terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7.5 9.5 3 2.5-3 2.5M13 15h4"/>',
   dossier: '<path d="M3.5 7a2 2 0 0 1 2-2h3.8l2 2.5h7.2a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>',
   options: '<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
 };
@@ -3995,22 +3996,49 @@ function vueAPropos(installation = false) {
       </ul>
 
       <h2 id="installation">Installation</h2>
-      <p>L'Atelier s'installe une fois sur votre ordinateur, puis s'ouvre par un raccourci sur le bureau. Il est testé sous
-        Windows ; il devrait marcher aussi sous macOS et Linux.</p>
-      <h3>Windows</h3>
-      <p class="ap-cta"><a class="btn btn-accent" href="${depot}/releases/latest/download/Atelier-MTG-Windows.exe">${ico("telecharger")}Télécharger pour Windows</a></p>
-      <p>Lancez le fichier téléchargé : rien d'autre à installer. Si Windows affiche « Windows a protégé votre ordinateur »,
-        cliquez sur « Informations complémentaires », puis « Exécuter quand même ».</p>
-      <h3>Avec un assistant IA</h3>
-      <p>Sous macOS et Linux, ou pour suivre le code de près : collez cette consigne à un assistant IA qui agit sur votre
-        ordinateur (Claude Code, Cursor, Copilot…). Il installe tout et vous pose trois questions.</p>
-      <div class="ap-consigne"><code>${esc(consigne)}</code>
-        <button type="button" class="btn btn-petit btn-discret" id="ap-copier">${ico("copier")}Copier</button></div>
-      <p>Pas encore d'assistant IA ? Installez <a href="${CLAUDE_BUREAU}" target="_blank" rel="noopener">l'application Claude
-        pour ordinateur</a> (abonnement Pro ou plus), ouvrez son onglet Code, choisissez le dossier où ranger l'Atelier, puis
-        collez-y la consigne.</p>
-      <h3>À la main</h3>
-      <p>Il faut Python 3.10 ou plus récent, et git. Les commandes sont sur GitHub :
+      <p>L'Atelier s'installe une fois sur votre ordinateur, puis s'ouvre par un raccourci sur le bureau. Trois façons de
+        faire, au choix :</p>
+      <div class="ap-onglets" role="tablist" aria-label="Façon d'installer">
+        <button type="button" role="tab" id="ap-o-windows" aria-controls="ap-p-windows"><svg class="ico ap-logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h8.4v8.4H3zM12.6 3H21v8.4h-8.4zM3 12.6h8.4V21H3zM12.6 12.6H21V21h-8.4z"/></svg>Installeur</button>
+        <button type="button" role="tab" id="ap-o-ia" aria-controls="ap-p-ia">${ico("discussion")}Assistant IA</button>
+        <button type="button" role="tab" id="ap-o-main" aria-controls="ap-p-main">${ico("terminal")}À la main</button>
+      </div>
+      <div class="ap-install" role="tabpanel" id="ap-p-windows" aria-labelledby="ap-o-windows">
+        <p class="ap-install-pour">Windows 10 et 11 · rien d'autre à installer</p>
+        <ol>
+          <li>Téléchargez l'installeur :
+            <a class="btn btn-accent ap-install-action" href="${depot}/releases/latest/download/Atelier-MTG-Windows.exe">${ico("telecharger")}Télécharger pour Windows</a></li>
+          <li>Double-cliquez sur le fichier, puis sur <b>Installer</b>. Si Windows affiche <b>Windows a protégé votre
+            ordinateur</b> : <b>Informations complémentaires</b>, puis <b>Exécuter quand même</b>.</li>
+          <li>L'Atelier s'ouvre dans votre navigateur. Pour le rouvrir : raccourci <b>Atelier MTG</b> sur le bureau.</li>
+        </ol>
+      </div>
+      <div class="ap-install" role="tabpanel" id="ap-p-ia" aria-labelledby="ap-o-ia" hidden>
+        <p class="ap-install-pour">Windows, macOS, Linux · il s'occupe de tout</p>
+        <ol>
+          <li>Ouvrez un assistant IA qui agit sur votre ordinateur : Claude Code, Cursor, Copilot… Sinon,
+            <a href="${CLAUDE_BUREAU}" target="_blank" rel="noopener">l'application Claude pour ordinateur</a>
+            (abonnement Pro ou plus), onglet <b>Code</b>.</li>
+          <li>Collez-lui cette consigne :
+            <div class="ap-commande"><code>${esc(consigne)}</code><button type="button" data-copier>Copier</button></div></li>
+          <li>Répondez à ses trois questions : il installe tout et crée le raccourci sur le bureau.</li>
+        </ol>
+      </div>
+      <div class="ap-install" role="tabpanel" id="ap-p-main" aria-labelledby="ap-o-main" hidden>
+        <p class="ap-install-pour">Windows, macOS, Linux · Python et git</p>
+        <ol>
+          <li>Installez <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Python</a> 3.10 ou plus
+            récent, et <a href="https://git-scm.com/downloads" target="_blank" rel="noopener">git</a>.</li>
+          <li>Dans un terminal :
+            <div class="ap-commande"><code>git clone ${depot}.git "Atelier MTG"
+cd "Atelier MTG"
+python installer.py</code><button type="button" data-copier>Copier</button></div></li>
+          <li>Pour rouvrir l'Atelier : raccourci <b>Atelier MTG</b> sur le bureau, ou <code>./atelier.sh</code> sous macOS et
+            Linux.</li>
+        </ol>
+      </div>
+      <p class="ap-install-sous">Les trois donnent le même Atelier, gratuit et open source. Les nouvelles versions s'annoncent
+        dans l'Atelier et s'installent en un clic ; vos decks sont conservés. Code source :
         <a class="ap-depot" href="${depot}" target="_blank" rel="noopener">${depot.replace("https://", "")}</a></p>
 
       <h2>Questions fréquentes</h2>
@@ -4041,9 +4069,38 @@ function vueAPropos(installation = false) {
     };
     if (img.closest(".ap-module")) img.onclick = () => zoomer(img);
   });
-  $("#ap-copier").onclick = async () => {
-    try { await navigator.clipboard.writeText(consigne); toast("Consigne copiée."); } catch (e) { erreur(e); }
+  const onglets = $$(".ap-onglets [role=tab]", vue);
+  const choisir = (o, focus = false) => {
+    onglets.forEach((x) => {
+      const oui = x === o;
+      x.setAttribute("aria-selected", oui);
+      x.tabIndex = oui ? 0 : -1;
+      $("#" + x.getAttribute("aria-controls"), vue).hidden = !oui;
+    });
+    if (focus) o.focus();
   };
+  onglets.forEach((o, i) => {
+    o.onclick = () => choisir(o);
+    o.onkeydown = (ev) => {
+      const d = { ArrowRight: 1, ArrowLeft: -1 }[ev.key];
+      if (d) { ev.preventDefault(); choisir(onglets[(i + d + onglets.length) % onglets.length], true); }
+    };
+  });
+  const plateforme = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "") + " " + navigator.userAgent;
+  choisir($(/Mac|iPhone|iPad|Linux|X11|CrOS/i.test(plateforme) && !/Windows|Android/i.test(plateforme) ? "#ap-o-ia" : "#ap-o-windows", vue));
+  $$("[data-copier]", vue).forEach((b) => b.onclick = async () => {
+    const code = b.previousElementSibling;
+    try {
+      await navigator.clipboard.writeText(code.textContent);
+      b.textContent = "Copié";
+      setTimeout(() => { b.textContent = "Copier"; }, 1800);
+    } catch (_) {                                 // presse-papiers refusé : le texte sélectionné, prêt pour Ctrl+C
+      const r = document.createRange();
+      r.selectNodeContents(code);
+      getSelection().removeAllRanges();
+      getSelection().addRange(r);
+    }
+  });
   // un saut, pas un défilement animé : les captures qui se chargent en chemin le feraient s'arrêter trop tôt
   const aInstallation = () => $("#installation").scrollIntoView();
   $("#ap-installer").onclick = (ev) => { ev.preventDefault(); aInstallation(); };      // même page : sans la redessiner
