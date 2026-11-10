@@ -42,14 +42,14 @@ jobs:
 
       - name: Publication
         if: startsWith(github.ref, 'refs/tags/v')
-        shell: pwsh
+        # bash, pas PowerShell : le message de l'étiquette passe tel quel, accents compris
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          $notes = (git tag -l --format="%(contents)" $env:TAG) -join "`n"
-          ($notes -split "-----BEGIN")[0].Trim() | Out-File -Encoding utf8NoBOM "$env:RUNNER_TEMP\notes.txt"
-          gh release create $env:TAG construction/Atelier-MTG-Windows.exe --verify-tag --title "Atelier MTG $($env:TAG.TrimStart('v'))" --notes-file "$env:RUNNER_TEMP\notes.txt"
+          git tag -l --format='%(contents)' "$TAG" | sed '/-----BEGIN/,$d' > notes.txt
+          gh release create "$TAG" construction/Atelier-MTG-Windows.exe --verify-tag --title "Atelier MTG ${TAG#v}" --notes-file notes.txt
 
       - name: Installeur d'essai
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
