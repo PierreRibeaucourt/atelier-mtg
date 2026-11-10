@@ -29,7 +29,7 @@ PYTHON_URL = f"https://www.python.org/ftp/python/{PYTHON}/python-{PYTHON}-embed-
 PYTHON_SHA256 = "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3"
 # fichiers suivis par git qui ne servent pas à l'Atelier installé
 EXCLUS = (".github/", "installeur/", ".gitattributes", ".gitignore", "installer.py", "atelier.sh", "Atelier MTG.bat",
-          "outils/publier_version.py")
+          "outils/publier_version.py", "outils/atelier/site_atelier.py")
 # le Python embarqué n'ajoute pas le dossier du script à sys.path : on lui donne ceux de l'Atelier (chemins relatifs à ce fichier)
 PTH = "python312.zip\n.\nLib\\site-packages\n..\\outils\\atelier\n..\\outils\n"
 

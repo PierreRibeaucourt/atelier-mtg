@@ -14,7 +14,8 @@ const etat = { decks: [], deck: null, filtre: "" };
 const PARTAGE = window.PARTAGE || null;
 if (PARTAGE) document.documentElement.classList.add("partage");
 // page partagée : à qui sont ces decks (reglages.json « nom », sinon le compte GitHub qui publie)
-const MES_DECKS = PARTAGE && PARTAGE.auteur ? `Decks de ${PARTAGE.auteur}` : "Mes decks";
+// titre_accueil : la page d'accueil de l'Atelier (site_atelier.py), qui n'est le site de decks de personne
+const MES_DECKS = PARTAGE && PARTAGE.titre_accueil || (PARTAGE && PARTAGE.auteur ? `Decks de ${PARTAGE.auteur}` : "Mes decks");
 let versionAtelier = (PARTAGE && PARTAGE.version) || "";       // version.py ; dans l'Atelier, lue par verifierVersion()
 // budget par carte (reglages.json, 5 € par défaut, 0 = pas d'alerte) : les cartes plus chères sont signalées
 const REGLAGES = (PARTAGE && PARTAGE.reglages) || window.REGLAGES || {};

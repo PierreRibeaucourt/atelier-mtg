@@ -401,16 +401,19 @@ def _image_partage(dossier, dessiner):
 
 def _page(dossier, donnees, entete):
     """index.html, app.js, style.css et donnees.js : une copie de l'interface, figée avec ses données.
-    entete : titre, description, url (adresse absolue de la page), image (adresse absolue de partage.jpg ou None), alt."""
+    entete : titre, description, url (adresse absolue de la page), image (adresse absolue de partage.jpg ou None), alt ;
+    et pour une page à montrer aux moteurs de recherche : indexer, canonique (une autre adresse que url), tete (lignes
+    HTML en plus dans <head>)."""
     import reglages
     from version import __version__
     os.makedirs(dossier, exist_ok=True)
     for f in ("app.js", "style.css"):
         shutil.copyfile(os.path.join(STATIQUE, f), os.path.join(dossier, f))
-    donnees = dict(donnees, reglages=reglages.pour_la_page(),         # budget par carte : les cartes chères restent signalées
-                   atelier=depot_atelier(),                           # recherche et discussion en vitrine : où télécharger l'Atelier
-                   auteur=_auteur(),                             # « Decks de … » à la place de « Mes decks »
-                   version=__version__)                               # la version de l'Atelier qui a publié la page
+    donnees = {"reglages": reglages.pour_la_page(),          # budget par carte : les cartes chères restent signalées
+               "atelier": depot_atelier(),                    # recherche et discussion en vitrine : où télécharger l'Atelier
+               "auteur": _auteur(),                           # « Decks de … » à la place de « Mes decks »
+               "version": __version__,                        # la version de l'Atelier qui a publié la page
+               **donnees}                                     # sauf avis contraire (page d'accueil de l'Atelier : sans auteur)
     js = "window.PARTAGE = " + json.dumps(donnees, ensure_ascii=False, separators=(",", ":")) + ";\n"
     _verifier(js)
     _ecrire(os.path.join(dossier, "donnees.js"), js)
@@ -421,14 +424,15 @@ def _page(dossier, donnees, entete):
     e = {k: att(x) if isinstance(x, str) else x for k, x in entete.items()}
     meta = [f'<title>{e["titre"]}</title>',
             f'<meta name="description" content="{e["description"]}">',
-            f'<link rel="canonical" href="{e["url"]}">',
-            '<meta name="robots" content="noindex">',                  # pour qui a le lien, pas pour les moteurs de recherche
-            '<meta property="og:type" content="website">',
-            '<meta property="og:site_name" content="Atelier MTG">',
-            '<meta property="og:locale" content="fr_FR">',
-            f'<meta property="og:url" content="{e["url"]}">',
-            f'<meta property="og:title" content="{e["titre"]}">',
-            f'<meta property="og:description" content="{e["description"]}">']
+            f'<link rel="canonical" href="{e.get("canonique") or e["url"]}">']
+    if not e.get("indexer"):
+        meta.append('<meta name="robots" content="noindex">')         # pour qui a le lien, pas pour les moteurs de recherche
+    meta += ['<meta property="og:type" content="website">',
+             '<meta property="og:site_name" content="Atelier MTG">',
+             '<meta property="og:locale" content="fr_FR">',
+             f'<meta property="og:url" content="{e["url"]}">',
+             f'<meta property="og:title" content="{e["titre"]}">',
+             f'<meta property="og:description" content="{e["description"]}">']
     if e.get("image"):
         meta += [f'<meta property="og:image" content="{e["image"]}">',
                  '<meta property="og:image:type" content="image/jpeg">',
@@ -438,7 +442,9 @@ def _page(dossier, donnees, entete):
                  '<meta name="twitter:card" content="summary_large_image">']
     else:
         meta.append('<meta name="twitter:card" content="summary">')
-    html = (html.replace("<title>Atelier MTG</title>", "\n  ".join(meta))
+    meta += entete.get("tete", [])
+    html = (html.replace('<html lang="fr">', '<html lang="fr" class="partage">')    # barre de page partagée dès l'affichage
+            .replace("<title>Atelier MTG</title>", "\n  ".join(meta))
             .replace('href="/static/style.css"', f'href="style.css?v={v["style.css"]}"')
             .replace('  <script src="/reglages.js"></script>\n', "")
             .replace('<script src="/static/app.js"></script>',
@@ -466,20 +472,24 @@ def _page_jouer(dossier):
 
 
 # « C'est quoi, l'Atelier MTG ? » : une vraie page (a-propos/), pour que son lien ait son propre aperçu ; son image
-# est sur le site de l'auteur de l'Atelier, avec les captures que montre la page
+# est sur le site de l'auteur de l'Atelier, avec les captures que montre la page. Chaque site de decks en a une copie,
+# qui renvoie les moteurs de recherche vers la page d'accueil de l'Atelier (site_atelier.py), la même page.
 A_PROPOS = "a-propos"
 IMAGE_ATELIER = "https://pierreribeaucourt.github.io/decks/a-propos/atelier.jpg"
+ACCUEIL_ATELIER = "https://pierreribeaucourt.github.io/atelier-mtg/"
+TITRE_ATELIER = "L'Atelier MTG : gestionnaire de decks Commander, gratuit et local"
+DESCRIPTION_ATELIER = ("Concevoir, tester et partager ses decks Commander : statistiques et base de mana, combos, "
+                       "bracket, table de jeu, recherche avancée et discussion avec Claude. Gratuit, open source, tout "
+                       "reste sur votre ordinateur.")
+ALT_ATELIER = "L'Atelier MTG : vos decks Commander, de la liste à la table"
 
 
 def _a_propos(donnees, site):
     local = os.path.join(DOSSIER, A_PROPOS, "atelier.jpg")         # le site de l'auteur : l'image est là
     image = f"{site}{A_PROPOS}/atelier.jpg?v={_version(local)}" if os.path.exists(local) else IMAGE_ATELIER
     _page(os.path.join(DOSSIER, A_PROPOS), dict(donnees, accueil="../", page=A_PROPOS), dict(
-        titre="L'Atelier MTG : gestionnaire de decks Commander, gratuit et local",
-        description=("Concevoir, tester et partager ses decks Commander : statistiques et base de mana, combos, bracket, "
-                     "table de jeu, recherche avancée et discussion avec Claude. Gratuit, open source, tout reste sur "
-                     "votre ordinateur."),
-        url=f"{site}{A_PROPOS}/", image=image, alt="L'Atelier MTG : vos decks Commander, de la liste à la table"))
+        titre=TITRE_ATELIER, description=DESCRIPTION_ATELIER, url=f"{site}{A_PROPOS}/", image=image, alt=ALT_ATELIER,
+        indexer=True, canonique=ACCUEIL_ATELIER))       # pas noindex : il contredirait la canonique
 
 
 def _accueil(reg, site):

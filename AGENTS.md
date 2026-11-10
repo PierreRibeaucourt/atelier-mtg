@@ -97,6 +97,8 @@ L'Atelier se met à jour tout seul (`outils/atelier/mise_a_jour.py`). Au lanceme
 
 L'étiquette déclenche GitHub Actions (`.github/workflows/installeur.yml`) : il fabrique l'installeur Windows et le joint à une publication GitHub du même nom, avec les nouveautés de l'étiquette, en quelques minutes. Les Ateliers installés par l'installeur ne voient la version qu'une fois cette publication faite. Pour fabriquer l'installeur sur son PC : `python installeur/construire.py` (il faut Inno Setup 6 : `winget install JRSoftware.InnoSetup`), qui le dépose dans `construction/`.
 
+La page d'accueil de l'Atelier, https://pierreribeaucourt.github.io/atelier-mtg/, est la page « C'est quoi, l'Atelier MTG ? » faite pour les moteurs de recherche : indexable, texte pré-rendu dans le HTML, données structurées et sitemap. GitHub Actions (`.github/workflows/site.yml`) la reconstruit et la publie sur GitHub Pages à chaque envoi sur `main` qui touche `outils/atelier/`. Pour la construire sur son PC (Chrome nécessaire) : `python outils/atelier/site_atelier.py <dossier>`. Les copies de cette page sur les sites de decks (`…/a-propos/`) la désignent comme canonique.
+
 ## Où sont les données
 
 Tout ceci est ignoré par git et ne doit jamais être commité, poussé ni effacé : pas de `git clean -x`, pas de `git reset --hard` qui toucherait à ces dossiers.

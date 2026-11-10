@@ -4,6 +4,8 @@ Une interface locale pour gérer ses decks Magic: The Gathering au format Comman
 
 Tout tourne sur ton PC, à l'adresse http://127.0.0.1:5000. Rien n'est mis en ligne. Gratuit et libre, sous licence MIT.
 
+Présentation et téléchargement : https://pierreribeaucourt.github.io/atelier-mtg/
+
 ## Ce qu'on peut faire
 
 - **Decks.** Créer un deck, vide ou à partir d'une liste Archidekt, Moxfield ou MTG Arena. Copier sa liste (menu « … » du deck) pour Archidekt, Moxfield, MTG Arena, MTGO, en liste simple ou avec les noms français. Le renommer : son historique, ses versions, ses simulations et sa discussion le suivent, et sa page partagée garde son adresse. Le supprimer : il va dans une corbeille d'où on peut le récupérer. Le retrouver parmi des dizaines grâce à la recherche (nom, commandant ou carte contenue), au filtre de couleurs et au raccourci Ctrl+K.
