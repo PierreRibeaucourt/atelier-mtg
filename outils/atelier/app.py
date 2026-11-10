@@ -323,6 +323,34 @@ def api_options_ecrire():
     return api_options()
 
 
+@app.get("/api/github")
+def api_github():
+    """Le compte GitHub connecté (partage sans git), et le compte du partage avec git (reglages.json), s'il y en a un."""
+    import github
+    import reglages
+    return jsonify(compte=github.compte(), git=reglages.github(), disponible=bool(github.CLIENT_ID))
+
+
+@app.post("/api/github/connexion")
+def api_github_connecter():
+    """Demande un code à GitHub : {etat, code, url}. La page le montre et suit GET /api/github/connexion."""
+    import github
+    return jsonify(github.connecter())
+
+
+@app.get("/api/github/connexion")
+def api_github_connexion():
+    import github
+    return jsonify(github.etat_connexion())
+
+
+@app.post("/api/github/deconnexion")
+def api_github_deconnecter():
+    import github
+    github.deconnecter()
+    return api_github()
+
+
 @app.post("/api/ouvrir-dossier")
 def api_ouvrir_dossier():
     """Ouvre le dossier de l'Atelier (decks, classeur, réglages) dans l'explorateur de fichiers."""

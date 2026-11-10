@@ -19,8 +19,8 @@ import urllib.parse
 import urllib.request
 
 URL = f"http://127.0.0.1:{os.environ.get('ATELIER_PORT', '5000')}"
-# lancer Claude depuis Claude, ou redémarrer l'Atelier qui fait tourner la discussion : jamais d'ici
-INTERDITS = ("/api/discussion", "/api/mise-a-jour")
+# lancer Claude depuis Claude, redémarrer l'Atelier qui fait tourner la discussion, toucher à la connexion GitHub : jamais d'ici
+INTERDITS = ("/api/discussion", "/api/mise-a-jour", "/api/github", "/api/ouvrir-dossier")
 
 AIDE = """Ce que montre l'Atelier, en texte. <deck> : nom du dossier (« Deck Kels ») ou une partie du nom (« kels »).
 

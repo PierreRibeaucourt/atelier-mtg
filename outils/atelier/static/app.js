@@ -38,7 +38,7 @@ async function api(chemin, opts = {}) {
   const r = await fetch(chemin, init);
   const type = r.headers.get("content-type") || "";
   const data = type.includes("json") ? await r.json() : await r.text();
-  if (!r.ok) throw new Error((data && data.erreur) || data || r.statusText);
+  if (!r.ok) throw Object.assign(new Error((data && data.erreur) || data || r.statusText), { statut: r.status });
   return data;
 }
 
@@ -1416,11 +1416,57 @@ function modalePartage(d) {
     };
     const publier = async () => {
       zone.innerHTML = `<p class="chargement">Publication…</p>`;
-      try { rendre(await api(`/api/decks/${enc(d.id)}/partage`, { method: "POST" })); toast("Publié : en ligne d'ici une minute.", 4000); }
-      catch (e) { zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
+      try { rendre(await api(`/api/decks/${enc(d.id)}/partage`, { method: "POST" })); toast("Publié : en ligne d'ici une minute ou deux.", 4000); }
+      catch (e) {
+        if (e.statut === 401) {
+          zone.innerHTML = `<p>${esc(e.message)}</p>
+            <div class="gh-action"><button class="btn btn-accent" id="gh-connecter">Se connecter à GitHub</button></div>`;
+          $("#gh-connecter", zone).onclick = () => connexionGithub(zone, publier);
+        }
+        else zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`;
+      }
     };
     const s = await api(`/api/decks/${enc(d.id)}/partage`).catch(() => ({}));
     if (s.url) rendre(s); else publier();
+  }, { focus: false });
+}
+
+// partage sans git : se connecter à GitHub par un code (github.py). Le code s'affiche tout de suite, avec les trois
+// gestes à faire sur github.com ; la page suit GitHub et appelle suite(compte) une fois connecté
+async function connexionGithub(zone, suite) {
+  zone.innerHTML = `<p class="chargement">Demande d'un code à GitHub…</p>`;
+  let c;
+  try { c = await api("/api/github/connexion", { method: "POST", body: {} }); }
+  catch (e) { zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; return; }
+  zone.innerHTML = `<ol class="gh-etapes">
+      <li><p class="gh-code" aria-label="Code de connexion">${esc(c.code)}</p>
+        <a class="btn btn-accent" id="gh-ouvrir" href="${esc(c.url)}" target="_blank" rel="noopener">${ico("copier")}Copier le code et ouvrir GitHub</a></li>
+      <li>Sur GitHub, colle le code (Ctrl+V), puis clique sur « Continue ».</li>
+      <li>Clique sur « Authorize Atelier MTG », puis reviens ici.</li>
+    </ol>
+    <p class="muet petit">Pas encore de compte GitHub ? La page de GitHub propose d'en créer un, gratuitement.</p>
+    <p class="gh-attente" role="status">En attente de GitHub…</p>`;
+  $("#gh-ouvrir", zone).onclick = () => { navigator.clipboard.writeText(c.code).catch(() => {}); };
+  while (zone.isConnected) {
+    await attendre(2000);
+    let e;
+    try { e = await api("/api/github/connexion"); } catch (_) { continue; }
+    if (!zone.isConnected || e.etat === "attente") continue;
+    if (e.etat === "ok") { toast(`Connecté à GitHub : ${e.compte}.`); return suite(e.compte); }
+    zone.innerHTML = `<p>${esc({ refus: "Connexion refusée sur GitHub.", expire: "Le code a expiré." }[e.etat] || e.erreur || "Connexion impossible.")}</p>
+      <div class="gh-action"><button class="btn btn-accent" id="gh-encore">Recommencer</button></div>`;
+    $("#gh-encore", zone).onclick = () => connexionGithub(zone, suite);
+    return;
+  }
+}
+
+// la même chose dans sa propre fenêtre (Options)
+function modaleGithub(suite) {
+  ouvrirModale(`<div class="fc-tete"><h2>Connexion à GitHub</h2>
+      <button class="btn btn-discret btn-icone" id="gh-fermer" aria-label="Fermer">${ico("fermer")}</button></div>
+    <div id="gh-zone"></div>`, (b) => {
+    $("#gh-fermer", b).onclick = fermerModale;
+    connexionGithub($("#gh-zone", b), (compte) => { fermerModale(); suite(compte); });
   }, { focus: false });
 }
 
@@ -1485,7 +1531,7 @@ function optionsGenerales(el, o) {
       <button type="button" class="btn btn-petit btn-discret" id="opt-dossier">${ico("dossier")}Ouvrir le dossier</button></div>
     <label class="opt-ligne"><span>Nom affiché</span><input class="champ" name="nom" maxlength="60" value="${esc(o.nom)}" placeholder="${esc(o.github)}"></label>
     <label class="opt-ligne"><span>Budget par carte</span><span class="opt-euros"><input class="champ" name="budget" inputmode="decimal" value="${budget(o.budget)}" placeholder="${budget(o.budget_defaut)}">€</span></label>
-    <label class="opt-ligne"><span>Compte GitHub</span><input class="champ" name="github" maxlength="39" value="${esc(o.github)}" autocomplete="off" spellcheck="false"></label>
+    <div id="opt-github"></div>
     ${o.demarrage == null ? "" : `<label class="opt-case"><input type="checkbox" name="demarrage" ${o.demarrage ? "checked" : ""}>Lancer l'Atelier au démarrage de Windows</label>`}`;
   el.onchange = async (ev) => {
     const c = ev.target;
@@ -1494,7 +1540,7 @@ function optionsGenerales(el, o) {
       const r = await api("/api/options", { method: "POST", body: { [c.name]: c.type === "checkbox" ? c.checked : c.value } });
       Object.assign(o, r);
       majBudget(r.budget);
-      $('[name="nom"]', el).placeholder = r.github;
+      $('[name="nom"]', el).placeholder = r.github || $('[name="nom"]', el).placeholder;
       toast("Enregistré.");
     } catch (e) { erreur(e); }
     if (c.type === "checkbox") c.checked = !!o.demarrage;
@@ -1502,6 +1548,25 @@ function optionsGenerales(el, o) {
   };
   el.onkeydown = (ev) => { if (ev.key === "Enter" && ev.target.matches("input.champ")) ev.target.blur(); };
   $("#opt-dossier", el).onclick = () => api("/api/ouvrir-dossier", { method: "POST", body: {} }).catch(erreur);
+  ligneGithub($("#opt-github", el), o);
+}
+
+// le compte GitHub où vont les decks partagés : connecté par code (github.py), ou celui du partage avec git (reglages.json)
+async function ligneGithub(el, o) {
+  const g = await api("/api/github").catch(() => ({}));
+  const nom = $('[name="nom"]');
+  if (nom) nom.placeholder = g.compte || o.github || "";
+  if (g.git && !g.compte) {
+    el.innerHTML = `<label class="opt-ligne"><span>Compte GitHub</span><input class="champ" name="github" maxlength="39" value="${esc(o.github)}" autocomplete="off" spellcheck="false"></label>`;
+    return;
+  }
+  el.innerHTML = `<div class="opt-ligne"><span>GitHub</span><span class="opt-github">${g.compte
+    ? `<strong>${esc(g.compte)}</strong><button type="button" class="btn btn-petit btn-discret" id="gh-deconnecter">Se déconnecter</button>`
+    : `<button type="button" class="btn btn-accent btn-petit" id="gh-options">Se connecter à GitHub</button>`}</span></div>`;
+  if (g.compte) $("#gh-deconnecter", el).onclick = async () => {
+    try { await api("/api/github/deconnexion", { method: "POST", body: {} }); ligneGithub(el, o); } catch (e) { erreur(e); }
+  };
+  else $("#gh-options", el).onclick = () => modaleGithub(() => ligneGithub(el, o));
 }
 
 // le classeur, présenté comme les résultats de la recherche : en-têtes Coul. · Nom VO · Nom VF · Type · Coût · Qté · Prix

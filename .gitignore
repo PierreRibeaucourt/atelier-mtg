@@ -6,6 +6,9 @@ Classeur/
 # pages partagées : leur propre dépôt (decks), publié sur GitHub Pages
 Partage Atelier/
 outils/atelier/discussion.json
+# connexion à GitHub pour partager sans git (jeton chiffré) et site où vont les pages
+outils/atelier/connexion_github.dat
+outils/atelier/publication_github.json
 # réglages de cette installation (budget, compte GitHub) : voir outils/reglages.py
 reglages.json
 

@@ -44,7 +44,7 @@ Testé sous Windows. macOS et Linux devraient marcher (Python et Flask sont mult
 Un fichier `installation.json` à la racine le signale. L'installeur (Inno Setup, `installeur/atelier.iss`) met tout dans `%LOCALAPPDATA%\Programs\Atelier MTG`, sans droits d'administrateur : le code, un Python embarqué dans `python\` (avec Flask, Pillow et pystray), puis les decks, le classeur et les réglages que l'Atelier y crée, comme à la racine d'un dépôt. Raccourcis sur le bureau et dans le menu Démarrer ; désinstallation par Paramètres › Applications, qui demande avant d'effacer les decks.
 - Pas de git, pas de `.venv`, pas de pip : ne lance pas `installer.py`. Le Python à utiliser est `python\python.exe` ; dans la discussion, `python` y mène déjà. Son fichier `python312._pth` met `outils/` et `outils/atelier/` dans les chemins de Python.
 - Mises à jour : l'Atelier lit la dernière publication GitHub du dépôt (`installation.json` › `depot`) ; « Mettre à jour » télécharge son installeur et le lance sans fenêtre, puis l'Atelier redémarre. Journal : `%TEMP%\Atelier-MTG-mise-a-jour.log`. Si ça échoue, retélécharger l'installeur et le relancer suffit : il remplace le code et garde les decks.
-- Le partage des decks demande git, à installer à part (`winget install Git.Git`).
+- Le partage des decks passe par la connexion à GitHub depuis l'Atelier (voir « Partager des decks ») : pas besoin de git.
 
 ## Fonctions facultatives
 
@@ -61,7 +61,11 @@ L'Atelier lance Claude Code (`claude -p`) dans le dossier du dépôt : pas de cl
 
 ### Partager des decks (GitHub Pages)
 
-« Partager le deck… » publie une copie en lecture seule de la page du deck dans le dépôt GitHub `decks` de la personne, servi par GitHub Pages : `https://<compte>.github.io/decks/<deck>/`. Mise en place, une seule fois, de préférence avec la CLI GitHub (`gh`, `winget install GitHub.cli` ou `brew install gh`) :
+« Partager le deck… » publie une copie en lecture seule de la page du deck sur GitHub Pages. Il faut un compte GitHub, gratuit.
+
+**Le plus simple : se connecter depuis l'Atelier.** Rien à installer ni à configurer : au premier partage (ou Options › GitHub › « Se connecter »), l'Atelier affiche un code ; la personne le colle sur github.com/login/device (où elle peut créer son compte) et accepte. L'Atelier crée alors son site, le dépôt `<compte>.github.io`, que GitHub publie tout seul, et y envoie les pages par l'API de GitHub, sans git : `https://<compte>.github.io/<deck>/`. Voir `outils/atelier/github.py`. La connexion se limite aux dépôts publics (`public_repo`) ; son jeton reste sur le PC, chiffré par Windows (`outils/atelier/connexion_github.dat`), et ne passe jamais par la page. Si ce site existe déjà pour autre chose, les pages vont dans un dépôt `decks`, dont il faut activer GitHub Pages à la main (le message dit comment).
+
+**Avec git**, pour qui le préfère : le dépôt `decks`, servi à `https://<compte>.github.io/decks/<deck>/`. Mise en place, une seule fois, de préférence avec la CLI GitHub (`gh`, `winget install GitHub.cli` ou `brew install gh`) :
 
 1. `gh auth login`, puis `gh auth setup-git` : git peut alors envoyer vers GitHub en HTTPS.
 2. Une identité git, si `git config --global user.email` ne répond rien :
@@ -73,7 +77,7 @@ L'Atelier lance Claude Code (`claude -p`) dans le dossier du dépôt : pas de cl
 
 Sans `gh` : créer le dépôt public `decks` sur github.com, avec un README, puis Settings › Pages › Deploy from a branch › `main` / `(root)`.
 
-Les pages sont préparées dans le dossier `Partage Atelier/`, un dépôt git à part, ignoré par ce dépôt-ci. Une page publiée est en ligne au bout d'une minute environ.
+Dans les deux cas, les pages sont préparées dans le dossier `Partage Atelier/` (avec git, un dépôt à part), ignoré par ce dépôt-ci. Connecté, l'Atelier publie par l'API même si `reglages.json` a un compte `github`. Une page publiée est en ligne au bout d'une minute environ (quelques minutes pour un site tout neuf).
 
 ## Réglages
 
@@ -115,7 +119,7 @@ Sauvegarder ses decks, c'est copier les dossiers `Deck …`.
 - **Port 5000 déjà pris**, par exemple par le récepteur AirPlay d'un Mac. L'Atelier prend le port libre suivant et ouvre la bonne page. Pour imposer un port : variable d'environnement `ATELIER_PORT`.
 - **La recherche affiche « La base de cartes se construit ».** C'est normal au premier lancement (voir plus haut) : laisse l'Atelier ouvert. En cas d'erreur réseau, le bouton « Relancer » reprend la construction ; ensuite, « Mettre à jour », en bas des résultats, force une mise à jour.
 - **« Claude Code est introuvable » dans la discussion.** Voir « Discussion avec Claude », puis relance l'Atelier.
-- **Le partage échoue.** Le message dit quoi faire : compte absent de `reglages.json`, dépôt `decks` inexistant, accès refusé (`gh auth login`, puis `gh auth setup-git`), identité git manquante.
+- **Le partage échoue.** Le message dit quoi faire. Connecté : reconnecter l'Atelier (Options › GitHub) si la connexion a expiré. Avec git : compte absent de `reglages.json`, dépôt `decks` inexistant, accès refusé (`gh auth login`, puis `gh auth setup-git`), identité git manquante.
 - **Pour vérifier l'installation sans lancer l'interface :** `python installer.py --sans-raccourci`.
 
 ## Règles pour l'assistant
@@ -130,7 +134,7 @@ Sauvegarder ses decks, c'est copier les dossiers `Deck …`.
 - **Organisation du code** :
   - `outils/atelier/app.py`, le serveur et ses routes ;
   - `outils/atelier/static/`, l'interface, en JavaScript sans framework ;
-  - `outils/atelier/*.py`, les modules (decks, prix, bracket, combos, suggestions, recherche, simulation, discussion, partage) ;
+  - `outils/atelier/*.py`, les modules (decks, prix, bracket, combos, suggestions, recherche, simulation, discussion, partage, et github pour la connexion du partage sans git) ;
   - `outils/atelier/demander.py`, l'Atelier en ligne de commande pour les assistants ;
   - `connaissances/`, les repères de construction d'un deck ;
   - `outils/simu*.py`, le simulateur ;

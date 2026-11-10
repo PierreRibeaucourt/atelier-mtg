@@ -4,9 +4,13 @@ La page reprend l'interface de l'Atelier (static/) avec les réponses de l'API f
 liste, visuel, fiches des cartes, statistiques, suggestions (thème et combos), combos du deck, versions, bracket et
 rapports de simulation. Rien d'autre ne part : ni les discussions, ni les autres decks, ni le classeur.
 
-Les pages sont rangées dans « Partage Atelier/ », un dépôt git à part (hors du dépôt de l'Atelier), poussé vers
-le dépôt « decks » du même compte GitHub que l'Atelier, avec la même identité git. Adresse d'un deck :
-https://<compte>.github.io/decks/<deck>/ ; la racine liste les decks partagés.
+Les pages sont rangées dans « Partage Atelier/ », puis publiées de l'une des deux façons :
+- connecté (github.py, sans git) : l'Atelier recopie le dossier dans le site de l'Atelier du compte (le dépôt
+  <compte>.github.io, créé au premier partage et publié tout seul par GitHub, ou un dépôt « decks » déjà publié) ;
+  adresse d'un deck : https://<compte>.github.io/<deck>/ ;
+- avec git (reglages.json › github) : « Partage Atelier/ » est un dépôt git à part, poussé vers le dépôt « decks » du
+  même compte que l'Atelier, avec la même identité git ; adresse : https://<compte>.github.io/decks/<deck>/.
+La racine du site liste les decks partagés.
 """
 import hashlib
 import json
@@ -21,6 +25,7 @@ import urllib.parse
 from collections import Counter
 
 import decks
+import github
 import infos_cartes as ic
 
 ICI = os.path.dirname(os.path.abspath(__file__))
@@ -28,15 +33,22 @@ STATIQUE = os.path.join(ICI, "static")
 DOSSIER = os.path.join(decks.RACINE, "Partage Atelier")
 REGISTRE = os.path.join(DOSSIER, "decks.json")
 NOM_DEPOT = "decks"
+PUBLICATION = os.path.join(ICI, "publication_github.json")      # connecté : dépôt, branche, site, dernier commit envoyé
+DESCRIPTION = "Decks Commander partagés avec l'Atelier MTG"           # celle du dépôt que crée l'Atelier connecté
 FORMATS = ("archidekt", "moxfield", "arena", "mtgo", "simple", "fr")
 _verrou = threading.Lock()
 
 
 # ---------------------------------------------------------------- git
 def _git(*args, dossier=None, ok=False):
-    r = subprocess.run(["git", "-C", dossier or DOSSIER, *args], capture_output=True, text=True, encoding="utf-8", errors="replace",
-                       timeout=120, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
-                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    try:
+        r = subprocess.run(["git", "-C", dossier or DOSSIER, *args], capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=120, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except FileNotFoundError:                                   # git n'est pas installé (installeur Windows)
+        if ok:
+            return subprocess.CompletedProcess(args, 1, "", "git introuvable")
+        raise github.NonConnecte("Pour partager tes decks, connecte l'Atelier à GitHub (compte gratuit).") from None
     if r.returncode and not ok:
         msg = (r.stderr or r.stdout).strip().splitlines()
         raise RuntimeError(f"Git ({args[0]}) : {msg[-1] if msg else 'échec'}")
@@ -45,12 +57,17 @@ def _git(*args, dossier=None, ok=False):
 
 def compte():
     """Le compte GitHub des pages : celui de reglages.json (clé github), sinon celui du dépôt de l'Atelier (remote
-    origin). Renvoie (dépôt des pages, adresse du site). Même compte que l'Atelier : même accès (SSH ou HTTPS)."""
+    origin). Renvoie (dépôt des pages, adresse du site). Même compte que l'Atelier : même accès (SSH ou HTTPS).
+    Connecté (github.py) : (None, adresse du site), connue dès le premier partage."""
     import reglages
+    if github.compte():
+        p = _publication()
+        if not p.get("site"):
+            raise RuntimeError("Aucun deck partagé pour l'instant")
+        return None, p["site"]
     proprio = reglages.github()
     if not proprio:            # pas de valeur par défaut : un dépôt cloné pointe vers le compte de son auteur, pas le tien
-        raise RuntimeError("Indique ton compte GitHub dans les Options de l'Atelier (en haut à droite), "
-                           "puis vois le README, « Partager un deck »")
+        raise github.NonConnecte("Pour partager tes decks, connecte l'Atelier à GitHub (compte gratuit).")
     url = _git("remote", "get-url", "origin", dossier=decks.RACINE, ok=True).stdout.strip()
     m = re.match(r"(?:git@([^:]+):|https://([^/]+)/)([^/]+)/[^/]+?(?:\.git)?$", url)
     if m and m.group(3).lower() == proprio.lower():          # le compte de l'Atelier : même accès (SSH ou HTTPS)
@@ -67,13 +84,17 @@ def depot_atelier():
     url = _git("remote", "get-url", "origin", dossier=decks.RACINE, ok=True).stdout.strip()
     m = re.match(r"(?:git@([^:]+):|https://([^/]+)/)([^/]+)/([^/]+?)(?:\.git)?$", url)
     if not m:
-        return None
+        import mise_a_jour                                       # installeur Windows, sans git : le dépôt qu'il suit
+        d = mise_a_jour.installation().get("depot")
+        return f"https://github.com/{d}" if d else None
     hote = m.group(1) or m.group(2)
     return f"https://{'github.com' if 'github' in hote else hote}/{m.group(3)}/{m.group(4)}"
 
 
 def _preparer():
     """Le dépôt local des pages, à jour avec GitHub. Renvoie l'adresse du site."""
+    if github.compte():
+        return _preparer_connecte()
     depot, site = compte()
     os.makedirs(DOSSIER, exist_ok=True)
     if not os.path.isdir(os.path.join(DOSSIER, ".git")):
@@ -109,6 +130,12 @@ def _preparer():
 
 
 def _publier(message):
+    if github.compte():
+        p = _publication()
+        p.update(commit=github.envoyer(p["depot"], p["branche"], DOSSIER, message),
+                 fichiers=sorted(github.fichiers_locaux(DOSSIER)))
+        _ecrire(PUBLICATION, json.dumps(p, ensure_ascii=False, indent=1))
+        return
     _git("add", "-A")
     if _git("diff", "--cached", "--quiet", ok=True).returncode:
         _git("commit", "-q", "-m", message)
@@ -118,6 +145,97 @@ def _publier(message):
             msg = ((r.stderr or "").strip().splitlines() or ["?"])[-1]
             raise RuntimeError(f"GitHub refuse l'envoi ({msg}) : vérifie le compte de reglages.json et ta connexion "
                                "à GitHub (gh auth login, puis gh auth setup-git)")
+
+
+# ---------------------------------------------------------------- connecté à GitHub (github.py), sans git
+def _publication():
+    try:
+        with open(PUBLICATION, encoding="utf-8") as f:
+            p = json.load(f)
+        return p if p.get("compte") == github.compte() else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _a_l_atelier(r):
+    """Ce dépôt est-il un site de l'Atelier ? Sa description, ou decks.json à sa racine."""
+    if r.get("description") == DESCRIPTION:
+        return True
+    try:
+        github.appel("GET", f"/repos/{r['full_name']}/contents/decks.json?ref={r['default_branch']}")
+        return True
+    except github.Erreur as e:
+        if e.statut != 404:
+            raise
+        return False
+
+
+def _site_atelier(login):
+    """Le dépôt des pages : un site de l'Atelier qui existe déjà, sinon le site personnel <compte>.github.io, créé
+    ici : GitHub le publie tout seul. S'il sert déjà à autre chose, on n'y touche pas : les pages vont dans un dépôt
+    « decks », dont il faut activer GitHub Pages à la main si besoin (la connexion n'en a pas le droit)."""
+    perso = f"{login.lower()}.github.io"
+    sites, existants = {perso: f"https://{perso}/", NOM_DEPOT: f"https://{perso}/{NOM_DEPOT}/"}, {}
+    for nom in sites:
+        try:
+            existants[nom] = github.appel("GET", f"/repos/{login}/{nom}")
+        except github.Erreur as e:
+            if e.statut != 404:
+                raise
+    nom = next((n for n, r in existants.items() if _a_l_atelier(r)), None)
+    if not nom:
+        nom = perso if perso not in existants else NOM_DEPOT if NOM_DEPOT not in existants else None
+        if not nom:
+            raise RuntimeError(f"Tes dépôts {perso} et « {NOM_DEPOT} » servent déjà à autre chose : l'Atelier n'y touche pas")
+        existants[nom] = github.appel("POST", "/user/repos", dict(name=nom, description=DESCRIPTION, auto_init=True,
+                                                                  has_issues=False, has_projects=False, has_wiki=False))
+    r = existants[nom]
+    if nom == NOM_DEPOT and not r.get("has_pages"):
+        try:
+            github.appel("POST", f"/repos/{r['full_name']}/pages", dict(source=dict(branch=r["default_branch"], path="/")),
+                         ok=(201, 409))
+        except github.Erreur:
+            raise RuntimeError(f"Sur github.com, active les pages de ton dépôt « {NOM_DEPOT} » (Settings › Pages › Deploy "
+                               f"from a branch › {r['default_branch']}), puis repartage : ton site {perso} sert déjà à "
+                               "autre chose") from None
+    return dict(depot=r["full_name"], branche=r["default_branch"], site=sites[nom])
+
+
+def _preparer_connecte():
+    """Comme _preparer, sans git : trouve (ou crée) le site, puis ramène ici ce qui a changé sur GitHub depuis la
+    dernière publication de ce PC (un autre PC, ou le premier partage). Renvoie l'adresse du site."""
+    login = github.compte()
+    p = _publication() or dict(compte=login)
+    if not p.get("depot"):
+        p.update(_site_atelier(login))
+    for essai in range(6):                                  # un dépôt tout juste créé met un instant à être prêt
+        try:
+            tete, _, distant = github.arbre(p["depot"], p["branche"])
+            break
+        except github.Erreur as e:
+            if e.statut not in (404, 409) or essai == 5:
+                raise
+            time.sleep(2)
+    os.makedirs(DOSSIER, exist_ok=True)
+    if tete != p.get("commit"):
+        local = github.fichiers_locaux(DOSSIER)
+        for rel, sha in distant.items():
+            chemin = os.path.join(DOSSIER, *rel.split("/"))
+            if rel in local:
+                with open(chemin, "rb") as f:
+                    if github.sha_blob(f.read()) == sha:
+                        continue
+            os.makedirs(os.path.dirname(chemin), exist_ok=True)
+            with open(chemin, "wb") as f:
+                f.write(github.telecharger(p["depot"], sha))
+        for rel in set(p.get("fichiers", ())) - set(distant):       # retirés sur GitHub depuis : retirés ici aussi
+            try:
+                os.remove(os.path.join(DOSSIER, *rel.split("/")))
+            except OSError:
+                pass
+        p.update(commit=tete, fichiers=sorted(distant))
+    _ecrire(PUBLICATION, json.dumps(p, ensure_ascii=False, indent=1))
+    return p["site"]
 
 
 # ---------------------------------------------------------------- registre des decks partagés
@@ -291,7 +409,7 @@ def _page(dossier, donnees, entete):
         shutil.copyfile(os.path.join(STATIQUE, f), os.path.join(dossier, f))
     donnees = dict(donnees, reglages=reglages.pour_la_page(),         # budget par carte : les cartes chères restent signalées
                    atelier=depot_atelier(),                           # recherche et discussion en vitrine : où télécharger l'Atelier
-                   auteur=reglages.nom(),                             # « Decks de … » à la place de « Mes decks »
+                   auteur=_auteur(),                             # « Decks de … » à la place de « Mes decks »
                    version=__version__)                               # la version de l'Atelier qui a publié la page
     js = "window.PARTAGE = " + json.dumps(donnees, ensure_ascii=False, separators=(",", ":")) + ";\n"
     _verifier(js)
@@ -391,7 +509,7 @@ def _accueil(reg, site):
 def _auteur():
     """À qui sont ces decks : « Decks de … » sur les pages partagées (reglages.json : nom, sinon le compte GitHub)."""
     import reglages
-    return reglages.nom()
+    return reglages.nom() or github.compte()
 
 
 def _euros(x):
@@ -508,8 +626,9 @@ def renommer(ancien, nouveau):
             return
         reg[nouveau] = dict(reg.pop(ancien), a_refaire=True)       # construire() réécrit l'entrée, sans a_refaire
         _ecrire(REGISTRE, json.dumps(reg, ensure_ascii=False, indent=1))
-        _git("add", "decks.json", ok=True)                         # enregistré ici, envoyé avec la prochaine publication
-        _git("commit", "-q", "-m", f"Renommage : {ancien.removeprefix('Deck ')} → {nouveau.removeprefix('Deck ')}", ok=True)
+        if not github.compte():                                    # git : enregistré ici, envoyé avec la prochaine publication
+            _git("add", "decks.json", ok=True)
+            _git("commit", "-q", "-m", f"Renommage : {ancien.removeprefix('Deck ')} → {nouveau.removeprefix('Deck ')}", ok=True)
     _echecs.pop(ancien, None)
 
 
