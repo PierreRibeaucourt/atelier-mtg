@@ -27,6 +27,9 @@ outils/atelier/atelier.ico
 outils/atelier/atelier.png
 outils/atelier/atelier.log
 
+# Installeur Windows en construction (installeur/construire.py)
+construction/
+
 # Divers
 __pycache__/
 *.tmp

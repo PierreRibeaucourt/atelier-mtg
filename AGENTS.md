@@ -6,6 +6,8 @@ L'Atelier est une application web locale pour les joueurs de Magic: The Gatherin
 
 ## Installer
 
+Sous Windows, l'installeur suffit à la plupart des gens : https://github.com/PierreRibeaucourt/atelier-mtg/releases/latest/download/Atelier-MTG-Windows.exe (voir « Atelier installé par l'installeur Windows »). Il ne demande ni Python ni git. Les étapes ci-dessous conviennent sous macOS et Linux, ou pour suivre le code avec git.
+
 Parle à la personne en français, simplement, sans jargon. Fais tout toi-même ; ne lui demande que ce qui suit.
 
 1. **Prérequis.**
@@ -36,6 +38,13 @@ Parle à la personne en français, simplement, sans jargon. Fais tout toi-même 
 7. **Montrer comment créer un premier deck.** Bouton « Nouveau deck » sur l'accueil. On peut coller une liste exportée d'Archidekt, de Moxfield ou de MTG Arena, ou partir d'un deck vide.
 
 Testé sous Windows. macOS et Linux devraient marcher (Python et Flask sont multiplateformes), sans avoir été essayés : signale tout problème.
+
+## Atelier installé par l'installeur Windows
+
+Un fichier `installation.json` à la racine le signale. L'installeur (Inno Setup, `installeur/atelier.iss`) met tout dans `%LOCALAPPDATA%\Programs\Atelier MTG`, sans droits d'administrateur : le code, un Python embarqué dans `python\` (avec Flask, Pillow et pystray), puis les decks, le classeur et les réglages que l'Atelier y crée, comme à la racine d'un dépôt. Raccourcis sur le bureau et dans le menu Démarrer ; désinstallation par Paramètres › Applications, qui demande avant d'effacer les decks.
+- Pas de git, pas de `.venv`, pas de pip : ne lance pas `installer.py`. Le Python à utiliser est `python\python.exe` ; dans la discussion, `python` y mène déjà. Son fichier `python312._pth` met `outils/` et `outils/atelier/` dans les chemins de Python.
+- Mises à jour : l'Atelier lit la dernière publication GitHub du dépôt (`installation.json` › `depot`) ; « Mettre à jour » télécharge son installeur et le lance sans fenêtre, puis l'Atelier redémarre. Journal : `%TEMP%\Atelier-MTG-mise-a-jour.log`. Si ça échoue, retélécharger l'installeur et le relancer suffit : il remplace le code et garde les decks.
+- Le partage des decks demande git, à installer à part (`winget install Git.Git`).
 
 ## Fonctions facultatives
 
@@ -76,11 +85,13 @@ La page Options règle aussi le lancement au démarrage de Windows (raccourci «
 
 L'Atelier se met à jour tout seul (`outils/atelier/mise_a_jour.py`). Au lancement, puis toutes les 20 heures, il lit les étiquettes `vX.Y.Z` du dépôt (`git fetch --tags origin`). Si l'une est plus récente que `outils/atelier/version.py`, un bandeau propose « Mettre à jour » : `git merge --ff-only vX.Y.Z`, dépendances réinstallées si `requirements.txt` a changé, puis redémarrage. Il refuse si des fichiers suivis par git ont été modifiés, ou si Claude répond, une recherche de synergies ou une simulation tourne.
 
-À la main : `git pull`, puis `python installer.py` (pour les nouvelles dépendances), puis relancer l'Atelier. Les decks ne bougent pas : ils sont ignorés par git.
+À la main : `git pull`, puis `python installer.py` (pour les nouvelles dépendances), puis relancer l'Atelier. Installé par l'installeur Windows : voir plus haut. Les decks ne bougent pas : ils sont ignorés par git.
 
 ## Publier une version (auteur du dépôt)
 
 `python outils/publier_version.py 1.1.0 "Une ou deux phrases sur les nouveautés."` : change le numéro dans `version.py`, commite « Version 1.1.0 », pose l'étiquette annotée `v1.1.0` (son message s'affiche dans le bandeau des Ateliers installés) et envoie le commit et l'étiquette (`git push origin main v1.1.0`). Commite d'abord le reste. Un envoi sur `main` sans nouvelle étiquette ne propose rien aux Ateliers installés. `--sans-envoi` prépare sans envoyer.
+
+L'étiquette déclenche GitHub Actions (`.github/workflows/installeur.yml`) : il fabrique l'installeur Windows et le joint à une publication GitHub du même nom, avec les nouveautés de l'étiquette, en quelques minutes. Les Ateliers installés par l'installeur ne voient la version qu'une fois cette publication faite. Pour fabriquer l'installeur sur son PC : `python installeur/construire.py` (il faut Inno Setup 6 : `winget install JRSoftware.InnoSetup`), qui le dépose dans `construction/`.
 
 ## Où sont les données
 
@@ -123,5 +134,6 @@ Sauvegarder ses decks, c'est copier les dossiers `Deck …`.
   - `outils/atelier/demander.py`, l'Atelier en ligne de commande pour les assistants ;
   - `connaissances/`, les repères de construction d'un deck ;
   - `outils/simu*.py`, le simulateur ;
-  - `outils/prix.py` et `outils/proba.py`, des outils en ligne de commande.
+  - `outils/prix.py` et `outils/proba.py`, des outils en ligne de commande ;
+  - `installeur/`, l'installeur Windows (script Inno Setup, dépendances figées, fabrication).
 - **Contribution.** Ce dépôt est celui de son auteur. Pour contribuer, travaille dans un fork : ne pousse rien sur le dépôt d'origine.

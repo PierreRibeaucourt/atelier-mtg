@@ -7,14 +7,19 @@ propose « Mettre à jour » :
 1. git merge --ff-only vers l'étiquette : rien n'est écrasé, et les decks, ignorés par git, ne bougent pas ;
 2. les dépendances sont réinstallées si requirements.txt a changé ;
 3. l'Atelier redémarre, et la page se recharge sur la nouvelle version.
-Sans git, sans dépôt ou hors ligne, rien ne s'affiche et rien ne casse."""
+Installé par l'installeur Windows (installation.json, sans git) : la version est la dernière publication GitHub du dépôt,
+avec l'installeur en pièce jointe (GitHub Actions le fabrique pour chaque étiquette) ; « Mettre à jour » le télécharge
+et le lance sans fenêtre : il remplace le code, laisse les decks, et relance l'Atelier.
+Sans git ni installeur, ou hors ligne, rien ne s'affiche et rien ne casse."""
 import json
 import os
 import re
 import subprocess
 import sys
+import tempfile
 import threading
 import time
+import urllib.request
 
 import decks
 from version import __version__
@@ -23,6 +28,8 @@ ICI = os.path.dirname(os.path.abspath(__file__))
 ETAT = os.path.join(ICI, "cache_version.json")
 FORMAT = re.compile(r"^v?(\d{1,4})\.(\d{1,4})\.(\d{1,4})$")
 INTERVALLE = 20 * 3600                 # secondes entre deux lectures des étiquettes du dépôt
+INSTALLATION = os.path.join(decks.RACINE, "installation.json")      # posé par l'installeur Windows
+INSTALLEUR = "Atelier-MTG-Windows.exe"                               # son nom dans chaque publication GitHub
 _verrou = threading.Lock()
 
 
@@ -43,6 +50,31 @@ def depot_git():
         return _git("rev-parse", "--is-inside-work-tree", timeout=10).stdout.strip() == "true"
     except (OSError, subprocess.SubprocessError):
         return False
+
+
+def installation():
+    """{"type": "windows", "version", "depot"} si l'Atelier vient de l'installeur Windows, sinon {}."""
+    try:
+        with open(INSTALLATION, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def _github(url, timeout=20):
+    req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json", "User-Agent": "atelier-mtg"})
+    return urllib.request.urlopen(req, timeout=timeout)
+
+
+def derniere_publication(depot):
+    """La dernière publication GitHub du dépôt qui porte l'installeur : {"version", "nouveautes", "url", "taille"}."""
+    with _github(f"https://api.github.com/repos/{depot}/releases/latest") as r:
+        p = json.load(r)
+    v = (p.get("tag_name") or "").lstrip("v")
+    a = next((a for a in p.get("assets", []) if a.get("name") == INSTALLEUR), None)
+    if not numero(v) or not a:
+        return {}
+    return {"version": v, "nouveautes": (p.get("body") or "").strip()[:400], "url": a["browser_download_url"], "taille": a["size"]}
 
 
 def lire():
@@ -82,9 +114,11 @@ def verifier(force=False, maintenant=None):
             _git("fetch", "--quiet", "--tags", "origin")
             v, nouveautes = derniere_etiquette()
             etat = {"verifie": maintenant, "version": v, "nouveautes": nouveautes}
+        elif installation().get("depot"):
+            etat = {"verifie": maintenant, **derniere_publication(installation()["depot"])}
         else:
             etat = {"verifie": maintenant}
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError):
         etat = dict(etat, verifie=maintenant)
     _ecrire(etat)
     return etat
@@ -116,8 +150,30 @@ class Echec(Exception):
     pass
 
 
+def telecharger(version):
+    """Installeur Windows : télécharge celui de la version annoncée ; rend son chemin."""
+    etat = lire()
+    if etat.get("version") != version or not etat.get("url"):
+        raise Echec("Mise à jour impossible : relance l'Atelier, puis réessaie.")
+    chemin = os.path.join(tempfile.gettempdir(), f"Atelier-MTG-Windows-{version}.exe")
+    try:
+        with _github(etat["url"], timeout=60) as r, open(chemin + ".tmp", "wb") as f:
+            while bloc := r.read(1 << 16):
+                f.write(bloc)
+    except OSError:
+        raise Echec("Téléchargement interrompu : vérifie la connexion, puis réessaie.") from None
+    if os.path.getsize(chemin + ".tmp") != etat.get("taille"):
+        os.remove(chemin + ".tmp")
+        raise Echec("Téléchargement incomplet : réessaie.")
+    os.replace(chemin + ".tmp", chemin)
+    return chemin
+
+
 def installer(version):
-    """Passe le code à l'étiquette v<version> (avance rapide seulement) et réinstalle les dépendances si besoin."""
+    """Passe le code à l'étiquette v<version> (avance rapide seulement) et réinstalle les dépendances si besoin.
+    Installeur Windows : télécharge le nouvel installeur et rend son chemin (redemarrer le lance)."""
+    if numero(version) and not depot_git() and installation().get("depot"):
+        return telecharger(version)
     if not numero(version) or not depot_git():
         raise Echec("Mise à jour impossible : l'Atelier n'a pas été installé avec git.")
     with _verrou:
@@ -154,12 +210,19 @@ subprocess.Popen(sys.argv[2:], close_fds=True,
 """
 
 
-def redemarrer(port, fichier_app):
+def redemarrer(port, fichier_app, installeur=None):
     """Relance l'Atelier avec les mêmes options, sans rouvrir d'onglet, une fois celui-ci arrêté ; puis l'arrête.
-    Sans console, le nouvel Atelier se range dans la barre d'état, comme celui lancé par le raccourci."""
+    Sans console, le nouvel Atelier se range dans la barre d'état, comme celui lancé par le raccourci.
+    Avec un installeur Windows : c'est lui qui remplace le code, puis relance l'Atelier."""
+    detache = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    if installeur:
+        journal = os.path.join(tempfile.gettempdir(), "Atelier-MTG-mise-a-jour.log")
+        subprocess.Popen([installeur, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", f"/LOG={journal}"], close_fds=True,
+                         cwd=tempfile.gettempdir(), creationflags=detache)
+        threading.Timer(1.0, lambda: os._exit(0)).start()
+        return
     pyw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
     lanceur = pyw if os.path.isfile(pyw) else sys.executable
     cmd = [sys.executable, fichier_app, *[a for a in sys.argv[1:] if a != "--sans-navigateur"], "--sans-navigateur"]
-    subprocess.Popen([lanceur, "-c", RELANCE, str(port), *cmd], close_fds=True, cwd=decks.RACINE,
-                     creationflags=getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
+    subprocess.Popen([lanceur, "-c", RELANCE, str(port), *cmd], close_fds=True, cwd=decks.RACINE, creationflags=detache)
     threading.Timer(1.0, lambda: os._exit(0)).start()

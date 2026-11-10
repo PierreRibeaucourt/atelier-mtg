@@ -323,6 +323,17 @@ def api_options_ecrire():
     return api_options()
 
 
+@app.post("/api/ouvrir-dossier")
+def api_ouvrir_dossier():
+    """Ouvre le dossier de l'Atelier (decks, classeur, réglages) dans l'explorateur de fichiers."""
+    if os.name == "nt":
+        os.startfile(decks.RACINE)
+    else:
+        import subprocess
+        subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", decks.RACINE])
+    return jsonify(ok=True)
+
+
 @app.get("/api/classeur")
 def api_classeur():
     """Les cartes du classeur (Classeur/classeur.txt), avec nom français, prix et image."""
@@ -885,10 +896,10 @@ def api_mise_a_jour():
     if o:
         return jsonify(erreur=f"Mise à jour impossible pour l'instant : {o}. Réessaie quand c'est fini."), 409
     try:
-        mise_a_jour.installer(d["version"])
+        installeur = mise_a_jour.installer(d["version"])
     except mise_a_jour.Echec as e:
         return jsonify(erreur=str(e)), 409
-    mise_a_jour.redemarrer(PORT, os.path.abspath(__file__))
+    mise_a_jour.redemarrer(PORT, os.path.abspath(__file__), installeur)
     return jsonify(version=d["version"])
 
 

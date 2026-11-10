@@ -139,6 +139,7 @@ const ICONES = {
   telecharger: '<path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/>',
   coche: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
   moins: '<path d="M5 12h14"/>',
+  dossier: '<path d="M3.5 7a2 2 0 0 1 2-2h3.8l2 2.5h7.2a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>',
   options: '<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
 };
 if (PARTAGE) $(".logo").href = PARTAGE.accueil === true ? "#/" : PARTAGE.accueil;
@@ -1480,7 +1481,8 @@ async function vueOptions() {
 // chaque champ s'enregistre quand on le quitte (ou Entrée), la case tout de suite
 function optionsGenerales(el, o) {
   const budget = (b) => (b == null ? "" : String(b).replace(".", ","));
-  el.innerHTML = `<h2>Général</h2>
+  el.innerHTML = `<div class="opt-titre"><h2>Général</h2>
+      <button type="button" class="btn btn-petit btn-discret" id="opt-dossier">${ico("dossier")}Ouvrir le dossier</button></div>
     <label class="opt-ligne"><span>Nom affiché</span><input class="champ" name="nom" maxlength="60" value="${esc(o.nom)}" placeholder="${esc(o.github)}"></label>
     <label class="opt-ligne"><span>Budget par carte</span><span class="opt-euros"><input class="champ" name="budget" inputmode="decimal" value="${budget(o.budget)}" placeholder="${budget(o.budget_defaut)}">€</span></label>
     <label class="opt-ligne"><span>Compte GitHub</span><input class="champ" name="github" maxlength="39" value="${esc(o.github)}" autocomplete="off" spellcheck="false"></label>
@@ -1499,6 +1501,7 @@ function optionsGenerales(el, o) {
     else c.value = c.name === "budget" ? budget(o.budget) : o[c.name];       // la valeur gardée (nettoyée, ou l'ancienne)
   };
   el.onkeydown = (ev) => { if (ev.key === "Enter" && ev.target.matches("input.champ")) ev.target.blur(); };
+  $("#opt-dossier", el).onclick = () => api("/api/ouvrir-dossier", { method: "POST", body: {} }).catch(erreur);
 }
 
 // le classeur, présenté comme les résultats de la recherche : en-têtes Coul. · Nom VO · Nom VF · Type · Coût · Qté · Prix
@@ -3820,12 +3823,12 @@ const MODULES_ATELIER = [
 // les questions des visiteurs (joueurs experts, débutants, non-informaticiens), repliées ; une réponse en HTML commence par « < »
 const FAQ_ATELIER = [
   ["Installation et sécurité", [
-    ["Il n'y a pas de fichier à télécharger ? Je ne suis pas informaticien.",
-      "L'Atelier se récupère sur GitHub, sous forme de code. Le plus simple est de confier l'installation à un assistant IA qui agit sur votre ordinateur, comme Claude Code : collez-lui la consigne ci-dessus. Il installe ce qu'il faut, vous pose trois questions et crée un raccourci sur le bureau. Ensuite, les mises à jour s'installent en un clic."],
+    ["Je ne suis pas informaticien : c'est compliqué à installer ?",
+      "Non. Sous Windows, téléchargez l'installeur et lancez-le, comme n'importe quel programme : il contient tout ce qu'il faut et crée un raccourci sur le bureau. Ensuite, les mises à jour s'installent en un clic. Sous macOS et Linux, confiez l'installation à un assistant IA qui agit sur votre ordinateur, comme Claude Code : collez-lui la consigne ci-dessus."],
     ["Ça marche sur Mac et Linux ?",
       "<p>En principe oui : c'est le même programme, lancé par <code>atelier.sh</code>. Mais pour l'instant, seul Windows est testé.</p>"],
     ["Est-ce sûr ?",
-      "L'Atelier ne s'ouvre que sur votre PC : il n'est pas accessible depuis le réseau. Il n'a pas d'installeur certifié, mais tout son code est public : vous, ou votre assistant IA, pouvez le lire avant de l'installer."],
+      "L'Atelier ne s'ouvre que sur votre PC : il n'est pas accessible depuis le réseau. Son installeur n'est pas signé (une signature coûte plusieurs centaines d'euros par an), d'où l'avertissement de Windows au premier lancement ; mais tout son code est public : vous, ou votre assistant IA, pouvez le lire avant de l'installer."],
   ]],
   ["Claude", [
     ["Faut-il payer pour Claude ?",
@@ -3929,9 +3932,13 @@ function vueAPropos(installation = false) {
       <h2 id="installation">Installation</h2>
       <p>L'Atelier s'installe une fois sur votre ordinateur, puis s'ouvre par un raccourci sur le bureau. Il est testé sous
         Windows ; il devrait marcher aussi sous macOS et Linux.</p>
-      <h3>Le plus simple : avec un assistant IA</h3>
-      <p>Collez cette consigne à un assistant IA qui agit sur votre ordinateur (Claude Code, Cursor, Copilot…) : il installe
-        tout et vous pose trois questions.</p>
+      <h3>Windows</h3>
+      <p class="ap-cta"><a class="btn btn-accent" href="${depot}/releases/latest/download/Atelier-MTG-Windows.exe">${ico("telecharger")}Télécharger pour Windows</a></p>
+      <p>Lancez le fichier téléchargé : rien d'autre à installer. Si Windows affiche « Windows a protégé votre ordinateur »,
+        cliquez sur « Informations complémentaires », puis « Exécuter quand même ».</p>
+      <h3>Avec un assistant IA</h3>
+      <p>Sous macOS et Linux, ou pour suivre le code de près : collez cette consigne à un assistant IA qui agit sur votre
+        ordinateur (Claude Code, Cursor, Copilot…). Il installe tout et vous pose trois questions.</p>
       <div class="ap-consigne"><code>${esc(consigne)}</code>
         <button type="button" class="btn btn-petit btn-discret" id="ap-copier">${ico("copier")}Copier</button></div>
       <p>Pas encore d'assistant IA ? Installez <a href="${CLAUDE_BUREAU}" target="_blank" rel="noopener">l'application Claude

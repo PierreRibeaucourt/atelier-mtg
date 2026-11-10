@@ -1,0 +1,59 @@
+# Installeur Windows : fabriqué pour chaque version (étiquette vX.Y.Z posée par outils/publier_version.py) et joint à
+# une publication GitHub, que les Ateliers installés par l'installeur lisent pour se mettre à jour. Lancé à la main
+# (Actions › Run workflow), il fabrique l'installeur sans rien publier : il est dans les « artifacts » de l'exécution.
+name: Installeur Windows
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  installeur:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Étiquettes complètes (leur message donne les nouveautés)
+        run: git fetch --force --tags
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Pillow (icône du chaudron)
+        run: python -m pip install --disable-pip-version-check pillow==12.3.0
+
+      - name: Inno Setup 6.7.3
+        shell: pwsh
+        run: |
+          $f = "$env:RUNNER_TEMP\innosetup.exe"
+          Invoke-WebRequest https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe -OutFile $f
+          if ((Get-FileHash $f -Algorithm SHA256).Hash -ne "9C73C3BAE7ED48D44112A0F48E66742C00090BDB5BEF71D9D3C056C66E97B732") { throw "Empreinte d'Inno Setup inattendue" }
+          Start-Process $f -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/CURRENTUSER" -Wait
+
+      - name: Installeur
+        run: python installeur/construire.py
+
+      - name: Publication
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          $notes = (git tag -l --format="%(contents)" $env:TAG) -join "`n"
+          ($notes -split "-----BEGIN")[0].Trim() | Out-File -Encoding utf8NoBOM "$env:RUNNER_TEMP\notes.txt"
+          gh release create $env:TAG construction/Atelier-MTG-Windows.exe --verify-tag --title "Atelier MTG $($env:TAG.TrimStart('v'))" --notes-file "$env:RUNNER_TEMP\notes.txt"
+
+      - name: Installeur d'essai
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Atelier-MTG-Windows
+          path: construction/Atelier-MTG-Windows.exe

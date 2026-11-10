@@ -34,9 +34,11 @@ Tout tourne sur ton PC, à l'adresse http://127.0.0.1:5000. Rien n'est mis en li
 
 ## Installation
 
-Le plus simple : demande à ton assistant IA (Claude Code, Codex, Cursor, Copilot…) « Installe l'Atelier MTG depuis https://github.com/PierreRibeaucourt/atelier-mtg ». Il suit [AGENTS.md](AGENTS.md). Il te pose trois questions (ton budget par carte, si tu veux partager tes decks, si tu veux discuter avec Claude) et fait le reste.
+**Windows** : télécharge [l'installeur](https://github.com/PierreRibeaucourt/atelier-mtg/releases/latest/download/Atelier-MTG-Windows.exe) et lance-le. Il contient son propre Python : rien d'autre à installer. Il installe l'Atelier dans ton dossier utilisateur (`%LOCALAPPDATA%\Programs\Atelier MTG`), sans droits d'administrateur, et pose un raccourci sur le bureau et dans le menu Démarrer. Il n'est pas signé : si Windows affiche « Windows a protégé votre ordinateur », clique sur « Informations complémentaires », puis « Exécuter quand même ». Pour le désinstaller : Paramètres › Applications ; tes decks restent, sauf si tu demandes à les effacer.
 
-À la main, il faut Python 3.10 ou plus récent, et git :
+**Avec un assistant IA** (Windows, macOS, Linux) : demande à ton assistant (Claude Code, Codex, Cursor, Copilot…) « Installe l'Atelier MTG depuis https://github.com/PierreRibeaucourt/atelier-mtg ». Il suit [AGENTS.md](AGENTS.md). Il te pose trois questions (ton budget par carte, si tu veux partager tes decks, si tu veux discuter avec Claude) et fait le reste.
+
+**À la main**, il faut Python 3.10 ou plus récent, et git :
 
 ```
 git clone https://github.com/PierreRibeaucourt/atelier-mtg.git "Atelier MTG"
@@ -46,7 +48,7 @@ python installer.py --budget 5
 
 L'installeur crée l'environnement Python (`.venv`), écrit tes réglages, vérifie que l'Atelier démarre et pose un raccourci « Atelier MTG » sur le bureau. Testé sous Windows ; macOS et Linux devraient marcher.
 
-**Mises à jour.** Quand une nouvelle version est publiée, un bandeau l'annonce en haut de l'Atelier, avec ses nouveautés. « Mettre à jour » l'installe et redémarre l'Atelier ; tes decks et tes réglages ne bougent pas. Pour cela, l'Atelier consulte le dépôt GitHub au lancement, puis une fois par jour (`git fetch`). Si tu as modifié des fichiers de l'Atelier, il ne les écrase pas : la mise à jour se fait alors à la main (`git pull`, puis `python installer.py`).
+**Mises à jour.** Quand une nouvelle version est publiée, un bandeau l'annonce en haut de l'Atelier, avec ses nouveautés. « Mettre à jour » l'installe et redémarre l'Atelier ; tes decks et tes réglages ne bougent pas. Pour cela, l'Atelier consulte le dépôt GitHub au lancement, puis une fois par jour (`git fetch`). Si tu as modifié des fichiers de l'Atelier, il ne les écrase pas : la mise à jour se fait alors à la main (`git pull`, puis `python installer.py`). Installé par l'installeur Windows, il consulte les publications du dépôt et télécharge le nouvel installeur, qui remplace le programme sans toucher aux decks.
 
 En option :
 - **la discussion avec Claude** demande Claude Code (l'extension de VS Code, de Cursor ou de Windsurf, ou le programme `claude`) et un abonnement Claude. Chaque message compte dans ta limite d'utilisation ;
@@ -59,13 +61,13 @@ Les réglages propres à ton installation sont dans `reglages.json`, à la racin
 
 ## Lancement
 
-Double-clique sur le raccourci « Atelier MTG » du bureau, sur `Atelier MTG.bat` (Windows) ou lance `./atelier.sh` (macOS, Linux). La page s'ouvre dans le navigateur. Sous Windows, l'Atelier se range dans la barre d'état, près de l'horloge (le chaudron ; avec Windows 11, peut-être derrière la flèche ^) : un clic rouvre la page, clic droit › Quitter l'arrête. Sur macOS et Linux, laisse la fenêtre du terminal ouverte : la fermer arrête l'Atelier.
+Double-clique sur le raccourci « Atelier MTG » du bureau (ou du menu Démarrer, avec l'installeur Windows), sur `Atelier MTG.bat` (Windows) ou lance `./atelier.sh` (macOS, Linux). La page s'ouvre dans le navigateur. Sous Windows, l'Atelier se range dans la barre d'état, près de l'horloge (le chaudron ; avec Windows 11, peut-être derrière la flèche ^) : un clic rouvre la page, clic droit › Quitter l'arrête. Sur macOS et Linux, laisse la fenêtre du terminal ouverte : la fermer arrête l'Atelier.
 
 Si l'Atelier n'est pas lancé, l'adresse http://127.0.0.1:5000 affiche « L'Atelier n'est pas lancé » au lieu d'une erreur, puis la page demandée dès qu'il répond. Sous Windows, le bouton « Lancer l'Atelier » le lance (le navigateur demande d'abord d'ouvrir « Atelier MTG »). Cette page est gardée par le navigateur à la première ouverture de l'Atelier ; effacer les données du site la retire jusqu'à la suivante.
 
 ## Où sont les decks
 
-Chaque deck est un dossier `Deck <nom>` placé à la racine. Il contient sa liste `archidekt.txt`, au format d'import d'Archidekt :
+Chaque deck est un dossier `Deck <nom>` placé à la racine (avec l'installeur Windows : `%LOCALAPPDATA%\Programs\Atelier MTG` ; Options › « Ouvrir le dossier » y mène). Il contient sa liste `archidekt.txt`, au format d'import d'Archidekt :
 
 ```
 1x Greven, Predator Captain [Commander]
