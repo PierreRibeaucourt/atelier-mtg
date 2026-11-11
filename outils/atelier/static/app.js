@@ -3864,7 +3864,7 @@ const MODULES_BASES = [
 ];
 // « Ce qui fait la différence » : ce que les autres outils n'ont pas, du plus marquant au moins marquant
 const MODULES_ATOUTS = [
-  ["simulateur", "Simulateur de parties", "Un simulateur multijoueur joue des centaines de parties contre trois adversaires types (aggro, contrôle, jetons, combo…) pour mesurer la vitesse et la régularité de votre deck : taux de victoire, causes de défaite, dégâts par source. Deux versions du deck jouent les mêmes parties : on voit si un changement aide vraiment."],
+  ["simulateur", "Simulateur de parties", "En un clic, le simulateur joue un millier de parties à quatre joueurs et dit si votre deck est régulier : le mana arrive-t-il à l'heure, jouez-vous vos cartes, tenez-vous votre board, gérez-vous celui des adversaires, quand arrive votre commandant. Il indique combien de vos cartes il comprend, et vous pouvez comparer deux versions d'un même deck. Avec Claude, il va plus loin : Claude lui apprend les cartes qu'il lit mal, rejoue et vous explique le résultat, taux de victoire compris."],
   ["bracket", "Bracket", "Le bracket est estimé automatiquement selon les règles officielles : Game Changers, combos infinies à deux cartes, tuteurs… et comparé à l'estimation de Commander Spellbook."],
   ["statistiques", "Statistiques et base de mana", "Courbe de mana, types, fonctions des cartes et surtout la répartition des sources de couleur : elle compte les terrains et les cartes de ramp, et dit si chaque couleur est confortable."],
   ["suggestions", "Suggestions de cartes", "Des cartes proposées pour votre deck, d'après son commandant et les cartes déjà dedans : celles qui suivent ses thèmes, celles qui complètent une combo, explication comprise, et celles qui attendent dans votre classeur. Toujours dans vos couleurs et votre budget, triées par intérêt, avec des filtres par type, fonction, coût et prix. Le calcul se fait sans IA."],
@@ -3886,7 +3886,7 @@ const FAQ_ATELIER = [
     ["Faut-il payer pour Claude ?",
       "Claude est facultatif : sans lui, tout le reste fonctionne. Pour s'en servir, il faut un abonnement Claude payant (Pro ou plus), car le compte gratuit ne donne pas accès à Claude Code."],
     ["Va-t-il épuiser mon abonnement ?",
-      "Il ne travaille que quand vous lui écrivez, ou quand vous demandez l'analyse des synergies d'un deck : rien ne tourne en arrière-plan. Les suggestions, les combos, le bracket, les statistiques et les fonctions des cartes ne passent pas par lui. « Compacter » résume une longue discussion pour qu'elle consomme moins."],
+      "Il ne travaille que quand vous lui écrivez, ou quand vous cliquez sur un bouton qui l'appelle, comme l'analyse des synergies d'un deck ou « Affiner avec Claude » : rien ne tourne en arrière-plan. Les suggestions, les combos, le bracket, les statistiques, les fonctions des cartes et le test du simulateur ne passent pas par lui. « Compacter » résume une longue discussion pour qu'elle consomme moins."],
   ]],
   ["Vos cartes et vos données", [
     ["Comment entrent mes cartes ?",
@@ -3900,7 +3900,7 @@ const FAQ_ATELIER = [
     ["Peut-on jouer en ligne contre d'autres joueurs ?",
       "Non, ce n'est pas un jeu vidéo. La table de jeu se joue seul, à la main, pour tester les mains de départ et les premiers tours."],
     ["Comment simuler des parties à quatre ?",
-      "En simplifiant. Les trois adversaires sont des archétypes (aggro, contrôle, jetons, combo…). Selon des probabilités, ils posent des créatures, retirent vos menaces, rasent la table ou gagnent sur une combo, mais sans politique. Le simulateur mesure la vitesse et la régularité de votre deck, et compare deux versions sur les mêmes parties."],
+      "En simplifiant. Les trois adversaires sont des archétypes (aggro, contrôle, jetons, combo…). Selon des probabilités, ils posent des créatures, retirent vos menaces, rasent la table ou gagnent sur une combo, mais sans politique. Seul, le simulateur juge la régularité du deck : le mana, les cartes jouées, le board, le commandant. Il comprend une partie des cartes en lisant leur texte, et joue les autres sans leur effet, ou avec une partie seulement : c'est Claude qui lui apprend celles-là. Les taux de victoire ne s'affichent qu'ensuite, quand ils ont un sens."],
     ["Je débute, est-ce pour moi ?",
       `<p>Oui. Les statistiques comparent votre deck à un modèle type, et Claude peut expliquer une règle, une carte ou proposer des ajouts dans votre budget. Les mots de cette page :</p>
       <ul class="ap-lexique">
@@ -3948,7 +3948,7 @@ function vueAPropos(installation = false) {
         <div class="ap-tete-texte">
           <h1>L'Atelier <span>MTG</span></h1>
           <p class="ap-accroche">Vos decks Commander,<br>de la liste à la table.</p>
-          <ul class="ap-puces">${["Suggestions", "Base de mana", "Combos", "Bracket", "Table de jeu", "Recherche avancée", "Claude"].map((x) => `<li>${x}</li>`).join("")}</ul>
+          <ul class="ap-puces">${["Suggestions", "Base de mana", "Combos", "Bracket", "Simulation", "Table de jeu", "Recherche avancée", "Claude"].map((x) => `<li>${x}</li>`).join("")}</ul>
           <p class="ap-cta"><a class="btn btn-accent" href="${INSTALLER}" id="ap-installer">${ico("telecharger")}Installer l'Atelier MTG</a>
             <a class="btn" href="${EXEMPLES_ATELIER}">${ico("partager")}Voir des decks partagés</a></p>
           <p class="ap-mention"><b>Gratuit</b> · open source · tout reste sur votre PC${versionAtelier ? ` · version ${esc(versionAtelier)}` : ""}</p>
@@ -3980,8 +3980,8 @@ function vueAPropos(installation = false) {
         <li><strong>Données souveraines.</strong> Vos decks restent sur votre disque dur et rien n'est collecté. Seules sortent les
           requêtes nécessaires : données, images et prix des cartes (Scryfall), combos et bracket (Commander Spellbook, MTGPics),
           la discussion avec Claude si vous l'utilisez, et les pages que vous choisissez de partager.</li>
-        <li><strong>IA strictement modulaire.</strong> Tri, statistiques, simulations et jeu en solo restent 100 % opérationnels
-          sans aucune configuration IA.</li>
+        <li><strong>IA strictement modulaire.</strong> Tri, statistiques, suggestions, test du simulateur et jeu en solo
+          fonctionnent sans aucune configuration IA.</li>
       </ul>
 
       <h2 id="installation">Installation</h2>
@@ -4049,7 +4049,7 @@ python installer.py</code><button type="button" data-copier>Copier</button></div
         <li><strong>les règles officielles</strong> pour le contrôle direct des cartes interdites, des brackets et des Game Changers.</li>
       </ul>
       <p>L'Atelier est né de cette synthèse : une interface locale fluide pour gérer ses cartes, connectable à la demande à un
-        assistant IA pour auditer un deck, automatiser le classement ou simuler des parties.</p>
+        assistant IA pour auditer un deck, automatiser le classement ou affiner les simulations.</p>
     </article>`;
   $$(".ap-tete img[data-f], .a-propos img[data-f]").forEach((img) => {
     img.onerror = () => {                       // dans l'Atelier : la capture de ce PC, sinon celle du site de l'auteur
