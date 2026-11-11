@@ -1817,8 +1817,7 @@ async function supprimerDeck(d) {
 }
 
 // ------------------------------------------------------------------ onglet Liste : rangement, tri, filtre
-const LIBELLE_SIM = {
-  corps: ["sim : simple corps", "Le simulateur joue cette créature sans ses effets"],
+const LIBELLE_SIM = {                                     // pas de badge pour une créature jouée comme simple corps
   sans_effet: ["sim : sans effet", "Le simulateur ne comprend pas ce sort : il ne fait rien en simulation"],
   partiel: ["sim : lue en partie", "Le simulateur ne comprend qu'une partie de la carte"],
 };
