@@ -835,7 +835,9 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
   border-top: 1px solid var(--bord); }
 .a-propos h3 { font-size: 1rem; margin: 1.4rem 0 .3rem; }
 .a-propos p { margin: .6rem 0; }
-.a-propos .chapeau { font-size: 1.15rem; line-height: 1.5; color: var(--texte); border-left: 3px solid var(--accent); padding-left: .9rem; margin: .4rem 0 1rem; }
+/* ce qu'il faut retenir de la page : en grand, la promesse (local, sans compte) sur sa ligne, en orange */
+.a-propos .chapeau { font-size: 1.25rem; line-height: 1.5; color: var(--texte); border-left: 4px solid var(--accent); padding-left: 1.1rem; margin: .6rem 0 1.4rem; }
+.a-propos .chapeau strong { display: block; margin-top: .5rem; color: var(--accent); }
 .a-propos p a:not(.btn), .a-propos li a:not(.btn) { color: var(--accent); }
 .ap-signature { font-size: .85rem; color: var(--texte-2); margin-top: -.3rem !important; }
 .ap-sources, .ap-principes { padding-left: 1.2rem; }

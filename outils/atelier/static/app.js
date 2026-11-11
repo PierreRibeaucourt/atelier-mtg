@@ -3966,7 +3966,7 @@ function vueAPropos(installation = false) {
         </div>
         <div class="ap-tete-texte">
           <h1>L'Atelier <span>MTG</span></h1>
-          <p class="ap-accroche">Vos decks Commander,<br>de la liste à la table.</p>
+          <p class="ap-accroche">Le deckbuilding Commander assisté,<br>100% local et sans compte.</p>
           <ul class="ap-puces">${["Suggestions", "Base de mana", "Combos", "Bracket", "Simulation", "Table de jeu", "Recherche avancée", "Claude"].map((x) => `<li>${x}</li>`).join("")}</ul>
           <p class="ap-cta"><a class="btn btn-accent" href="${INSTALLER}" id="ap-installer">${ico("telecharger")}Installer l'Atelier MTG</a>
             <a class="btn" href="${EXEMPLES_ATELIER}">${ico("partager")}Voir des decks partagés</a></p>
@@ -3975,10 +3975,9 @@ function vueAPropos(installation = false) {
       </div>
     </header>
     <article class="a-propos">
-      <p class="chapeau">Le deckbuilding Commander assisté, 100% local et sans compte.</p>
-      <p>L'Atelier est une application locale, qui s'ouvre dans votre navigateur, pensée pour concevoir, tester et faire évoluer
-        des decks Magic: The Gathering en Commander. Zéro pub, zéro compte, zéro cloud : l'Atelier tourne uniquement sur
-        votre PC.</p>
+      <p class="chapeau">L'Atelier est une application locale, qui s'ouvre dans votre navigateur, pensée pour concevoir, tester et
+        faire évoluer des decks Magic: The Gathering en Commander. <strong>Zéro pub, zéro compte, zéro cloud : l'Atelier tourne
+        uniquement sur votre PC.</strong></p>
 
       <h2>Les bases : un outil complet</h2>
       ${modules(MODULES_BASES)}

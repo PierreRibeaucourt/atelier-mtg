@@ -484,7 +484,7 @@ TITRE_ATELIER = "L'Atelier MTG : gestionnaire de decks Commander, gratuit et loc
 DESCRIPTION_ATELIER = ("Concevoir, tester et partager ses decks Commander : statistiques et base de mana, combos, "
                        "bracket, table de jeu, recherche avancée et discussion avec Claude. Gratuit, open source, tout "
                        "reste sur votre ordinateur.")
-ALT_ATELIER = "L'Atelier MTG : vos decks Commander, de la liste à la table"
+ALT_ATELIER = "L'Atelier MTG : le deckbuilding Commander assisté, 100% local et sans compte"
 
 
 def _a_propos():
