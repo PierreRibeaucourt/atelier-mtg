@@ -1435,14 +1435,21 @@ async function connexionGithub(zone, suite) {
   zone.innerHTML = `<p class="chargement">Demande d'un code à GitHub…</p>`;
   let c;
   try { c = await api("/api/github/connexion", { method: "POST", body: {} }); }
-  catch (e) { zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; return; }
-  zone.innerHTML = `<ol class="gh-etapes">
+  catch (e) {
+    zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>
+      <div class="gh-action"><button class="btn btn-accent" id="gh-encore">Réessayer</button></div>`;
+    $("#gh-encore", zone).onclick = () => connexionGithub(zone, suite);
+    return;
+  }
+  // GitHub ne dit rien à qui n'est pas développeur : pourquoi lui, et qu'un compte gratuit suffit
+  zone.innerHTML = `<p class="gh-pourquoi">GitHub, un service gratuit, héberge les pages de tes decks. Pas encore de compte ?
+      La page de GitHub propose d'en créer un.</p>
+    <ol class="gh-etapes">
       <li><p class="gh-code" aria-label="Code de connexion">${esc(c.code)}</p>
         <a class="btn btn-accent" id="gh-ouvrir" href="${esc(c.url)}" target="_blank" rel="noopener">${ico("copier")}Copier le code et ouvrir GitHub</a></li>
       <li>Sur GitHub, colle le code (Ctrl+V), puis clique sur « Continue ».</li>
       <li>Clique sur « Authorize Atelier MTG », puis reviens ici.</li>
     </ol>
-    <p class="muet petit">Pas encore de compte GitHub ? La page de GitHub propose d'en créer un, gratuitement.</p>
     <p class="gh-attente" role="status">En attente de GitHub…</p>`;
   $("#gh-ouvrir", zone).onclick = () => { navigator.clipboard.writeText(c.code).catch(() => {}); };
   while (zone.isConnected) {
@@ -1603,7 +1610,7 @@ async function ligneGithub(el, o) {
     el.innerHTML = `<label class="opt-champ"><span>Compte GitHub</span><input class="champ" name="github" maxlength="39" value="${esc(o.github)}" autocomplete="off" spellcheck="false"></label>`;
     return;
   }
-  el.innerHTML = `<div class="opt-champ"><span>GitHub</span><span class="opt-github">${g.compte
+  el.innerHTML = `<div class="opt-champ"><span>Hébergement des pages</span><span class="opt-github">${g.compte
     ? `<strong>${esc(g.compte)}</strong><button type="button" class="btn btn-petit btn-discret" id="gh-deconnecter">Se déconnecter</button>`
     : `<button type="button" class="btn btn-accent btn-petit" id="gh-options">Se connecter à GitHub</button>`}</span></div>`;
   if (g.compte) $("#gh-deconnecter", el).onclick = async () => {
