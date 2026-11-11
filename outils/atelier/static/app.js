@@ -1568,6 +1568,8 @@ function optionsGenerales(el, o) {
       <label class="opt-champ"><span>Budget par carte</span><span class="opt-euros"><input class="champ" name="budget" inputmode="decimal" value="${budget(o.budget)}" placeholder="${budget(o.budget_defaut)}">€</span></label>
       ${champVisuel(o)}${basculesUB(o)}`)
     + bloc("partager", "Partage", `
+      <p class="opt-explication">L'Atelier tourne seulement sur ton PC. Pour montrer tes decks à quelqu'un, il les publie
+        sur des pages web hébergées par GitHub : il te faut un compte GitHub, gratuit.</p>
       <label class="opt-champ"><span>Nom affiché</span><input class="champ" name="nom" maxlength="60" value="${esc(o.nom)}" placeholder="${esc(o.github)}"></label>
       <div id="opt-github"></div>`)
     + bloc("options", "L'Atelier", `

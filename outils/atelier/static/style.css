@@ -969,6 +969,7 @@ button.badge:hover { box-shadow: inset 0 0 0 1px currentColor; }
 .opt-lignes > * { padding: .8rem 0; }
 .opt-lignes > * + * { border-top: 1px solid var(--bord); }
 .opt-lignes > :last-child { padding-bottom: 0; }
+.opt-explication { margin: 0; font-size: .88rem; color: var(--texte-2); }
 .opt-champ { display: grid; gap: .4rem; }
 .opt-champ > span:first-child { font-size: .85rem; color: var(--texte-2); }
 .opt-euros { display: inline-flex; align-items: center; gap: .45rem; }
