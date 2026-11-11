@@ -12,6 +12,7 @@
 - sans_ub_illustrations : impression par défaut hors Universes Beyond quand il en existe une autre (Sol Ring, une Île…).
 - sans_ub_suggestions : ne pas suggérer les cartes qui n'existent qu'en Universes Beyond (Marvel, Final Fantasy…).
 - preferences : true une fois que la page a posé ses questions (fermeture, impression, Universes Beyond).
+- non_partages : decks retirés du partage à la main, que l'Atelier ne publie plus tout seul (voir partage.py).
 """
 import json
 import os

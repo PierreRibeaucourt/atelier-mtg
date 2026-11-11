@@ -11,6 +11,10 @@ Les pages sont rangées dans « Partage Atelier/ », puis publiées de l'une des
 - avec git (reglages.json › github) : « Partage Atelier/ » est un dépôt git à part, poussé vers le dépôt « decks » du
   même compte que l'Atelier, avec la même identité git ; adresse : https://<compte>.github.io/decks/<deck>/.
 La racine du site liste les decks partagés.
+
+Une fois le partage en place, tous les decks sont partagés et tenus à jour sans qu'on y pense (surveiller) : un nouveau
+deck dès qu'il a des cartes, un deck modifié deux minutes après la dernière modification, et chaque page une fois par
+jour, avec les prix du jour. Un deck qu'on retire du partage n'est plus publié tout seul, jusqu'à ce qu'on le repartage.
 """
 import hashlib
 import json
@@ -589,7 +593,56 @@ def partager(deck, get):
         _preparer()
         _publier("Partage : " + construire(deck, get))
     _echecs.pop(deck, None)
+    _retirer_a_la_main(deck, False)
     return etat(deck)
+
+
+def publier(liste, get):
+    """Publie (ou met à jour) les pages de ces decks en un seul envoi, pour la mise à jour automatique. Un deck qui ne
+    se construit pas est noté dans _echecs et les autres partent ; si l'envoi échoue, ils sont tous à refaire."""
+    faits, titres = [], []
+    with _verrou:
+        try:
+            _preparer()
+            for deck in liste:
+                try:
+                    titres.append(construire(deck, get))
+                    faits.append(deck)
+                except Exception as ex:
+                    _echecs[deck] = (time.time(), str(ex))
+            if titres:
+                _publier("Partage : " + ", ".join(titres))
+        except Exception as ex:
+            reg = _registre()
+            for deck in faits:                     # déjà notés comme publiés par construire() : à refaire
+                reg[deck]["a_refaire"] = True
+            if faits:
+                _ecrire(REGISTRE, json.dumps(reg, ensure_ascii=False, indent=1))
+            for deck in liste:
+                _echecs[deck] = (time.time(), str(ex))
+            return
+    for deck in faits:
+        _echecs.pop(deck, None)
+
+
+def actif():
+    """Le partage est en place (connecté à GitHub, ou avec git) : tous les decks sont alors partagés."""
+    import reglages
+    return bool(github.compte() or reglages.github())
+
+
+def _retires():
+    """Les decks retirés du partage à la main (reglages.json, jamais publié) : pas republiés tout seuls."""
+    import reglages
+    return set(reglages.lire().get("non_partages") or ())
+
+
+def _retirer_a_la_main(deck, oui, nouveau=None):
+    import reglages
+    avant = _retires()
+    apres = (avant - {deck}) | ({nouveau or deck} if oui else set())
+    if apres != avant:
+        reglages.ecrire(non_partages=sorted(apres) or None)
 
 
 # ---------------------------------------------------------------- mise à jour automatique des pages partagées
@@ -617,51 +670,75 @@ def derniere_modif(deck):
 
 
 def a_republier(maintenant=None):
-    """Les decks partagés à republier, sans échec trop récent : modifiés depuis leur publication (au calme depuis CALME
-    secondes), ou publiés par une autre version de l'Atelier (ou avant qu'elle soit notée), pour que leur page ait
-    l'interface et les liens de celle-ci. Ceux-là attendent que la base de cartes soit chargée : la page s'en sert."""
+    """Les decks à publier, sans échec trop récent, quand le partage est en place :
+    - partagés et modifiés depuis leur publication, au calme depuis CALME secondes ;
+    - partagés et publiés par une autre version de l'Atelier (ou avant qu'elle soit notée), pour que leur page ait
+      l'interface et les liens de celle-ci, ou avant aujourd'hui : prix du jour, suggestions, Game Changers (toutes les
+      pages partent alors ensemble, au premier passage de la journée) ;
+    - pas encore partagés, s'ils ont des cartes et ne sont pas retirés du partage à la main, au calme.
+    Les deux derniers cas attendent que la base de cartes soit chargée : la page s'en sert."""
     import recherche
+    if not actif():
+        return []
     maintenant = maintenant or time.time()
-    base_prete = None
+    reg, retires, base = _registre(), _retires(), []
+    jour = time.strftime("%Y-%m-%d", time.localtime(maintenant))
+
+    def base_prete():
+        if not base:
+            base.append(recherche.etat_base()["prete"])
+        return base[0]
+
     r = []
-    for deck, p in _registre().items():
-        if not os.path.isdir(os.path.join(decks.RACINE, deck)):
-            continue
-        t, e = derniere_modif(deck), _echecs.get(deck)
+    for deck in decks.dossiers():
+        p, e = reg.get(deck), _echecs.get(deck)
         if e and maintenant - e[0] < REESSAI:
             continue
-        if t > p["date"] or p.get("a_refaire"):
-            if maintenant - t >= CALME:
-                r.append(deck)
-        elif p.get("version") != __version__:
-            if base_prete is None:
-                base_prete = recherche.etat_base()["prete"]
-            if base_prete:
-                r.append(deck)
+        t = derniere_modif(deck)
+        if p and (t > p["date"] or p.get("a_refaire")):
+            pret = maintenant - t >= CALME
+        elif p:
+            vieille = p.get("version") != __version__ or time.strftime("%Y-%m-%d", time.localtime(p["date"])) != jour
+            pret = vieille and base_prete()
+        elif deck not in retires and _a_des_cartes(deck):
+            pret = maintenant - t >= CALME and base_prete()
+        else:
+            pret = False
+        if pret:
+            r.append(deck)
     return r
 
 
+def _a_des_cartes(deck):
+    try:
+        return os.path.getsize(decks.chemin(deck)) > 0
+    except (OSError, KeyError):
+        return False
+
+
 def surveiller(get, pause=30):
-    """En fond tant que l'Atelier est ouvert : republie la page d'un deck partagé quand on a fini de le modifier,
-    depuis l'Atelier, le Claude de l'Atelier ou un éditeur. Au lancement, rattrape ce qui a changé Atelier fermé, et
-    après une mise à jour de l'Atelier, republie toutes les pages."""
+    """En fond tant que l'Atelier est ouvert : publie les decks pas encore partagés et republie une page quand on a
+    fini de modifier son deck, depuis l'Atelier, le Claude de l'Atelier ou un éditeur, ou quand elle date de la veille.
+    Au lancement, rattrape ce qui a changé Atelier fermé, et après une mise à jour de l'Atelier, republie toutes les
+    pages. Avant de publier, les prix et les Game Changers sont mis à jour (rien n'est refait s'ils sont du jour)."""
     while True:
         time.sleep(pause)
         try:
-            decks_a_faire = a_republier()
+            liste = a_republier()
+            if not liste or ic.etat.get("tache"):             # une mise à jour des prix tourne : la page attendra la fin
+                continue
+            ic.mise_a_jour(sorted({c["nom"] for d in liste for c in decks.lire(decks.chemin(d))}))
         except Exception:
             continue
-        for deck in decks_a_faire:
-            try:
-                partager(deck, get)
-            except Exception as ex:
-                _echecs[deck] = (time.time(), str(ex))
+        publier(liste, get)
 
 
 def renommer(ancien, nouveau):
     """Le deck a changé de nom : sa page garde son adresse (le lien déjà envoyé marche toujours) et sera republiée
     avec le nouveau titre par surveiller()."""
     with _verrou:
+        if ancien in _retires():
+            _retirer_a_la_main(ancien, True, nouveau)
         reg = _registre()
         if ancien not in reg:
             return
@@ -685,4 +762,5 @@ def retirer(deck):
         _ecrire(REGISTRE, json.dumps(reg, ensure_ascii=False, indent=1))
         _accueil(reg, compte()[1])
         _publier(f"Retrait : {deck.removeprefix('Deck ')}")
+    _retirer_a_la_main(deck, True)
     return {}
