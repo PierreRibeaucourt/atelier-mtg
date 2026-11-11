@@ -3883,13 +3883,13 @@ const MODULES_BASES = [
 ];
 // « Ce qui fait la différence » : ce que les autres outils n'ont pas, du plus marquant au moins marquant
 const MODULES_ATOUTS = [
-  ["simulateur", "Simulateur de parties", "En un clic, le simulateur joue un millier de parties à quatre joueurs et dit si votre deck est régulier : le mana arrive-t-il à l'heure, jouez-vous vos cartes, tenez-vous votre board, gérez-vous celui des adversaires, quand arrive votre commandant. Il indique combien de vos cartes il comprend, et vous pouvez comparer deux versions d'un même deck. Avec Claude, il va plus loin : Claude lui apprend les cartes qu'il lit mal, rejoue et vous explique le résultat, taux de victoire compris."],
+  ["simulateur", "Simulateur de parties", "En un clic, simulez 1 000 parties à quatre joueurs pour tester la régularité de votre deck (mana, présence sur table, gestion, sortie du commandant). Comparez deux versions d'une même liste pour mesurer vos changements. Avec Claude, le simulateur apprend les cartes complexes, rejoue et vous détaille ses résultats."],
   ["bracket", "Bracket", "Le bracket est estimé automatiquement selon les règles officielles : Game Changers, combos infinies à deux cartes, tuteurs… et comparé à l'estimation de Commander Spellbook."],
   ["statistiques", "Statistiques et base de mana", "Courbe de mana, types, fonctions des cartes et surtout la répartition des sources de couleur : elle compte les terrains et les cartes de ramp, et dit si chaque couleur est confortable."],
-  ["suggestions", "Suggestions de cartes", "Des cartes proposées pour votre deck, d'après son commandant et les cartes déjà dedans : celles qui suivent ses thèmes, celles qui complètent une combo, explication comprise, et celles qui attendent dans votre classeur. Toujours dans vos couleurs et votre budget, triées par intérêt, avec des filtres par type, fonction, coût et prix. Le calcul se fait sans IA."],
-  ["budget", "Prix Cardmarket et budget", "Le prix indicatif Cardmarket du jour pour chaque carte et chaque deck, avec une alerte au-delà de votre budget par carte. Les cartes qui vous manquent se copient au format des listes de souhaits de Cardmarket : collez-les sur le site, il calcule le panier."],
+  ["suggestions", "Suggestions de cartes", "Des recommandations ciblées selon votre commandant, vos combos et votre classeur. Triées par pertinence, adaptées à vos couleurs et à votre budget, avec filtres par type, coût et prix."],
+  ["budget", "Prix Cardmarket et budget", "Les prix Cardmarket pour vos cartes et vos decks, avec alerte en cas de dépassement de budget. Exportez les cartes manquantes au format liste de souhaits Cardmarket en un clic pour calculer directement votre panier."],
   ["combos", "Combos", "Les combos du deck sont repérées automatiquement, en croisant plusieurs sources : MTGPics (la base de Magic-Ville) et Commander Spellbook."],
-  ["discussion", "Discussion avec Claude", "Facultative, à droite de l'écran : Claude voit vos decks et tout ce que montre l'Atelier (statistiques, suggestions, combos, bracket, classeur), et s'appuie sur des repères de construction reconnus. Il aide à catégoriser les cartes, faire un cut, chercher des idées ou vérifier une interaction. Aucune clé d'API à créer : elle passe par Claude Code et votre abonnement Claude payant (Pro ou plus), dont elle consomme simplement l'usage normal."],
+  ["discussion", "Discussion avec Claude", "Un copilote optionnel qui a accès à tout votre Atelier (decks, stats, combos, classeur). Il vous aide à faire vos cuts, explorer des synergies ou vérifier des règles complexes. Aucune clé d'API à configurer : il utilise directement votre abonnement Claude payant (Pro ou supérieur)."],
 ];
 // les questions des visiteurs (joueurs experts, débutants, non-informaticiens), repliées ; une réponse en HTML commence par « < »
 const FAQ_ATELIER = [
@@ -3975,10 +3975,10 @@ function vueAPropos(installation = false) {
       </div>
     </header>
     <article class="a-propos">
-      <p class="chapeau">Le gestionnaire de decks Commander local, sans compte et taillé pour le deckbuilding assisté.</p>
+      <p class="chapeau">Le deckbuilding Commander assisté, 100% local et sans compte.</p>
       <p>L'Atelier est une application locale, qui s'ouvre dans votre navigateur, pensée pour concevoir, tester et faire évoluer
-        des decks Magic: The Gathering en Commander. Pas de publicité, aucun compte en ligne, pas de données hébergées sur un
-        serveur distant : tout s'exécute directement sur votre ordinateur.</p>
+        des decks Magic: The Gathering en Commander. Zéro pub, zéro compte, zéro cloud : l'Atelier tourne uniquement sur
+        votre PC.</p>
 
       <h2>Les bases : un outil complet</h2>
       ${modules(MODULES_BASES)}
@@ -3996,10 +3996,10 @@ function vueAPropos(installation = false) {
       <ul class="ap-principes">
         <li><strong>Open source et gratuit.</strong> Le code est publié sous <a href="${depot}/blob/main/LICENSE" target="_blank" rel="noopener">licence MIT</a> :
           accessible, vérifiable et modifiable par tous sur GitHub.</li>
-        <li><strong>Données souveraines.</strong> Vos decks restent sur votre disque dur et rien n'est collecté. Seules sortent les
+        <li><strong>Vos decks sont stockés sur votre PC.</strong> Rien n'est collecté. Seules sortent les
           requêtes nécessaires : données, images et prix des cartes (Scryfall), combos et bracket (Commander Spellbook, MTGPics),
           la discussion avec Claude si vous l'utilisez, et les pages que vous choisissez de partager.</li>
-        <li><strong>IA strictement modulaire.</strong> Tri, statistiques, suggestions, test du simulateur et jeu en solo
+        <li><strong>L'IA est optionnelle.</strong> Tri, statistiques, suggestions, test du simulateur et jeu en solo
           fonctionnent sans aucune configuration IA.</li>
       </ul>
 
@@ -4067,8 +4067,8 @@ python installer.py</code><button type="button" data-copier>Copier</button></div
         <li><strong>Cardmarket</strong> pour les cotations du jour ;</li>
         <li><strong>les règles officielles</strong> pour le contrôle direct des cartes interdites, des brackets et des Game Changers.</li>
       </ul>
-      <p>L'Atelier est né de cette synthèse : une interface locale fluide pour gérer ses cartes, connectable à la demande à un
-        assistant IA pour auditer un deck, automatiser le classement ou affiner les simulations.</p>
+      <p>J'ai donc créé l'Atelier pour réunir tout ça : une vraie interface sur PC pour construire vos decks, avec la
+        possibilité d'appeler l'IA en renfort si besoin.</p>
     </article>`;
   $$(".ap-tete img[data-f], .a-propos img[data-f]").forEach((img) => {
     img.onerror = () => {                       // dans l'Atelier : la capture de ce PC, sinon celle du site de l'auteur
