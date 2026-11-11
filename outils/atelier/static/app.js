@@ -3905,6 +3905,8 @@ const AUTEUR_ATELIER = "PierreRibeaucourt";
 const DEPOT_ATELIER = "https://github.com/PierreRibeaucourt/atelier-mtg";
 // les captures de la page : sur le site de decks de l'auteur, pas dans le dépôt de code (on y voit des cartes et une discussion)
 const CAPTURES_ATELIER = "https://pierreribeaucourt.github.io/decks/a-propos/";
+// les decks partagés de l'auteur : à quoi ressemble une page partagée, en vrai
+const EXEMPLES_ATELIER = "https://pierreribeaucourt.github.io/decks/";
 // pour qui n'a pas encore d'assistant IA : Claude Code dans l'application de bureau, sans terminal (guide en français)
 const CLAUDE_BUREAU = "https://code.claude.com/docs/fr/desktop-quickstart";
 // [capture, titre, texte] ; « Les bases » : ce qu'on attend de tout gestionnaire de decks
@@ -3944,7 +3946,7 @@ const FAQ_ATELIER = [
     ["Comment entrent mes cartes ?",
       "On colle une liste copiée depuis Moxfield, Archidekt ou MTG Arena. La liste d'un deck préconstruit se trouve sur ces sites. Les cartes rangées hors des decks se collent de la même façon dans le classeur."],
     ["Et sur mon téléphone ?",
-      "L'Atelier s'ouvre sur le PC. Pour emporter un deck, « Partager » le publie en ligne, sur une page comme celle-ci : elle se lit sur téléphone et se met à jour toute seule quand le deck change. Il faut un compte GitHub, gratuit : c'est lui qui héberge votre page."],
+      `<p>L'Atelier s'ouvre sur le PC. Pour emporter un deck, « Partager » le publie en ligne, sur une page <a href="${EXEMPLES_ATELIER}">comme celles-ci</a> : elle se lit sur téléphone et se met à jour toute seule quand le deck change. Il faut un compte GitHub, gratuit : c'est lui qui héberge votre page.</p>`],
     ["Puis-je partir avec mes decks ?",
       "Oui. Chaque deck est un dossier sur votre disque, avec sa liste en texte (format Archidekt, tags compris), son historique et ses versions. Le menu « … » copie la liste pour Archidekt, Moxfield, MTG Arena ou MTGO."],
   ]],
@@ -4001,7 +4003,8 @@ function vueAPropos(installation = false) {
           <h1>L'Atelier <span>MTG</span></h1>
           <p class="ap-accroche">Vos decks Commander,<br>de la liste à la table.</p>
           <ul class="ap-puces">${["Suggestions", "Base de mana", "Combos", "Bracket", "Table de jeu", "Recherche avancée", "Claude"].map((x) => `<li>${x}</li>`).join("")}</ul>
-          <p class="ap-cta"><a class="btn btn-accent" href="${INSTALLER}" id="ap-installer">${ico("telecharger")}Installer l'Atelier MTG</a></p>
+          <p class="ap-cta"><a class="btn btn-accent" href="${INSTALLER}" id="ap-installer">${ico("telecharger")}Installer l'Atelier MTG</a>
+            <a class="btn" href="${EXEMPLES_ATELIER}">${ico("partager")}Voir des decks partagés</a></p>
           <p class="ap-mention"><b>Gratuit</b> · open source · tout reste sur votre PC${versionAtelier ? ` · version ${esc(versionAtelier)}` : ""}</p>
         </div>
       </div>
@@ -4021,7 +4024,7 @@ function vueAPropos(installation = false) {
       <h2>Et aussi</h2>
       <div class="ap-grille">
         ${fonction("Import en un collage", "Une liste copiée depuis Moxfield, Archidekt ou MTG Arena devient un deck, rangé par catégories.")}
-        ${fonction("Partage simplifié", "Publication en un clic d'une page de présentation légère, comme celle-ci, à partager avec votre groupe de jeu.")}
+        ${fonction("Partage simplifié", `Chaque deck a sa page en ligne, tenue à jour toute seule, à envoyer à votre groupe de jeu : liste, visuel, statistiques, et une table pour le tester. <a href="${EXEMPLES_ATELIER}">Voir des exemples</a>`)}
       </div>
 
       <h2>Philosophie : local, ouvert et transparent</h2>

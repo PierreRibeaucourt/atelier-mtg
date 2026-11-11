@@ -865,7 +865,7 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .ap-puces { list-style: none; padding: 0; margin: 0 0 1.5rem; display: flex; flex-wrap: wrap; gap: 7px; }
 .ap-puces li { font-size: .85rem; line-height: 1.5; padding: .15rem .7rem; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--bord);
   color: var(--texte-2); }
-.ap-cta { margin: 0 0 .8rem; }
+.ap-cta { margin: 0 0 .8rem; display: flex; flex-wrap: wrap; gap: .6rem; }
 .ap-mention { margin: 0; font-size: .85rem; color: var(--texte-2); }
 .ap-mention b { color: var(--accent); font-weight: 600; }
 @media (max-width: 900px) {                        /* écran étroit : le texte seul */
