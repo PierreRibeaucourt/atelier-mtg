@@ -1076,10 +1076,14 @@ def impression_image(nom, set_):
 
 
 def apercu(nom):
-    """Image et prix d'une carte citée."""
+    """Image et prix d'une carte citée ; l'image dans la langue choisie (Options) quand elle existe."""
     b = base()
     x = b and b["par_cle"].get(ic._cle(nom).lower())
     if not x:
         return None
+    image = ic.impression_langue(x["n"])
     s = _sortie(x, b, {}, None, ic.aujourdhui())
-    return {k: s[k] for k in ("nom", "fr", "image", "prix", "foil")}
+    r = {k: s[k] for k in ("nom", "fr", "image", "prix", "foil")}
+    if image:
+        r["image"] = image
+    return r

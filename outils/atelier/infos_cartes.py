@@ -239,23 +239,25 @@ def _temoin(f):
 
 
 @_temoin
-def rafraichir_prix(noms, force=False, suivi=True):
+def rafraichir_prix(noms, force=False, suivi=True, langue=None):
     """Prix du jour et impression par défaut de chaque carte, selon les préférences (Options) : l'impression la moins
     chère, ou la moins chère qui existe dans la langue choisie (son image dans cette langue, le prix de son édition) ;
     hors Universes Beyond quand il en existe une autre, si on l'a demandé. Prix en euros hors foil, comme outils/prix.py
     (le foil si la carte n'existe qu'en foil). Gardé 24 h ; la liste des impressions dans la langue choisie, une semaine.
     Une impression choisie dans un deck (« (ima) 205 ») garde son image : celle-ci ne sert que par défaut.
-    suivi=False : sans afficher l'avancement dans la barre du haut (recherche d'une carte)."""
+    suivi=False : sans afficher l'avancement dans la barre du haut (recherche d'une carte), ni lire les impressions dans
+    la langue choisie, sauf langue=True (aperçu d'une carte citée)."""
     cache = _charge()
     jour = aujourdhui()
     lang, sans_ub = reglages.impression()
+    avec_langue = suivi if langue is None else langue
     pref = f"{lang or ''}|{int(sans_ub)}"                 # préférences changées : tout est à refaire
     _bases_par_defaut(noms, lang, sans_ub, pref)
     def a_refaire(f):
         # « prix_edition » absent = prix calculé avant l'exclusion des éditions douteuses : à refaire
         if force or f.get("prix_date") != jour or "prix_edition" not in f:
             return True
-        return f.get("imp_pref") != pref and (suivi or not lang)     # recherche : la langue attendra une mise à jour suivie
+        return f.get("imp_pref") != pref and (avec_langue or not lang)     # recherche : la langue attendra une mise à jour suivie
     a_faire = [n for n in noms if n not in BASES_FR and cache["cartes"].get(n) and a_refaire(cache["cartes"][n])]
     if not a_faire:
         _sauve()
@@ -276,7 +278,7 @@ def rafraichir_prix(noms, force=False, suivi=True):
 
     # les impressions dans la langue choisie, relues chaque semaine ; pas pour une recherche (suivi=False) : ses images
     # viennent de la base de cartes, et la carte sera complétée quand elle entrera dans un deck ou le classeur
-    if lang and suivi:
+    if lang and avec_langue:
         def perime(f):
             L = f.get("imp_lang") or {}
             return L.get("lang") != lang or not L.get("date") or (date.fromisoformat(jour) - date.fromisoformat(L["date"])).days >= 7
@@ -313,6 +315,24 @@ def rafraichir_prix(noms, force=False, suivi=True):
             if not lang or (f.get("imp_lang") or {}).get("lang") == lang:
                 f["imp_pref"] = pref                 # sinon : à refaire avec la langue, à la prochaine mise à jour suivie
     _sauve()
+
+
+def impression_langue(nom):
+    """Image d'une carte citée (discussion, suggestions…) dans la langue choisie (Options), comme dans les decks. La base
+    de cartes n'a que les impressions anglaises : la première fois, l'Atelier lit celles de la langue sur Scryfall
+    (une seconde environ), puis les garde. None : aucune langue choisie, pas d'impression dans cette langue, ou pas de réseau."""
+    lang, sans_ub = reglages.impression()
+    if not lang:
+        return None
+    try:
+        infos([nom])
+        f = _charge()["cartes"].get(nom)
+        if f and f.get("imp_pref") != f"{lang}|{int(sans_ub)}":
+            rafraichir_prix([nom], suivi=False, langue=True)
+    except Exception:
+        return None
+    f = _charge()["cartes"].get(nom) or {}
+    return f.get("image") if (f.get("imp") or {}).get("lang") == lang else None
 
 
 @_temoin
