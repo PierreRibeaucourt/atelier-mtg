@@ -835,9 +835,12 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
   border-top: 1px solid var(--bord); }
 .a-propos h3 { font-size: 1rem; margin: 1.4rem 0 .3rem; }
 .a-propos p { margin: .6rem 0; }
-/* ce qu'il faut retenir de la page : centré, la promesse (local, sans compte) en grand sur sa ligne, en orange */
-.a-propos .chapeau { font-size: 1.15rem; line-height: 1.55; color: var(--texte-2); text-align: center; max-width: 40rem; margin: 1.2rem auto 2rem; }
-.a-propos .chapeau strong { display: block; margin-top: .7rem; font-size: 1.5rem; line-height: 1.3; color: var(--accent); }
+/* ce qu'il faut retenir de la page : un bandeau sur toute la largeur, la promesse (local, sans compte) en grand */
+.ap-bandeau { width: min(1100px, calc(100vw - 2rem)); position: relative; left: 50%; transform: translateX(-50%); margin: 1.2rem 0 2rem;
+  padding: 1.8rem 1rem; text-align: center; background: var(--surface); border-top: 1px solid var(--bord); border-bottom: 1px solid var(--bord); }
+.ap-bandeau p { max-width: 44rem; margin: 0 auto; color: var(--texte-2); }
+.ap-bandeau .ap-promesse { margin-bottom: .6rem; font-size: 1.7rem; font-weight: 800; line-height: 1.25; color: var(--texte); }
+.ap-promesse em { font-style: normal; color: var(--accent); }
 .a-propos p a:not(.btn), .a-propos li a:not(.btn) { color: var(--accent); }
 .ap-signature { font-size: .85rem; color: var(--texte-2); margin-top: -.3rem !important; }
 .ap-sources, .ap-principes { padding-left: 1.2rem; }

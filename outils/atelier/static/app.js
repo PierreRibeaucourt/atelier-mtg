@@ -3975,9 +3975,11 @@ function vueAPropos(installation = false) {
       </div>
     </header>
     <article class="a-propos">
-      <p class="chapeau">L'Atelier est une application locale, qui s'ouvre dans votre navigateur, pensée pour concevoir, tester et
-        faire évoluer des decks Magic: The Gathering en Commander. <strong>Zéro pub, zéro compte, zéro cloud : l'Atelier tourne
-        uniquement sur votre PC.</strong></p>
+      <div class="ap-bandeau">
+        <p class="ap-promesse">Zéro pub, zéro compte, zéro cloud : l'Atelier tourne <em>uniquement sur votre PC</em>.</p>
+        <p>L'Atelier est une application locale, qui s'ouvre dans votre navigateur, pensée pour concevoir, tester et faire
+          évoluer des decks Magic: The Gathering en Commander.</p>
+      </div>
 
       <h2>Les bases : un outil complet</h2>
       ${modules(MODULES_BASES)}
