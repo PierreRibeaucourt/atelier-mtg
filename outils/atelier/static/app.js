@@ -1041,10 +1041,7 @@ const jaugeSugg = (note) => {
   return `<span class="sg-jauge" role="img" aria-label="Intérêt : ${n} sur 5">${[1, 2, 3, 4, 5].map((k) => `<i class="${k <= n ? "plein" : ""}"></i>`).join("")}</span>`;
 };
 
-const badgesSugg = (x, d) => [
-  badgesRch(x, d),
-  x.classeur ? `<span class="badge badge-ok">Classeur${x.classeur > 1 ? " ×" + x.classeur : ""}</span>` : "",
-].join("");
+const badgesSugg = (x, d) => badgesRch(x, d);
 
 function actionsSugg(x, images = false) {                  // en images : « Écarter » en icône, pour tenir sous la carte
   if (x.dans === "deck") return `<span class="badge badge-ok">✓ dans le deck</span>`;
