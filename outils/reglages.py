@@ -9,7 +9,8 @@
 - fermeture : « arreter » = l'Atelier s'arrête quand on ferme sa dernière page ; sinon il reste prêt en arrière-plan.
 - langue_cartes : l'impression par défaut des cartes est la moins chère qui existe dans cette langue (« fr »…) ;
   sans elle, la moins chère.
-- sans_ub : éviter les cartes Universes Beyond quand c'est possible (suggestions, impressions par défaut).
+- sans_ub_illustrations : impression par défaut hors Universes Beyond quand il en existe une autre (Sol Ring, une Île…).
+- sans_ub_suggestions : ne pas suggérer les cartes qui n'existent qu'en Universes Beyond (Marvel, Final Fantasy…).
 - preferences : true une fois que la page a posé ses questions (fermeture, impression, Universes Beyond).
 """
 import json
@@ -74,9 +75,14 @@ LANGUES = {"fr": "français", "de": "allemand", "it": "italien", "es": "espagnol
 
 
 def impression():
-    """(langue des impressions par défaut, ou None pour la moins chère toutes langues ; éviter les Universes Beyond)."""
+    """(langue des impressions par défaut, ou None pour la moins chère toutes langues ; éviter les illustrations
+    Universes Beyond)."""
     r = lire()
-    return (r.get("langue_cartes") if r.get("langue_cartes") in LANGUES else None), bool(r.get("sans_ub"))
+    return (r.get("langue_cartes") if r.get("langue_cartes") in LANGUES else None), bool(r.get("sans_ub_illustrations"))
+
+
+def sans_ub_suggestions():
+    return bool(lire().get("sans_ub_suggestions"))
 
 
 def arret_a_la_fermeture():

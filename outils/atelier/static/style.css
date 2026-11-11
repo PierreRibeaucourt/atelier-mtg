@@ -305,6 +305,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .fiche-image { width: 180px; }
 .champ { width: 100%; padding: .55rem .7rem; border: 1px solid var(--bord); border-radius: 8px; background: var(--fond); }
 .champ:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+/* listes déroulantes : notre chevron, à distance du bord (celui du navigateur y est collé) */
+select.champ { appearance: none; padding-right: 2.3rem; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238f8a84' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right .75rem center; background-size: .95rem; }
+select.champ.champ-petit, .moteur select.champ.champ-petit { padding-right: 1.8rem; background-position: right .5rem center; background-size: .8rem; }
 .resultats { margin: .5rem 0; display: grid; gap: 2px; max-height: 320px; overflow: auto; }
 .resultats button { text-align: left; border: 0; background: transparent; padding: .4rem .55rem; border-radius: 6px; cursor: pointer; }
 .resultats button:hover, .resultats button.choisi { background: var(--accent-doux); }
@@ -945,13 +949,32 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 button.badge { border: 0; font-family: inherit; cursor: pointer; }
 button.badge:hover { box-shadow: inset 0 0 0 1px currentColor; }
 
-/* ---- options : réglages de ce PC, puis le classeur (cartes qu'on a hors des decks) */
-.options h2 { margin-top: 0; }
-.opt-ligne { display: grid; grid-template-columns: 10.5rem minmax(0, 18rem); align-items: center; gap: .3rem 1rem; margin: .55rem 0; }
+/* ---- options : trois blocs (cartes, partage, l'Atelier), puis le classeur (cartes qu'on a hors des decks) */
+.options h2 { margin-top: 0; display: flex; align-items: center; gap: .5rem; }
+.options h2 .ico { color: var(--accent); }
+.opt-grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: 1rem; align-items: start;
+  margin-bottom: 1rem; }
+.opt-grille .panneau { margin: 0; }
+.opt-bloc h2 { font-size: 1.1rem; margin-bottom: .2rem; }
+/* une ligne par réglage, séparées d'un trait ; le libellé au-dessus du champ, ou à gauche de l'interrupteur */
+.opt-lignes > * { padding: .8rem 0; }
+.opt-lignes > * + * { border-top: 1px solid var(--bord); }
+.opt-lignes > :last-child { padding-bottom: 0; }
+.opt-champ { display: grid; gap: .4rem; }
+.opt-champ > span:first-child { font-size: .85rem; color: var(--texte-2); }
 .opt-euros { display: inline-flex; align-items: center; gap: .45rem; }
 .opt-euros .champ { width: 6rem; }
-.opt-case { display: flex; align-items: center; gap: .5rem; margin-top: .9rem; cursor: pointer; }
 .opt-github { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .8rem; }
+.opt-boutons { display: flex; flex-wrap: wrap; gap: .5rem; }
+.opt-bascule { display: flex; align-items: center; justify-content: space-between; gap: 1rem; cursor: pointer; line-height: 1.4; }
+.opt-bascule input { appearance: none; flex: none; position: relative; width: 2.4rem; height: 1.4rem; margin: 0; border-radius: 1rem;
+  background: var(--surface-2); border: 1px solid var(--bord); cursor: pointer; transition: background-color .15s, border-color .15s; }
+.opt-bascule input::after { content: ""; position: absolute; top: 2px; left: 2px; width: calc(1.4rem - 6px); height: calc(1.4rem - 6px);
+  border-radius: 50%; background: var(--texte-2); transition: transform .15s, background-color .15s; }
+.opt-bascule input:checked { background: var(--accent); border-color: var(--accent); }
+.opt-bascule input:checked::after { transform: translateX(1rem); background: var(--accent-texte); }
+.opt-bascule input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .opt-bascule input, .opt-bascule input::after { transition: none; } }
 /* connexion à GitHub par code (partage sans git) : trois étapes numérotées, le code en grand */
 .gh-etapes { list-style: none; counter-reset: gh; margin: .4rem 0 1rem; padding: 0; display: grid; gap: .9rem; }
 .gh-etapes li { counter-increment: gh; position: relative; padding-left: 2.3rem; min-height: 1.6rem; line-height: 1.6rem; }
@@ -985,7 +1008,7 @@ button.badge:hover { box-shadow: inset 0 0 0 1px currentColor; }
     grid-template-areas: "img vo cout" "img vf vf" "img det det" "img prix qte"; }
   .rch-liste.cl-table .rch-prix { align-self: center; }
 }
-@media (max-width: 600px) { .opt-ligne, .cl-outils { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) { .cl-outils { grid-template-columns: minmax(0, 1fr); } }
 
 /* ---- onglet Suggestions : les groupes et Liste | Images, les filtres, puis la liste du classeur avec une colonne Intérêt */
 .sg-tete { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1rem; margin-bottom: .6rem; }

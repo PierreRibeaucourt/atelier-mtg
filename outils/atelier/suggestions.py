@@ -211,7 +211,7 @@ def calculer(deck):
     poss = classeur.cartes()
     combos = _combos(deck)
     ub = _universes_beyond()
-    sans_ub = reglages.impression()[1]                      # Options : éviter les Universes Beyond (qui n'existent qu'ainsi)
+    sans_ub = reglages.sans_ub_suggestions()                # Options : ne pas suggérer de cartes Universes Beyond
 
     def proposable(x):
         return (x["_cle"] not in a["cles"] and x["n"] not in refus and "commander" in x["_lg"] and set(x["ci"]) <= ident

@@ -1519,32 +1519,35 @@ function renommerPrefs(ancien, nouveau) {
 }
 
 // ------------------------------------------------------------------ options : réglages de ce PC (reglages.json), démarrage, classeur
+// Options : trois blocs (les cartes, le partage, le programme), puis le classeur
 async function vueOptions() {
   vue.innerHTML = `<nav class="fil" aria-label="Fil d'Ariane"><a href="#/">Mes decks</a><span aria-hidden="true">›</span><span aria-current="page">Options</span></nav>
-    <section class="panneau options" id="opt-general"><p class="chargement">Chargement…</p></section>
+    <div class="opt-grille" id="opt-general"><p class="chargement">Chargement…</p></div>
     <section class="panneau options" id="opt-classeur"></section>`;
   optionsGenerales($("#opt-general"), await api("/api/options"));
   classeurOptions($("#opt-classeur"));
 }
 
-// les préférences demandées une fois au premier lancement (modalePreferences), puis modifiables dans les options
-const champsPreferences = (o) => `
-    <label class="opt-ligne"><span>Page fermée</span><select class="champ" name="fermeture">
+// les champs des options ; ceux des préférences sont aussi demandés une fois au premier lancement (modalePreferences)
+const bascule = (nom, oui, texte) => `<label class="opt-bascule"><span>${texte}</span><input type="checkbox" role="switch" name="${nom}" ${oui ? "checked" : ""}></label>`;
+const champFermeture = (o) => `<label class="opt-champ"><span>Page fermée</span><select class="champ" name="fermeture">
       <option value="garder">Garder l'Atelier prêt</option>
-      <option value="arreter" ${o.fermeture === "arreter" ? "selected" : ""}>Arrêter l'Atelier</option></select></label>
-    <label class="opt-ligne"><span>Visuel par défaut</span><select class="champ" name="langue_cartes">
+      <option value="arreter" ${o.fermeture === "arreter" ? "selected" : ""}>Arrêter l'Atelier</option></select></label>`;
+const champVisuel = (o) => `<label class="opt-champ"><span>Visuel par défaut</span><select class="champ" name="langue_cartes">
       <option value="">L'édition la moins chère</option>
-      ${Object.entries(o.langues || {}).map(([k, l]) => `<option value="${k}" ${o.langue_cartes === k ? "selected" : ""}>La moins chère en ${esc(l)}</option>`).join("")}</select></label>
-    <label class="opt-case"><input type="checkbox" name="sans_ub" ${o.sans_ub ? "checked" : ""}>Éviter les cartes Universes Beyond quand c'est possible</label>`;
+      ${Object.entries(o.langues || {}).map(([k, l]) => `<option value="${k}" ${o.langue_cartes === k ? "selected" : ""}>La moins chère en ${esc(l)}</option>`).join("")}</select></label>`;
+const basculesUB = (o) => bascule("sans_ub_illustrations", o.sans_ub_illustrations, "Éviter les illustrations Universes Beyond quand c'est possible")
+  + bascule("sans_ub_suggestions", o.sans_ub_suggestions, "Ne pas suggérer de cartes Universes Beyond");
 
 function modalePreferences(o) {
-  ouvrirModale(`<h2>Préférences</h2><div class="options">${champsPreferences(o)}</div>
+  ouvrirModale(`<h2>Préférences</h2><div class="opt-lignes">${champFermeture(o)}${champVisuel(o)}${basculesUB(o)}</div>
     <div class="boutons"><button class="btn btn-accent" id="ok">Enregistrer</button></div>`, (b) => {
     const champ = (n) => $(`[name="${n}"]`, b);
     $("#ok", b).onclick = async () => {
       try {
         await api("/api/options", { method: "POST", body: { fermeture: champ("fermeture").value,
-          langue_cartes: champ("langue_cartes").value, sans_ub: champ("sans_ub").checked, preferences: true } });
+          langue_cartes: champ("langue_cartes").value, sans_ub_illustrations: champ("sans_ub_illustrations").checked,
+          sans_ub_suggestions: champ("sans_ub_suggestions").checked, preferences: true } });
         fermerModale();
         toast("Enregistré.");
       } catch (e) { erreur(e); }
@@ -1555,14 +1558,19 @@ function modalePreferences(o) {
 // chaque champ s'enregistre quand on le quitte (ou Entrée), la case tout de suite
 function optionsGenerales(el, o) {
   const budget = (b) => (b == null ? "" : String(b).replace(".", ","));
-  el.innerHTML = `<div class="opt-titre"><h2>Général</h2>
-      <button type="button" class="btn btn-petit btn-discret" id="opt-dossier">${ico("dossier")}Ouvrir le dossier</button>
-      <button type="button" class="btn btn-petit btn-discret" id="opt-arreter">${ico("arreter")}Arrêter l'Atelier</button></div>
-    <label class="opt-ligne"><span>Nom affiché</span><input class="champ" name="nom" maxlength="60" value="${esc(o.nom)}" placeholder="${esc(o.github)}"></label>
-    <label class="opt-ligne"><span>Budget par carte</span><span class="opt-euros"><input class="champ" name="budget" inputmode="decimal" value="${budget(o.budget)}" placeholder="${budget(o.budget_defaut)}">€</span></label>
-    <div id="opt-github"></div>
-    ${champsPreferences(o)}
-    ${o.demarrage == null ? "" : `<label class="opt-case"><input type="checkbox" name="demarrage" ${o.demarrage ? "checked" : ""}>Lancer l'Atelier au démarrage de Windows</label>`}`;
+  const bloc = (icone, titre, lignes) => `<section class="panneau options opt-bloc"><h2>${ico(icone)}${titre}</h2><div class="opt-lignes">${lignes}</div></section>`;
+  el.innerHTML = bloc("cartes", "Cartes", `
+      <label class="opt-champ"><span>Budget par carte</span><span class="opt-euros"><input class="champ" name="budget" inputmode="decimal" value="${budget(o.budget)}" placeholder="${budget(o.budget_defaut)}">€</span></label>
+      ${champVisuel(o)}${basculesUB(o)}`)
+    + bloc("partager", "Partage", `
+      <label class="opt-champ"><span>Nom affiché</span><input class="champ" name="nom" maxlength="60" value="${esc(o.nom)}" placeholder="${esc(o.github)}"></label>
+      <div id="opt-github"></div>`)
+    + bloc("options", "L'Atelier", `
+      ${o.demarrage == null ? "" : bascule("demarrage", o.demarrage, "Lancer au démarrage de Windows")}
+      ${champFermeture(o)}
+      <div class="opt-boutons">
+        <button type="button" class="btn btn-petit" id="opt-dossier">${ico("dossier")}Ouvrir le dossier</button>
+        <button type="button" class="btn btn-petit" id="opt-arreter">${ico("arreter")}Arrêter l'Atelier</button></div>`);
   el.onchange = async (ev) => {
     const c = ev.target;
     if (!c.name) return;
@@ -1594,10 +1602,10 @@ async function ligneGithub(el, o) {
   const nom = $('[name="nom"]');
   if (nom) nom.placeholder = g.compte || o.github || "";
   if (g.git && !g.compte) {
-    el.innerHTML = `<label class="opt-ligne"><span>Compte GitHub</span><input class="champ" name="github" maxlength="39" value="${esc(o.github)}" autocomplete="off" spellcheck="false"></label>`;
+    el.innerHTML = `<label class="opt-champ"><span>Compte GitHub</span><input class="champ" name="github" maxlength="39" value="${esc(o.github)}" autocomplete="off" spellcheck="false"></label>`;
     return;
   }
-  el.innerHTML = `<div class="opt-ligne"><span>GitHub</span><span class="opt-github">${g.compte
+  el.innerHTML = `<div class="opt-champ"><span>GitHub</span><span class="opt-github">${g.compte
     ? `<strong>${esc(g.compte)}</strong><button type="button" class="btn btn-petit btn-discret" id="gh-deconnecter">Se déconnecter</button>`
     : `<button type="button" class="btn btn-accent btn-petit" id="gh-options">Se connecter à GitHub</button>`}</span></div>`;
   if (g.compte) $("#gh-deconnecter", el).onclick = async () => {
@@ -1690,7 +1698,7 @@ async function classeurOptions(el) {
   if (!TRI_CLASSEUR[tri]) tri = "nom";
   let sens = PREF.get("sens-classeur", TRI_CLASSEUR_DESC[tri] ? "desc" : "asc");
   let vueImages = PREF.get("vue-classeur", "liste") === "images";
-  el.innerHTML = `<div class="opt-titre"><h2>Classeur</h2>
+  el.innerHTML = `<div class="opt-titre"><h2>${ico("livre")}Classeur</h2>
       <button type="button" class="btn btn-petit btn-discret" id="cl-copier">${ico("copier")}Copier la liste</button></div>
     <div class="cl-outils"><div id="cl-ajout"></div><input class="champ" id="cl-filtre" type="search" placeholder="Filtrer…" aria-label="Filtrer le classeur"></div>
     <details class="cl-coller"><summary>Coller une liste</summary>

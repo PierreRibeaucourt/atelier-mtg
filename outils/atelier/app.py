@@ -293,14 +293,15 @@ def api_options():
     lang, sans_ub = reglages.impression()
     return jsonify(nom=r.get("nom") or "", github=r.get("github") or "", budget=r.get("budget"), budget_defaut=reglages.BUDGET_DEFAUT,
                    demarrage=demarrage(), fermeture="arreter" if reglages.arret_a_la_fermeture() else "garder",
-                   langue_cartes=lang or "", sans_ub=sans_ub, langues=reglages.LANGUES, preferences=bool(r.get("preferences")))
+                   langue_cartes=lang or "", sans_ub_illustrations=sans_ub, sans_ub_suggestions=reglages.sans_ub_suggestions(),
+                   langues=reglages.LANGUES, preferences=bool(r.get("preferences")))
 
 
 @app.post("/api/options")
 def api_options_ecrire():
     """Ce qui change : nom, github, budget (vide = 5 € par défaut, 0 = pas d'alerte), demarrage (true / false),
-    fermeture (garder / arreter), langue_cartes (vide = la moins chère, ou un code de reglages.LANGUES), sans_ub,
-    preferences (true : les questions du premier lancement ont eu leur réponse)."""
+    fermeture (garder / arreter), langue_cartes (vide = la moins chère, ou un code de reglages.LANGUES),
+    sans_ub_illustrations, sans_ub_suggestions, preferences (true : les questions du premier lancement ont eu leur réponse)."""
     import reglages
     d = request.get_json() or {}
     ch = {}
@@ -313,8 +314,9 @@ def api_options_ecrire():
         if d["langue_cartes"] and d["langue_cartes"] not in reglages.LANGUES:
             raise ValueError("Langue inconnue.")
         ch["langue_cartes"] = d["langue_cartes"] or None
-    if "sans_ub" in d:
-        ch["sans_ub"] = bool(d["sans_ub"]) or None
+    for k in ("sans_ub_illustrations", "sans_ub_suggestions"):
+        if k in d:
+            ch[k] = bool(d[k]) or None
     if "nom" in d:
         ch["nom"] = " ".join(str(d["nom"]).split())[:60] or None
     if "github" in d:
