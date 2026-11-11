@@ -1041,3 +1041,34 @@ summary.sg-puce:hover { background: color-mix(in srgb, var(--accent) 22%, transp
 .sg-combo-bloc .badge { margin-left: .3rem; }
 .sg-ecartees { margin-top: 1.2rem; }
 .sg-ecartees ul { list-style: none; padding: 0; margin: .4rem 0 0; display: flex; flex-direction: column; gap: .15rem; font-size: .9rem; }
+
+/* onglet Simulation : « Tester le deck » (verdict et jauges de régularité), « Affiner avec Claude » */
+.sim-lancer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .8rem 1.5rem; }
+.sim-boutons { display: flex; flex-wrap: wrap; gap: .6rem; }
+.sim-couverture { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .7rem; color: var(--texte-2); font-size: .9rem; }
+.sim-lancer #s-prog { flex-basis: 100%; }
+.sim-lancer #s-prog:empty { display: none; }
+.sim-tete { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1rem; margin-bottom: 1.1rem; }
+.sim-titre { margin: 0; font-size: 1.45rem; }
+.sim-verdict { font-weight: 700; white-space: nowrap; }
+.sim-verdict::before { content: ""; display: inline-block; width: .65em; height: .65em; border-radius: 50%; margin-right: .45em;
+  background: currentColor; }
+.sim-bon { color: var(--bon); } .sim-juste { color: var(--juste); } .sim-alerte { color: var(--alerte); }
+.sim-grille { display: grid; grid-template-columns: max-content 1fr; gap: .8rem 1.4rem; align-items: center; }
+.sim-grille.sim-deux { grid-template-columns: max-content 1fr 1fr; }
+.sim-nom { font-weight: 600; }
+.sim-cellule { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .9rem; }
+.sim-valeur { color: var(--texte-2); font-size: .85rem; }
+.sim-version { display: flex; flex-direction: column; gap: .15rem; font-size: .9rem; }
+.sim-resultat h3 { margin: 1.4rem 0 .5rem; font-size: 1rem; }
+.sim-constats ul { margin: 0; padding-left: 1.2rem; }
+.sim-constats li + li { margin-top: .25rem; }
+.sim-constats h3 { margin: .6rem 0 .3rem; font-size: .9rem; color: var(--texte-2); }
+.sim-details { margin-top: 1.2rem; }
+.sim-replie { margin-top: 1rem; }
+.sim-replie .grille-2 { margin-top: .7rem; }
+.sim-resultat .defile > .tableau, .sim-replie .defile > .tableau { min-width: 0; }
+@media (max-width: 600px) {
+  .sim-grille, .sim-grille.sim-deux { grid-template-columns: 1fr; gap: .25rem; }
+  .sim-nom { margin-top: .7rem; }
+}

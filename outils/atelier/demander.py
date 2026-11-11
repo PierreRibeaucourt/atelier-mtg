@@ -13,6 +13,7 @@ import math
 import os
 import re
 import sys
+import time
 import unicodedata
 import urllib.error
 import urllib.parse
@@ -42,6 +43,11 @@ AIDE = """Ce que montre l'Atelier, en texte. <deck> : nom du dossier (« Deck Ke
   comparer <deck> <fichier a> [<fichier b>]   différences entre deux versions (sans fichier b : la liste actuelle)
   version <deck> <nom> [note]             enregistre la liste actuelle comme version
   simulations <deck>                      rapports de simulation (fichiers JSON dans <deck>/simulations/)
+  couverture <deck>                       les cartes que le simulateur lit mal, avec les lignes qu'il ne comprend pas ;
+                                          à décrire dans <deck>/simulateur.json (voir connaissances/simulateur.md)
+  simuler <deck> [--n 1000] [--tables Mixte,Contrôle] [--a <version>] [--b <version>]
+                                          lance un test (réglages et cartes de simulateur.json) et attend son rapport
+  rapport <deck> [fichier]                un rapport de test en texte (sans fichier : le dernier)
   synergies <deck>                        la dernière analyse des synergies faite par Claude
   carte <nom>                             fiche d'une carte (français ou anglais) : textes, prix, légalité, decks qui l'ont
   chercher <texte>                        noms de cartes qui contiennent ce texte
@@ -563,13 +569,113 @@ def c_simulations(args):
     deck = trouver_deck(args[0])
     rs = api(f"/api/decks/{q(deck)}/simulations")
     if not rs:
-        print("Aucun rapport. Lancer une simulation : python outils/simu.py (voir son aide) ou l'onglet Simulation.")
+        print("Aucun rapport. Lancer un test : python outils/atelier/demander.py simuler <deck>.")
     for r in rs:
         v = f"victoires A {pct(r['victoire_a'])}" if r.get("victoire_a") is not None else ""
         if r.get("victoire_b") is not None:
             v += f", B {pct(r['victoire_b'])}"
         print(f"- {r['date']} · {r.get('n')} parties · table {r.get('table_resume')} · pilote {r.get('pilote')} · {v}"
               f" · versions {json.dumps(r.get('versions'), ensure_ascii=False)} · {deck}/simulations/{r['fichier']}")
+
+
+NIVEAU_MOT = {"bon": "solide", "juste": "juste", "alerte": "faible"}
+VERDICT_MOT = {"regulier": "Deck régulier", "a_peaufiner": "Deck à peaufiner", "irregulier": "Deck irrégulier"}
+MESURES = [("terrains4", "4 terrains au tour 4", "%"), ("couleur", "tours où une couleur manque (2 à 6)", "%"),
+           ("mulligans", "deux mulligans ou plus", "%"), ("vides", "tours sans rien jouer (2 à 7)", ""),
+           ("usage", "mana utilisé (tours 1 à 6)", "%"), ("defausse", "parties avec défausse en fin de tour", "%"),
+           ("permanents8", "permanents au tour 8", ""), ("creatures8", "créatures au tour 8", ""),
+           ("morts_moi", "tes créatures mortes par partie", ""), ("tues", "créatures adverses détruites pendant tes tours", ""),
+           ("crea_adv8", "créatures par adversaire au tour 8", ""), ("commandant", "commandant à l'heure", "%"),
+           ("cmd_tour", "tour moyen du commandant", ""), ("cmd_mort", "commandant tué par partie", "")]
+
+
+def _mesure(v, unite):
+    if v is None:
+        return "?"
+    return pct(v) if unite == "%" else f"{v:.1f}".replace(".", ",")
+
+
+def _rapport_texte(deck, r, fichier):
+    t0 = "Mixte" if "Mixte" in r["tables"] else r["tables"][0]
+    V, R = r["versions"], r["resultats"]
+    out = [f"Test du {r['date'][:16].replace('T', ' ')} · {r['n']} parties par table · tables : {', '.join(r['tables'])} · "
+           + ("affiné (simulateur.json)" if r.get("affine") else "sans simulateur.json : les cartes mal lues jouent sans effet")]
+    for cle, v in V.items():
+        cov = v.get("couverture") or {}
+        out.append(f"\n{cle} = {v['nom']} · cartes comprises par le simulateur : {cov.get('comprises', '?')} sur {cov.get('total', '?')}")
+        reg = R[t0][cle].get("regularite")
+        if not reg:
+            continue
+        out.append(f"  {VERDICT_MOT.get(reg['verdict'], reg['verdict'])} (table {t0})")
+        out += [f"  - {i['titre']} : {NIVEAU_MOT.get(i['niveau'], '?')} ({i['valeur']})" for i in reg["indicateurs"]]
+        out += [f"  ! {c}" for c in reg["constats"]]
+        m = reg.get("mesures") or {}
+        out.append("  mesures : " + " · ".join(f"{lib} {_mesure(m.get(k), u)}" for k, lib, u in MESURES))
+    b = "B" in V
+    out.append("\nVictoires par table" + (" (A / B / écart A − B, ± marge à 95 %)" if b else "") + " :")
+    for t in r["tables"]:
+        x = R[t]
+        s = f"  {t} : {pct(x['A']['victoire'])}"
+        if b:
+            e = x.get("ecart") or {}
+            s += f" / {pct(x['B']['victoire'])} / {e.get('m', 0) * 100:+.1f} ± {e.get('ic', 0) * 100:.1f} pt"
+        causes = sorted((x["A"].get("causes") or {}).items(), key=lambda kv: -kv[1])[:4]
+        s += f" · fin moyenne T{(x['A'].get('tour_fin') or 0):.1f}".replace(".", ",") + " · défaites : " + (", ".join(f"{k} {pct(v)}" for k, v in causes) or "aucune")
+        out.append(s)
+    if not r.get("affine"):
+        out.append("  (ces victoires ne valent que si le simulateur comprend le deck : voir couverture)")
+    out.append(f"\nFichier : {deck}/simulations/{fichier}")
+    return "\n".join(out)
+
+
+def c_couverture(args):
+    il_faut(args, 1, "couverture <deck>")
+    deck = trouver_deck(args[0])
+    d = api(f"/api/decks/{q(deck)}/simulation/cartes")
+    print(f"Cartes comprises par le simulateur : {d['comprises']} sur {d['total']} (hors terrains et commandants)"
+          + (f" ; décrites dans {deck}/simulateur.json : {len(d['textes'])}" if d.get("textes") else ""))
+    for cle, titre in (("partiel", "Lues en partie (le reste de la carte est ignoré)"), ("corps", "Créatures jouées comme simples corps"),
+                       ("sans_effet", "Sorts joués sans effet")):
+        if d[cle]:
+            print(f"\n{titre} :")
+            for n in d[cle]:
+                print(f"  - {n} : non compris « " + " » « ".join(d["non_lu"].get(n) or []) + " »")
+    if d.get("perso_non_lu"):
+        print("\nTextes de simulateur.json pas encore compris :")
+        for n, l in d["perso_non_lu"].items():
+            print(f"  - {n} : « " + " » « ".join(l) + " »")
+    if d.get("inconnues"):
+        print("\nCartes de simulateur.json absentes du deck : " + ", ".join(d["inconnues"]))
+    print("\nFormat de simulateur.json et tournures comprises : connaissances/simulateur.md")
+
+
+def c_simuler(args):
+    o, reste = options(args, valeurs=("n", "tables", "a", "b"))
+    il_faut(reste, 1, "simuler <deck> [--n 1000] [--tables Mixte,Contrôle] [--a <version>] [--b <version>]")
+    deck = trouver_deck(reste[0])
+    tables = [t.strip() for t in re.split(r"[,;]", o.get("tables", "Mixte")) if t.strip()]
+    job = api(f"/api/decks/{q(deck)}/simulations", dict(a=o.get("a", ""), b=o.get("b"), tables=tables, n=int(o.get("n", 1000))))
+    while True:
+        time.sleep(1)
+        j = api(f"/api/jobs/{job['id']}")
+        if j["statut"] != "en_cours":
+            break
+    if j["statut"] != "fini":
+        sortir(f"Test {j['statut']} : {j.get('erreur') or ''}")
+    print(_rapport_texte(deck, api(f"/api/decks/{q(deck)}/simulations/{q(j['rapport'])}"), j["rapport"]))
+
+
+def c_rapport(args):
+    il_faut(args, 1, "rapport <deck> [fichier]")
+    deck = trouver_deck(args[0])
+    f = args[1] if len(args) > 1 else None
+    if not f:
+        rs = api(f"/api/decks/{q(deck)}/simulations")
+        if not rs:
+            sortir("Aucun rapport. Lancer un test : python outils/atelier/demander.py simuler <deck>.")
+        f = rs[0]["fichier"]
+    f = os.path.basename(f)
+    print(_rapport_texte(deck, api(f"/api/decks/{q(deck)}/simulations/{q(f)}"), f))
 
 
 def c_synergies(args):
@@ -660,6 +766,7 @@ def c_api(args):
 COMMANDES = dict(decks=c_decks, deck=c_deck, stats=c_stats, suggestions=c_suggestions, ecarter=c_ecarter,
                  reproposer=lambda a: c_ecarter(a, False), combos=c_combos, bracket=c_bracket, classeur=c_classeur,
                  achats=c_achats, versions=c_versions, comparer=c_comparer, version=c_version, simulations=c_simulations,
+                 couverture=c_couverture, simuler=c_simuler, rapport=c_rapport,
                  synergies=c_synergies, carte=c_carte, chercher=c_chercher, recherche=c_recherche, fonctions=c_fonctions,
                  api=c_api, **{"combos-carte": c_combos_carte})
 

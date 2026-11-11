@@ -3273,64 +3273,74 @@ function listeChiffres(obj, table, format) {
   return e.length ? e.map(([k, v]) => `${esc(lib(k, table))} ${format(v)}`).join(" · ") : "—";
 }
 
-function couvertureHtml(v) {
-  const c = v.couverture || {};
-  const parts = [];
-  if (c.corps?.length) parts.push(`${c.corps.length} créature${c.corps.length > 1 ? "s" : ""} jouée${c.corps.length > 1 ? "s" : ""} comme simple corps (${c.corps.map((n) => nc(n)).join(", ")})`);
-  if (c.sans_effet?.length) parts.push(`${c.sans_effet.length} sort${c.sans_effet.length > 1 ? "s" : ""} sans effet (${c.sans_effet.map((n) => nc(n)).join(", ")})`);
-  if (c.partiel?.length) parts.push(`${c.partiel.length} carte${c.partiel.length > 1 ? "s" : ""} lue${c.partiel.length > 1 ? "s" : ""} en partie (${c.partiel.map((n) => nc(n)).join(", ")})`);
-  return parts.length ? `<p class="note petit"><strong>${esc(v.nom)} :</strong> ${parts.join(" ; ")}.</p>` : "";
+// « Tester le deck » (sans IA) : un verdict et cinq jauges de régularité (simu.regularite), sans taux de victoire, qui
+// n'a de sens que si le simulateur comprend les cartes. « Affiner avec Claude » : il décrit les cartes mal lues dans
+// <deck>/simulateur.json (connaissances/simulateur.md) ; ses tests montrent alors aussi les victoires.
+const NIVEAU_SIM = { bon: ["solide", "ok"], juste: ["juste", "juste"], alerte: ["faible", "alerte"] };
+const VERDICT_SIM = { regulier: ["Deck régulier", "bon"], a_peaufiner: ["Deck à peaufiner", "juste"], irregulier: ["Deck irrégulier", "alerte"] };
+const MESURES_SIM = [["terrains4", "4 terrains au tour 4", "%"], ["couleur", "Tours où une couleur manque (2 à 6)", "%"],
+  ["mulligans", "Deux mulligans ou plus", "%"], ["vides", "Tours sans rien jouer (2 à 7)", "n"], ["usage", "Mana utilisé (tours 1 à 6)", "%"],
+  ["defausse", "Défausse en fin de tour", "%"], ["permanents8", "Permanents au tour 8", "n"], ["creatures8", "Créatures au tour 8", "n"],
+  ["morts_moi", "Tes créatures mortes", "n"], ["tues", "Créatures adverses détruites", "n"], ["crea_adv8", "Créatures par adversaire au tour 8", "n"],
+  ["commandant", "Commandant à l'heure", "%"], ["cmd_tour", "Tour du commandant", "n"], ["cmd_mort", "Commandant tué", "n"]];
+const nbSim = (v) => (v == null ? "—" : v.toFixed(1).replace(".", ",").replace(/,0$/, ""));
+const dateSim = (d, style = "long") => new Date(d).toLocaleString("fr-FR", { dateStyle: style, timeStyle: "short" });
+
+function jaugeSim(i) {
+  if (!i || !i.niveau) return `<span class="muet">—</span>`;
+  const [mot, cls] = NIVEAU_SIM[i.niveau];
+  return `<span class="jauge"><span class="jauge-piste"><span class="jauge-barre jauge-${i.niveau}" style="width:${Math.round(i.place * 100)}%"></span>`
+    + `<span class="jauge-cible" style="left:70%"></span></span><span class="badge badge-${cls}">${mot}</span></span>`
+    + `<span class="sim-valeur">${esc(i.valeur)}</span>`;
+}
+
+function verdictSim(reg) {
+  const [mot, niv] = VERDICT_SIM[reg.verdict] || ["—", "juste"];
+  return `<span class="sim-verdict sim-${niv}">${mot}</span>`;
 }
 
 function afficheRapport(zone, r) {
-  const A = r.versions.A, B = r.versions.B;
-  const lignes = r.tables.map((t) => {
-    const x = r.resultats[t];
-    return `<tr>
-      <td><strong>${esc(t)}</strong></td>
-      <td class="num">${pct(x.A.victoire)}</td>
-      ${B ? `<td class="num">${pct(x.B.victoire)}</td><td class="num">${ecartHtml(x.ecart)}</td>` : ""}
-      <td class="num">T${(x.A.tour_fin ?? 0).toFixed(1).replace(".", ",")}</td>
-      <td class="num">${x.A.pv8 == null ? "—" : Math.round(x.A.pv8)}</td>
-      <td class="num">${pct(x.A.cmd5, 0)}</td>
-    </tr>`;
-  }).join("");
-  const details = r.tables.map((t) => {
-    const x = r.resultats[t];
-    const bloc = (cle, v) => {
-      const s = x[cle];
-      return `<div><h3>${esc(v.nom)}</h3>
-        <p class="petit"><strong>Défaites :</strong> ${listeChiffres(s.causes, LIB_SOURCE, (v) => pct(v, 0))}
-          · pas finies au tour 15 : ${pct(s.pas_finie, 0)}</p>
-        <p class="petit"><strong>Tes dégâts par partie :</strong> ${listeChiffres(Object.fromEntries(Object.entries(s.degats).filter(([k]) => !k.endsWith("_adv"))), LIB_SOURCE, (v) => v.toFixed(1).replace(".", ","))}</p>
-        <p class="petit"><strong>Adversaires éliminés par partie :</strong> ${listeChiffres(s.elim, LIB_SOURCE, (v) => v.toFixed(2).replace(".", ","))}</p>
-        <p class="petit"><strong>Tes PV perdus par partie :</strong> ${listeChiffres(s.pertes, LIB_SOURCE, (v) => v.toFixed(1).replace(".", ","))}</p>
-        <p class="petit"><strong>Par partie :</strong> ${listeChiffres(s.stat, LIB_STAT, (v) => v.toFixed(2).replace(".", ","))}</p>
-        <p class="petit"><strong>Commandant lancé :</strong> au tour 4 ${pct(s.cmd4, 0)}, au tour 5 ${pct(s.cmd5, 0)}
-          · créatures par adversaire au tour 6 : ${s.crea6 == null ? "—" : s.crea6.toFixed(1).replace(".", ",")}, au tour 8 : ${s.crea8 == null ? "—" : s.crea8.toFixed(1).replace(".", ",")}</p></div>`;
-    };
-    return `<details><summary>Détails : ${esc(t)}</summary><div class="grille-2">${bloc("A", A)}${B ? bloc("B", B) : ""}</div></details>`;
-  }).join("");
-  const reg = r.reglages || {};
+  const t0 = r.tables.includes("Mixte") ? "Mixte" : r.tables[0];
+  const L = r.resultats[t0];
+  if (!L.A.regularite) return void (zone.innerHTML = "");       // rapport d'avant les jauges (effacés au démarrage)
+  const cles = r.versions.B ? ["A", "B"] : ["A"];
+  const reg = Object.fromEntries(cles.map((k) => [k, L[k].regularite]));
+  const deux = cles.length > 1;
+  const titre = deux ? `<h2 class="sim-titre">Comparaison</h2>` : `<h2 class="sim-titre">${verdictSim(reg.A)}</h2>`;
+  const entete = deux ? `<span></span>${cles.map((k) => `<span class="sim-version"><strong>${esc(r.versions[k].nom)}</strong>${verdictSim(reg[k])}</span>`).join("")}` : "";
+  const lignes = reg.A.indicateurs.map((ind, i) => `<span class="sim-nom">${esc(ind.titre)}</span>`
+    + cles.map((k) => `<span class="sim-cellule">${jaugeSim(reg[k].indicateurs[i])}</span>`).join("")).join("");
+  const constats = cles.filter((k) => reg[k].constats.length).map((k) => `
+      <div class="sim-constats">${deux ? `<h3>${esc(r.versions[k].nom)}</h3>` : ""}
+        <ul>${reg[k].constats.map((c) => `<li>${esc(c)}</li>`).join("")}</ul></div>`).join("");
+  const victoires = r.affine ? `
+      <h3>Victoires</h3>
+      <div class="defile"><table class="tableau">
+        <thead><tr><th>Adversaires</th>${cles.map((k) => `<th class="num">${deux ? esc(r.versions[k].nom) : "Victoires"}</th>`).join("")}${deux ? `<th class="num">Écart</th>` : ""}</tr></thead>
+        <tbody>${r.tables.map((t) => `<tr><td>${esc(t)}</td>${cles.map((k) => `<td class="num">${pct(r.resultats[t][k].victoire)}</td>`).join("")}
+          ${deux ? `<td class="num">${ecartHtml(r.resultats[t].ecart)}</td>` : ""}</tr>`).join("")}</tbody>
+      </table></div>` : "";
+  const mesures = MESURES_SIM.map(([cle, lib, u]) => `<tr><td>${esc(lib)}</td>${cles.map((k) => {
+    const v = (reg[k].mesures || {})[cle];
+    return `<td class="num">${v == null ? "—" : u === "%" ? pct(v, 0) : nbSim(v)}</td>`;
+  }).join("")}</tr>`).join("");
   zone.innerHTML = `
-    <div class="panneau">
-      <h2 style="margin-top:0">Rapport du ${esc(new Date(r.date).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" }))}</h2>
-      <p class="muet petit">${r.n} parties · ${esc(reg.pilote || "vite")}${reg.premier?.length ? ` · en premier : ${reg.premier.map((n) => nc(n)).join(", ")}` : ""}${reg.garder?.length ? ` · gardées pour la salve : ${reg.garder.map((n) => nc(n)).join(", ")}` : ""}</p>
-      <p><strong>A</strong> = ${esc(A.nom)}${B ? ` · <strong>B</strong> = ${esc(B.nom)}` : ""}</p>
-      ${couvertureHtml(A)}${B ? couvertureHtml(B) : ""}
-      <table class="tableau">
-        <thead><tr><th>Table</th><th class="num">Victoires A</th>${B ? `<th class="num">Victoires B</th><th class="num">Écart A − B</th>` : ""}
-          <th class="num">Fin moyenne</th><th class="num">Tes PV au tour 8</th><th class="num">Commandant au tour 5</th></tr></thead>
-        <tbody>${lignes}</tbody>
-      </table>
-      ${details}
+    <div class="panneau sim-resultat">
+      <div class="sim-tete">${titre}
+        ${r.affine ? `<span class="badge badge-gc">Avec Claude</span>` : ""}
+        <span class="muet petit">${esc(dateSim(r.date))} · ${r.n.toLocaleString("fr-FR")} parties</span></div>
+      <div class="sim-grille${deux ? " sim-deux" : ""}">${entete}${lignes}</div>
+      ${constats ? `<h3>Ce qui cloche</h3>${constats}` : ""}
+      ${victoires}
+      <details class="sim-details"><summary>Détails</summary>
+        <div class="defile"><table class="tableau">
+          ${deux ? `<thead><tr><th></th>${cles.map((k) => `<th class="num">${esc(r.versions[k].nom)}</th>`).join("")}</tr></thead>` : ""}
+          <tbody>${mesures}</tbody></table></div>
+      </details>
       <div class="boutons ecrit"><button class="btn" id="rap-claude">${ico("discussion")}Expliquer avec Claude</button></div>
     </div>`;
-  $("#rap-claude", zone).onclick = () => ouvrirChat(`Explique-moi le rapport de simulation ${r.deck}/simulations/${zone.dataset.fichier || ""} (${A.nom}${B ? " contre " + B.nom : ""}) : qu'est-ce qui ressort, et que me conseilles-tu ?`);
-}
-
-function puces(liste, nom) {
-  return `<div class="puces">${liste.map((n, i) => `<span class="puce">${nc(n)}<button data-ote="${nom}" data-i="${i}" aria-label="Retirer">✕</button></span>`).join("") || `<span class="muet petit">aucune</span>`}</div>`;
+  $("#rap-claude", zone).onclick = () => ouvrirChat(`Explique-moi le test du simulateur ${r.deck}/simulations/${zone.dataset.fichier || ""}`
+    + ` (python outils/atelier/demander.py rapport) : qu'est-ce qui ressort, et que me conseilles-tu ?`);
 }
 
 async function ongletSimulation(conteneur, d, rapportInitial = null) {
@@ -3339,160 +3349,96 @@ async function ongletSimulation(conteneur, d, rapportInitial = null) {
   conteneur.appendChild(el);
   el.innerHTML = `<p class="chargement">Chargement…</p>`;
   const [o, rapports] = await Promise.all([api(`/api/decks/${enc(d.id)}/simulation/options`), api(`/api/decks/${enc(d.id)}/simulations`)]);
-  const R = { ...o.reglages, premier: [...(o.reglages.premier || [])], garder: [...(o.reglages.garder || [])] };
   const choixA = etat.simA ?? "", choixB = etat.simB ?? "__aucune__";
+  const comparer = etat.simB != null;                  // arrivé de l'onglet Versions : la comparaison est prête
   etat.simA = etat.simB = undefined;
-  const cartesDeck = [...new Set(d.cartes.filter((c) => c.cat !== "Maybeboard" && c.cat !== "Commander" && !(c.info.type || "").includes("Land")).map((c) => c.nom))].sort();
-  const greven = (d.commandant || "").startsWith("Greven");
+  const cov = o.couverture;
+  const partCov = cov && cov.total ? cov.comprises / cov.total : null;
+  const nivCov = partCov == null ? null : partCov >= 0.9 ? "bon" : partCov >= 0.7 ? "juste" : "alerte";
+  const premier = rapportInitial || rapports.find((r) => r.verdict)?.fichier;   // les rapports d'avant la refonte ne s'ouvrent plus seuls
   el.innerHTML = `
-    <div class="panneau ecrit">
-      <div class="grille-2">
-        <label>Liste à tester (A)<select class="champ" id="s-a">${optionsVersions(o.versions, choixA)}</select></label>
-        <label>Comparer avec (B)<select class="champ" id="s-b">${optionsVersions(o.versions, choixB, true, true)}</select></label>
+    <div class="panneau sim-lancer ecrit">
+      <div class="sim-boutons">
+        <button class="btn btn-accent" id="s-lancer">${ico("lancer")}Tester le deck</button>
+        <button class="btn" id="s-claude">${ico("discussion")}Affiner avec Claude</button>
       </div>
-      <fieldset><legend>Tables</legend>
-        <div class="cases">${o.tables.map((t) => `<label><input type="checkbox" name="table" value="${esc(t)}" checked> ${esc(t)}</label>`).join("")}</div>
-        <div class="form-ligne"><button class="btn btn-petit" id="t-toutes">Toutes</button><button class="btn btn-petit" id="t-mixte">Mixte seule</button></div>
-      </fieldset>
-      <div class="form-ligne">
-        <label>Parties par table
-          <select class="champ" id="s-n" style="width:auto">${[200, 500, 1000, 2000, 4000].map((n) => `<option ${n === 2000 ? "selected" : ""}>${n}</option>`).join("")}</select></label>
-        <span class="muet petit" id="s-duree"></span>
-      </div>
-      <fieldset><legend>Façon de jouer</legend>
-        <div class="cases">
-          <label><input type="radio" name="pilote" value="vite" ${R.pilote !== "salve" ? "checked" : ""}> tout lancer dès que possible</label>
-          <label><input type="radio" name="pilote" value="salve" ${R.pilote === "salve" ? "checked" : ""}> garder ses créatures pour une salve</label>
-        </div>
-        <details><summary>Réglages avancés</summary>
-          <div class="grille-2" style="margin-top:.5rem">
-            <label class="petit">Salve : moteur en jeu et au moins <input class="champ" type="number" min="1" max="10" id="r-salve_nb" value="${R.salve_nb}" style="width:4.5rem"> créatures lançables</label>
-            <label class="petit">On arrête d'attendre sous <input class="champ" type="number" min="1" max="40" id="r-salve_pv" value="${R.salve_pv}" style="width:4.5rem"> PV</label>
-            <label class="petit">… ou au-delà de <input class="champ" type="number" min="1" max="15" id="r-salve_main" value="${R.salve_main}" style="width:4.5rem"> cartes en main</label>
-            ${greven ? `<label class="petit">Greven (jeu en salve) : remonter à <input class="champ" type="number" min="1" max="15" id="r-greven_main" value="${R.greven_main}" style="width:4.5rem"> cartes,
-              sans passer sous <input class="champ" type="number" min="1" max="40" id="r-greven_pv" value="${R.greven_pv}" style="width:4.5rem"> PV</label>` : ""}
-          </div>
-          <div class="grille-2" style="margin-top:.6rem">
-            <div><div class="petit"><strong>Cartes à poser en premier</strong></div>
-              <div id="p-premier">${puces(R.premier, "premier")}</div>
-              <select class="champ" id="add-premier" style="margin-top:.3rem"><option value="">+ ajouter une carte…</option>${cartesDeck.map((n) => `<option>${esc(n)}</option>`).join("")}</select></div>
-            <div><div class="petit"><strong>Cartes à garder pour une salve</strong></div>
-              <div id="p-garder">${puces(R.garder, "garder")}</div>
-              <select class="champ" id="add-garder" style="margin-top:.3rem"><option value="">+ ajouter une carte…</option>${cartesDeck.map((n) => `<option>${esc(n)}</option>`).join("")}</select></div>
-          </div>
-          <div class="form-ligne"><button class="btn btn-petit" id="r-sauver">Enregistrer comme réglages du deck</button>
-            <button class="btn btn-petit" id="r-defaut">Revenir aux réglages par défaut</button></div>
-        </details>
-      </fieldset>
-      <div class="boutons"><button class="btn btn-accent" id="s-lancer">${ico("lancer")}Lancer la simulation</button></div>
+      ${nivCov ? `<div class="sim-couverture"><span>Cartes comprises</span>
+        <span class="jauge"><span class="jauge-piste"><span class="jauge-barre jauge-${nivCov}" style="width:${Math.max(3, Math.round(partCov * 100))}%"></span></span>
+        <span class="jauge-val">${cov.comprises} / ${cov.total}</span></span>${o.affine ? `<span class="badge badge-gc">Avec Claude</span>` : ""}</div>` : ""}
       <div id="s-prog"></div>
     </div>
-    <div id="s-rapport"></div>
-    <h2>Rapports enregistrés</h2>
-    ${rapports.length ? `<table class="tableau"><thead><tr><th>Date</th><th>Listes</th><th class="num">Victoires</th><th class="num">Écart</th><th></th></tr></thead><tbody>
-      ${rapports.map((r, i) => `<tr><td class="petit">${esc(new Date(r.date).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }))}<br><span class="muet">${r.n} parties · ${r.tables.length} table${r.tables.length > 1 ? "s" : ""} · ${esc(r.pilote)}</span></td>
-        <td class="petit">A : ${esc(r.versions.A)}${r.versions.B ? `<br>B : ${esc(r.versions.B)}` : ""}</td>
-        <td class="num">${esc(r.table_resume)} : ${pct(r.victoire_a)}${r.victoire_b != null ? ` / ${pct(r.victoire_b)}` : ""}</td>
-        <td class="num">${ecartHtml(r.ecart)}</td>
+    <div id="s-rapport">${PARTAGE && !premier ? `<p class="muet">Aucun test.</p>` : ""}</div>
+    <details class="sim-replie ecrit" id="s-comparer" ${comparer ? "open" : ""}><summary>Comparer deux versions</summary>
+      <div class="grille-2">
+        <label>Version A<select class="champ" id="s-a">${optionsVersions(o.versions, choixA)}</select></label>
+        <label>Version B<select class="champ" id="s-b">${optionsVersions(o.versions, choixB === "__aucune__" ? null : choixB)}</select></label>
+      </div>
+      <div class="boutons"><button class="btn" id="s-comparer-lancer">${ico("comparer")}Comparer</button></div>
+    </details>
+    ${rapports.some((r) => r.fichier !== premier) ? `
+    <details class="sim-replie"><summary>Tests précédents</summary>
+      <div class="defile"><table class="tableau"><tbody>
+      ${rapports.map((r, i) => `<tr><td class="petit">${esc(dateSim(r.date, "short"))}</td>
+        <td class="petit">${esc(r.versions.A)}${r.versions.B ? ` · ${esc(r.versions.B)}` : ""}</td>
+        <td>${verdictSim(r)}</td>
         <td class="num"><button class="btn btn-petit" data-rap="${i}">Ouvrir</button></td></tr>`).join("")}
-    </tbody></table>` : `<p class="muet">Aucun rapport.</p>`}`;
+      </tbody></table></div>
+    </details>` : ""}`;
 
-  const duree = () => {
-    const n = +$("#s-n", el).value, nt = $$("[name=table]:checked", el).length, nv = $("#s-b", el).value === "__aucune__" ? 1 : 2;
-    const s = Math.ceil((n * nt * nv * 0.012) / o.coeurs) + 2;
-    $("#s-duree", el).textContent = `≈ ${s < 90 ? s + " s" : Math.round(s / 60) + " min"}`;
-  };
-  el.addEventListener("change", duree);
-  duree();
-  $("#t-toutes", el).onclick = () => { $$("[name=table]", el).forEach((c) => (c.checked = true)); duree(); };
-  $("#t-mixte", el).onclick = () => { $$("[name=table]", el).forEach((c) => (c.checked = c.value === "Mixte")); duree(); };
-
-  const majPuces = () => {
-    $("#p-premier", el).innerHTML = puces(R.premier, "premier");
-    $("#p-garder", el).innerHTML = puces(R.garder, "garder");
-  };
-  for (const nom of ["premier", "garder"]) {
-    $("#add-" + nom, el).onchange = (ev) => {
-      if (ev.target.value && !R[nom].includes(ev.target.value)) R[nom].push(ev.target.value);
-      ev.target.value = "";
-      majPuces();
-    };
-  }
-  el.addEventListener("click", (ev) => {
-    const b = ev.target.closest("[data-ote]");
-    if (b) { R[b.dataset.ote].splice(+b.dataset.i, 1); majPuces(); }
-  });
-  const lireReglages = () => {
-    const r = { ...R, pilote: $("[name=pilote]:checked", el).value };
-    for (const k of ["salve_nb", "salve_pv", "salve_main", "greven_main", "greven_pv"]) {
-      const c = $("#r-" + k, el);
-      if (c) r[k] = +c.value;
-    }
-    return r;
-  };
-  $("#r-sauver", el).onclick = async () => {
-    try { await api(`/api/decks/${enc(d.id)}/reglages`, { method: "POST", body: lireReglages() }); toast("Réglages enregistrés."); }
-    catch (e) { erreur(e); }
-  };
-  $("#r-defaut", el).onclick = async () => {
-    await api(`/api/decks/${enc(d.id)}/reglages`, { method: "POST", body: o.defaut });
-    ongletSimulation(conteneur, d);
-  };
-
-  $$("[data-rap]", el).forEach((b) => b.addEventListener("click", async () => {
-    const f = rapports[+b.dataset.rap].fichier;
+  const montrer = async (f) => {
     const z = $("#s-rapport", el);
     z.dataset.fichier = f;
-    afficheRapport(z, await api(`/api/decks/${enc(d.id)}/simulations/${enc(f)}`));
-    z.scrollIntoView({ behavior: "smooth" });
-  }));
-
-  if (rapportInitial) {
-    const z = $("#s-rapport", el);
-    z.dataset.fichier = rapportInitial;
-    try { afficheRapport(z, await api(`/api/decks/${enc(d.id)}/simulations/${enc(rapportInitial)}`)); }
+    try { afficheRapport(z, await api(`/api/decks/${enc(d.id)}/simulations/${enc(f)}`)); }
     catch (e) { z.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
-  }
+  };
+  if (premier) await montrer(premier);
 
-  $("#s-lancer", el).onclick = async () => {
-    const tables = $$("[name=table]:checked", el).map((c) => c.value);
-    if (!tables.length) return toast("Choisis au moins une table.");
-    const b = $("#s-b", el).value;
-    const corps = { a: $("#s-a", el).value, b: b === "__aucune__" ? null : b, tables, n: +$("#s-n", el).value, reglages: lireReglages() };
-    if (corps.b !== null && corps.b === corps.a) return toast("Choisis deux listes différentes pour comparer.");
+  $$("[data-rap]", el).forEach((b) => b.addEventListener("click", async () => {
+    await montrer(rapports[+b.dataset.rap].fichier);
+    $("#s-rapport", el).scrollIntoView({ behavior: "smooth" });
+  }));
+  if (PARTAGE) return;
+
+  const lancer = async (corps) => {
     try {
       const job = await api(`/api/decks/${enc(d.id)}/simulations`, { method: "POST", body: corps });
-      suivreSimulation(el, d, job.id);
+      suivreSimulation(el, d, job.id, (f) => ongletSimulation(conteneur, d, f));
     } catch (e) { erreur(e); }
+  };
+  $("#s-lancer", el).onclick = () => lancer({ a: "", b: null, tables: ["Mixte"], n: o.test_n || 1000 });
+  $("#s-comparer-lancer", el).onclick = () => {
+    const a = $("#s-a", el).value, b = $("#s-b", el).value;
+    if (a === b) return toast("Choisis deux versions différentes.");
+    lancer({ a, b, tables: ["Mixte"], n: o.test_n || 1000 });
+  };
+  $("#s-claude", el).onclick = async () => {
+    await ouvrirChat(`Affine le simulateur pour mon deck ${d.titre} : suis connaissances/simulateur.md (cartes mal lues,`
+      + ` simulateur.json, trois essais au plus), puis explique-moi le résultat.`);
+    envoyerChat();
   };
 }
 
-async function suivreSimulation(el, d, id) {
+async function suivreSimulation(el, d, id, fini) {
   const prog = $("#s-prog", el);
-  $("#s-lancer", el).disabled = true;
+  const boutons = $$("#s-lancer, #s-comparer-lancer", el);
+  boutons.forEach((b) => (b.disabled = true));
   const tour = async () => {
     let j;
-    try { j = await api("/api/jobs/" + id); } catch (e) { prog.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; $("#s-lancer", el).disabled = false; return; }
+    try { j = await api("/api/jobs/" + id); } catch (e) { prog.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; boutons.forEach((b) => (b.disabled = false)); return; }
     if (j.statut === "en_cours") {
       prog.innerHTML = `<div class="barre-prog"><div style="width:${(100 * j.fait / j.total).toFixed(1)}%"></div></div>
-        <div class="form-ligne" style="justify-content:space-between;margin:0"><span class="petit muet">${j.fait} / ${j.total} parties${j.reste != null ? ` · encore ${j.reste < 90 ? j.reste + " s" : Math.round(j.reste / 60) + " min"}` : ""}</span>
+        <div class="form-ligne" style="justify-content:space-between;margin:0"><span class="petit muet">${j.reste != null ? `encore ${j.reste < 90 ? j.reste + " s" : Math.round(j.reste / 60) + " min"}` : ""}</span>
         <button class="btn btn-petit" id="s-stop">${ico("arreter")}Arrêter</button></div>`;
       $("#s-stop", prog).onclick = () => api(`/api/jobs/${id}/annuler`, { method: "POST" });
       return setTimeout(tour, 700);
     }
-    $("#s-lancer", el).disabled = false;
+    boutons.forEach((b) => (b.disabled = false));
     if (j.statut === "erreur") { prog.innerHTML = `<p class="erreur">${esc(j.erreur)}</p>`; return; }
-    if (j.statut === "annule") { prog.innerHTML = `<p class="muet">Simulation arrêtée.</p>`; return; }
-    prog.innerHTML = "";
-    const z = $("#s-rapport", el);
-    z.dataset.fichier = j.rapport;
-    afficheRapport(z, await api(`/api/decks/${enc(d.id)}/simulations/${enc(j.rapport)}`));
-    z.scrollIntoView({ behavior: "smooth" });
-    toast("Simulation terminée.");
+    if (j.statut === "annule") { prog.innerHTML = ""; return; }
+    fini(j.rapport);
   };
   tour();
 }
-
 
 // ------------------------------------------------------------------ recherche de cartes (moteur façon Magic-Ville)
 // Mêmes fenêtres et mêmes règles que le moteur de Magic-Ville ; la recherche se fait sur la base locale (recherche.py).

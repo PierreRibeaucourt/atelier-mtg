@@ -619,8 +619,21 @@ def api_comparer(deck):
 @app.get("/api/decks/<path:deck>/simulation/options")
 def api_sim_options(deck):
     import simulation
+    try:
+        cov = simulation.couverture_deck(deck)
+    except Exception:                                       # le simulateur ne doit jamais empêcher d'ouvrir l'onglet
+        cov = None
     return jsonify(tables=simulation.tables_dispo(), reglages=simulation.lire_reglages(deck), defaut=simulation.reglages_defaut(),
-                   versions=decks.versions(deck), coeurs=max(1, (os.cpu_count() or 2) - 1))
+                   versions=decks.versions(deck), coeurs=max(1, (os.cpu_count() or 2) - 1), couverture=cov,
+                   affine=bool(simulation.textes(deck)), test_n=simulation.TEST_N)
+
+
+@app.get("/api/decks/<path:deck>/simulation/cartes")
+def api_sim_cartes(deck):
+    """Pour Claude (demander.py couverture) : les cartes que le simulateur lit mal, avec leurs lignes non comprises, et
+    les textes de simulateur.json qu'il ne comprend pas encore."""
+    import simulation
+    return jsonify(simulation.couverture_deck(deck, detail=True) | dict(textes=simulation.textes(deck)))
 
 
 @app.post("/api/decks/<path:deck>/reglages")
@@ -1180,6 +1193,8 @@ if __name__ == "__main__":
             sys.exit(0)
     url = f"http://127.0.0.1:{PORT}"
     os.environ["ATELIER_PORT"] = str(PORT)         # pour demander.py, que Claude lance depuis la discussion
+    import simulation
+    simulation.effacer_anciens()                   # rapports d'avant les jauges de régularité, avant que le partage ne parte
     en_fond(ic.mise_a_jour, tous_les_noms())
     import recherche
     en_fond(recherche.demarrer)                    # base de la recherche de cartes : chargée, puis surveillée (nouvelles cartes, prix)

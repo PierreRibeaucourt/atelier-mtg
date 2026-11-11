@@ -43,7 +43,7 @@ TU VOIS CE QU'IL VOIT : python outils/atelier/demander.py <commande> donne en te
 Lance les commandes python avec l'outil Bash (PowerShell ne t'est pas permis), une commande par carte plutôt qu'une boucle.
   decks · deck <deck> · stats <deck> (courbe, fonctions comparées aux repères, base de mana) · suggestions <deck> [theme|combos|classeur]
   · combos <deck> · combos-carte <deck> <carte> · bracket <deck> · classeur [mot] · achats <deck> · versions <deck> · comparer
-  · simulations <deck> · synergies <deck> · carte <nom> · chercher <texte> · recherche clé=valeur (la page Recherche) · fonctions [mot]
+  · simulations <deck> · couverture <deck> · simuler <deck> · rapport <deck> · synergies <deck> · carte <nom> · chercher <texte> · recherche clé=valeur (la page Recherche) · fonctions [mot]
   · ecarter <deck> <carte> · version <deck> <nom> · api GET|POST api/… (toute autre route de outils/atelier/app.py).
 REPÈRES DE CONSTRUCTION (gabarit des 100 cartes, ramp, pioche, removal, terrains, base de mana, brackets, cut) :
 connaissances/reperes-commander.md. Lis-le avant de conseiller un ajout, un retrait, la base de mana ou la répartition d'un deck,
@@ -57,15 +57,16 @@ l'Atelier ou Internet, en vérifiant chaque carte avec carte <nom> (prix, légal
 OÙ SONT LES DONNÉES (dans ce dossier) :
 - Decks : dossiers « Deck … ». archidekt.txt = la liste de référence (« 1x Nom [Catégorie] », ou « 1x Nom (ima) 205 [Catégorie] »
   quand une impression est choisie : garde ce « (set) numéro » si tu touches la ligne ; Maybeboard = catégorie [Maybeboard]).
-  historique/ et versions/ : les anciennes listes ; simulations/*.json : les rapports ; pilote.json : réglages du simulateur
-  (pilote "vite" ou "salve", salve_pv, salve_main, salve_nb, greven_main, greven_pv, premier = cartes lancées avant tout,
-  garder = cartes gardées pour une salve) ; achats.json : cartes possédées ; suggestions.json : suggestions écartées.
+  historique/ et versions/ : les anciennes listes ; simulations/*.json : les rapports ; simulateur.json : ce que le
+  simulateur sait de ce deck (cartes décrites, plan de jeu) ; achats.json : cartes possédées ; suggestions.json : suggestions écartées.
 - Classeur/classeur.txt : les cartes hors des decks. reglages.json : les réglages (budget par carte). Corbeille Atelier/ : decks supprimés.
 - AVANT de modifier un archidekt.txt : python outils/atelier/sauvegarde.py "<dossier du deck>" "<ce que tu changes>" (l'ancienne
   liste va dans l'historique). Remplace une carte À LA MÊME LIGNE pour garder les simulations comparables. Ne modifie, renomme,
   supprime ou restaure un deck que si l'utilisateur le demande.
-- Simulateur : python outils/simu.py (avec simu_cartes.py, simu_moteur.py). Une consigne de jeu qui ne rentre pas dans pilote.json
-  se code dans outils/simu_moteur.py (vérifie ensuite que les résultats par défaut ne changent pas).
+- SIMULATEUR (« Affiner avec Claude ») : n'écris JAMAIS dans outils/ (le programme : remplacé à chaque mise à jour). Tout ce que tu
+  apprends au simulateur sur un deck va dans <deck>/simulateur.json, et la méthode est dans connaissances/simulateur.md : lis-le
+  d'abord. En bref : couverture <deck> (cartes mal lues), décris-les dans simulateur.json, simuler <deck>, rapport <deck>, trois
+  essais au plus, puis explique le résultat en mots de joueur. Ce que le format ne sait pas dire, dis-le au joueur au lieu de coder.
   Prix : python outils/prix.py "<carte>". Probabilités de pioche : python outils/proba.py.
 - Ta mémoire peut contenir des fiches de deck (deck-*.md) et les préférences de l'utilisateur : elles passent avant les repères.
 - Internet : oui, sauf EDHREC (ses conditions interdisent les accès automatisés) et Cardmarket (protégé contre les robots) :

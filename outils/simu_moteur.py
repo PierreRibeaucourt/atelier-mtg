@@ -155,6 +155,9 @@ class Partie(Engagement):
         self.R = {**REGLAGES_DEFAUT, "pilote": pilote, **(reglages or {})}
         self.pilote, self.salve_tour = self.R["pilote"], None
         self.kc = C[cmd]
+        # second commandant (partenaires, Historique) : en main dès le départ, comme dans la zone de commandement
+        self.partenaire = self.R.get("partenaire") if self.R.get("partenaire") in C else None
+        self.couleurs_cmd = set(self.kc["couleurs"]) | (C[self.partenaire]["couleurs"] if self.partenaire else set())
         self.rng = random.Random(f"{graine}-moi")
         self.adv = [Adversaire(i, a) for i, a in enumerate(archetypes)]
         for a in self.adv:
@@ -176,6 +179,8 @@ class Partie(Engagement):
         self.stat = Counter()
         self.pose = {}
         self.main_depart(deck)
+        if self.partenaire:
+            self.hand.append(self.partenaire)
         self.init_engag()
 
     # ================================================================ outils de base
@@ -315,6 +320,7 @@ class Partie(Engagement):
             caillou = any(self.kind(c) == "rock" and self.C[c]["mv"] <= 2 for c in main)
             if 3 <= terrains <= 5 or (terrains == 2 and (caillou or essai >= 1)) or essai == 3:
                 break
+        self.stat["mulligans"] = essai                 # 1 = le mulligan gratuit
         while len(main) > garde:          # on remet dessous : terrains en trop, sinon le sort le plus cher
             n_t = sum(1 for c in main if self.C[c]["terrain"])
             c = next((c for c in main if self.C[c]["terrain"]), None) if n_t > 4 else max(
@@ -394,7 +400,7 @@ class Partie(Engagement):
         self.terrains.append([base, self.C[base]["mana"], pret])
 
     def identite(self):
-        return "".join(c for c in "WUBRG" if c in self.kc["couleurs"]) or "C"
+        return "".join(c for c in "WUBRG" if c in self.couleurs_cmd) or "C"
 
     def construit_pool(self):
         marais = any("Swamp" in self.C[x[0]]["types_terrain"] for x in self.terrains)
@@ -537,6 +543,8 @@ class Partie(Engagement):
         if c.get("cmd"):
             a.cmd_retour = self.t + 2
         self.stat["morts_adv"] += 1
+        if self.en_mon_tour:                           # pendant ton tour : ton combat, tes sorts
+            self.stat["tues_moi"] += 1
         self.seg_mort = True
         a.cim += 1
         if not c["jeton"]:
@@ -2050,7 +2058,9 @@ class Partie(Engagement):
         suivi = {}
         for t in range(1, T + 1):
             self.en_mon_tour = True
+            lances = self.stat["lances"]
             self.mon_tour(t)
+            joues = self.stat["lances"] - lances
             self.en_mon_tour = False
             for a in self.adv:
                 if self.fin:
@@ -2063,8 +2073,12 @@ class Partie(Engagement):
                         break
                     self.pioche(1)
             v = self.vivants()
+            b = self.besoin()
             suivi[t] = dict(pv=self.pv, crea_adv=sum(len(a.creas) for a in v) / max(len(v), 1), adv_vivants=len(v),
-                            star=any(self.sur(k) for k in ("dawn", "vat", "gift", "sneak")))
+                            star=any(self.sur(k) for k in ("dawn", "vat", "gift", "sneak")),
+                            # régularité (simu.regularite) : rien ici ne tire au hasard, les parties restent les mêmes
+                            joues=joues, terrains=len(self.terrains), main=len(self.hand), perms=len(self.perms),
+                            creas=len(self.creatures()), couleur=any(b[c] and not self.a_couleur(c) for c in "WUBRG"))
             if self.fin:
                 break
         res, cause = self.fin or ("pas_finie", "")

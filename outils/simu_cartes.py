@@ -128,10 +128,11 @@ NOMBRES = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5
 
 
 # ---------------------------------------------------------------- listes
-def lire_liste(chemin):
+def lire_liste(chemin, partenaire=False):
     """Lit une liste : export Archidekt « 1x Nom [Tags] », ou « 1 Nom » avec « SB: 1 Commandant ».
-    Renvoie (commandant, liste des autres cartes avec répétitions)."""
-    cmd, cartes = None, []
+    Renvoie (commandant, liste des autres cartes avec répétitions) ; avec partenaire=True,
+    (commandant, second commandant ou None, autres cartes). Le premier commandant de la liste est le principal."""
+    cmd, cmds, cartes = None, [], []
     for ligne in open(chemin, encoding="utf-8"):
         ligne = ligne.strip()
         m = re.search(r"commandant\s*:\s*(.+)$", ligne, re.I)
@@ -149,10 +150,14 @@ def lire_liste(chemin):
         if "Maybeboard" in tags or "Sideboard" in tags:
             continue
         if "Commander" in tags or sb:
-            cmd = nom
+            cmds.append(nom)
             continue
         cartes += [nom] * n
-    return cmd, [c for c in cartes if c != cmd]
+    cmd = cmds[0] if cmds else cmd
+    autres = [c for c in cartes if c != cmd and c not in cmds]
+    if partenaire:
+        return cmd, (cmds[1] if len(cmds) > 1 else None), autres
+    return cmd, autres
 
 
 def fiches(noms):
@@ -507,19 +512,25 @@ def role_auto(k):
     return "a_moteur" if k["effets"] or k["statiques"] else "a_autre"
 
 
-def construire(noms, cmd):
-    """Prépare toutes les cartes d'une liste (plus le commandant) pour le moteur. Renvoie (cartes, noms non compris)."""
-    F = fiches(list(noms) + [cmd])
-    identite = set(F[cmd]["identite"]) or {"C"}
+def construire(noms, cmd, partenaire=None, textes=None):
+    """Prépare toutes les cartes d'une liste (plus le ou les commandants) pour le moteur. Renvoie (cartes, noms non compris).
+    textes : {carte: texte} du deck (simulateur.json, écrit par Claude) ; ce texte, dans les tournures que lit analyser(),
+    remplace le texte Oracle de la carte et passe avant les cartes écrites à la main (COMPORTEMENTS)."""
+    cmds = [cmd] + ([partenaire] if partenaire else [])
+    F = fiches(list(noms) + cmds)
+    identite = set().union(*(F[c]["identite"] for c in cmds)) or {"C"}
     C = {}
-    for n in set(noms) | {cmd}:
+    for n in set(noms) | set(cmds):
         f = F[n]
+        perso = bool(textes) and isinstance((textes or {}).get(n), str)
+        if perso:
+            f = dict(f, texte=textes[n])
         types = set(re.findall(r"\b(Creature|Land|Artifact|Enchantment|Instant|Sorcery|Planeswalker|Battle)\b", f["type"]))
         sous = set(f["type"].split("—")[1].split()) if "—" in f["type"] else set()
-        comp = COMPORTEMENTS.get(n)
+        comp = None if perso else COMPORTEMENTS.get(n)
         an = analyser(n, f, permanent=not ({"Instant", "Sorcery"} & types))
         k = dict(nom=n, types=types, sous_types=sous, creature="Creature" in types, terrain="Land" in types,
-                 permanent=not ({"Instant", "Sorcery"} & types), legendaire="Legendary" in f["type"])
+                 permanent=not ({"Instant", "Sorcery"} & types), legendaire="Legendary" in f["type"], perso=perso)
         k.update({a: b for a, b in (comp or {}).items() if a != "kind"})
         k["plein"] = parse_cout(f["cout"])
         k["x"] = "{X}" in f["cout"]
@@ -570,12 +581,15 @@ def construire(noms, cmd):
 
 
 def couverture(C):
-    """Classe chaque carte : écrite à la main, lue automatiquement, lue en partie, ou jouée sans effet."""
-    res = {"specifique": [], "auto": [], "partiel": [], "corps": [], "sans_effet": []}
+    """Classe chaque carte : décrite pour ce deck (simulateur.json), écrite à la main, lue automatiquement, lue en partie,
+    ou jouée sans effet."""
+    res = {"affinee": [], "specifique": [], "auto": [], "partiel": [], "corps": [], "sans_effet": []}
     engag = any(k["kind"].startswith("e_") or k["kind"] == "tromo" for k in C.values())
     for n, k in sorted(C.items()):
         if k["terrain"] and (not k["non_lu"] or n in TERRAINS_SPECIAUX):
             res["auto"].append(n)
+        elif k.get("perso") and not k["non_lu"]:
+            res["affinee"].append(n)
         elif k["terrain"] and n in TERRAINS_ENGAG and engag:
             res["specifique"].append(n)
         elif n in COMPORTEMENTS:

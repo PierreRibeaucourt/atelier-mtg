@@ -107,7 +107,7 @@ Tout ceci est ignoré par git et ne doit jamais être commité, poussé ni effac
 - `Deck <nom>/`, un dossier par deck, à la racine :
   - `archidekt.txt`, la liste de référence au format Archidekt (`1x Nom [Catégorie]`) ;
   - l'historique et les versions ;
-  - `simulations/`, `pilote.json` (réglages du simulateur), `discussion.json`, `achats.json` (cartes possédées : le reste est à acheter) et `suggestions.json` (cartes que l'onglet Suggestions ne propose plus).
+  - `simulations/`, `simulateur.json` (ce que Claude a appris au simulateur sur ce deck : cartes décrites, plan de jeu ; voir `connaissances/simulateur.md`), `discussion.json`, `achats.json` (cartes possédées : le reste est à acheter) et `suggestions.json` (cartes que l'onglet Suggestions ne propose plus).
 - `Corbeille Atelier/` : les decks supprimés, récupérables.
 - `Partage Atelier/` : les pages partagées. `reglages.json` : les réglages. `Classeur/` : le classeur.
 - Les caches, dans `outils/` et `outils/atelier/` : base des cartes, prix, combos. Ils se reconstruisent tout seuls.
@@ -141,7 +141,7 @@ Sauvegarder ses decks, c'est copier les dossiers `Deck …`.
   - `outils/atelier/*.py`, les modules (decks, prix, bracket, combos, suggestions, recherche, simulation, discussion, partage, et github pour la connexion du partage sans git) ;
   - `outils/atelier/demander.py`, l'Atelier en ligne de commande pour les assistants ;
   - `connaissances/`, les repères de construction d'un deck ;
-  - `outils/simu*.py`, le simulateur ;
+  - `outils/simu*.py`, le simulateur. Un deck ne s'y écrit jamais : ses cartes et son plan de jeu vont dans `<deck>/simulateur.json`, qui survit aux mises à jour (`connaissances/simulateur.md`) ;
   - `outils/prix.py` et `outils/proba.py`, des outils en ligne de commande ;
   - `installeur/`, l'installeur Windows (script Inno Setup, dépendances figées, fabrication).
 - **Contribution.** Ce dépôt est celui de son auteur. Pour contribuer, travaille dans un fork : ne pousse rien sur le dépôt d'origine.
