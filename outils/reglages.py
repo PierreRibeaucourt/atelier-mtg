@@ -6,6 +6,11 @@
 - github : compte GitHub où publier les decks partagés (dépôt « decks »). Par défaut, celui du dépôt de l'Atelier
   (remote origin).
 - nom : le nom affiché sur les pages partagées (« Decks de … »). Par défaut, le compte GitHub.
+- fermeture : « arreter » = l'Atelier s'arrête quand on ferme sa dernière page ; sinon il reste prêt en arrière-plan.
+- langue_cartes : l'impression par défaut des cartes est la moins chère qui existe dans cette langue (« fr »…) ;
+  sans elle, la moins chère.
+- sans_ub : éviter les cartes Universes Beyond quand c'est possible (suggestions, impressions par défaut).
+- preferences : true une fois que la page a posé ses questions (fermeture, impression, Universes Beyond).
 """
 import json
 import os
@@ -61,6 +66,21 @@ def pour_la_page():
 
 def github():
     return (lire().get("github") or "").strip().lstrip("@") or None
+
+
+# langues des impressions de cartes (codes Scryfall), pour « la moins chère en … » ; l'anglais est la moins chère tout court
+LANGUES = {"fr": "français", "de": "allemand", "it": "italien", "es": "espagnol", "pt": "portugais", "ja": "japonais",
+           "ko": "coréen", "ru": "russe", "zhs": "chinois simplifié", "zht": "chinois traditionnel"}
+
+
+def impression():
+    """(langue des impressions par défaut, ou None pour la moins chère toutes langues ; éviter les Universes Beyond)."""
+    r = lire()
+    return (r.get("langue_cartes") if r.get("langue_cartes") in LANGUES else None), bool(r.get("sans_ub"))
+
+
+def arret_a_la_fermeture():
+    return lire().get("fermeture") == "arreter"
 
 
 def nom():

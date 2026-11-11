@@ -1527,14 +1527,41 @@ async function vueOptions() {
   classeurOptions($("#opt-classeur"));
 }
 
+// les préférences demandées une fois au premier lancement (modalePreferences), puis modifiables dans les options
+const champsPreferences = (o) => `
+    <label class="opt-ligne"><span>Page fermée</span><select class="champ" name="fermeture">
+      <option value="garder">Garder l'Atelier prêt</option>
+      <option value="arreter" ${o.fermeture === "arreter" ? "selected" : ""}>Arrêter l'Atelier</option></select></label>
+    <label class="opt-ligne"><span>Visuel par défaut</span><select class="champ" name="langue_cartes">
+      <option value="">L'édition la moins chère</option>
+      ${Object.entries(o.langues || {}).map(([k, l]) => `<option value="${k}" ${o.langue_cartes === k ? "selected" : ""}>La moins chère en ${esc(l)}</option>`).join("")}</select></label>
+    <label class="opt-case"><input type="checkbox" name="sans_ub" ${o.sans_ub ? "checked" : ""}>Éviter les cartes Universes Beyond quand c'est possible</label>`;
+
+function modalePreferences(o) {
+  ouvrirModale(`<h2>Préférences</h2><div class="options">${champsPreferences(o)}</div>
+    <div class="boutons"><button class="btn btn-accent" id="ok">Enregistrer</button></div>`, (b) => {
+    const champ = (n) => $(`[name="${n}"]`, b);
+    $("#ok", b).onclick = async () => {
+      try {
+        await api("/api/options", { method: "POST", body: { fermeture: champ("fermeture").value,
+          langue_cartes: champ("langue_cartes").value, sans_ub: champ("sans_ub").checked, preferences: true } });
+        fermerModale();
+        toast("Enregistré.");
+      } catch (e) { erreur(e); }
+    };
+  }, { focus: false });
+}
+
 // chaque champ s'enregistre quand on le quitte (ou Entrée), la case tout de suite
 function optionsGenerales(el, o) {
   const budget = (b) => (b == null ? "" : String(b).replace(".", ","));
   el.innerHTML = `<div class="opt-titre"><h2>Général</h2>
-      <button type="button" class="btn btn-petit btn-discret" id="opt-dossier">${ico("dossier")}Ouvrir le dossier</button></div>
+      <button type="button" class="btn btn-petit btn-discret" id="opt-dossier">${ico("dossier")}Ouvrir le dossier</button>
+      <button type="button" class="btn btn-petit btn-discret" id="opt-arreter">${ico("arreter")}Arrêter l'Atelier</button></div>
     <label class="opt-ligne"><span>Nom affiché</span><input class="champ" name="nom" maxlength="60" value="${esc(o.nom)}" placeholder="${esc(o.github)}"></label>
     <label class="opt-ligne"><span>Budget par carte</span><span class="opt-euros"><input class="champ" name="budget" inputmode="decimal" value="${budget(o.budget)}" placeholder="${budget(o.budget_defaut)}">€</span></label>
     <div id="opt-github"></div>
+    ${champsPreferences(o)}
     ${o.demarrage == null ? "" : `<label class="opt-case"><input type="checkbox" name="demarrage" ${o.demarrage ? "checked" : ""}>Lancer l'Atelier au démarrage de Windows</label>`}`;
   el.onchange = async (ev) => {
     const c = ev.target;
@@ -1546,11 +1573,18 @@ function optionsGenerales(el, o) {
       $('[name="nom"]', el).placeholder = r.github || $('[name="nom"]', el).placeholder;
       toast("Enregistré.");
     } catch (e) { erreur(e); }
-    if (c.type === "checkbox") c.checked = !!o.demarrage;
+    if (c.type === "checkbox") c.checked = !!o[c.name];
     else c.value = c.name === "budget" ? budget(o.budget) : o[c.name];       // la valeur gardée (nettoyée, ou l'ancienne)
   };
   el.onkeydown = (ev) => { if (ev.key === "Enter" && ev.target.matches("input.champ")) ev.target.blur(); };
   $("#opt-dossier", el).onclick = () => api("/api/ouvrir-dossier", { method: "POST", body: {} }).catch(erreur);
+  // la page se recharge sur « L'Atelier n'est pas lancé » (gardée par le navigateur, voir sw.js), avec de quoi le relancer
+  $("#opt-arreter", el).onclick = async () => {
+    try {
+      await api("/api/arreter", { method: "POST", body: {} });
+      setTimeout(() => location.reload(), 1500);
+    } catch (e) { erreur(e); }
+  };
   ligneGithub($("#opt-github", el), o);
 }
 
@@ -4779,9 +4813,13 @@ document.addEventListener("visibilitychange", async () => {
 });
 
 // ------------------------------------------------------------------ état de la mise à jour (prix, Game Changers)
+// cette page est ouverte : elle le dit à chaque nouvelle, et prévient quand on la ferme (réglage « Arrêter l'Atelier »)
+const ID_PAGE = Math.random().toString(36).slice(2, 12);
+if (!PARTAGE) addEventListener("pagehide", () => navigator.sendBeacon("/api/presence/fin", ID_PAGE));
+
 async function suivreMaj() {
   try {
-    const e = await api("/api/etat");
+    const e = await api("/api/etat?page=" + ID_PAGE);
     const m = e.maj;
     $("#etat-maj").textContent = m.tache
       ? `Mise à jour ${m.tache}${m.total > 1 ? ` ${m.fait}/${m.total}` : ""}…`
@@ -5168,6 +5206,9 @@ if (!PARTAGE) {
 
 route();
 if (!PARTAGE) suivreMaj();
+// les préférences, demandées une fois : fermeture de la page, visuel par défaut des cartes, Universes Beyond
+if (!PARTAGE) setTimeout(() => api("/api/options").then((o) => { if (!o.preferences && $("#modale").hidden) modalePreferences(o); })
+  .catch(() => {}), 800);
 
 // nouvelle version de l'Atelier (mise_a_jour.py) : un bandeau propose de l'installer ; l'Atelier redémarre et la page se recharge
 async function verifierVersion() {

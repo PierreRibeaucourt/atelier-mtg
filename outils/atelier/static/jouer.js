@@ -1133,3 +1133,12 @@ function lancer() {
 let prevenu = !TACTILE;
 try { prevenu = prevenu || !!sessionStorage.getItem("jouer-tactile"); } catch (_) {}
 if (prevenu) lancer(); else avertirTactile(lancer);
+
+// cette page est ouverte : l'Atelier ne s'arrête pas tant qu'elle l'est (Options › Page fermée › Arrêter l'Atelier)
+if (!PARTAGE) {
+  const ID_PAGE = Math.random().toString(36).slice(2, 12);
+  const signe = () => fetch("/api/etat?page=" + ID_PAGE).catch(() => {});
+  signe();
+  setInterval(signe, 30000);
+  addEventListener("pagehide", () => navigator.sendBeacon("/api/presence/fin", ID_PAGE));
+}

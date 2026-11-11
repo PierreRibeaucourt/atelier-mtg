@@ -97,7 +97,8 @@ def _pt(c):
     return " // ".join(vals)
 
 
-GARDES = ("fr", "fr_type", "fr_texte", "prix", "prix_lien", "prix_date", "prix_edition")      # déjà calculés : on ne les perd pas quand une fiche est complétée
+# déjà calculés : on ne les perd pas quand une fiche est complétée (sans imp_pref : son image par défaut sera refaite)
+GARDES = ("fr", "fr_type", "fr_texte", "prix", "prix_lien", "prix_date", "prix_edition", "imp_lang")
 
 
 def _eur(c):
@@ -166,44 +167,135 @@ def _recherche_groupee(noms, extra, traite, recentes_dabord=False):
         yield len(bloc)
 
 
+def _ub(c):
+    """Impression Universes Beyond (Marvel, Final Fantasy, Fallout…) : Scryfall le note sur chaque impression."""
+    return "universesbeyond" in (c.get("promo_types") or [])
+
+
+def _papier(c):
+    """Une impression qu'on peut montrer : papier, image disponible, pas un objet de collection ni une carte géante."""
+    return not (c.get("digital") or c.get("oversized") or c.get("image_status") in ("missing", "placeholder")
+                or c.get("set_type") in ("memorabilia", "token", "minigame"))
+
+
+def _choisir(anglaises, locales, sans_ub):
+    """L'impression par défaut d'une carte : (impression anglaise, impression à montrer, prix, foil ?) ou None.
+    La moins chère (hors foil, sinon foil) ; d'abord parmi celles qui existent dans la langue choisie (locales) ; hors
+    Universes Beyond quand on l'a demandé et qu'il en reste."""
+    def moins_chere(paires):
+        for cle_prix, foil in (("prix", False), ("prix_foil", True)):
+            p = [(en[cle_prix], i) for i, (en, _) in enumerate(paires) if en.get(cle_prix) is not None]
+            if p:
+                prix, i = min(p)
+                return paires[i][0], paires[i][1], prix, foil
+        return None
+    toutes = [(i, i) for i in anglaises.values()]
+    loc = [(anglaises[k], v) for k, v in ((tuple(k.split("|", 1)), v) for k, v in (locales or {}).items()) if k in anglaises]
+    ordre = ([[p for p in loc if not p[1]["ub"]], [p for p in toutes if not p[0]["ub"]]] if sans_ub else []) + [loc, toutes]
+    for paires in ordre:
+        r = moins_chere(paires)
+        if r:
+            return r
+    return None
+
+
+def _bases_par_defaut(noms, lang, sans_ub, pref):
+    """Terrains de base : leur prix ne compte pas ; l'image est celle de l'impression la plus récente, dans la langue
+    choisie et hors Universes Beyond si demandé. Une requête par terrain, refaite quand les préférences changent."""
+    cache = _charge()["cartes"]
+    for n in noms:
+        f = cache.get(n)
+        if n not in BASES_FR or not f or f.get("imp_pref") == pref:
+            continue
+        for filtre in [f"lang:{lang}" if lang else "", ""] if lang else [""]:
+            q = f'!"{n}" game:paper -is:promo {filtre} {"-is:ub" if sans_ub else ""}'
+            r = get("https://api.scryfall.com/cards/search", {"q": " ".join(q.split()), "unique": "prints", "order": "released",
+                                                              "dir": "desc"})
+            c = next((c for c in (r or {}).get("data", []) if _papier(c) and c["name"] == n), None)
+            if c:
+                i = _impression(c)
+                with _verrou:
+                    f.update(image=i["image"], petite=i["petite"], art=i["art"] or f.get("art", ""),
+                             imp=dict(set=i["set"], num=i["num"], lang=i["lang"]), imp_pref=pref)
+                break
+        else:
+            with _verrou:
+                f["imp_pref"] = pref                 # rien trouvé (ou pas de réseau) : l'image d'avant, jusqu'au prochain changement
+
+
 def rafraichir_prix(noms, force=False, suivi=True):
-    """Prix le plus bas (en euros, hors foil) parmi toutes les éditions, comme outils/prix.py. Gardé 24 h.
+    """Prix du jour et impression par défaut de chaque carte, selon les préférences (Options) : l'impression la moins
+    chère, ou la moins chère qui existe dans la langue choisie (son image dans cette langue, le prix de son édition) ;
+    hors Universes Beyond quand il en existe une autre, si on l'a demandé. Prix en euros hors foil, comme outils/prix.py
+    (le foil si la carte n'existe qu'en foil). Gardé 24 h ; la liste des impressions dans la langue choisie, une semaine.
+    Une impression choisie dans un deck (« (ima) 205 ») garde son image : celle-ci ne sert que par défaut.
     suivi=False : sans afficher l'avancement dans la barre du haut (recherche d'une carte)."""
     cache = _charge()
     jour = aujourdhui()
-    # « prix_edition » absent = prix calculé avant l'exclusion des éditions douteuses : à refaire
-    a_faire = [n for n in noms if n not in BASES_FR and cache["cartes"].get(n)
-               and (force or cache["cartes"][n].get("prix_date") != jour or "prix_edition" not in cache["cartes"][n])]
+    lang, sans_ub = reglages.impression()
+    pref = f"{lang or ''}|{int(sans_ub)}"                 # préférences changées : tout est à refaire
+    _bases_par_defaut(noms, lang, sans_ub, pref)
+    def a_refaire(f):
+        # « prix_edition » absent = prix calculé avant l'exclusion des éditions douteuses : à refaire
+        if force or f.get("prix_date") != jour or "prix_edition" not in f:
+            return True
+        return f.get("imp_pref") != pref and (suivi or not lang)     # recherche : la langue attendra une mise à jour suivie
+    a_faire = [n for n in noms if n not in BASES_FR and cache["cartes"].get(n) and a_refaire(cache["cartes"][n])]
     if not a_faire:
+        _sauve()
         return
     par_cle = {_cle(n): n for n in a_faire}
-    meilleur, foil = {}, {}
+    anglaises = {n: {} for n in a_faire}                  # (set, numéro) -> impression, avec son prix et son lien Cardmarket
 
     def traite(c):
         n = par_cle.get(_cle(c["name"]))
-        if not n or not prix_fiable(c):
-            return
-        lien = _lien((c.get("purchase_uris") or {}).get("cardmarket", ""))
-        p = _eur(c)
-        if p is not None and (n not in meilleur or p < meilleur[n][0]):
-            meilleur[n] = (p, lien, c.get("set_name", ""))
-        pf = (c.get("prices") or {}).get("eur_foil")       # carte qui n'existe qu'en foil (ex. Greven, C19) : on garde ce prix-là
-        if pf and (n not in foil or float(pf) < foil[n][0]):
-            foil[n] = (float(pf), lien, c.get("set_name", "") + " (foil)")
+        if n and prix_fiable(c):
+            anglaises[n][(c["set"], c["collector_number"])] = dict(
+                _impression(c), ub=_ub(c), lien=_lien((c.get("purchase_uris") or {}).get("cardmarket", "")))
     if suivi:
         etat.update(tache="prix", fait=0, total=len(a_faire))
     for k in _recherche_groupee(a_faire, "", traite):
         if suivi:
             etat["fait"] += k
+
+    # les impressions dans la langue choisie, relues chaque semaine ; pas pour une recherche (suivi=False) : ses images
+    # viennent de la base de cartes, et la carte sera complétée quand elle entrera dans un deck ou le classeur
+    if lang and suivi:
+        def perime(f):
+            L = f.get("imp_lang") or {}
+            return L.get("lang") != lang or not L.get("date") or (date.fromisoformat(jour) - date.fromisoformat(L["date"])).days >= 7
+        a_lire = [n for n in a_faire if perime(cache["cartes"][n])]
+        lues = {n: {} for n in a_lire}
+
+        def traite_langue(c):
+            n = par_cle.get(_cle(c["name"]))
+            if n in lues and _papier(c):
+                i = _impression(c)
+                lues[n][f"{c['set']}|{c['collector_number']}"] = dict(image=i["image"], petite=i["petite"], art=i["art"],
+                                                                         lang=lang, ub=_ub(c))
+        if a_lire:
+            for _ in _recherche_groupee(a_lire, f"lang:{lang} game:paper", traite_langue):
+                pass
+            with _verrou:
+                for n in a_lire:
+                    cache["cartes"][n]["imp_lang"] = dict(lang=lang, date=jour, eds=lues[n])
+
     with _verrou:
         for n in a_faire:
             f = cache["cartes"][n]
-            m = meilleur.get(n) or foil.get(n)
-            if m:
-                f["prix"], f["prix_lien"], f["prix_edition"] = m[0], m[1] or f["prix_lien"], m[2]
+            choix = _choisir(anglaises[n], (f.get("imp_lang") or {}).get("eds") if lang else None, sans_ub)
+            if choix:
+                en, vue, prix, foil = choix
+                f["prix"], f["prix_lien"] = prix, en["lien"] or f["prix_lien"]
+                f["prix_edition"] = en["edition"] + (" (foil)" if foil else "")
+                if vue.get("image"):
+                    f.update(image=vue["image"], petite=vue["petite"], art=vue["art"] or f.get("art", ""))
+                f["imp"] = dict(set=en["set"], num=en["num"], lang=vue.get("lang") or "en")
             else:                                    # rien trouvé (ou Scryfall injoignable) : on garde l'ancien prix
                 f.setdefault("prix_edition", "")
             f["prix_date"] = jour
+            if not lang or (f.get("imp_lang") or {}).get("lang") == lang:
+                f["imp_pref"] = pref                 # sinon : à refaire avec la langue, à la prochaine mise à jour suivie
     _sauve()
 
 
@@ -312,8 +404,7 @@ def impressions_carte(nom):
     r = get("https://api.scryfall.com/cards/search", {"q": q, "unique": "prints", "order": "released", "dir": "desc"})
     while r:
         for c in r.get("data", []):
-            if _cle(c["name"]).lower() != _cle(nom).lower() or c.get("oversized") or c.get("image_status") in ("missing", "placeholder") \
-                    or c.get("set_type") in ("memorabilia", "token", "minigame"):
+            if _cle(c["name"]).lower() != _cle(nom).lower() or not _papier(c):
                 continue
             res.append(_impression(c))
         r = get(r["next_page"]) if r.get("has_more") else None

@@ -8,6 +8,7 @@ import re
 import socket
 import sys
 import threading
+import time
 import webbrowser
 
 ICI = os.path.dirname(os.path.abspath(__file__))
@@ -289,16 +290,31 @@ def reglages_js():
 def api_options():
     import reglages
     r = reglages.lire()
+    lang, sans_ub = reglages.impression()
     return jsonify(nom=r.get("nom") or "", github=r.get("github") or "", budget=r.get("budget"), budget_defaut=reglages.BUDGET_DEFAUT,
-                   demarrage=demarrage())
+                   demarrage=demarrage(), fermeture="arreter" if reglages.arret_a_la_fermeture() else "garder",
+                   langue_cartes=lang or "", sans_ub=sans_ub, langues=reglages.LANGUES, preferences=bool(r.get("preferences")))
 
 
 @app.post("/api/options")
 def api_options_ecrire():
-    """Ce qui change : nom, github, budget (vide = 5 € par défaut, 0 = pas d'alerte), demarrage (true / false)."""
+    """Ce qui change : nom, github, budget (vide = 5 € par défaut, 0 = pas d'alerte), demarrage (true / false),
+    fermeture (garder / arreter), langue_cartes (vide = la moins chère, ou un code de reglages.LANGUES), sans_ub,
+    preferences (true : les questions du premier lancement ont eu leur réponse)."""
     import reglages
     d = request.get_json() or {}
     ch = {}
+    if "fermeture" in d:
+        ch["fermeture"] = "arreter" if d["fermeture"] == "arreter" else "garder"
+    if "preferences" in d:
+        ch["preferences"] = True
+    impression_avant = reglages.impression()
+    if "langue_cartes" in d:
+        if d["langue_cartes"] and d["langue_cartes"] not in reglages.LANGUES:
+            raise ValueError("Langue inconnue.")
+        ch["langue_cartes"] = d["langue_cartes"] or None
+    if "sans_ub" in d:
+        ch["sans_ub"] = bool(d["sans_ub"]) or None
     if "nom" in d:
         ch["nom"] = " ".join(str(d["nom"]).split())[:60] or None
     if "github" in d:
@@ -318,6 +334,8 @@ def api_options_ecrire():
     if ch:
         reglages.ecrire(**ch)
         ic.BUDGET = reglages.budget()                       # tout de suite, sans relancer l'Atelier
+    if reglages.impression() != impression_avant:           # autre impression par défaut : images et prix refaits
+        en_fond(ic.mise_a_jour, tous_les_noms())
     if "demarrage" in d:
         regler_demarrage(bool(d["demarrage"]))
     return api_options()
@@ -829,8 +847,80 @@ def api_bracket(deck):
 
 @app.get("/api/etat")
 def api_etat():
+    """L'avancement des mises à jour ; la page l'interroge toutes les 3 s (?page=… : elle est encore ouverte)."""
+    if request.args.get("page"):
+        page_ouverte(request.args["page"])
     gc = ic._charge()["gc"]
     return jsonify(dict(maj=dict(ic.etat), gc_nb=len(gc.get("noms") or []), gc_maj=gc.get("maj")))
+
+
+# ---------------------------------------------------------------- arrêt : bouton des Options, ou dernière page fermée
+_pages = {}                    # pages ouvertes : identifiant -> dernière nouvelle (heure)
+_pages_vues = threading.Event()
+PAGE_PERDUE = 150              # s sans nouvelles d'une page : fermée sans prévenir (un onglet en arrière-plan écrit 1 fois/min)
+DELAI_ARRET = 20               # s après la dernière page fermée : un rechargement ou un lien vers une autre page n'arrête rien
+_icone = None                  # le chaudron de la barre d'état, à retirer avant de s'arrêter
+
+
+def page_ouverte(page):
+    _pages[str(page)[:40]] = time.time()
+    _pages_vues.set()
+
+
+@app.post("/api/presence/fin")
+def api_presence_fin():
+    """Une page se ferme (navigator.sendBeacon) : l'identifiant de la page dans le corps."""
+    _pages.pop(request.get_data(as_text=True)[:40], None)
+    return "", 204
+
+
+def occupe_pour_arreter():
+    """Ce que l'arrêt automatique attend : ce qu'un redémarrage couperait, plus les mises à jour et les partages."""
+    import partage
+    import recherche
+    return occupe() or (recherche.etat_base()["construction"].get("actif") and "la base de cartes se construit") \
+        or (ic.etat.get("tache") and "une mise à jour tourne") or (partage._verrou.locked() and "un partage se publie")
+
+
+def arreter():
+    """Arrête l'Atelier : le chaudron disparaît de la barre d'état (lancement normal), sinon le programme s'arrête."""
+    if _icone:
+        _icone.stop()                              # barre_etat rend la main : le lancement se termine (os._exit)
+    else:
+        os._exit(0)
+
+
+def surveiller_fermeture(pas=10):
+    """Réglage « Arrêter l'Atelier » à la fermeture de la page : une fois qu'une page a été ouverte, l'Atelier s'arrête
+    quand plus aucune n'est ouverte et que rien ne tourne. Un PC en veille ne compte pas comme une page fermée."""
+    import reglages
+    vide_depuis, avant = None, time.time()
+    while True:
+        time.sleep(pas)
+        maintenant = time.time()
+        if maintenant - avant > 3 * pas:           # sortie de veille : les pages n'ont pas pu donner de nouvelles
+            for p in _pages:
+                _pages[p] = maintenant
+        avant = maintenant
+        for p, t in list(_pages.items()):
+            if maintenant - t > PAGE_PERDUE:
+                _pages.pop(p, None)
+        if _pages or not _pages_vues.is_set() or not reglages.arret_a_la_fermeture():
+            vide_depuis = None
+            continue
+        vide_depuis = vide_depuis or maintenant
+        if maintenant - vide_depuis >= DELAI_ARRET and not occupe_pour_arreter():
+            arreter()
+
+
+@app.post("/api/arreter")
+def api_arreter():
+    """Bouton « Arrêter l'Atelier » des Options."""
+    o = occupe()
+    if o:
+        return jsonify(erreur=f"Arrêt impossible pour l'instant : {o}. Réessaie quand c'est fini."), 409
+    threading.Timer(0.5, arreter).start()          # le temps de répondre à la page
+    return jsonify(ok=True)
 
 
 @app.post("/api/rafraichir")
@@ -1075,9 +1165,11 @@ def barre_etat(url):
 
     def quitter(icone, item):
         icone.stop()
+    global _icone
     menu = pystray.Menu(pystray.MenuItem("Ouvrir l'Atelier", ouvrir, default=True), pystray.MenuItem("Quitter", quitter))
     threading.Timer(4, montrer_icone).start()      # Windows enregistre l'icône quand elle apparaît
-    pystray.Icon("atelier-mtg", _chaudron(64), "Atelier MTG", menu).run()
+    _icone = pystray.Icon("atelier-mtg", _chaudron(64), "Atelier MTG", menu)
+    _icone.run()
 
 
 if __name__ == "__main__":
@@ -1113,6 +1205,7 @@ if __name__ == "__main__":
         en_fond(partage.surveiller, app.test_client().get)     # pages partagées remises à jour quand un deck change
         en_fond(mise_a_jour.surveiller)                        # nouvelle version de l'Atelier : lue une fois par jour
         enregistrer_lien()
+    en_fond(surveiller_fermeture)                  # réglage « Arrêter l'Atelier » quand on ferme la page
     if "--sans-navigateur" not in sys.argv:
         threading.Timer(1.5, lambda: webbrowser.open(url)).start()
     if barre:

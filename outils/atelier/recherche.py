@@ -30,6 +30,7 @@ from prix import EDITIONS_DOUTEUSES, ENTETES, get  # noqa: E402
 
 import decks  # noqa: E402
 import infos_cartes as ic  # noqa: E402
+import reglages  # noqa: E402
 
 FICHIER = os.path.join(ICI, "base_cartes.json.gz")
 VERSION = 1
@@ -314,7 +315,7 @@ def _cartes_et_impressions():
             x["eur"], x["foil"] = foil, True           # carte qui n'existe qu'en foil (ex. Greven, C19)
         d = c.get("released_at") or ""
         x["pr"].append([c["set"], c["collector_number"], (c.get("rarity") or "?")[0], d, eur if eur is not None else foil,
-                        _chemin_image(c), c.get("lang", "en")])
+                        _chemin_image(c), c.get("lang", "en"), int(ic._ub(c))])      # 1 : impression Universes Beyond
         if d and not c.get("promo") and c.get("set_type") not in ("promo", "token") and (not x["d0"] or d < x["d0"]):
             x["d0"], x["s0"] = d, c["set"]             # première édition (pour « Nouvelles cartes uniquement »)
         r = _rang_impression(c)
@@ -871,6 +872,8 @@ def _rang_type(x):
 def _sortie(x, b, dans, imp=None, jour=None):
     pr = x["pr"]
     p = imp if imp is not None else (pr[x["im"]] if x.get("im") is not None and pr else None)
+    if imp is None and p and len(p) > 7 and p[7] and reglages.impression()[1]:      # Options : éviter les Universes Beyond
+        p = next((q for q in pr if len(q) > 7 and not q[7] and q[5]), p)          # (base d'avant : on ne sait pas)
     ed = b["editions"].get(p[0], {}) if p else {}
     prix = x["eur"] if imp is None else p[4]
     fiche = ic._charge()["cartes"].get(x["n"]) or {}

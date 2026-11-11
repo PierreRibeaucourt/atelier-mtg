@@ -211,9 +211,11 @@ def calculer(deck):
     poss = classeur.cartes()
     combos = _combos(deck)
     ub = _universes_beyond()
+    sans_ub = reglages.impression()[1]                      # Options : éviter les Universes Beyond (qui n'existent qu'ainsi)
 
     def proposable(x):
         return (x["_cle"] not in a["cles"] and x["n"] not in refus and "commander" in x["_lg"] and set(x["ci"]) <= ident
+                and not (sans_ub and x["n"] in ub)
                 and x["spe"] not in recherche.HORS_JEU and not x["dig"] and not x["fun"] and "Land" not in x["_types"]
                 and (budget == math.inf or (x["eur"] is not None and x["eur"] <= budget)))
 
