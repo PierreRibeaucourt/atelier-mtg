@@ -2346,11 +2346,13 @@ function modaleVersion(c) {
 // ------------------------------------------------------------------ recherche d'une carte (ajout, remplacement, commandant)
 // Liste de résultats avec coût, prix (le plus bas du jour, chargé juste après) et image + prix au survol.
 // surAjout : un bouton + sur chaque suggestion ajoute la carte sans ouvrir sa fiche (renvoie vrai si c'est fait)
+// (surAjout(x, { maybe }) : un second bouton l'ajoute au Maybeboard ; Entrée ajoute la carte en tête de liste au deck)
 function rechercheCarte(zone, { surChoix, surAjout = null, deck = () => etat.deck, placeholder = "Nom de la carte…" }) {
   zone.innerHTML = `<input class="champ" type="search" placeholder="${esc(placeholder)}" autocomplete="off" aria-label="Chercher une carte">
     <div class="resultats" role="listbox"></div>`;
   const champ = $("input", zone), res = $(".resultats", zone);
-  let minuteur, numero = 0, liste = [], actif = -1;
+  let minuteur, numero = 0, liste = [], actif = -1, fait = "", ajoutEnCours = false;
+  const ajoutable = (x) => { const d = deck(); return !(d && d.cartes.some((c) => c.nom === x.nom)) || /\bBasic\b/.test(x.type || ""); };
 
   const legende = (x) => `${x.fr && x.fr !== x.nom ? x.fr + " — " : ""}${x.prix === undefined || (x.prix == null && !x.prixFait) ? "prix en cours…" : x.prix == null ? "prix inconnu" : euros(x.prix)}${x.gc ? " · Game Changer" : ""}`;
   const nomHtml = (x) => `<span class="en">${esc(x.nom)}</span>${x.fr && x.fr !== x.nom ? ` <span class="muet">· ${esc(x.fr)}</span>` : ""}
@@ -2361,12 +2363,14 @@ function rechercheCarte(zone, { surChoix, surAjout = null, deck = () => etat.dec
     const deja = d && d.cartes.some((c) => c.nom === x.nom);
     const hors = d && d.identite && (x.couleurs || []).some((k) => !d.identite.includes(k));
     const cher = (x.prix || 0) > BUDGET;
-    const plus = !surAjout ? "" : deja && !/\bBasic\b/.test(x.type || "") ? `<span class="res-plus"></span>`
-      : `<button type="button" class="res-plus" data-plus="${i}" title="Ajouter au deck" aria-label="Ajouter ${esc(x.nom)} au deck">${ico("plus")}</button>`;
+    const plus = !surAjout ? "" : !ajoutable(x) ? `<span class="res-plus"></span><span class="res-plus"></span>`
+      : `<button type="button" class="res-plus" data-plus="${i}" data-dest="maybe" title="Ajouter au Maybeboard" aria-label="Ajouter ${esc(x.nom)} au Maybeboard">${ico("maybe")}</button>
+        <button type="button" class="res-plus" data-plus="${i}" title="Ajouter au deck" aria-label="Ajouter ${esc(x.nom)} au deck">${ico("plus")}</button>`;
+    const legalite = x.legal === "banned" ? `<span class="badge badge-alerte">interdite</span>` : x.legal === "not_legal" ? `<span class="badge badge-alerte">non légale</span>` : "";
     return `<div class="res-ligne"><button type="button" class="res-carte ${i === actif ? "choisi" : ""}" data-i="${i}" role="option"
         data-image="${esc(x.image)}" data-legende="${esc(legende(x))}" ${cher ? 'data-cher="1"' : ""}>
       <span class="res-nom">${nomHtml(x)}</span>
-      <span class="res-badges">${x.gc ? `<span class="badge badge-gc">Game Changer</span>` : ""}${x.legal === "banned" ? `<span class="badge badge-alerte">interdite</span>` : ""}${hors ? `<span class="badge badge-alerte">hors couleurs</span>` : ""}${deja ? `<span class="badge">déjà dans le deck</span>` : ""}</span>
+      <span class="res-badges">${x.gc ? `<span class="badge badge-gc">Game Changer</span>` : ""}${legalite}${hors ? `<span class="badge badge-alerte">hors couleurs</span>` : ""}${deja ? `<span class="badge">déjà dans le deck</span>` : ""}</span>
       ${mana(x.cout)}
       <span class="prix ${cher ? "cher" : ""}">${prixHtml(x)}</span>
     </button>${plus}</div>`;
@@ -2389,49 +2393,54 @@ function rechercheCarte(zone, { surChoix, surAjout = null, deck = () => etat.dec
     });
     if (survol && res.contains(survol)) majLegende();
   };
+  // les anciens résultats restent affichés pendant que les nouveaux arrivent ; les prix manquants suivent sans bloquer
   const chercher = async (q) => {
     const k = ++numero;
-    if (q.trim().length < 2) { liste = []; res.innerHTML = ""; return; }
-    res.innerHTML = `<span class="muet petit">Recherche…</span>`;
+    if (q.trim().length < 2) { liste = []; fait = q; res.innerHTML = ""; return; }
+    if (!liste.length) res.innerHTML = `<span class="muet petit">Recherche…</span>`;
     try {
       const r = await api("/api/chercher?q=" + enc(q));
       if (k !== numero) return;
       liste = r;
+      fait = q;
       actif = r.length ? 0 : -1;
       res.innerHTML = r.length ? r.map(ligne).join("") : `<span class="muet petit">Aucune carte trouvée.</span>`;
       for (const x of r) if (x.prix != null) x.prixFait = true;
-      const manque = r.filter((x) => x.prix == null || !x.fr).map((x) => x.nom);
-      if (manque.length) {
-        const p = await api("/api/prix", { method: "POST", body: { noms: manque } });
-        if (k === numero) majPrix(p);
-      }
+      const manque = r.filter((x) => x.prix == null || x.fr == null).map((x) => x.nom);
+      if (manque.length) api("/api/prix", { method: "POST", body: { noms: manque } }).then((p) => { if (k === numero) majPrix(p); }).catch(() => {});
     } catch (e) { if (k === numero) res.innerHTML = `<span class="erreur">${esc(e.message)}</span>`; }
   };
   const marque = () => $$(".res-carte", res).forEach((el, j) => el.classList.toggle("choisi", j === actif));
   const choisir = (i) => { if (!liste[i]) return; actif = i; marque(); surChoix(liste[i]); };
+  const ajouter = async (i, maybe = false, bouton = null) => {
+    if (ajoutEnCours || !liste[i]) return;
+    ajoutEnCours = true;
+    if (bouton) bouton.disabled = true;
+    try {
+      if (await surAjout(liste[i], { maybe })) vider();             // carte ajoutée : le champ est prêt pour la suivante
+      else { if (bouton) bouton.disabled = false; champ.focus(); }
+    } finally { ajoutEnCours = false; }
+  };
 
-  champ.addEventListener("input", () => { clearTimeout(minuteur); minuteur = setTimeout(() => chercher(champ.value), 300); });
-  champ.addEventListener("keydown", (ev) => {
-    if (!liste.length) return;
-    if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+  champ.addEventListener("input", () => { clearTimeout(minuteur); minuteur = setTimeout(() => chercher(champ.value), 120); });
+  champ.addEventListener("keydown", async (ev) => {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      if (champ.value !== fait) { clearTimeout(minuteur); await chercher(champ.value); }      // Entrée tapée avant les résultats
+      if (!liste.length) return;
+      const i = Math.max(0, actif);
+      if (surAjout && ajoutable(liste[i])) ajouter(i); else choisir(i);
+    } else if ((ev.key === "ArrowDown" || ev.key === "ArrowUp") && liste.length) {
       ev.preventDefault();
       actif = (actif + (ev.key === "ArrowDown" ? 1 : -1) + liste.length) % liste.length;
       marque();
       $$(".res-carte", res)[actif]?.scrollIntoView({ block: "nearest" });
-    } else if (ev.key === "Enter") {
-      ev.preventDefault();
-      choisir(Math.max(0, actif));
     }
   });
-  const vider = () => { numero++; clearTimeout(minuteur); champ.value = ""; liste = []; actif = -1; res.innerHTML = ""; champ.focus(); };
+  const vider = () => { numero++; clearTimeout(minuteur); champ.value = ""; fait = ""; liste = []; actif = -1; res.innerHTML = ""; champ.focus(); };
   res.addEventListener("click", async (ev) => {
     const p = ev.target.closest("button.res-plus");
-    if (p) {
-      p.disabled = true;
-      if (await surAjout(liste[+p.dataset.plus])) vider();         // carte ajoutée : le champ est prêt pour la suivante
-      else { p.disabled = false; champ.focus(); }
-      return;
-    }
+    if (p) return ajouter(+p.dataset.plus, p.dataset.dest === "maybe", p);
     const b = ev.target.closest(".res-carte");
     if (b) choisir(+b.dataset.i);
   });
@@ -2493,59 +2502,64 @@ function modaleAjout() {
         <input class="champ" style="flex:1;min-width:180px" id="cat-ajout" list="liste-cat" placeholder="Ramp, Draw…" value="${esc(etat.dernierTags || "")}">
         ${optionsCategories()}
         <label class="petit">Quantité <input class="champ" type="number" id="qte-ajout" min="1" max="99" value="1" style="width:4.5rem"></label>
-        <label class="petit"><input type="checkbox" id="maybe" ${etat.dernierMaybe ? "checked" : ""}> Maybeboard</label>
       </div>
     </div>
     <div id="journal" class="journal petit"></div>
-    <div class="boutons"><button class="btn" id="fermer">Fermer</button><button class="btn btn-accent" id="ok" disabled>${ico("plus")}<span>Ajouter au deck</span></button></div>`, (b) => {
+    <div class="boutons"><button class="btn" id="fermer">Fermer</button>
+      <button class="btn" id="ok-maybe" disabled>${ico("maybe")}Maybeboard</button>
+      <button class="btn btn-accent" id="ok" disabled>${ico("plus")}<span>Ajouter au deck</span></button></div>`, (b) => {
     let choix = null;
-    const ajouter = async (nom, edition) => {
+    // la fiche affichée : les deux boutons du bas l'ajoutent (au deck ou au Maybeboard) ; sans fiche, ils attendent
+    const boutonsFiche = (actifs) => {
+      $("#ok", b).disabled = $("#ok-maybe", b).disabled = !actifs;
+      $("#ok span", b).textContent = actifs && choix ? `Ajouter ${choix.nom}` : "Ajouter au deck";
+    };
+    const ajouter = async (nom, edition, maybe = false) => {
       const tags = $("#cat-ajout", b).value.split(",").map((t) => t.trim()).filter(Boolean);
       etat.dernierTags = $("#cat-ajout", b).value;
-      etat.dernierMaybe = $("#maybe", b).checked;
-      if (etat.dernierMaybe) tags.unshift("Maybeboard");
+      if (maybe) tags.unshift("Maybeboard");
       const n = Math.max(1, +$("#qte-ajout", b).value || 1);
       const res = await modifier("ajouter", null, { nom, tags, n, edition }, "");
       if (res) $("#journal", b).insertAdjacentHTML("afterbegin",
-        `<div>✓ ${n > 1 ? n + "× " : ""}${esc(nom)}${etat.dernierMaybe ? " (Maybeboard)" : ""} · ${res.total} cartes</div>`);
+        `<div>✓ ${n > 1 ? n + "× " : ""}${esc(nom)}${maybe ? " (Maybeboard)" : ""} · ${res.total} cartes</div>`);
       return res;
     };
     const rech = rechercheCarte($("#rech", b), {
-      surAjout: async (x) => {
-        const res = await ajouter(x.nom, null);
+      surAjout: async (x, { maybe = false } = {}) => {
+        const res = await ajouter(x.nom, null, maybe);
         if (res) {
           $("#qte-ajout", b).value = 1;
           if (choix && choix.nom === x.nom) {                 // la fiche affichée était celle de cette carte
             choix = null;
             $("#fiche", b).innerHTML = "";
-            $("#ok", b).disabled = true;
-            $("#ok span", b).textContent = "Ajouter au deck";
+            boutonsFiche(false);
           }
         }
         return res;
       },
       surChoix: async (x) => {
         choix = null;
-        $("#ok", b).disabled = true;
+        boutonsFiche(false);
         try {
           choix = await chargerFiche($("#fiche", b), x.nom, { surVersion: (g) => { choix = g; } });
-          $("#ok", b).disabled = false;
-          $("#ok span", b).textContent = `Ajouter ${choix.nom}`;
+          boutonsFiche(true);
           $("#ok", b).focus();
         } catch (e) { $("#fiche", b).innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
       },
     });
     $("#fermer", b).onclick = fermerModale;
-    $("#ok", b).onclick = async () => {
+    const valider = async (maybe) => {
       if (!choix) return;
-      $("#ok", b).disabled = true;
-      if (!await ajouter(choix.nom, editionVersion(choix.version))) { $("#ok", b).disabled = false; return; }
+      boutonsFiche(false);
+      if (!await ajouter(choix.nom, editionVersion(choix.version), maybe)) { boutonsFiche(true); return; }
       choix = null;
       $("#fiche", b).innerHTML = "";
       $("#qte-ajout", b).value = 1;
-      $("#ok span", b).textContent = "Ajouter au deck";
+      boutonsFiche(false);
       rech.vider();
     };
+    $("#ok", b).onclick = () => valider(false);
+    $("#ok-maybe", b).onclick = () => valider(true);
   });
 }
 

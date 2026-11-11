@@ -689,7 +689,18 @@ def api_annuler(id_):
 # ---------------------------------------------------------------- cartes, prix, Game Changers
 @app.get("/api/chercher")
 def api_chercher():
-    return jsonify(ic.chercher(request.args.get("q", "")))
+    """Nom d'une carte à ajouter : la base de cartes locale répond tout de suite ; Scryfall tant qu'elle se construit."""
+    import recherche
+    import reglages
+    q = request.args.get("q", "")
+    if recherche._base is None:
+        return jsonify(ic.chercher(q))
+    lang = reglages.impression()[0]
+    fiches = ic._charge()["cartes"]
+    def image(x):                  # la base n'a que l'anglais : l'image dans la langue choisie, si l'Atelier la connaît déjà
+        f = fiches.get(x["nom"]) or {}
+        return f["image"] if lang and f.get("image") and (f.get("imp") or {}).get("lang") == lang else x["image"]
+    return jsonify([dict(x, legal=x["legal"] or "not_legal", image=image(x)) for x in recherche.noms(q, None, 20)])
 
 
 @app.post("/api/prix")
