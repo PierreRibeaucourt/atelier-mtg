@@ -83,6 +83,16 @@ def compte():
     return _lire().get("compte")
 
 
+def auteur():
+    """L'auteur des commits de l'Atelier : le compte, avec son adresse anonyme de GitHub. Sans elle, GitHub met
+    l'adresse e-mail principale du compte, visible de tous dans un dépôt public."""
+    c = _lire()
+    if not c.get("id"):                                     # connecté avant que l'Atelier ne note l'identifiant
+        c["id"] = _appel("GET", "/user")["id"]
+        _garder(c)
+    return dict(name=c["compte"], email=f"{c['id']}+{c['compte']}@users.noreply.github.com")
+
+
 def deconnecter():
     try:
         os.remove(FICHIER)
@@ -130,7 +140,7 @@ def _attendre(code_appareil, intervalle, ticket):
         if r.get("access_token"):
             try:
                 moi = _appel("GET", "/user", jeton_acces=r["access_token"])
-                _garder({"jeton": r["access_token"], "compte": moi["login"]})
+                _garder({"jeton": r["access_token"], "compte": moi["login"], "id": moi["id"]})
                 etat = dict(etat="ok", compte=moi["login"])
             except (Erreur, OSError) as e:
                 etat = dict(etat="erreur", erreur=str(e))
@@ -238,7 +248,9 @@ def envoyer(depot, branche, dossier, message, exclus=()):
         if not entrees:
             return tete
         a = appel("POST", f"/repos/{depot}/git/trees", dict(base_tree=base, tree=entrees))["sha"]
-        c = appel("POST", f"/repos/{depot}/git/commits", dict(message=message, tree=a, parents=[tete]))["sha"]
+        qui = auteur()
+        c = appel("POST", f"/repos/{depot}/git/commits", dict(message=message, tree=a, parents=[tete], author=qui,
+                                                              committer=qui))["sha"]
         try:
             appel("PATCH", f"/repos/{depot}/git/refs/heads/{branche}", dict(sha=c))
             return c
