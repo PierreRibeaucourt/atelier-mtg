@@ -133,13 +133,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .chiffres { display: flex; flex-wrap: wrap; gap: .35rem; }
 
 /* ---- badges */
-.badge { display: inline-flex; align-items: center; gap: .25rem; font-size: .75rem; line-height: 1; padding: .25rem .5rem; border-radius: 999px;
-  background: var(--surface-2); color: var(--texte-2); white-space: nowrap; }
-.badge-ok { background: var(--bon-doux); color: var(--bon); }
-.badge-alerte, .badge-cher { background: var(--alerte-doux); color: var(--alerte); }
-.badge-juste { background: var(--juste-doux); color: var(--juste); }
-.badge-gc { background: var(--accent-doux); color: var(--accent); font-weight: 600; }
-.badge-bracket { font-weight: 600; color: var(--texte); }
+/* façon Scryfall : rectangles pleins, petites capitales ; le texte prend la couleur du fond de page (foncé en thème
+   sombre, clair en thème clair), lisible sur les deux */
+.badge { display: inline-flex; align-items: center; gap: .25rem; font-size: .68rem; font-weight: 700; line-height: 1; letter-spacing: .05em;
+  text-transform: uppercase; padding: .3rem .45rem; border-radius: 3px; background: var(--surface-2); color: var(--texte); white-space: nowrap; }
+.badge-ok { background: var(--bon); color: var(--fond); }
+.badge-alerte, .badge-cher { background: var(--alerte); color: var(--fond); }
+.badge-juste { background: var(--juste); color: var(--fond); }
+.badge-gc { background: var(--accent); color: var(--fond); }
 .badge-bracket .ico { width: 1.15em; height: 1.15em; }
 .tag { font-size: .72rem; color: var(--texte-2); border: 1px solid var(--bord); border-radius: 4px; padding: 0 .3rem; background: transparent; cursor: pointer; line-height: 1.5; }
 .tag:hover { border-color: var(--accent); color: var(--accent); }
