@@ -533,6 +533,16 @@ a.btn-accent { color: var(--accent-texte); }      /* un lien en bouton orange : 
 .vue.vue-large { max-width: 1500px; }
 .rch-tete { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .4rem 1rem; margin-bottom: .6rem; }
 .rch-tete .fil { margin: 0; }
+/* recherche pour un deck : bandeau à l'image de son commandant, la croix repasse en recherche sans deck */
+.rch-bandeau { position: relative; display: flex; align-items: center; gap: .5rem 1rem; min-height: 60px; padding: .5rem .6rem .5rem 1.1rem;
+  margin-bottom: .8rem; border-radius: 10px; overflow: hidden; color: #fff; background: #1f1e1b center 28% / cover no-repeat; }
+.rch-bandeau::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0,0,0,.8), rgba(0,0,0,.5) 55%, rgba(0,0,0,.15)); }
+.rch-bandeau > * { position: relative; }
+.rch-bandeau.sans-art { background: var(--surface-2); color: var(--texte); }
+.rch-bandeau.sans-art::before { content: none; }
+.rch-bandeau-nom { font-size: 1.15rem; font-weight: 700; }
+.rch-bandeau .identite { margin-left: 0; }
+.rch-bandeau .btn-icone { margin-left: auto; color: inherit; }
 /* le moteur, disposé comme celui de Magic-Ville : trois rangées de fenêtres, tout au-dessus de la ligne de flottaison */
 .moteur { display: grid; gap: .6rem; container: moteur / inline-size; }      /* sa disposition suit sa largeur (discussion ouverte ou non) */
 .mt-rang { display: grid; gap: .6rem; }

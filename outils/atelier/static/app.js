@@ -619,7 +619,7 @@ async function route() {
   majTitre();
   const [chemin, qs] = location.hash.replace(/^#\/?/, "").split(/\?(.*)/s);
   const parts = chemin.split("/");
-  $("#lien-recherche").classList.toggle("actif", parts[0] === "recherche");
+  $("#lien-recherche").classList.toggle("actif", parts[0] === "recherche" && !new URLSearchParams(qs || "").get("deck"));   // pour un deck : son bandeau
   $("#lien-options").classList.toggle("actif", parts[0] === "options");
   vue.classList.toggle("vue-large", parts[0] === "recherche" || parts[0] === "options");
   vue.classList.remove("vue-pleine");                       // la page « C'est quoi » la remet : son en-tête prend toute la largeur
@@ -975,7 +975,7 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
         </div>
         <div class="actions">
           <a class="btn" href="${PARTAGE ? "jouer/" : `/jouer?deck=${enc(id)}`}" target="_blank" rel="noopener">${ico("lancer")}Jouer</a>
-          <a class="btn ecrit" href="#/recherche?deck=${enc(id)}">${ico("chercher")}Chercher des cartes</a>
+          <a class="btn ecrit" href="#/recherche?deck=${enc(id)}">${ico("chercher")}Chercher pour ce deck</a>
           <button class="btn btn-icone ouvre-menu" id="btn-deck-menu" aria-label="Autres actions sur le deck" title="Autres actions">${ico("plus_de")}</button>
         </div>
       </div>
@@ -3793,21 +3793,24 @@ async function vueRecherche(params) {
   vue.innerHTML = `
     <div class="rch-tete">
       <nav class="fil" aria-label="Fil d'Ariane"><a href="#/">Mes decks</a><span aria-hidden="true">›</span>${rch.deck ? `<a href="#/deck/${enc(rch.deck.id)}">${esc(rch.deck.titre)}</a><span aria-hidden="true">›</span>` : ""}<span aria-current="page">Recherche de cartes</span></nav>
-      <div class="rch-deck">
+      ${rch.deck ? "" : `<div class="rch-deck">
         <label class="petit muet" for="rch-deck">Pour le deck</label>
         <select class="champ champ-petit" id="rch-deck">
           <option value="">— aucun —</option>
           ${[...ds].sort((a, b) => recence(b) - recence(a) || a.titre.localeCompare(b.titre)).map((d) =>
-            `<option value="${esc(d.id)}" ${d.id === c.deck ? "selected" : ""}>${esc(d.titre)}</option>`).join("")}
+            `<option value="${esc(d.id)}">${esc(d.titre)}</option>`).join("")}
         </select>
-        <span id="rch-deck-info" class="petit muet"></span>
-      </div>
+      </div>`}
     </div>
+    ${rch.deck ? `<div class="rch-bandeau ${rch.deck.art ? "" : "sans-art"}"${rch.deck.art ? ` style="background-image:url('${esc(rch.deck.art)}')"` : ""}>
+      <span class="rch-bandeau-nom">${esc(rch.deck.titre)}</span>
+      <span id="rch-deck-info" class="petit"></span>
+      <button type="button" class="btn btn-discret btn-icone" id="rch-sans-deck" aria-label="Chercher sans deck" title="Chercher sans deck">${ico("fermer")}</button>
+    </div>` : ""}
     <div id="rch-form"></div>
     <div id="rch-resultats"></div>`;
   majInfosDeck();
-  $("#rch-deck").onchange = async (ev) => {
-    const id = ev.target.value;
+  const changerDeck = (id) => {
     if (id) choisirDiscussion(id);                 // chercher pour un autre deck : sa discussion suit
     const nc = { ...rch.crit, deck: id };
     if (!id) delete nc.horsdeck;
@@ -3816,6 +3819,8 @@ async function vueRecherche(params) {
     rch.ouvrir = rch.ouvert;
     location.hash = "#/recherche?" + critVersHash(nc);
   };
+  if (rch.deck) $("#rch-sans-deck").onclick = () => changerDeck("");
+  else $("#rch-deck").onchange = (ev) => changerDeck(ev.target.value);
   rendreFormulaire();
   if (c.r === "1") await lancerRecherche();
 }

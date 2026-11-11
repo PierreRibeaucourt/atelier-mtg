@@ -802,8 +802,10 @@ def api_apercu(deck):
     cmds = [e["nom"] for e in entrees if decks.categorie(e) == "Commander"]
     I = ic.infos(cmds) if cmds else {}
     ident = sorted(set().union(*[set(I[c].get("couleurs") or []) for c in cmds])) if cmds and all(I.get(c) for c in cmds) else None
+    i_cmd = next((i for i, e in enumerate(entrees) if decks.categorie(e) == "Commander"), None)
+    art = avec_visuel(I.get(cmds[0]), visuels(deck, entrees, {i_cmd}).get(i_cmd)).get("art", "") if cmds else ""   # bandeau de la page
     return jsonify(dict(id=deck, titre=deck.removeprefix("Deck "), identite=ident, **cpt, categories=decks.categories(entrees),
-                        modifie=os.path.getmtime(decks.chemin(deck))))
+                        art=art, modifie=os.path.getmtime(decks.chemin(deck))))
 
 
 @app.get("/api/decks/<path:deck>/combos")
