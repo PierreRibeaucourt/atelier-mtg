@@ -1043,7 +1043,6 @@ const jaugeSugg = (note) => {
 
 const badgesSugg = (x, d) => [
   badgesRch(x, d),
-  x.ub ? `<span class="badge" title="Universes Beyond">UB</span>` : "",
   x.classeur ? `<span class="badge badge-ok">Classeur${x.classeur > 1 ? " ×" + x.classeur : ""}</span>` : "",
 ].join("");
 
@@ -1101,7 +1100,6 @@ function carteImageSugg(x, i) {
   const cher = (x.prix || 0) > BUDGET;
   const marques = [
     x.gc ? `<span class="marque marque-gc" title="Game Changer">GC</span>` : "",
-    x.ub ? `<span class="marque" title="Universes Beyond">UB</span>` : "",
     x.classeur ? `<span class="marque marque-ok">classeur</span>` : "",
     x.dans === "deck" ? `<span class="marque marque-ok">✓ deck</span>` : x.dans === "maybe" ? `<span class="marque marque-maybe">maybe</span>` : "",
   ].join("");
