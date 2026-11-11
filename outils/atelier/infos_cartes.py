@@ -4,6 +4,7 @@ Source : Scryfall, qui republie chaque jour les prix Cardmarket (Cardmarket bloq
 Tout est gardé dans cache_infos.json : les fiches et noms français pour toujours, les prix 24 h, la liste des
 Game Changers 24 h (rafraîchie au lancement de l'Atelier ou par le bouton).
 """
+import functools
 import json
 import os
 import re
@@ -223,6 +224,21 @@ def _bases_par_defaut(noms, lang, sans_ub, pref):
                 f["imp_pref"] = pref                 # rien trouvé (ou pas de réseau) : l'image d'avant, jusqu'au prochain changement
 
 
+def _temoin(f):
+    """Lancée seule (après un ajout de cartes, pas dans mise_a_jour), une mise à jour suivie éteint son témoin en
+    finissant : sinon « prix » resterait affiché, et l'Atelier se croirait occupé (partage, arrêt à la fermeture)."""
+    @functools.wraps(f)
+    def g(*a, **kw):
+        seule = kw.get("suivi", True) and not etat["tache"]
+        try:
+            return f(*a, **kw)
+        finally:
+            if seule:
+                etat.update(tache="", fait=0, total=0)
+    return g
+
+
+@_temoin
 def rafraichir_prix(noms, force=False, suivi=True):
     """Prix du jour et impression par défaut de chaque carte, selon les préférences (Options) : l'impression la moins
     chère, ou la moins chère qui existe dans la langue choisie (son image dans cette langue, le prix de son édition) ;
@@ -299,6 +315,7 @@ def rafraichir_prix(noms, force=False, suivi=True):
     _sauve()
 
 
+@_temoin
 def noms_francais(noms, suivi=True):
     """Nom, type et texte imprimés sur l'édition française la plus récente (une fois pour toutes).
     fr = "" : la carte n'existe pas en français ; l'Atelier affiche alors le texte anglais."""
@@ -507,8 +524,17 @@ def prix_et_noms(noms):
 
 
 # ---------------------------------------------------------------- mise à jour au lancement
+_une_maj = threading.Lock()
+
+
 def mise_a_jour(noms, force_prix=False):
-    """Fiches, noms français, prix du jour et Game Changers pour toutes les cartes des decks. Lancée en tâche de fond."""
+    """Fiches, noms français, prix du jour et Game Changers pour toutes les cartes des decks. Lancée en tâche de fond.
+    Une à la fois : la suivante attend la fin de celle qui tourne (elle n'a alors presque plus rien à faire)."""
+    with _une_maj:
+        _mise_a_jour(noms, force_prix)
+
+
+def _mise_a_jour(noms, force_prix):
     try:
         etat.update(tache="fiches", fait=0, total=len(noms))
         infos(noms)

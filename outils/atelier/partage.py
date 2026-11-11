@@ -725,7 +725,7 @@ def surveiller(get, pause=30):
         time.sleep(pause)
         try:
             liste = a_republier()
-            if not liste or ic.etat.get("tache"):             # une mise à jour des prix tourne : la page attendra la fin
+            if not liste:
                 continue
             ic.mise_a_jour(sorted({c["nom"] for d in liste for c in decks.lire(decks.chemin(d))}))
         except Exception:
