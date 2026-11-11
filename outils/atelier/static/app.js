@@ -3758,12 +3758,11 @@ function resumeCrit(c) {
 
 // ---- la page
 async function vueRecherche(params) {
-  // la page sans critère : le formulaire, avec les critères de la dernière recherche du même genre. Lien du haut : la
-  // dernière recherche sans deck ; bouton « Chercher des cartes » d'un deck : la dernière recherche pour ce deck
-  const deckDemande = params.get("deck") || "";
-  if ([...params.keys()].every((k) => k === "deck")) {
-    let derniere = new URLSearchParams(PREF.get(cleDerniere(deckDemande), ""));
-    if ((derniere.get("deck") || "") !== deckDemande) derniere = new URLSearchParams();   // mémorisée pour un autre deck
+  // lien du haut, sans critère : le formulaire avec les critères de la dernière recherche sans deck. Bouton « Chercher
+  // des cartes » d'un deck : un formulaire vierge, aux couleurs du deck (une ancienne recherche pourrait en sortir)
+  if (![...params.keys()].length) {
+    let derniere = new URLSearchParams(PREF.get(cleDerniere(""), ""));
+    if (derniere.get("deck")) derniere = new URLSearchParams();
     derniere.delete("r");                          // le formulaire, prérempli, sans relancer la recherche
     derniere.delete("page");
     if ([...derniere.keys()].length) {
@@ -4329,9 +4328,9 @@ async function lancerRecherche() {
   rendreResultats(z, r);
 }
 
-// la dernière recherche : sans deck pour le lien du haut, et celle de chaque deck (bouton « Chercher des cartes » du deck)
+// la dernière recherche sans deck, que rouvre le lien du haut
 function memoriser() {
-  PREF.set(cleDerniere(rch.crit.deck || ""), critVersHash(rch.crit));
+  if (!rch.crit.deck) PREF.set(cleDerniere(""), critVersHash(rch.crit));
 }
 
 async function attendreBase(z) {
