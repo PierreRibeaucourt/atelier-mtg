@@ -1817,10 +1817,6 @@ async function supprimerDeck(d) {
 }
 
 // ------------------------------------------------------------------ onglet Liste : rangement, tri, filtre
-const LIBELLE_SIM = {                                     // pas de badge pour une créature jouée comme simple corps
-  sans_effet: ["sim : sans effet", "Le simulateur ne comprend pas ce sort : il ne fait rien en simulation"],
-  partiel: ["sim : lue en partie", "Le simulateur ne comprend qu'une partie de la carte"],
-};
 const TITRE_ALERTE = {
   "hors couleurs": "Une de ses couleurs n'est pas dans l'identité de ton commandant : interdite dans ce deck",
   "ne peut pas être commandant": "Seules les créatures légendaires (et quelques planeswalkers, véhicules ou vaisseaux qui le disent) peuvent être commandant",
@@ -1897,7 +1893,6 @@ function segments(pref, valeurs, def) {
 
 function ongletListe(el, d) {
   el.innerHTML = `
-    ${d.erreur_sim ? `<p class="erreur petit">Le simulateur n'a pas pu lire ce deck : ${esc(d.erreur_sim.non_lu[0])}</p>` : ""}
     ${!d.cartes.length ? `<div class="panneau vide"><p>Ce deck est vide.</p><button class="btn btn-accent ecrit" id="vide-ajouter">${ico("plus")}Ajouter des cartes</button></div>` : `
     <div class="barre-outils">
       ${segments("affichage", [["liste", "Liste", "liste"], ["visuel", "Visuel", "cartes"]], AFFICHAGE)}
@@ -2016,7 +2011,6 @@ function badgesAlerte(c) {
 function ligneCarte(c, rangement) {
   const f = c.info || {};
   const tags = c.tags.filter((t) => t !== "Maybeboard" && t !== "Commander" && !(rangement === "tags" && t === c.cat));
-  const sim = c.sim && LIBELLE_SIM[c.sim.classe];
   const cher = (f.prix || 0) > BUDGET;
   return `<div class="ligne ligne-carte" data-carte="${c.index}">
     <span class="qte">${c.n > 1 ? c.n + "×" : ""}</span>
@@ -2027,7 +2021,6 @@ function ligneCarte(c, rangement) {
       ${badgesAlerte(c)}
       ${f.gc ? `<span class="badge badge-gc" title="Game Changer : compte dans le bracket (3 maximum en bracket 3)">Game Changer</span>` : ""}
       ${cher ? `<span class="badge badge-cher" title="Au-dessus de ton budget de ${BUDGET_TXT} par carte">&gt; ${BUDGET_TXT}</span>` : ""}
-      ${sim ? `<span class="badge badge-sim" title="${esc(sim[1] + (c.sim.non_lu.length ? " :\n• " + c.sim.non_lu.join("\n• ") : ""))}">${sim[0]}</span>` : ""}
     </span>
     ${f.prix_lien ? `<a class="prix ${cher ? "cher" : ""}" href="${esc(f.prix_lien)}" target="_blank" rel="noopener" title="${esc(f.prix_edition ? `Le moins cher : ${f.prix_edition}. ` : "")}Voir sur Cardmarket">${euros(f.prix)}</a>` : `<span class="prix muet">${euros(f.prix)}</span>`}
     <button class="btn-menu" aria-label="Fiche et actions : ${esc(c.nom)}" title="Fiche et actions">${ico("plus_de")}</button>
@@ -2102,7 +2095,6 @@ function ouvrirCarte(c) {
   const legendaire = f.peut_commander != null ? f.peut_commander
     : /Legendary Creature|Background/.test(f.type || "") || /can be your commander/i.test(f.texte || "");
   const second = !cmd && (d.commandants || []).length === 1;              // il y a déjà un commandant : celle-ci serait le second
-  const sim = c.sim && LIBELLE_SIM[c.sim.classe];
   const cher = (f.prix || 0) > BUDGET;
   const tags = c.tags.filter((t) => t !== "Maybeboard" && t !== "Commander");
   ouvrirModale(`
@@ -2120,7 +2112,6 @@ function ouvrirCarte(c) {
           ${PARTAGE ? "" : `<button type="button" class="badge" data-act="achat" hidden></button>`}
           ${f.gc ? `<span class="badge badge-gc">Game Changer</span>` : ""}
           ${badgesAlerte(c)}
-          ${sim ? `<span class="badge badge-sim" title="${esc(sim[1] + (c.sim.non_lu.length ? " :\n• " + c.sim.non_lu.join("\n• ") : ""))}">${sim[0]}</span>` : ""}
         </div>
         ${assembleHtml(f.assemble)}
         ${f.fr_texte || f.texte ? `<div class="texte fs-texte">${(f.fr_texte || f.texte).split("\n").map((l) => l.trim() === "//" ? "<hr>" : l.trim() ? `<p>${texteMana(l)}</p>` : "").join("")}</div>` : ""}

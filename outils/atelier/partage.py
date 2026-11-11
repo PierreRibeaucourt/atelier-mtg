@@ -580,7 +580,7 @@ def construire(deck, get):
         image=image and url + image, alt=f"{d['titre']} : carte de {_liste(cmds) or 'son commandant'}, couleurs et chiffres du deck"))
     _page_jouer(dossier)
     reg[deck] = dict(slug=slug, date=donnees["date"], version=__version__,       # version : voir a_republier()
-                     resume={k: v for k, v in d.items() if k not in ("cartes", "categories", "erreur_sim")},
+                     resume={k: v for k, v in d.items() if k not in ("cartes", "categories")},
                      cartes=[[c["nom"], c["info"].get("fr") or ""] for c in d["cartes"]])
     _ecrire(REGISTRE, json.dumps(reg, ensure_ascii=False, indent=1))
     _accueil(reg, site)

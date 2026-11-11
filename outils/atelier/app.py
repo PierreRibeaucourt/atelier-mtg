@@ -49,23 +49,6 @@ def en_fond(f, *a, **kw):
     threading.Thread(target=f, args=a, kwargs=kw, daemon=True).start()
 
 
-def couverture_sim(entrees, cmd):
-    """Ce que le simulateur comprend de chaque carte : {nom: (classe, lignes non comprises)}."""
-    try:
-        from simu_cartes import construire, couverture
-        noms = [n for n in decks.noms(entrees) if n != cmd]
-        C, cov = construire(noms, cmd)
-        res = {}
-        for cle in ("partiel", "corps", "sans_effet"):
-            for n in cov[cle]:
-                res[n] = dict(classe=cle, non_lu=C[n].get("non_lu", []))
-        for n in cov["specifique"]:
-            res[n] = dict(classe="specifique", non_lu=[])
-        return res
-    except Exception as e:                                  # le simulateur ne doit jamais empêcher d'afficher un deck
-        return {"_erreur": dict(classe="erreur", non_lu=[str(e)])}
-
-
 PLUSIEURS = re.compile(r"deck can have (?:any number|up to \w+) of cards named", re.I)
 
 
@@ -211,7 +194,6 @@ def resume_deck(deck, avec_cartes=False):
              identite=ident, alertes={n: a for n, a in alertes.items() if n in hors_maybe},
              modifie=os.path.getmtime(decks.chemin(deck)))
     if avec_cartes:
-        cov = couverture_sim(entrees, cmd) if cmd else {}
         try:
             import recherche
             F = recherche.fonctions_cartes(decks.noms(entrees)) or {}      # vide tant que la base se charge
@@ -224,10 +206,10 @@ def resume_deck(deck, avec_cartes=False):
             el = eligibilite(e["nom"])
             f["peut_commander"], f["partenaire"] = (el["commandant"], el["partenaire"]) if el else (None, None)
             fam, fns = F.get(e["nom"], ([], []))
-            cartes.append(dict(index=i, n=e["n"], nom=e["nom"], tags=e["tags"], cat=decks.categorie(e), info=f, sim=cov.get(e["nom"]),
+            cartes.append(dict(index=i, n=e["n"], nom=e["nom"], tags=e["tags"], cat=decks.categorie(e), info=f,
                                fonctions=fam, fonctions_detail=fns,
                                alertes=alertes.get(e["nom"], []), version=version_courte(V.get(i))))
-        r.update(cartes=cartes, categories=decks.categories(entrees), erreur_sim=cov.get("_erreur"))
+        r.update(cartes=cartes, categories=decks.categories(entrees))
     return r
 
 

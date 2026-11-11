@@ -139,7 +139,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .badge-alerte, .badge-cher { background: var(--alerte-doux); color: var(--alerte); }
 .badge-juste { background: var(--juste-doux); color: var(--juste); }
 .badge-gc { background: var(--accent-doux); color: var(--accent); font-weight: 600; }
-.badge-sim { background: var(--info-doux); color: var(--info); }
 .badge-bracket { font-weight: 600; color: var(--texte); }
 .badge-bracket .ico { width: 1.15em; height: 1.15em; }
 .tag { font-size: .72rem; color: var(--texte-2); border: 1px solid var(--bord); border-radius: 4px; padding: 0 .3rem; background: transparent; cursor: pointer; line-height: 1.5; }
