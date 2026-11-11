@@ -12,6 +12,9 @@ import base64
 import hashlib
 import json
 import os
+import socket
+import ssl
+import sys
 import threading
 import time
 import urllib.error
@@ -109,14 +112,46 @@ def _poster(url, donnees):
         return json.load(r)
 
 
+def _cause(e):
+    """Pourquoi une requête n'a pas abouti, en quelques mots : le message le dit, et le journal (atelier.log) le garde.
+    Sans elle, un pare-feu, une horloge fausse (certificat refusé) ou une coupure donnaient tous « GitHub ne répond pas »."""
+    print(f"GitHub : {type(e).__name__} : {e}", file=sys.stderr, flush=True)
+    r = getattr(e, "reason", e)
+    texte = str(r)
+    if isinstance(r, ssl.SSLCertVerificationError) or "CERTIFICATE" in texte.upper():
+        return "certificat refusé. Vérifie la date et l'heure du PC, ou ton antivirus."
+    if isinstance(r, ssl.SSLError):
+        return "connexion sécurisée impossible. Un antivirus ou un pare-feu bloque peut-être GitHub."
+    if isinstance(r, socket.gaierror):
+        return "adresse introuvable. Le PC est-il connecté à Internet ?"
+    quoi = ("pas de réponse à temps" if isinstance(r, TimeoutError) or "timed out" in texte
+            else "connexion coupée" if isinstance(r, ConnectionError) else type(r).__name__)
+    return quoi + ". Vérifie ta connexion, puis réessaie."
+
+
 def connecter():
     """Demande un code à GitHub et attend en fond qu'on l'accepte. Renvoie {code, url, expire}."""
     if not CLIENT_ID:
         raise Erreur("La connexion à GitHub n'est pas encore disponible dans cette version de l'Atelier.")
-    try:
-        d = _poster("https://github.com/login/device/code", dict(client_id=CLIENT_ID, scope=PORTEE))
-    except (OSError, ValueError):
-        raise Erreur("GitHub ne répond pas : vérifie ta connexion, puis réessaie.") from None
+    for essai in range(2):                                   # un raté passager (réseau qui revient, Wi-Fi) : un second essai
+        try:
+            d = _poster("https://github.com/login/device/code", dict(client_id=CLIENT_ID, scope=PORTEE))
+            break
+        except urllib.error.HTTPError as e:                  # GitHub répond, mais refuse (trop de demandes…)
+            try:
+                desc = json.loads(e.read()).get("error_description", "")
+            except (OSError, ValueError, AttributeError):
+                desc = ""
+            _cause(e)
+            raise Erreur(f"GitHub refuse la demande ({e.code}{' : ' + desc if desc else ''}). Réessaie dans quelques minutes.") from None
+        except ValueError as e:                              # une page qui n'est pas de GitHub (proxy, portail Wi-Fi)
+            _cause(e)
+            raise Erreur("GitHub a répondu une page inattendue : un proxy ou un portail Wi-Fi ? Réessaie plus tard.") from None
+        except OSError as e:
+            cause = _cause(e)
+            if essai:
+                raise Erreur(f"GitHub ne répond pas : {cause}") from None
+            time.sleep(2)
     if "device_code" not in d:
         raise Erreur("GitHub refuse la connexion (" + d.get("error_description", d.get("error", "?")) + ").")
     ticket = object()                                       # une nouvelle demande rend caduque l'attente de la précédente
@@ -181,8 +216,8 @@ def _appel(methode, chemin, donnees=None, jeton_acces=None, ok=(200, 201)):
             statut = r.status
     except urllib.error.HTTPError as e:
         corps, statut = e.read(), e.code
-    except OSError:
-        raise Erreur("GitHub ne répond pas : vérifie ta connexion, puis réessaie.") from None
+    except OSError as e:
+        raise Erreur(f"GitHub ne répond pas : {_cause(e)}") from None
     if statut == 401:
         deconnecter()
         raise NonConnecte("La connexion à GitHub a expiré : reconnecte l'Atelier.", 401)
