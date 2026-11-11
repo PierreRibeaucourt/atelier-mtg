@@ -1525,22 +1525,25 @@ async function vueOptions() {
 
 // les champs des options ; ceux des préférences sont aussi demandés une fois au premier lancement (modalePreferences)
 const bascule = (nom, oui, texte) => `<label class="opt-bascule"><span>${texte}</span><input type="checkbox" role="switch" name="${nom}" ${oui ? "checked" : ""}></label>`;
-const champFermeture = (o) => `<label class="opt-champ"><span>Page fermée</span><select class="champ" name="fermeture">
-      <option value="garder">Garder l'Atelier prêt</option>
-      <option value="arreter" ${o.fermeture === "arreter" ? "selected" : ""}>Arrêter l'Atelier</option></select></label>`;
-const champVisuel = (o) => `<label class="opt-champ"><span>Visuel par défaut</span><select class="champ" name="langue_cartes">
+const champFermeture = (o) => `<label class="opt-champ"><span>Quand je ferme la page</span><select class="champ" name="fermeture">
+      <option value="garder">L'Atelier reste prêt</option>
+      <option value="arreter" ${o.fermeture === "arreter" ? "selected" : ""}>L'Atelier s'arrête</option></select></label>`;
+const champVisuel = (o) => `<label class="opt-champ"><span>Image des cartes</span><select class="champ" name="langue_cartes">
       <option value="">L'édition la moins chère</option>
       ${Object.entries(o.langues || {}).map(([k, l]) => `<option value="${k}" ${o.langue_cartes === k ? "selected" : ""}>La moins chère en ${esc(l)}</option>`).join("")}</select></label>`;
-const basculesUB = (o) => bascule("sans_ub_illustrations", o.sans_ub_illustrations, "Éviter les illustrations Universes Beyond quand c'est possible")
+// « Universes Beyond » ne dit rien à qui débute : des exemples à la première mention
+const basculesUB = (o) => bascule("sans_ub_illustrations", o.sans_ub_illustrations, "Éviter les illustrations Universes Beyond (Marvel, Final Fantasy, Seigneur des anneaux…) quand c'est possible")
   + bascule("sans_ub_suggestions", o.sans_ub_suggestions, "Ne pas suggérer de cartes Universes Beyond");
 
+// premier lancement : pas la question de la page fermée, qu'on ne comprend pas avant d'avoir vu que l'Atelier tourne sur
+// le PC (elle reste dans les Options)
 function modalePreferences(o) {
-  ouvrirModale(`<h2>Préférences</h2><div class="opt-lignes">${champFermeture(o)}${champVisuel(o)}${basculesUB(o)}</div>
+  ouvrirModale(`<h2>Préférences</h2><div class="opt-lignes">${champVisuel(o)}${basculesUB(o)}</div>
     <div class="boutons"><button class="btn btn-accent" id="ok">Enregistrer</button></div>`, (b) => {
     const champ = (n) => $(`[name="${n}"]`, b);
     $("#ok", b).onclick = async () => {
       try {
-        await api("/api/options", { method: "POST", body: { fermeture: champ("fermeture").value,
+        await api("/api/options", { method: "POST", body: {
           langue_cartes: champ("langue_cartes").value, sans_ub_illustrations: champ("sans_ub_illustrations").checked,
           sans_ub_suggestions: champ("sans_ub_suggestions").checked, preferences: true } });
         fermerModale();
