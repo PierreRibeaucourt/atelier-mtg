@@ -917,8 +917,8 @@ function modaleNouveauDeck() {
       $("#nd-cmd", b).innerHTML = cmd ? `
         <div class="cmd-choisi">
           <img src="${esc(cmd.image)}" alt="" data-image="${esc(cmd.image)}">
-          <div><strong>${esc(cmd.nom)}</strong> ${mana(cmd.cout)}${cmd.fr ? `<div class="muet petit">${esc(cmd.fr)}</div>` : ""}
-            <div class="muet petit">${esc(cmd.type || "")}</div></div>
+          <div><strong>${esc(cmd.fr || cmd.nom)}</strong> ${mana(cmd.cout)}${cmd.fr && cmd.fr !== cmd.nom ? `<div class="muet petit">${esc(cmd.nom)}</div>` : ""}
+            <div class="muet petit">${esc(cmd.type_fr || cmd.type || "")}</div></div>
           <button class="btn btn-petit" id="nd-autre">Changer</button>
         </div>` : "";
       $("#nd-rech", b).hidden = !!cmd;
@@ -2095,10 +2095,10 @@ function ouvrirCarte(c) {
   ouvrirModale(`
     <div class="fiche-carte">
       <div class="fc-image">${f.image ? `<img src="${esc(f.image)}" alt="${esc(c.nom)}" data-recto="${esc(f.image)}" data-verso="${esc((f.dos && f.dos.image) || "")}">` : `<div class="sans-image">${esc(c.nom)}</div>`}
-        ${boutonVerso(f.dos)}${lienVersion(c.version)}</div>
+        ${boutonVerso(f.dos)}${lienVersion(c.version || c.image_ed, c.versions)}</div>
       <div class="fc-infos">
         <div class="fc-tete">
-          <div><h2>${esc(c.nom)} ${mana(f.cout)}</h2>${f.fr && f.fr !== c.nom ? `<div class="muet">${esc(f.fr)}</div>` : ""}</div>
+          <div><h2>${esc(f.fr || c.nom)} ${mana(f.cout)}</h2>${f.fr && f.fr !== c.nom ? `<div class="muet">${esc(c.nom)}</div>` : ""}</div>
           <button class="btn btn-discret btn-icone" id="fc-fermer" aria-label="Fermer">${ico("fermer")}</button>
         </div>
         <div class="petit muet">${esc(f.fr_type || f.type || "")}${f.pt ? " · " + esc(f.pt) : ""}${cmd ? " · commandant" : maybe ? " · Maybeboard" : ""}</div>
@@ -2196,7 +2196,7 @@ function modaleTags(c, retourFiche = false) {
   const tags = c.tags.filter((t) => t !== "Maybeboard" && t !== "Commander");
   const tous = (etat.deck && etat.deck.categories) || [];
   ouvrirModale(`
-    <h2>Tags de ${esc(c.nom)}</h2>
+    <h2>Tags de ${esc(nomAffiche(c))}</h2>
     <div id="tags-carte" class="puces"></div>
     <div class="form-ligne">
       <input class="champ" id="tag-nouveau" list="liste-cat" placeholder="Nouveau tag" style="flex:1;min-width:200px">
@@ -2248,10 +2248,11 @@ function modaleTags(c, retourFiche = false) {
 const memeVersion = (a, b) => !!a && !!b && a.set === b.set && a.num === b.num && (a.lang || "en") === (b.lang || "en");
 const editionVersion = (p) => p ? { set: p.set, num: p.num, lang: p.lang, nom_edition: p.edition } : null;
 
-function lienVersion(v) {
+// sous l'image : l'édition de l'image affichée, et le lien vers les autres impressions (comme la fiche de la recherche)
+function lienVersion(v, n = 0) {
   return `<div class="fc-version">
     ${v ? `<span class="petit muet">${esc(v.edition)}${v.annee ? " · " + esc(v.annee) : ""}${v.lang === "fr" ? " · en français" : ""}</span>` : ""}
-    <button type="button" class="lien-discret ecrit" data-act="version">Changer la version</button>
+    <button type="button" class="lien-discret ecrit" data-act="version">${n > 1 ? `${n} versions` : "Changer la version"}</button>
   </div>`;
 }
 
@@ -2433,22 +2434,27 @@ async function chargerFiche(zone, nom, { version = null, surVersion = null } = {
   const d = etat.deck;
   const deja = d && d.cartes.some((c) => c.nom === f.nom);
   const hors = d && d.identite && (f.couleurs || []).some((x) => !d.identite.includes(x));
+  // mêmes éléments, dans le même ordre, que les fiches du deck et de la recherche (ouvrirCarte, ficheRecherche)
+  const texte = (t) => (t || "").split("\n").map((l) => l.trim() === "//" ? "<hr>" : l.trim() ? `<p>${texteMana(l)}</p>` : "").join("");
   zone.innerHTML = `
     <div class="fiche">
-      <div class="fiche-image"><img src="${esc(f.image)}" alt="${esc(f.nom)}">${surVersion ? lienVersion(f.version) : ""}</div>
-      <div>
-        <h3 style="margin-top:0">${esc(f.nom)} ${mana(f.cout)}</h3>
-        ${f.fr ? `<div class="muet">${esc(f.fr)}</div>` : ""}
-        <div class="chiffres" style="margin:.5rem 0">
-          <span class="badge ${f.trop_cher ? "badge-cher" : "badge-ok"}">${euros(f.prix)}${f.prix_edition ? ` · ${esc(f.prix_edition)}` : ""}</span>
+      <div class="fiche-image"><img src="${esc(f.image)}" alt="${esc(f.nom)}">${surVersion ? lienVersion(f.version || f.image_ed, f.versions) : ""}</div>
+      <div class="fc-infos">
+        <div><h3 style="margin:0">${esc(f.fr || f.nom)} ${mana(f.cout)}</h3>${f.fr && f.fr !== f.nom ? `<div class="muet">${esc(f.nom)}</div>` : ""}</div>
+        <div class="petit muet">${esc(f.fr_type || f.type || "")}${f.pt ? " · " + esc(f.pt) : ""}</div>
+        <div class="chiffres">
+          <span class="badge ${f.trop_cher ? "badge-cher" : ""}" title="Le moins cher, toutes éditions (prix Cardmarket du jour)">${euros(f.prix)}${f.prix_edition ? ` · ${esc(f.prix_edition)}` : ""}</span>
           ${f.gc ? `<span class="badge badge-gc">Game Changer</span>` : ""}
           ${f.legal === "banned" ? `<span class="badge badge-alerte">interdite</span>` : ""}
           ${hors ? `<span class="badge badge-alerte">hors couleurs</span>` : ""}
           ${deja ? `<span class="badge badge-alerte">déjà dans ce deck</span>` : ""}
-          ${f.prix_lien ? `<a class="badge" href="${esc(f.prix_lien)}" target="_blank" rel="noopener">Cardmarket ↗</a>` : ""}
         </div>
-        <div class="petit muet">${esc(f.type)}</div>
-        <div class="texte">${esc(f.texte)}</div>
+        ${f.fr_texte || f.texte ? `<div class="texte fs-texte">${texte(f.fr_texte || f.texte)}</div>` : ""}
+        ${f.fr_texte && f.texte ? `<details class="petit"><summary>Texte anglais</summary><div class="fs-texte" style="margin-top:.4rem">${texte(f.texte)}</div></details>` : ""}
+        <div class="fc-liens">
+          <a href="${esc(f.prix_lien || lienCardmarket(f.nom))}" target="_blank" rel="noopener">${ico("panier")}Cardmarket ↗</a>
+          <a href="${esc(f.gatherer || lienGatherer(f.nom))}" target="_blank" rel="noopener">${ico("livre")}Gatherer ↗</a>
+        </div>
       </div>
     </div>`;
   const lien = $('[data-act="version"]', zone);

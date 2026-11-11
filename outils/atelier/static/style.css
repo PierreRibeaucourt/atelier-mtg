@@ -334,7 +334,6 @@ select.champ.champ-petit, .moteur select.champ.champ-petit { padding-right: 1.8r
 @media (max-width: 560px) { .res-carte { grid-template-columns: minmax(0, 1fr) 4.2rem; } .res-carte .cout, .res-badges { display: none; } }
 .fiche { display: grid; grid-template-columns: 180px 1fr; gap: 1rem; margin-top: .75rem; }
 .fiche-image > img { display: block; width: 180px; border-radius: 9px; }
-.fiche .texte { white-space: pre-wrap; font-size: .88rem; color: var(--texte-2); }
 .form-ligne { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: .75rem; }
 .boutons { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1rem; }
 @media (max-width: 560px) { .fiche { grid-template-columns: 1fr; } .fiche-image, .fiche-image > img { width: 160px; } }

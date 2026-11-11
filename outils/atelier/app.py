@@ -159,6 +159,16 @@ def version_courte(v):
     return dict(set=v["set"], num=v["num"], lang=v["lang"], edition=v["edition"], annee=v["annee"]) if v else None
 
 
+def edition_image(nom, f):
+    """Sous l'image d'une fiche de carte, comme dans la recherche : « édition · année » de l'image par défaut, et le nombre
+    de versions. D'après la base de la recherche, sans l'attendre si elle se charge encore."""
+    import recherche
+    imp = f.get("imp") or {}
+    ii = recherche.impression_image(nom, imp.get("set"))
+    return dict(image_ed=dict(edition=ii["edition"], annee=ii["annee"], lang=imp.get("lang", "en")) if ii and ii["edition"] else None,
+                versions=ii["versions"] if ii else 0)
+
+
 def bracket_resume(deck):
     """Bracket estimé (règles officielles) pour l'accueil et l'en-tête, sans attendre Commander Spellbook : sa dernière
     analyse du deck sert en attendant la nouvelle, lancée en tâche de fond. (None, []) si le deck n'a jamais été analysé."""
@@ -208,7 +218,7 @@ def resume_deck(deck, avec_cartes=False):
             fam, fns = F.get(e["nom"], ([], []))
             cartes.append(dict(index=i, n=e["n"], nom=e["nom"], tags=e["tags"], cat=decks.categorie(e), info=f,
                                fonctions=fam, fonctions_detail=fns,
-                               alertes=alertes.get(e["nom"], []), version=version_courte(V.get(i))))
+                               alertes=alertes.get(e["nom"], []), version=version_courte(V.get(i)), **edition_image(e["nom"], f)))
         r.update(cartes=cartes, categories=decks.categories(entrees))
     return r
 
@@ -705,6 +715,7 @@ def api_carte():
     el = eligibilite(nom)
     f["peut_commander"], f["partenaire"] = (el["commandant"], el["partenaire"]) if el else (None, None)
     f["trop_cher"] = (f.get("prix") or 0) > ic.BUDGET
+    f.update(edition_image(nom, f))
     return jsonify(f)
 
 

@@ -772,7 +772,7 @@ function voirCarte(id) {
   const img = imageDe(c);
   const texte = c.jeton ? c.jeton.texte : (f.fr_texte || f.texte || "");
   const b = ouvrirModale(`<div class="fiche">${img ? `<img src="${esc(img)}" alt="">` : ""}${d && !c.retournee ? `<img src="${esc(d.image)}" alt="">` : ""}
-    <div class="texte"><h2>${esc(nomDe(c))}</h2><p class="muet">${esc(c.jeton ? c.jeton.type : (f.fr_type || f.type || ""))}${f.pt && !c.jeton ? " · " + esc(f.pt) : ""}</p>${esc(texte)}</div></div>
+    <div class="texte"><h2>${esc(nomDe(c))}</h2>${!c.jeton && nomAnglais(c) && nomAnglais(c) !== nomDe(c) ? `<p class="muet">${esc(nomAnglais(c))}</p>` : ""}<p class="muet">${esc(c.jeton ? c.jeton.type : (f.fr_type || f.type || ""))}${f.pt && !c.jeton ? " · " + esc(f.pt) : ""}</p>${esc(texte)}</div></div>
     <div class="pied"><button type="button" class="btn" data-non>Fermer</button></div>`, true);
   $("[data-non]", b).onclick = fermerModale;
 }

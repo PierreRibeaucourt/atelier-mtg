@@ -1063,6 +1063,18 @@ def fonctions_cartes(noms):
     return res
 
 
+def impression_image(nom, set_):
+    """Fiche d'une carte du deck, comme celle de la recherche : nom et année de l'édition de son image, et nombre
+    d'impressions de la carte. None si la base n'est pas encore chargée (on ne l'attend pas) ou ne connaît pas la carte."""
+    b = _base
+    x = b and b["par_cle"].get(ic._cle(nom).lower())
+    if not x:
+        return None
+    ed = b["editions"].get(set_ or "", {})
+    p = next((q for q in x["pr"] if q[0] == set_), None)
+    return dict(edition=ed.get("fr") or ed.get("n") or "", annee=((p[3] if p else ed.get("d")) or "")[:4], versions=len(x["pr"]))
+
+
 def apercu(nom):
     """Image et prix d'une carte citée."""
     b = base()
