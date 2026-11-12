@@ -114,9 +114,20 @@ window.MOTEUR = (() => {
     if (pos < 0) pos = entrees.length - 1;
     entrees.splice(pos + 1, 0, e);
   };
-  function modifier(entrees, op, d) {
+  // impression française choisie : notée à côté de la liste (visuels.json, decks._noter_langue) ; vrai si ça change
+  function noterLangue(langues, ed, lang) {
+    if (!langues || !ed) return false;
+    const k = `${ed.set}/${ed.num}`;
+    if (lang && lang !== "en") { if (langues[k] === lang) return false; langues[k] = lang; return true; }
+    if (!(k in langues)) return false;
+    delete langues[k];
+    return true;
+  }
+  // langues : le contenu de visuels.json du deck, modifié sur place (null : on ne le suit pas)
+  function modifier(entrees, op, d, langues = null) {
     let e = null, i = null, raison = "";
     if (op !== "ajouter") { i = trouver(entrees, d); e = entrees[i]; }
+    const lang = (d.edition || {}).lang;
     if (op === "ajouter") {
       const nouvelle = { n: parseInt(d.n || 1, 10), nom: d.nom, tags: (d.tags || []).filter(Boolean), etiquette: null, edition: versEdition(d.edition) };
       const cat = categorie(nouvelle);
@@ -125,6 +136,7 @@ window.MOTEUR = (() => {
         meme.n += nouvelle.n;
         raison = `+ ${d.nom} (×${meme.n})`;
       } else {
+        noterLangue(langues, nouvelle.edition, lang);
         placer(entrees, nouvelle);
         raison = `+ ${d.nom}` + (cat === "Maybeboard" ? " (Maybeboard)" : "");
       }
@@ -154,6 +166,15 @@ window.MOTEUR = (() => {
       const avant = [...e.tags], garde = avant.filter((t) => t === "Commander" || t === "Maybeboard");
       e.tags = [...garde, ...(d.tags || []).filter((t) => t && !garde.includes(t))];
       raison = `${e.nom} : ${avant.join(",")} → ${e.tags.join(",")}`;
+    } else if (op === "remplacer") {           // même ligne : la simulation garde le même mélange
+      raison = `${e.nom} → ${d.nom}`;
+      Object.assign(e, { nom: d.nom, n: 1, etiquette: null, edition: versEdition(d.edition) });
+      noterLangue(langues, e.edition, lang);
+    } else if (op === "edition") {             // autre impression de la même carte : seul le visuel change
+      e.edition = versEdition(d.edition);
+      noterLangue(langues, e.edition, lang);
+      const ed = d.edition || {};
+      raison = `${e.nom} : visuel ` + (e.edition ? `${ed.nom_edition || e.edition.set.toUpperCase()} ${e.edition.num}` + (lang === "fr" ? " (français)" : "") : "par défaut");
     } else if (op === "quantite") {
       e.n = Math.max(1, parseInt(d.n, 10) || 1);
       raison = `${e.nom} × ${e.n}`;
@@ -217,11 +238,16 @@ window.MOTEUR = (() => {
     return { res, ident: ident ? [...ident].sort() : null };
   }
 
-  // prec : la page d'avant (fiches, fonctions, visuels des cartes déjà là) ; infos : les fiches des nouvelles cartes
-  function page(id, entrees, prec, infos, budget) {
+  // prec : la page d'avant (fiches, fonctions, visuels des cartes déjà là) ; infos : les fiches des nouvelles cartes ;
+  // vis : le visuel qui vient de changer {nom: {version, image, petite, art}} (version null : l'image par défaut)
+  function page(id, entrees, prec, infos, budget, vis = {}) {
     const avant = new Map(((prec && prec.cartes) || []).map((c) => [c.nom, c]));
     const I = {};
-    for (const e of entrees) I[e.nom] = (avant.get(e.nom) || {}).info || infos[e.nom] || null;
+    for (const e of entrees) {
+      I[e.nom] = (avant.get(e.nom) || {}).info || infos[e.nom] || null;
+      const v = vis[e.nom];
+      if (v && I[e.nom] && v.image) I[e.nom] = { ...I[e.nom], image: v.image, petite: v.petite, art: v.art || I[e.nom].art };
+    }
     const jeu = entrees.filter((e) => categorie(e) !== "Maybeboard");
     const cmd = entrees.filter((e) => categorie(e) === "Commander");
     const { res: al, ident } = alertes(entrees, I);
@@ -231,7 +257,7 @@ window.MOTEUR = (() => {
     const cartes = entrees.map((e, i) => {
       const p = avant.get(e.nom) || {};
       return { index: i, n: e.n, nom: e.nom, tags: [...e.tags], cat: categorie(e), info: I[e.nom] || {}, fonctions: p.fonctions || [],
-        fonctions_detail: p.fonctions_detail || [], alertes: al[e.nom] || [], version: p.version || null,
+        fonctions_detail: p.fonctions_detail || [], alertes: al[e.nom] || [], version: vis[e.nom] ? vis[e.nom].version : p.version || null,
         image_ed: p.image_ed || null, versions: p.versions || 0 };
     });
     const categories = [...new Set([...((prec && prec.categories) || []), ...entrees.flatMap((e) => e.tags)])]
@@ -246,6 +272,13 @@ window.MOTEUR = (() => {
       identite: ident, alertes: Object.fromEntries(Object.entries(al).filter(([n]) => horsMaybe.has(n))),
       modifie: Date.now() / 1000, cartes, categories,
     };
+  }
+  // le dossier « Deck <nom> » d'un nom tapé (decks._dossier)
+  function dossier(nom) {
+    nom = String(nom || "").split(/\s+/).filter(Boolean).join(" ");
+    if (!nom.replace(/^Deck /, "").trim()) throw new Error("donne un nom au deck");
+    if (/[<>:"/\\|?*]/.test(nom) || nom.endsWith(".")) throw new Error('le nom ne peut pas contenir < > : " / \\ | ? * ni finir par un point');
+    return nom.startsWith("Deck ") ? nom : "Deck " + nom;
   }
   // le résumé pour l'accueil : la page sans ses cartes
   const resume = (p) => Object.fromEntries(Object.entries(p).filter(([k]) => k !== "cartes" && k !== "categories"));
@@ -268,5 +301,5 @@ window.MOTEUR = (() => {
     return [...notes, ...(notes.length ? [""] : []), ...lignes].join("\n") + "\n";
   }
 
-  return { lire, lireLignes, texte, categorie, modifier, fiche, page, resume, lireClasseur, ecrireClasseur, BASES };
+  return { lire, lireLignes, texte, categorie, modifier, fiche, page, resume, lireClasseur, ecrireClasseur, lienCardmarket, dossier, BASES };
 })();
