@@ -1114,6 +1114,8 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
     </div>
     <section id="contenu"></section>`;
   $("#btn-ajouter").onclick = () => modaleAjout();
+  const actif = $(".onglets a.actif");                // l'onglet ouvert, en vue dans la barre qui défile (téléphone)
+  if (actif) { const n = actif.parentElement; n.scrollLeft += actif.getBoundingClientRect().left - n.getBoundingClientRect().left - (n.clientWidth - actif.offsetWidth) / 2; }
   $$(".cmd-entete").forEach((x) => { x.onclick = () => ouvrirCarte(d.cartes[+x.dataset.carte]); });
   $("#btn-deck-menu").onclick = (ev) => ouvrirMenu(ev.currentTarget, [
     ...(!PC ? [] : [["Partager le deck…", () => modalePartage(d), "", "partager"],

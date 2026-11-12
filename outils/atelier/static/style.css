@@ -235,6 +235,18 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .duo .cmd-entete + .cmd-entete { margin-left: -50px; }
   .entete-deck.avec-cmd .infos, .entete-deck.duo .infos { padding-left: 1.1rem; min-height: 0; }
 }
+@media (max-width: 560px) {                        /* téléphone : un en-tête compact, le commandant à gauche du titre */
+  .entete-deck .bandeau { height: 92px; }
+  .cmds-entete, .duo .cmds-entete { position: absolute; left: 1rem; top: 36px; margin: 0; --l: 84px; }
+  .duo .cmds-entete { left: 1.3rem; }
+  .duo .cmd-entete + .cmd-entete { margin-left: -46px; }
+  .entete-deck.avec-cmd .infos { padding: .7rem .9rem .9rem calc(84px + 1.9rem); min-height: 72px; gap: .6rem 1rem; }
+  .entete-deck.duo .infos { padding-left: calc(2 * 84px - 46px + 2.4rem); }
+  .entete-deck h1 { font-size: 1.5rem; }
+  /* les boutons sur toute la largeur, sous la carte du commandant (le titre et les badges, au-dessus, sont plus hauts qu'elle) */
+  .entete-deck.avec-cmd .actions { flex-basis: calc(100% + 84px + 1rem); margin-left: calc(-84px - 1rem); }
+  .entete-deck.duo .actions { flex-basis: calc(100% + 2 * 84px - 46px + 1.5rem); margin-left: calc(-2 * 84px + 46px - 1.5rem); }
+}
 }
 @media (max-width: 560px) { .etale { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); } }
 .ligne { display: grid; grid-template-columns: 2.4rem minmax(0, 1fr) auto auto 4.6rem 2rem; align-items: center; gap: .6rem;
