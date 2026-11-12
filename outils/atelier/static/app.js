@@ -4445,6 +4445,11 @@ const DEPOT_ATELIER = "https://github.com/PierreRibeaucourt/atelier-mtg";
 const CAPTURES_ATELIER = "https://pierreribeaucourt.github.io/decks/a-propos/";
 // les decks partagés de l'auteur : à quoi ressemble une page partagée, en vrai
 const EXEMPLES_ATELIER = "https://pierreribeaucourt.github.io/decks/";
+// l'Atelier sur téléphone (telephone.js), et son adresse en QR code pour qui visite la page depuis un ordinateur
+const APPLI_TELEPHONE = "https://atelier-mtg.github.io/";
+const QR_APPLI = `<svg class="ap-qr" viewBox="0 0 33 33" role="img" aria-label="QR code de atelier-mtg.github.io"><rect width="33" height="33" fill="#fff"/><path fill="#000" d="M2 2h7v1h-7zM11 2h1v1h-1zM13 2h2v1h-2zM17 2h3v1h-3zM24 2h7v1h-7zM2 3h1v1h-1zM8 3h1v1h-1zM10 3h1v1h-1zM12 3h1v1h-1zM14 3h3v1h-3zM18 3h1v1h-1zM22 3h1v1h-1zM24 3h1v1h-1zM30 3h1v1h-1zM2 4h1v1h-1zM4 4h3v1h-3zM8 4h1v1h-1zM10 4h2v1h-2zM14 4h2v1h-2zM17 4h1v1h-1zM20 4h1v1h-1zM24 4h1v1h-1zM26 4h3v1h-3zM30 4h1v1h-1zM2 5h1v1h-1zM4 5h3v1h-3zM8 5h1v1h-1zM10 5h1v1h-1zM12 5h2v1h-2zM18 5h2v1h-2zM21 5h2v1h-2zM24 5h1v1h-1zM26 5h3v1h-3zM30 5h1v1h-1zM2 6h1v1h-1zM4 6h3v1h-3zM8 6h1v1h-1zM11 6h1v1h-1zM17 6h6v1h-6zM24 6h1v1h-1zM26 6h3v1h-3zM30 6h1v1h-1zM2 7h1v1h-1zM8 7h1v1h-1zM12 7h2v1h-2zM17 7h1v1h-1zM20 7h1v1h-1zM22 7h1v1h-1zM24 7h1v1h-1zM30 7h1v1h-1zM2 8h7v1h-7zM10 8h1v1h-1zM12 8h1v1h-1zM14 8h1v1h-1zM16 8h1v1h-1zM18 8h1v1h-1zM20 8h1v1h-1zM22 8h1v1h-1zM24 8h7v1h-7zM10 9h5v1h-5zM16 9h3v1h-3zM20 9h3v1h-3zM2 10h1v1h-1zM8 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM18 10h2v1h-2zM23 10h2v1h-2zM27 10h3v1h-3zM2 11h1v1h-1zM4 11h1v1h-1zM6 11h2v1h-2zM9 11h2v1h-2zM12 11h2v1h-2zM15 11h1v1h-1zM18 11h1v1h-1zM21 11h1v1h-1zM25 11h2v1h-2zM28 11h2v1h-2zM2 12h1v1h-1zM6 12h1v1h-1zM8 12h1v1h-1zM10 12h4v1h-4zM15 12h4v1h-4zM23 12h2v1h-2zM26 12h1v1h-1zM4 13h3v1h-3zM10 13h1v1h-1zM15 13h1v1h-1zM21 13h3v1h-3zM25 13h1v1h-1zM27 13h1v1h-1zM2 14h1v1h-1zM5 14h1v1h-1zM8 14h3v1h-3zM13 14h3v1h-3zM17 14h2v1h-2zM22 14h1v1h-1zM24 14h2v1h-2zM30 14h1v1h-1zM5 15h2v1h-2zM9 15h1v1h-1zM11 15h1v1h-1zM13 15h2v1h-2zM18 15h1v1h-1zM20 15h2v1h-2zM24 15h3v1h-3zM29 15h2v1h-2zM2 16h4v1h-4zM7 16h3v1h-3zM12 16h2v1h-2zM19 16h2v1h-2zM22 16h1v1h-1zM25 16h4v1h-4zM2 17h1v1h-1zM4 17h1v1h-1zM12 17h2v1h-2zM17 17h1v1h-1zM20 17h2v1h-2zM23 17h4v1h-4zM28 17h1v1h-1zM30 17h1v1h-1zM3 18h1v1h-1zM5 18h2v1h-2zM8 18h1v1h-1zM10 18h1v1h-1zM12 18h3v1h-3zM18 18h3v1h-3zM27 18h2v1h-2zM2 19h1v1h-1zM5 19h1v1h-1zM7 19h1v1h-1zM12 19h1v1h-1zM15 19h2v1h-2zM19 19h8v1h-8zM28 19h3v1h-3zM2 20h3v1h-3zM8 20h3v1h-3zM12 20h3v1h-3zM17 20h1v1h-1zM21 20h7v1h-7zM30 20h1v1h-1zM2 21h1v1h-1zM4 21h1v1h-1zM6 21h2v1h-2zM10 21h1v1h-1zM13 21h1v1h-1zM15 21h1v1h-1zM20 21h1v1h-1zM22 21h1v1h-1zM24 21h3v1h-3zM2 22h1v1h-1zM6 22h1v1h-1zM8 22h5v1h-5zM16 22h2v1h-2zM19 22h1v1h-1zM22 22h5v1h-5zM28 22h3v1h-3zM10 23h1v1h-1zM12 23h1v1h-1zM16 23h1v1h-1zM19 23h4v1h-4zM26 23h2v1h-2zM2 24h7v1h-7zM11 24h1v1h-1zM13 24h2v1h-2zM20 24h3v1h-3zM24 24h1v1h-1zM26 24h3v1h-3zM2 25h1v1h-1zM8 25h1v1h-1zM12 25h1v1h-1zM16 25h3v1h-3zM21 25h2v1h-2zM26 25h1v1h-1zM30 25h1v1h-1zM2 26h1v1h-1zM4 26h3v1h-3zM8 26h1v1h-1zM14 26h3v1h-3zM18 26h1v1h-1zM21 26h7v1h-7zM2 27h1v1h-1zM4 27h3v1h-3zM8 27h1v1h-1zM11 27h3v1h-3zM15 27h2v1h-2zM19 27h3v1h-3zM25 27h1v1h-1zM27 27h3v1h-3zM2 28h1v1h-1zM4 28h3v1h-3zM8 28h1v1h-1zM14 28h6v1h-6zM21 28h9v1h-9zM2 29h1v1h-1zM8 29h1v1h-1zM11 29h2v1h-2zM17 29h1v1h-1zM23 29h1v1h-1zM25 29h4v1h-4zM30 29h1v1h-1zM2 30h7v1h-7zM10 30h1v1h-1zM14 30h1v1h-1zM19 30h3v1h-3zM26 30h1v1h-1zM28 30h1v1h-1z"/></svg>`;
+// un téléphone ou une tablette (iPadOS se présente comme un Mac, mais tactile)
+const SUR_TELEPHONE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 // pour qui n'a pas encore d'assistant IA : Claude Code dans l'application de bureau, sans terminal (guide en français)
 const CLAUDE_BUREAU = "https://code.claude.com/docs/fr/desktop-quickstart";
 // [capture, titre, texte] ; « Les bases » : ce qu'on attend de tout gestionnaire de decks
@@ -4484,7 +4489,8 @@ const FAQ_ATELIER = [
     ["Comment entrent mes cartes ?",
       "On colle une liste copiée depuis Moxfield, Archidekt ou MTG Arena. La liste d'un deck préconstruit se trouve sur ces sites. Les cartes rangées hors des decks se collent de la même façon dans le classeur."],
     ["Et sur mon téléphone ?",
-      `<p>L'Atelier s'ouvre sur le PC. Pour emporter un deck, « Partager » le publie en ligne, sur une page <a href="${EXEMPLES_ATELIER}">comme celles-ci</a> : elle se lit sur téléphone et se met à jour toute seule quand le deck change. Il faut un compte GitHub, gratuit : c'est lui qui héberge votre page.</p>`],
+      `<p>Oui : ouvrez <a href="${APPLI_TELEPHONE}">atelier-mtg.github.io</a> sur votre téléphone, puis ajoutez-la à l'écran d'accueil. Elle marche seule, sans PC ni compte, ou reliée à l'Atelier de votre PC par un QR code, et garde vos decks même sans réseau. La simulation, la table de jeu, les proxies et la discussion avec Claude restent sur PC.</p>
+      <p>Pour montrer un deck à quelqu'un, « Partager » le publie sur une page <a href="${EXEMPLES_ATELIER}">comme celles-ci</a>, qui se lit sur téléphone et se met à jour toute seule. Il faut un compte GitHub, gratuit : c'est lui qui héberge votre page.</p>`],
     ["Et si mon PC tombe en panne ?",
       "Activez la sauvegarde en ligne, facultative : l'Atelier range une copie de vos decks, de leurs versions et de votre classeur sur votre propre compte GitHub, gratuit, dans un espace privé que vous seul voyez. Chaque modification s'y ajoute toute seule. Sur un autre PC, « Récupérer mes decks » les ramène."],
     ["Puis-je partir avec mes decks ?",
@@ -4543,15 +4549,16 @@ function vueAPropos(installation = false) {
           <h1>L'Atelier <span>MTG</span></h1>
           <p class="ap-accroche">Le deckbuilding Commander assisté,<br>100% local et sans compte.</p>
           <ul class="ap-puces">${["Suggestions", "Base de mana", "Combos", "Bracket", "Simulation", "Table de jeu", "Recherche avancée", "Claude"].map((x) => `<li>${x}</li>`).join("")}</ul>
-          <p class="ap-cta"><a class="btn btn-accent" href="${INSTALLER}" id="ap-installer">${ico("telecharger")}Installer l'Atelier MTG</a>
+          <p class="ap-cta">${SUR_TELEPHONE ? `<a class="btn btn-accent" href="${APPLI_TELEPHONE}" id="ap-appli">${ico("telephone")}Ouvrir l'Atelier MTG</a>`
+            : `<a class="btn btn-accent" href="${INSTALLER}" id="ap-installer">${ico("telecharger")}Installer l'Atelier MTG</a>`}
             <a class="btn" href="${EXEMPLES_ATELIER}">${ico("partager")}Voir des decks partagés</a></p>
-          <p class="ap-mention"><b>Gratuit</b> · open source · tout reste sur votre PC${versionAtelier ? ` · version ${esc(versionAtelier)}` : ""}</p>
+          <p class="ap-mention"><b>Gratuit</b> · open source · PC et téléphone${versionAtelier ? ` · version ${esc(versionAtelier)}` : ""}</p>
         </div>
       </div>
     </header>
     <article class="a-propos">
       <div class="ap-bandeau">
-        <p class="ap-promesse">Zéro pub, zéro compte, zéro cloud : l'Atelier tourne <em>uniquement sur votre PC</em>.</p>
+        <p class="ap-promesse">Zéro pub, zéro compte, zéro cloud : l'Atelier tourne <em>uniquement sur vos appareils</em>, PC ou téléphone.</p>
         <p>L'Atelier est une application locale, qui s'ouvre dans votre navigateur, pensée pour concevoir, tester et faire
           évoluer des decks Magic: The Gathering en Commander.</p>
       </div>
@@ -4565,6 +4572,7 @@ function vueAPropos(installation = false) {
       <h2>Et aussi</h2>
       <div class="ap-grille">
         ${fonction("Import en un collage", "Une liste copiée depuis Moxfield, Archidekt ou MTG Arena devient un deck, rangé par catégories.")}
+        ${fonction("Sur votre téléphone", `L'Atelier s'ajoute à l'écran d'accueil, sans passer par un store. Seul ou relié à votre PC par un QR code, il garde vos decks même sans réseau. <a href="${APPLI_TELEPHONE}">Ouvrir l'appli</a>`)}
         ${fonction("Partage simplifié", `Chaque deck a sa page en ligne, tenue à jour toute seule, à envoyer à votre groupe de jeu : liste, visuel, statistiques, et une table pour le tester. <a href="${EXEMPLES_ATELIER}">Voir des exemples</a>`)}
       </div>
 
@@ -4572,20 +4580,22 @@ function vueAPropos(installation = false) {
       <ul class="ap-principes">
         <li><strong>Open source et gratuit.</strong> Le code est publié sous <a href="${depot}/blob/main/LICENSE" target="_blank" rel="noopener">licence MIT</a> :
           accessible, vérifiable et modifiable par tous sur GitHub.</li>
-        <li><strong>Vos decks sont stockés sur votre PC.</strong> Rien n'est collecté. Seules sortent les
+        <li><strong>Vos decks sont stockés sur vos appareils.</strong> Rien n'est collecté. Seules sortent les
           requêtes nécessaires : données, images et prix des cartes (Scryfall), combos et bracket (Commander Spellbook, MTGPics),
-          la discussion avec Claude si vous l'utilisez, et les pages que vous choisissez de partager.</li>
+          la discussion avec Claude si vous l'utilisez, la sauvegarde en ligne si vous l'activez, et les pages que vous
+          choisissez de partager.</li>
         <li><strong>L'IA est optionnelle.</strong> Tri, statistiques, suggestions, test du simulateur et jeu en solo
           fonctionnent sans aucune configuration IA.</li>
       </ul>
 
       <h2 id="installation">Installation</h2>
-      <p>L'Atelier s'installe une fois sur votre ordinateur, puis s'ouvre par un raccourci sur le bureau. Trois façons de
-        faire, au choix :</p>
+      <p>Sur ordinateur, l'Atelier s'installe une fois, puis s'ouvre par un raccourci sur le bureau. Sur téléphone, il
+        s'ouvre dans le navigateur, sans rien télécharger. Au choix :</p>
       <div class="ap-onglets" role="tablist" aria-label="Façon d'installer">
         <button type="button" role="tab" id="ap-o-windows" aria-controls="ap-p-windows"><svg class="ico ap-logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h8.4v8.4H3zM12.6 3H21v8.4h-8.4zM3 12.6h8.4V21H3zM12.6 12.6H21V21h-8.4z"/></svg>Installeur</button>
         <button type="button" role="tab" id="ap-o-ia" aria-controls="ap-p-ia">${ico("discussion")}Assistant IA</button>
         <button type="button" role="tab" id="ap-o-main" aria-controls="ap-p-main">${ico("terminal")}À la main</button>
+        <button type="button" role="tab" id="ap-o-tel" aria-controls="ap-p-tel">${ico("telephone")}Téléphone</button>
       </div>
       <div class="ap-install" role="tabpanel" id="ap-p-windows" aria-labelledby="ap-o-windows">
         <p class="ap-install-pour">Windows 10 et 11 · rien d'autre à installer</p>
@@ -4621,7 +4631,20 @@ python installer.py</code><button type="button" data-copier>Copier</button></div
             Linux.</li>
         </ol>
       </div>
-      <p class="ap-install-sous">Les trois donnent le même Atelier, gratuit et open source. Les nouvelles versions s'annoncent
+      <div class="ap-install" role="tabpanel" id="ap-p-tel" aria-labelledby="ap-o-tel" hidden>
+        <p class="ap-install-pour">Android et iPhone · sans store, sans compte</p>
+        <ol>
+          <li>${SUR_TELEPHONE ? `Ouvrez l'appli :
+            <a class="btn btn-accent ap-install-action" href="${APPLI_TELEPHONE}">${ico("telephone")}Ouvrir l'Atelier MTG</a>`
+            : `Sur votre téléphone, ouvrez <a href="${APPLI_TELEPHONE}">atelier-mtg.github.io</a>, ou scannez ce QR code :
+            <span class="ap-qr-cadre">${QR_APPLI}</span>`}</li>
+          <li>Ajoutez-la à l'écran d'accueil. Android : <b>Installer l'application</b> ; iPhone : <b>Partager</b>, puis
+            <b>Sur l'écran d'accueil</b>.</li>
+          <li>Touchez <b>Commencer ici</b>. Vous avez déjà l'Atelier sur PC ? Dans ses <b>Options</b>, <b>Téléphone</b>
+            affiche un QR code : <b>Scanner le QR code du PC</b> relie les deux.</li>
+        </ol>
+      </div>
+      <p class="ap-install-sous">Sur ordinateur, les trois façons donnent le même Atelier, gratuit et open source. Les nouvelles versions s'annoncent
         dans l'Atelier et s'installent en un clic ; vos decks sont conservés. Code source :
         <a class="ap-depot" href="${depot}" target="_blank" rel="noopener">${depot.replace("https://", "")}</a></p>
 
@@ -4671,7 +4694,7 @@ python installer.py</code><button type="button" data-copier>Copier</button></div
     };
   });
   const plateforme = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "") + " " + navigator.userAgent;
-  choisir($(/Mac|iPhone|iPad|Linux|X11|CrOS/i.test(plateforme) && !/Windows|Android/i.test(plateforme) ? "#ap-o-ia" : "#ap-o-windows", vue));
+  choisir($(SUR_TELEPHONE ? "#ap-o-tel" : /Mac|Linux|X11|CrOS/i.test(plateforme) && !/Windows/i.test(plateforme) ? "#ap-o-ia" : "#ap-o-windows", vue));
   $$("[data-copier]", vue).forEach((b) => b.onclick = async () => {
     const code = b.previousElementSibling;
     try {
@@ -4687,7 +4710,7 @@ python installer.py</code><button type="button" data-copier>Copier</button></div
   });
   // un saut, pas un défilement animé : les captures qui se chargent en chemin le feraient s'arrêter trop tôt
   const aInstallation = () => $("#installation").scrollIntoView();
-  $("#ap-installer").onclick = (ev) => { ev.preventDefault(); aInstallation(); };      // même page : sans la redessiner
+  if ($("#ap-installer")) $("#ap-installer").onclick = (ev) => { ev.preventDefault(); aInstallation(); };   // même page : sans la redessiner
   if (installation) aInstallation();
 }
 

@@ -899,7 +899,7 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .ap-zoom { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; padding: 2vh 2vw;
   background: rgba(0,0,0,.86); cursor: zoom-out; }
 .ap-zoom img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
-/* installation : trois façons, une par onglet ; la carte de l'onglet choisi dessous */
+/* installation : quatre façons, une par onglet ; la carte de l'onglet choisi dessous */
 .ap-onglets { display: inline-flex; gap: 4px; padding: 4px; margin-top: .4rem; background: var(--surface); border: 1px solid var(--bord);
   border-radius: 10px; }
 .ap-onglets [role=tab] { display: inline-flex; align-items: center; gap: .5rem; padding: .5rem 1rem; border: 0; border-radius: 7px;
@@ -922,10 +922,13 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
   cursor: pointer; }
 .ap-commande button:hover { filter: brightness(1.08); }
 .a-propos .ap-install-sous { margin-top: 1rem; font-size: .9rem; color: var(--texte-2); }
-@media (max-width: 600px) {                        /* téléphone : les trois onglets sur toute la largeur */
-  .ap-onglets { display: flex; }
-  .ap-onglets [role=tab] { flex: 1; justify-content: center; padding: .5rem .4rem; gap: .35rem; font-size: .88rem; }
+@media (max-width: 600px) {                        /* téléphone : les quatre onglets sur deux lignes, toute la largeur */
+  .ap-onglets { display: grid; grid-template-columns: 1fr 1fr; }
+  .ap-onglets [role=tab] { justify-content: center; padding: .55rem .4rem; gap: .35rem; font-size: .88rem; }
 }
+/* l'adresse de l'appli du téléphone en QR code, pour qui lit la page sur un ordinateur */
+.ap-qr-cadre { display: block; width: fit-content; margin-top: .6rem; padding: 6px; background: #fff; border-radius: 8px; border: 1px solid var(--bord); }
+.ap-qr { display: block; width: 136px; height: 136px; }
 #installation { scroll-margin-top: var(--haut-barre, 56px); }        /* bouton « Installer » : le titre sous la barre du haut */
 .ap-depot { white-space: nowrap; }                                   /* l'adresse du dépôt d'un seul tenant */
 /* questions fréquentes : une question par ligne, la réponse se déplie au clic ; le + tourne en × */
