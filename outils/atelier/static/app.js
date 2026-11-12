@@ -1473,7 +1473,7 @@ async function ongletAchats(el, d, poss = null) {
     const c = x.c, f = c.info || {}, cher = (f.prix || 0) > BUDGET, lib = achat ? "Je l'ai" : "À acheter";
     return `<div class="ligne ligne-carte ligne-achat" data-carte="${c.index}">
       <span class="qte">${x.n > 1 ? x.n + "×" : ""}</span>
-      <span class="nom"><span class="en" data-image="${esc(f.image)}" data-legende="${esc(legendeCarte(c))}" ${cher ? 'data-cher="1"' : ""}>${esc(c.nom)}</span>${f.fr && f.fr !== c.nom ? `<span class="fr">${esc(f.fr)}</span>` : ""}</span>
+      <span class="nom"><span class="en" data-image="${esc(f.image)}" data-legende="${esc(legendeCarte(c))}" ${cher ? 'data-cher="1"' : ""}>${esc(c.nom)}</span>${f.fr && f.fr !== c.nom ? `<span class="fr">${esc(f.fr)}</span>` : ""}${achat ? `<span class="ou-hint" data-ou="${esc(c.nom)}" hidden></span>` : ""}</span>
       ${mana(f.cout)}
       ${f.prix_lien ? `<a class="prix ${cher ? "cher" : ""}" href="${esc(f.prix_lien)}" target="_blank" rel="noopener">${euros(f.prix)}</a>` : `<span class="prix muet">${euros(f.prix)}</span>`}
       <button type="button" class="btn-menu" data-bascule="${esc(c.nom)}" data-v="${achat ? x.total : 0}" aria-label="${lib} : ${esc(c.nom)}" title="${lib}">${ico(achat ? "coche" : "panier")}</button>
@@ -1493,6 +1493,18 @@ async function ongletAchats(el, d, poss = null) {
       ${ai.length ? ai.map((x) => ligne(x, false)).join("") : `<p class="muet petit">Aucune.</p>`}
     </section>
   </div>`;
+  // à acheter, mais déjà là ailleurs : au classeur, ou dans un autre deck (où je l'ai)
+  if (acheter.length) api("/api/ou-sont").then((idx) => {
+    for (const s of $$("[data-ou]", el)) {
+      const x = idx[s.dataset.ou];
+      if (!x) continue;
+      const bouts = [x.classeur ? `Classeur${x.classeur > 1 ? " : " + x.classeur : ""}` : "",
+        ...x.decks.filter(([id, , ai]) => id !== d.id && ai > 0).map(([id, , ai]) => id.replace(/^Deck /, "") + (ai > 1 ? " : " + ai : ""))].filter(Boolean);
+      if (!bouts.length) continue;
+      s.textContent = "J'en ai : " + bouts.join(", ");
+      s.hidden = false;
+    }
+  }).catch(() => {});
   const marquer = async (changements) => {
     try { ongletAchats(el, d, await marquerPossedees(d, changements)); } catch (e) { erreur(e); }
   };
@@ -1989,6 +2001,7 @@ async function classeurOptions(el) {
     <details class="cl-coller"><summary>Coller une liste</summary>
       <textarea class="champ" id="cl-liste" rows="6" placeholder="1 Sol Ring&#10;2 Lightning Bolt&#10;…"></textarea>
       <div class="boutons"><button class="btn btn-accent btn-petit" id="cl-ajouter">Ajouter au classeur</button></div></details>
+    <details class="cl-coller" id="cl-partagees"><summary>Dans plusieurs decks</summary><div id="cl-partagees-res"></div></details>
     <div id="cl-res"><p class="chargement">Chargement…</p></div>`;
   const res = $("#cl-res", el), filtre = $("#cl-filtre", el);
   const nb = (l) => l.reduce((s, x) => s + x.n, 0);
@@ -2078,6 +2091,7 @@ async function classeurOptions(el) {
     } catch (e) { erreur(e); }
     b.disabled = false;
   };
+  $("#cl-partagees", el).ontoggle = (ev) => { if (ev.target.open) cartesPartagees($("#cl-partagees-res", el)); };
   $("#cl-copier", el).onclick = async () => {
     try {
       await navigator.clipboard.writeText(cartes.map((x) => `${x.n} ${x.nom}`).join("\n") + "\n");
@@ -2088,6 +2102,22 @@ async function classeurOptions(el) {
     cartes = (await api("/api/classeur")).cartes;
     rendre();
   } catch (e) { res.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
+}
+
+// les cartes jouées dans plusieurs decks : combien j'en ai (classeur et decks) pour combien il en faut
+async function cartesPartagees(el) {
+  el.innerHTML = `<p class="chargement">Chargement…</p>`;
+  try {
+    const idx = await api("/api/ou-sont");
+    const l = Object.entries(idx).filter(([, x]) => x.decks.length > 1)
+      .map(([nom, x]) => ({ nom, fr: x.fr, decks: x.decks, ai: x.classeur + x.decks.reduce((s, y) => s + y[2], 0), faut: x.decks.reduce((s, y) => s + y[1], 0) }))
+      .sort((a, b) => b.decks.length - a.decks.length || (a.fr || a.nom).localeCompare(b.fr || b.nom, "fr"));
+    el.innerHTML = l.length ? `<div class="cl-partagees">${l.map((x) => `<div class="ligne ligne-partagee">
+        <span class="nom"><span class="en">${esc(x.nom)}</span>${x.fr && x.fr !== x.nom ? `<span class="fr">${esc(x.fr)}</span>` : ""}</span>
+        <span class="petit muet">${x.decks.map(([id]) => esc(id.replace(/^Deck /, ""))).join(", ")}</span>
+        <span class="petit ${x.ai < x.faut ? "manque" : "muet"}" title="J'en ai ${x.ai}, les decks en jouent ${x.faut}">${x.ai} / ${x.faut}</span>
+      </div>`).join("")}</div>` : `<p class="muet petit">Aucune.</p>`;
+  } catch (e) { el.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
 }
 
 async function supprimerDeck(d) {
@@ -2369,6 +2399,22 @@ document.addEventListener("click", (ev) => {
 }, true);
 
 // fiche d'une carte (clic gauche sur une carte, en liste ou en visuel) : grande image, texte, prix, tags et actions
+// où est cette carte : le classeur et les autres decks qui la jouent, pour ne pas racheter une carte qu'on a déjà
+// (« à acheter » : ce deck la joue, mais elle n'y est pas encore)
+async function ouEst(el, nom, deckId = null) {
+  if (PARTAGE || !el) return;
+  try {
+    const x = (await api("/api/ou-sont?nom=" + enc(nom)))[nom] || { classeur: 0, decks: [] };
+    const autres = x.decks.filter(([id]) => id !== deckId);
+    const morceaux = [];
+    if (x.classeur) morceaux.push(`${ico("livre")}Classeur : ${x.classeur}`);
+    if (autres.length) morceaux.push(`${ico("cartes")}${deckId ? "Aussi dans" : "Dans"} ${autres.map(([id, n, ai]) =>
+      `<a href="#/deck/${enc(id)}">${esc(id.replace(/^Deck /, ""))}</a>${ai < n ? ` <span class="muet">(à acheter)</span>` : ""}`).join(", ")}`);
+    el.innerHTML = morceaux.map((m) => `<span>${m}</span>`).join("");
+    el.hidden = !morceaux.length;
+  } catch (_) { el.hidden = true; }
+}
+
 function ouvrirCarte(c) {
   if (!c) return;
   const d = etat.deck;
@@ -2398,6 +2444,7 @@ function ouvrirCarte(c) {
           ${f.gc ? `<span class="badge badge-gc">Game Changer</span>` : ""}
           ${badgesAlerte(c)}
         </div>
+        <div class="ou-est petit" hidden></div>
         ${assembleHtml(f.assemble)}
         ${f.fr_texte || f.texte ? `<div class="texte fs-texte">${(f.fr_texte || f.texte).split("\n").map((l) => l.trim() === "//" ? "<hr>" : l.trim() ? `<p>${texteMana(l)}</p>` : "").join("")}</div>` : ""}
         ${f.fr_texte && f.texte ? `<details class="petit"><summary>Texte anglais</summary><div class="fs-texte" style="margin-top:.4rem">${f.texte.split("\n").map((l) => l.trim() === "//" ? "<hr>" : `<p>${texteMana(l)}</p>`).join("")}</div></details>` : ""}
@@ -2436,6 +2483,7 @@ function ouvrirCarte(c) {
     $("#fc-fermer", b).onclick = fermerModale;
     const achat = $('[data-act="achat"]', b);
     if (achat) possedeesDeck(d).then((poss) => boutonAchat(achat, d, c, poss)).catch(() => {});
+    ouEst($(".ou-est", b), c.nom, d.id);
     b.addEventListener("click", async (ev) => {
       const x = ev.target.closest("[data-act]");
       if (!x || x.disabled) return;
@@ -2748,6 +2796,7 @@ async function chargerFiche(zone, nom, { version = null, surVersion = null } = {
           ${hors ? `<span class="badge badge-alerte">hors couleurs</span>` : ""}
           ${deja ? `<span class="badge badge-alerte">déjà dans ce deck</span>` : ""}
         </div>
+        <div class="ou-est petit" hidden></div>
         ${f.fr_texte || f.texte ? `<div class="texte fs-texte">${texte(f.fr_texte || f.texte)}</div>` : ""}
         ${f.fr_texte && f.texte ? `<details class="petit"><summary>Texte anglais</summary><div class="fs-texte" style="margin-top:.4rem">${texte(f.texte)}</div></details>` : ""}
         <div class="fc-liens">
@@ -2756,6 +2805,7 @@ async function chargerFiche(zone, nom, { version = null, surVersion = null } = {
         </div>
       </div>
     </div>`;
+  ouEst($(".ou-est", zone), f.nom, d && d.id);
   const lien = $('[data-act="version"]', zone);
   if (lien) lien.onclick = () => choixVersion(zone, {
     nom: f.nom, titre: f.fr || f.nom, actuelle: f.version,
@@ -4957,6 +5007,7 @@ function ficheRecherche(i, ctx = null) {
           <span class="badge ${cher ? "badge-cher" : ""}" id="rf-prix-badge" title="Le moins cher, toutes éditions (prix Cardmarket du jour)">${prixRch(x)}</span>
           ${badgesRch(x, d)}
         </div>
+        <div class="ou-est petit" hidden></div>
         <div id="rf-assemble"></div>
         ${x.texte_fr || x.texte ? `<div class="texte fs-texte">${texte(x.texte_fr || x.texte)}</div>` : ""}
         ${x.texte_fr && x.texte ? `<details class="petit"><summary>Texte anglais</summary><div class="fs-texte" style="margin-top:.4rem">${texte(x.texte)}</div></details>` : ""}
@@ -4975,6 +5026,7 @@ function ficheRecherche(i, ctx = null) {
       </div>
     </div>`, (b) => {
     let dest = x.dans === "maybe" ? "deck" : PREF.get("rf-dest", "deck");
+    ouEst($(".ou-est", b), x.nom, d && d.id);
     b.addEventListener("click", async (ev) => {
       const s = ev.target.closest("[data-dest]");
       if (s) {

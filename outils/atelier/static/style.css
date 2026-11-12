@@ -1156,3 +1156,13 @@ summary.sg-puce:hover { background: color-mix(in srgb, var(--accent) 22%, transp
   body.impression .px-feuille { height: 296mm; box-shadow: none; break-after: page; }
   body.impression .px-feuille:last-child { break-after: auto; }
 }
+
+/* ---------------------------------------------------------------- import depuis une autre appli, où sont mes cartes, jetons */
+.ou-est { display: flex; flex-wrap: wrap; gap: .2rem 1.1rem; margin: .55rem 0 .2rem; color: var(--texte-2); }
+.ou-est .ico { width: 1em; height: 1em; vertical-align: -.15em; margin-right: .3rem; }
+.ligne .nom .ou-hint { flex-basis: 100%; font-size: .8rem; color: var(--accent); }
+.cl-partagees { margin-top: .5rem; }
+.ligne-partagee { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 4rem; }
+.ligne-partagee > :last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.ligne-partagee .manque { color: var(--alerte); font-weight: 600; }
+@media (max-width: 600px) { .ligne-jeton, .ligne-partagee { grid-template-columns: minmax(0, 1fr) auto; } .ligne-jeton > :last-child { grid-column: 1 / -1; } }

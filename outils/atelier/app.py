@@ -454,6 +454,21 @@ def api_classeur_modifier():
     return jsonify(cartes=api_classeur().get_json()["cartes"], inconnues=inconnues)
 
 
+@app.get("/api/ou-sont")
+def api_ou_sont():
+    """Où sont mes cartes, pour ne pas racheter une carte que j'ai déjà : {nom: {classeur, decks: [[deck, joués, que
+    j'ai]]}} ; nom=… : cette carte seulement."""
+    import classeur
+    i = classeur.index()
+    nom = request.args.get("nom")
+    if nom:
+        return jsonify({nom: i.get(nom, {"classeur": 0, "decks": []})})
+    I = ic.infos(list(i))
+    for n, v in i.items():
+        v["fr"] = (I.get(n) or {}).get("fr")
+    return jsonify(i)
+
+
 @app.errorhandler(Exception)
 def erreur(e):
     code = getattr(e, "code", 500)

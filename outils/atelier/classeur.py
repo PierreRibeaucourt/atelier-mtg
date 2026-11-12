@@ -55,6 +55,26 @@ def lire_liste(texte):
     return c
 
 
+def index():
+    """Où sont mes cartes : {nom: {"classeur": exemplaires, "decks": [[deck, exemplaires joués, exemplaires que j'ai]]}}.
+    Les decks comptent hors Maybeboard et sans les terrains de base ; « que j'ai » vient de l'onglet Achats."""
+    res = {}
+    for nom, n in cartes().items():
+        res[nom] = {"classeur": n, "decks": []}
+    for deck in decks.dossiers():
+        p = os.path.join(decks.RACINE, deck, decks.FICHIER)
+        if not os.path.exists(p):
+            continue
+        besoin = Counter()
+        for e in decks.lire(p):
+            if decks.categorie(e) != "Maybeboard" and e["nom"] not in decks.BASES:
+                besoin[e["nom"]] += e["n"]
+        poss = decks.possedees(deck)
+        for nom, n in besoin.items():
+            res.setdefault(nom, {"classeur": 0, "decks": []})["decks"].append([deck, n, min(n, int(poss.get(nom) or 0))])
+    return res
+
+
 def ajouter(ajouts):
     """ajouts : {nom: exemplaires en plus}. Renvoie toutes les cartes."""
     with _verrou:
