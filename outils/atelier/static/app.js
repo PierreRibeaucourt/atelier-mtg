@@ -718,7 +718,7 @@ function deckDeLaPage() {
       </a>`;
     const nc = cartes.length;
     liste.innerHTML = (q.length >= 2 ? `<div class="aller-section">Cartes</div>` + (nc ? items.slice(0, nc).map(ligneCarte).join("")
-        : enConstruction ? `<div class="aller-vide petit">La base de cartes se construit : la recherche marchera quand elle sera prête.
+        : enConstruction ? `<div class="aller-vide petit">La base de cartes ${TELEPHONE ? "arrive" : "se construit"} : la recherche marchera quand elle sera prête.
             <a href="${esc(tous(brut))}">Voir l'avancement →</a></div>`
         : `<div class="aller-vide muet petit">Aucune carte.</div>`) : "")
       + (decksTrouves.length ? (q.length >= 2 ? `<div class="aller-section">Decks</div>` : "") + items.slice(nc).map((it, j) => ligneDeck(it, nc + j)).join("") : "")
@@ -4905,7 +4905,7 @@ async function attendreBase(z) {
     const e = (b && b.construction) || {};
     const pc = e.total ? Math.round((100 * e.fait) / e.total) : 0;
     z.innerHTML = `<div class="panneau">
-      <h3>La base de cartes se construit</h3>
+      <h3>La base de cartes ${TELEPHONE ? "arrive" : "se construit"}</h3>
       <p>${esc(e.etape || (e.erreur ? "Arrêtée" : "En attente…"))}${e.total ? ` · ${pc} %` : ""}</p>
       ${e.total ? `<div class="barre-prog"><div style="width:${pc}%"></div></div>` : ""}
       ${e.erreur ? `<p class="erreur petit">${esc(e.erreur)}</p><button class="btn" id="rch-relancer">Relancer</button>` : ""}

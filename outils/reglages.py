@@ -66,7 +66,7 @@ def budget_texte():
 def pour_la_page():
     """Ce que l'interface doit savoir (window.REGLAGES) : budget 0 = pas d'alerte."""
     b = budget()
-    return {"budget": 0 if b == float("inf") else b}
+    return {"budget": 0 if b == float("inf") else b, "sans_ub_illustrations": impression()[1]}
 
 
 def github():

@@ -275,7 +275,8 @@ def _carte(c):
                 o=texte, co="".join(k for k in COULEURS if k in couleurs), ci="".join(k for k in COULEURS if k in c.get("color_identity", [])),
                 p=avant.get("power"), e=avant.get("toughness"), l=next((f.get("loyalty") for f in [c] + faces if f.get("loyalty")), None),
                 pt=_pt(c), lay=c.get("layout", ""), lg=leg, gc=bool(c.get("game_changer")), rk=c.get("edhrec_rank"),
-                spe=_speciale(c), fr="", tf="", of="")
+                spe=_speciale(c), fr="", tf="", of="",
+                cl=(c.get("legalities") or {}).get("commander", ""), pm=c.get("produced_mana") or [])   # pour le téléphone
 
 
 def _cartes_et_impressions():

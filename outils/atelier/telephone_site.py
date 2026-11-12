@@ -45,8 +45,12 @@ def construire(dossier):
     os.makedirs(dossier)
     for f in ("app.js", "style.css"):
         shutil.copyfile(os.path.join(STATIQUE, f), os.path.join(dossier, f))
-    for f in ("moteur.js", "telephone.js", "jsQR.js"):
+    for f in ("moteur.js", "cartes.js", "jsQR.js"):
         shutil.copyfile(os.path.join(STATIQUE, "telephone", f), os.path.join(dossier, f))
+    with open(os.path.join(STATIQUE, "telephone", "telephone.js"), encoding="utf-8") as f:      # le Worker de la base de cartes
+        tel = f.read().replace("__CARTES__", "cartes.js?v=" + _empreinte(os.path.join(dossier, "cartes.js")))
+    with open(os.path.join(dossier, "telephone.js"), "w", encoding="utf-8", newline="\n") as f:
+        f.write(tel)
     _icones(dossier)
     with open(os.path.join(dossier, "manifest.webmanifest"), "w", encoding="utf-8") as f:
         json.dump(dict(name="Atelier MTG", short_name="Atelier MTG", description="Tes decks Commander, partout.", lang="fr",
@@ -56,7 +60,7 @@ def construire(dossier):
                               dict(src="icone-512.png", sizes="512x512", type="image/png"),
                               dict(src="icone-masque-512.png", sizes="512x512", type="image/png", purpose="maskable")]),
                   f, ensure_ascii=False, indent=1)
-    v = {f: _empreinte(os.path.join(dossier, f)) for f in ("app.js", "style.css", "moteur.js", "telephone.js")}
+    v = {f: _empreinte(os.path.join(dossier, f)) for f in ("app.js", "style.css", "moteur.js", "telephone.js", "cartes.js")}
     with open(os.path.join(STATIQUE, "index.html"), encoding="utf-8") as f:
         html = f.read()
     tete = "\n  ".join(['<meta name="robots" content="noindex">',
@@ -83,7 +87,7 @@ def construire(dossier):
     with open(os.path.join(dossier, "index.html"), "w", encoding="utf-8", newline="\n") as f:
         f.write(html)
     fichiers = ["./", f"app.js?v={v['app.js']}", f"style.css?v={v['style.css']}", f"moteur.js?v={v['moteur.js']}",
-                f"telephone.js?v={v['telephone.js']}",
+                f"telephone.js?v={v['telephone.js']}", f"cartes.js?v={v['cartes.js']}",
                 "jsQR.js", "manifest.webmanifest", *ICONES]
     version = hashlib.sha1("".join(sorted(v.values())).encode() + html.encode()).hexdigest()[:12]
     with open(os.path.join(STATIQUE, "telephone", "sw.js"), encoding="utf-8") as f:

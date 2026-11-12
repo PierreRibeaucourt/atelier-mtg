@@ -139,6 +139,14 @@
     if (p === "/api/chercher") return chercher(u.searchParams.get("q") || "");
     if (p === "/api/carte") return carte(u);
     if (p === "/api/impressions") return impressionsCarte(u.searchParams.get("nom") || "");
+    // la recherche de cartes : dans la base de cartes du téléphone
+    if (p === "/api/recherche/base") { if (!etatBase.prete && !baseEnCours) laBase().catch(() => {}); return copie(etatBase); }
+    if (p === "/api/recherche") return rechercheAvancee(u);
+    if (p === "/api/recherche/editions") return demander("editions");
+    if (p === "/api/recherche/fonctions") return demander("fonctions");
+    if (p === "/api/recherche/tags") return demander("suggestions", u.searchParams.get("q") || "");
+    if (p === "/api/recherche/noms") { pret(); return message("noms", [u.searchParams.get("q") || "", await dansDeck(u.searchParams.get("deck")), 8]); }
+    if (p === "/api/recherche-cartes") return decksAvecCarte(u.searchParams.get("q") || "");
     const index = await fichier("index.json.gz");
     if (!index) throw Object.assign(new Error("Tes decks ne sont pas encore arrivés."), { statut: 503 });
     if (p === "/api/version") return { version: index.version, disponible: null };
@@ -170,6 +178,7 @@
         const d = await fichier(f);
         if (d && k in d.api) return copie(d.api[k]);
       }
+      if (etatBase.prete) return message("apercu", [u.searchParams.get("nom") || ""]);
     }
     throw absente();
   }
@@ -213,6 +222,111 @@
     await BD.ecrire("@attente", l);
     clearTimeout(minuterie);
     minuterie = setTimeout(() => envoyer().catch(() => {}), 2500);       // une série de modifications part en une fois
+  }
+
+  // ------------------------------------------------------------------ la base de cartes (cartes.js, dans un Worker)
+  // Celle de la recherche du PC, allégée (base_telephone.py), publiée avec l'appli et refaite chaque semaine : téléchargée
+  // une fois (≈ 10 Mo), gardée ici (@base), puis seulement quand elle change, hors données mobiles. Elle sert à la
+  // recherche de cartes, au champ du haut, et aux fiches des cartes : sans réseau, et sans PC.
+  const CARTES = "__CARTES__";                        // cartes.js?v=… (telephone_site.py)
+  const etatBase = { prete: false, date: null, date_fr: null, nb: 0, verifie: 0, nouveautes: [], prochaine: 0,
+    construction: { actif: false, etape: "", fait: 0, total: 0, unite: "", erreur: "" } };
+  let travailleur = null, baseEnCours = null, numMsg = 0;
+  const reponses = new Map();
+  function message(f, a = [], transfert = []) {
+    if (!travailleur) {
+      travailleur = new Worker(CARTES);
+      travailleur.onmessage = (ev) => {
+        const r = reponses.get(ev.data.id);
+        if (!r) return;
+        reponses.delete(ev.data.id);
+        if ("e" in ev.data) r.ko(new Error(ev.data.e)); else r.ok(ev.data.r);
+      };
+      travailleur.onerror = (ev) => { for (const r of reponses.values()) r.ko(new Error(ev.message || "La base de cartes ne répond pas.")); reponses.clear(); };
+    }
+    return new Promise((ok, ko) => { const id = ++numMsg; reponses.set(id, { ok, ko }); travailleur.postMessage({ id, f, a }, transfert); });
+  }
+  const mobile = () => { const c = navigator.connection; return !!c && (c.saveData || c.type === "cellular"); };
+  async function telechargerBase(idx = null) {
+    const c = etatBase.construction;
+    Object.assign(c, { actif: true, etape: "Téléchargement de la base de cartes", fait: 0, total: 0, unite: "octets", erreur: "" });
+    try {
+      idx = idx || await (await fetch("base/index.json", { cache: "no-store" })).json();
+      c.total = idx.taille;
+      const r = await fetch("base/" + idx.fichier);
+      if (!r.ok) throw new Error(`La base de cartes ne répond pas (${r.status}).`);
+      const lecteur = r.body.getReader(), morceaux = [];
+      for (;;) {
+        const { done, value } = await lecteur.read();
+        if (done) break;
+        morceaux.push(value);
+        c.fait += value.length;
+      }
+      const g = { fichier: idx.fichier, date: idx.date, nb: idx.nb, donnees: await new Blob(morceaux).arrayBuffer() };
+      await BD.ecrire("@base", g);
+      return g;
+    } catch (e) {
+      c.erreur = e instanceof TypeError ? "Pas de réseau : la base de cartes arrivera plus tard." : e.message;
+      throw new Error(c.erreur);
+    } finally { c.actif = false; }
+  }
+  // la base dans le Worker : celle gardée ici, sinon téléchargée
+  function laBase(g = null) {
+    return baseEnCours || (baseEnCours = (async () => {
+      g = g || await BD.lire("@base").catch(() => null) || await telechargerBase();
+      etatBase.construction.etape = "Lecture de la base de cartes";
+      const r = await message("charger", [g.donnees], [g.donnees]);
+      await message("reglages", [{ sansUb: !!(window.REGLAGES || {}).sans_ub_illustrations }]);
+      Object.assign(etatBase, { prete: true, date: r.date, nb: r.nb });
+      etatBase.construction.etape = "";
+    })().catch((e) => { baseEnCours = null; etatBase.construction.erreur = e.message; throw e; }));
+  }
+  // une nouvelle base publiée : téléchargée (pas sur les données mobiles, sauf si on la demande), puis relue
+  async function nouvelleBase(force = false) {
+    etatBase.verifie = Date.now() / 1000;
+    const idx = await (await fetch("base/index.json", { cache: "no-store" })).json();
+    const g = await BD.lire("@base").catch(() => null);
+    if (g && g.fichier === idx.fichier) return false;
+    if (!force && mobile()) return false;
+    const n = await telechargerBase(idx);
+    await baseEnCours?.catch(() => {});
+    baseEnCours = null;
+    await laBase(n);
+    return true;
+  }
+  const pret = () => {
+    if (etatBase.prete) return;
+    if (!baseEnCours) laBase().catch(() => {});
+    throw Object.assign(new Error("La base de cartes n'est pas encore prête."), { statut: 503 });
+  };
+  const demander = (f, ...a) => { pret(); return message(f, a); };
+  // les cartes d'un deck, pour les marquer dans les résultats : {clé du nom: "commandant" | "deck" | "maybe"}
+  async function dansDeck(id) {
+    if (!id) return {};
+    const d = await api(`/api/decks/${id}`).catch(() => null), res = {};
+    for (const c of (d && d.cartes) || []) {
+      const k = cle(c.nom).toLowerCase(), v = c.cat === "Commander" ? "commandant" : c.cat === "Maybeboard" ? "maybe" : "deck";
+      if (res[k] == null || res[k] === "maybe") res[k] = v;
+    }
+    return res;
+  }
+  async function rechercheAvancee(u) {
+    pret();
+    const p = Object.fromEntries(u.searchParams);
+    return { ...(await message("chercher", [p, await dansDeck(p.deck), null])), base: copie(etatBase) };
+  }
+  // le champ du haut : les decks qui contiennent une carte dont le nom (anglais ou français) contient le texte
+  async function decksAvecCarte(q) {
+    q = simple(q.trim());
+    if (q.length < 3) return {};
+    const res = {};
+    for (const d of await api("/api/decks").catch(() => [])) {
+      const page = await api(`/api/decks/${d.id}`).catch(() => null);
+      const l = ((page && page.cartes) || []).filter((c) => simple(c.nom).includes(q) || simple((c.info || {}).fr).includes(q)).map((c) => c.nom);
+      const t = [...new Set(l)];
+      if (t.length) res[d.id] = [...t.slice(0, 4), ...(t.length > 4 ? [`et ${t.length - 4} autres`] : [])];
+    }
+    return res;
   }
 
   // ------------------------------------------------------------------ les cartes, sur Scryfall (infos_cartes.py)
@@ -324,11 +438,18 @@
     return f;
   }
   // les fiches de cartes tapées ou collées : {nom tapé: fiche (son nom : celui de Scryfall)} ; absente si introuvable
+  // (la base de cartes d'abord : sans réseau ; Scryfall pour celles qu'elle n'a pas)
   async function fiches(noms, garde = null) {
-    const m = await cartes(noms, garde);
-    await francais([...m.values()].filter(Boolean).map((c) => c.name), garde);
-    const res = {};
-    for (const [n, c] of m) if (c) res[n] = ficheDe(c);
+    const res = etatBase.prete ? await message("fiches", [noms]).catch(() => ({})) : {};
+    const reste = noms.filter((n) => !res[n]);
+    if (!reste.length) return res;
+    try {
+      const m = await cartes(reste, garde);
+      await francais([...m.values()].filter(Boolean).map((c) => c.name), garde);
+      for (const [n, c] of m) if (c) res[n] = ficheDe(c);
+    } catch (e) {
+      if (e.abandon || !etatBase.prete) throw e;          // pas de réseau : les cartes que la base ne connaît pas restent inconnues
+    }
     return res;
   }
   // une carte d'un deck : déjà vue dans un deck ou le classeur, sinon demandée à Scryfall (gardée ici)
@@ -357,6 +478,7 @@
     const garde = gardeDe(++tourRecherche);
     texte = texte.trim();
     if (texte.length < 2) return [];
+    if (etatBase.prete) return (await message("noms", [texte, {}, 20])).map((x) => ({ ...x, legal: x.legal || "not_legal" }));
     let res = [];
     const noms = new Set();
     const ac = await scryfall(`${SCRYFALL}/cards/autocomplete?q=${encodeURIComponent(texte)}`, null, garde);
@@ -386,6 +508,10 @@
   async function prixEtNoms(noms) {
     const garde = gardeDe(tourRecherche);
     noms = noms.filter(Boolean).slice(0, 25);
+    if (etatBase.prete) {
+      const f = await message("fiches", [noms]);
+      if (noms.every((n) => f[n])) return Object.fromEntries(noms.map((n) => [n, { prix: f[n].prix, prix_lien: "", fr: f[n].fr }]));
+    }
     const m = await cartes(noms, garde);
     await francais([...m.values()].filter(Boolean).map((c) => c.name), garde);
     const res = {};
@@ -445,13 +571,20 @@
     const v = s && num ? await uneImpression(s, num, u.searchParams.get("lang") || "en").catch(() => null) : null;
     if (v && v.image) Object.assign(f, { image: v.image, petite: v.petite, art: v.art || f.art });
     return { ...f, version: versionCourte(v), gc: !!f.gc, peut_commander: f.peut_commander ?? null, partenaire: f.partenaire ?? null,
-      trop_cher: budget() > 0 && (f.prix || 0) > budget(), image_ed: null, versions: 0 };
+      trop_cher: budget() > 0 && (f.prix || 0) > budget(), image_ed: null,
+      versions: etatBase.prete ? ((await message("impressionImage", [nom, null]).catch(() => null)) || {}).versions || 0 : 0 };
   }
 
   const budget = () => Number((window.REGLAGES || {}).budget) || 0;
   async function ecrire(u, b) {
     const p = u.pathname, m = p.match(/^\/api\/decks\/([^/]+)\/(modifier|achats|suggestions\/ecarter)$/);
     if (p === "/api/prix") return prixEtNoms(b.noms || []);
+    if (p === "/api/recherche/base") {                    // « Mettre à jour » : une nouvelle base, même sur les données mobiles
+      const c = etatBase.construction;
+      Object.assign(c, { actif: true, etape: "Recherche d'une nouvelle base", fait: 0, total: 0, unite: "", erreur: "" });
+      nouvelleBase(true).catch((e) => { c.erreur = e instanceof TypeError ? "Pas de réseau." : e.message; }).finally(() => { c.actif = false; });
+      return copie(etatBase);
+    }
     if (!(await fichier("index.json.gz"))) throw Object.assign(new Error("Tes decks ne sont pas encore arrivés."), { statut: 503 });
     if (p === "/api/decks") return creerDeck(b);
     const r = p.match(/^\/api\/decks\/([^/]+)\/(renommer|supprimer)$/);
@@ -902,7 +1035,18 @@
   }
 
   // ------------------------------------------------------------------ démarrage
+  // la base de cartes : celle gardée ici, puis la nouvelle si elle a changé ; la première fois, hors données mobiles
+  function preparerBase() {
+    setTimeout(async () => {
+      try {
+        if (await BD.lire("@base").catch(() => null)) await laBase().then(() => nouvelleBase());
+        else if (!mobile()) await laBase();
+      } catch (_) { /* pas de réseau : elle arrivera plus tard */ }
+    }, 1500);
+  }
+
   async function demarrer() {
+    preparerBase();
     if (!acces) return window.route && route();
     bandeauInstaller();
     envoyer().catch(() => {});                             // ce qui n'était pas parti (hors ligne)
