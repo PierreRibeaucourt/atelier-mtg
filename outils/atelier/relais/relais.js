@@ -1,5 +1,5 @@
 // Relais de l'Atelier MTG sur téléphone : GitHub (connexion par appareil) et Commander Spellbook refusent les pages web
-// (pas de CORS). Le relais transmet seulement ces quatre demandes, pour l'appli atelier-mtg.github.io. Aucun secret :
+// (pas de CORS). Le relais transmet seulement ces cinq demandes, pour l'appli atelier-mtg.github.io. Aucun secret :
 // l'identifiant de l'application GitHub est public, et le jeton obtenu repart aussitôt vers le téléphone, sans être gardé.
 const ORIGINES = ["https://atelier-mtg.github.io", "http://127.0.0.1:5078"];
 const CLIENT_ID = "Ov23li9fE6JyGKnCmR3L";
@@ -39,6 +39,13 @@ export default {
         if (!code || code.length > 100) return reponse('{"erreur":"code manquant"}', 400, origine);
         return reponse(...await github("https://github.com/login/oauth/access_token",
           { client_id: CLIENT_ID, device_code: code, grant_type: "urn:ietf:params:oauth:grant-type:device_code" }), origine);
+      }
+      if (chemin === "/spellbook/variants") {               // les combos d'une carte : {q} (syntaxe de recherche de Spellbook)
+        const q = String(JSON.parse(corps || "{}").q || "");
+        if (!q || q.length > 300) return reponse('{"erreur":"recherche manquante"}', 400, origine);
+        const r = await fetch(SPELLBOOK + "variants/?" + new URLSearchParams({ q, limit: "60" }),
+          { headers: { "Accept": "application/json", "User-Agent": "atelier-mtg" } });
+        return reponse(await r.text(), r.status, origine);
       }
       const sb = chemin.match(/^\/spellbook\/(find-my-combos|estimate-bracket)$/);
       if (sb) {

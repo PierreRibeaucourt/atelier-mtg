@@ -155,6 +155,14 @@
     if (p === "/api/recherche/tags") return demander("suggestions", u.searchParams.get("q") || "");
     if (p === "/api/recherche/noms") { pret(); return message("noms", [u.searchParams.get("q") || "", await dansDeck(u.searchParams.get("deck")), 8]); }
     if (p === "/api/recherche-cartes") return decksAvecCarte(u.searchParams.get("q") || "");
+    // Commander Spellbook, par le relais : les combos d'une carte ; sans PC, le bracket et les combos du deck à jour
+    const sbm = p.match(/^\/api\/decks\/([^/]+)\/(bracket|combos|combos\/carte)$/);
+    if (sbm && sbm[2] === "combos/carte") return combosCarte(decodeURIComponent(sbm[1]), u);
+    if (sbm && local) {
+      const id = decodeURIComponent(sbm[1]), r = await assurerSpellbook(id, u.searchParams.get("force") === "1");
+      const d = await fichier("decks/" + id), v = d && d.api[`/api/decks/${id}/${sbm[2]}`];
+      if (v) return { ...copie(v), ...(r.erreur ? (sbm[2] === "bracket" ? { spellbook_erreur: r.erreur } : { erreur: r.erreur }) : {}) };
+    }
     const index = await fichier("index.json.gz");
     if (!index) throw Object.assign(new Error("Tes decks ne sont pas encore arrivés."), { statut: 503 });
     if (p === "/api/version") return { version: index.version, disponible: null };
@@ -989,17 +997,107 @@
         return v || (etatBase.prete ? await message("impression", [nom, ed.set, ed.num]).catch(() => null) : null)
           || await uneImpression(ed.set, ed.num, "en").catch(() => null);
       },
-      suggestions: async (entrees, refus) => {
+      suggestions: async (entrees, refus, combos = {}) => {
         const cl = Object.fromEntries(MOTEUR.lireClasseur(f["Classeur/classeur.txt"] || "").cartes);
-        return etatBase.prete ? message("suggerer", [entrees, refus, cl, budget(), !!(window.REGLAGES || {}).sans_ub_suggestions])
+        return etatBase.prete ? message("suggerer", [entrees, refus, cl, budget(), !!(window.REGLAGES || {}).sans_ub_suggestions, combos])
           .catch(() => ({ cartes: [], ecartees: refus })) : { cartes: [], ecartees: refus };
       },
+      spellbook: spellbookConnu,
       budget: budget(),
       categories: PAGES.categories(f),
     };
   }
-  // les pages des decks touchés (tous si touches est vide), puis l'accueil, rangées comme celles du PC
-  async function recalculer(d, touches = null) {
+  // ------------------------------------------------------------------ Commander Spellbook, par le relais (bracket.spellbook)
+  // Spellbook et la connexion GitHub refusent les pages web : un petit relais sans secret (outils/atelier/relais) les transmet.
+  const RELAIS = "https://relais.atelier-mtg.workers.dev";
+  async function relais(chemin, corps, ms = 60000) {
+    if (navigator.onLine === false) throw new Error("pas de réseau");
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms);
+    try {
+      const r = await fetch(RELAIS + chemin, { method: "POST", body: JSON.stringify(corps), headers: { "Content-Type": "application/json" }, signal: ctl.signal });
+      if (!r.ok) throw new Error(`erreur ${r.status}`);
+      return await r.json();
+    } catch (e) {
+      throw new Error(e.name === "AbortError" ? "trop long" : e instanceof TypeError ? "pas de réseau" : e.message);
+    } finally { clearTimeout(t); }
+  }
+  // les analyses gardées (@spellbook) : {analyses: {clé de la liste: analyse}, dernier: {deck: clé}}, comme cache_spellbook.json
+  const SB = "@spellbook";
+  const lesAnalyses = async () => (await BD.lire(SB).catch(() => null)) || { analyses: {}, dernier: {} };
+  async function cleListe(corps) {
+    const h = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(JSON.stringify(corps)));
+    return [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+  // sans réseau : l'analyse de la liste actuelle (a_jour), sinon la dernière du deck (bracket.spellbook_connu)
+  async function spellbookConnu(id, entrees) {
+    const c = await lesAnalyses(), k = await cleListe(PAGES.corpsSpellbook(entrees));
+    return c.analyses[k] ? { sb: c.analyses[k], a_jour: true } : { sb: c.analyses[c.dernier[id]] || null, a_jour: false };
+  }
+  async function analyserSpellbook(id, entrees) {
+    const corps = PAGES.corpsSpellbook(entrees), k = await cleListe(corps);
+    const [est, fmc] = await Promise.all([relais("/spellbook/estimate-bracket", corps), relais("/spellbook/find-my-combos", corps)]);
+    const res = PAGES.analyse(est, fmc.results || {}, entrees);
+    const c = await lesAnalyses();
+    c.analyses[k] = res;
+    c.dernier[id] = k;
+    const gardees = new Set(Object.values(c.dernier));          // les 40 plus récentes, et la dernière de chaque deck
+    for (const [x] of Object.entries(c.analyses).filter(([x]) => !gardees.has(x)).sort((a, b) => b[1].date - a[1].date).slice(40)) delete c.analyses[x];
+    await BD.ecrire(SB, c);
+  }
+  // sans PC : la liste actuelle du deck analysée par Spellbook, puis sa page refaite. {fait, erreur}
+  // fond : pas de nouvel essai avant 10 min après un échec (à la demande, on réessaie toujours)
+  const analyses = new Map(), echecs = new Map();
+  function assurerSpellbook(id, force = false, fond = false) {
+    if (analyses.has(id)) return analyses.get(id);
+    const p = (async () => {
+      const texte = (await depot()).fichiers[`${id}/archidekt.txt`];
+      if (texte == null) return { fait: false, erreur: null };
+      const entrees = MOTEUR.lire(texte);
+      if (!force && (await spellbookConnu(id, entrees)).a_jour) return { fait: false, erreur: null };
+      if (fond && Date.now() - (echecs.get(id) || 0) < 600000) return { fait: false, erreur: "pas de réseau" };
+      try { await analyserSpellbook(id, entrees); echecs.delete(id); }
+      catch (e) { echecs.set(id, Date.now()); return { fait: false, erreur: e.message }; }
+      await recalculer(null, new Set([id]));
+      return { fait: true, erreur: null };
+    })().finally(() => analyses.delete(id));
+    analyses.set(id, p);
+    return p;
+  }
+  // en fond, les decks pas encore analysés ; la page se refait si elle montre ce deck (sauf fenêtre ouverte)
+  async function spellbookEnFond(ids) {
+    for (const id of ids) {
+      const r = await assurerSpellbook(id, false, true).catch(() => ({}));
+      const h = location.hash, deck = `#/deck/${encodeURIComponent(id)}`;
+      if (r.fait && window.route && T.pret && document.querySelector("#modale")?.hidden !== false
+          && (h === "#/" || h === "" || h === `${deck}/bracket` || h === `${deck}/combos`)) route();
+    }
+  }
+  // l'onglet Combos, vue « une carte » (combos.combos_carte) : les combos de Spellbook avec cette carte
+  async function combosCarte(id, u) {
+    const nom = u.searchParams.get("nom") || "", page = await api(`/api/decks/${encodeURIComponent(id)}`);
+    const jeu = page.cartes.filter((c) => c.cat !== "Maybeboard"), cmds = jeu.filter((c) => c.cat === "Commander");
+    const ident = cmds.length ? new Set(cmds.flatMap((c) => (c.info && c.info.couleurs) || [])) : null;
+    const filtre = u.searchParams.get("couleurs") !== "0" ? ident : null;
+    let res = [], erreur = null;
+    try {
+      const q = `card:"${cle(nom)}" legal:commander` + (filtre ? ` ci<=${[...filtre].sort().join("").toLowerCase() || "c"}` : "");
+      res = (await relais("/spellbook/variants", { q })).results || [];
+    } catch (e) { erreur = `Commander Spellbook ne répond pas : ${e.message}`; }
+    const noms = [...new Set(res.flatMap((c) => (c.uses || []).map((x) => x.card.name)))];
+    const I = noms.length ? await fiches(noms).catch(() => ({})) : {};
+    return PAGES.combosCarte(nom, res, I, PAGES.dansDe(jeu.map((c) => c.nom)),
+      filtre, new Set(page.cartes.filter((c) => c.cat === "Maybeboard").map((c) => c.nom)), erreur);
+  }
+
+  // les pages des decks touchés (tous si touches est vide), puis l'accueil, rangées comme celles du PC ; une seule à la
+  // fois (d vide : les fichiers du téléphone au moment du calcul)
+  let calculs = Promise.resolve();
+  function recalculer(d, touches = null) {
+    const p = calculs.then(async () => recalculerMaintenant(d || await depot(), touches));
+    calculs = p.catch(() => {});
+    return p;
+  }
+  async function recalculerMaintenant(d, touches) {
     const f = d.fichiers, o = outilsPages(f), ids = PAGES.decksDe(f);
     const ancien = (await fichier("index.json.gz")) || { decks: {} }, pages = {}, decks = {};
     for (const id of ids) {
@@ -1017,6 +1115,7 @@
       reglages: window.REGLAGES, decks, api, source: null, branche: null, local: true } });
     memoire.clear();
     fusion = null;
+    setTimeout(() => spellbookEnFond(touches ? [...touches] : ids), 1000);
   }
   // « Commencer ici » : un Atelier sur ce téléphone, sans PC ni compte
   async function commencerIci() {
@@ -1225,6 +1324,7 @@
       try { await synchroniser(); T.erreur = ""; } catch (err) { T.erreur = err.message; }
       T.pret = true;
       if (window.route) route();
+      setTimeout(async () => spellbookEnFond(PAGES.decksDe((await depot()).fichiers)), 3000);
       return;
     }
     if (!acces) return window.route && route();

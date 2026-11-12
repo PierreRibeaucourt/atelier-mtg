@@ -541,7 +541,7 @@ function pertinences(entrees) {
   return res;
 }
 // l'onglet Suggestions : refus (« Ne plus proposer »), classeur {nom: exemplaires}, budget (0 : aucun)
-function suggerer(entrees, refus, classeur, budget, sansUb) {
+function suggerer(entrees, refus, classeur, budget, sansUb, combos = {}) {
   const a = analyse(entrees);
   if (!a.cmd.length && !a.jeu.length) return { cartes: [], ecartees: [...refus].sort() };
   fonctionsCartes([]);                               // les familles du gabarit, pour le filtre « Fonction »
@@ -556,13 +556,18 @@ function suggerer(entrees, refus, classeur, budget, sansUb) {
   const groupes = new Map();
   const tries = trier([...theme.keys()], (k) => -theme.get(k) * (0.6 + 0.4 * popularite(B.cartes[k])), false).slice(0, PAR_THEME);
   for (const k of tries) if (theme.get(k) >= 0.2) groupes.set(k, new Set(["theme"]));
+  const parNom = new Map(candidats.map((k) => [B.cartes[k].n, k]));
+  for (const nom of Object.keys(combos)) {            // combos à une carte près (Commander Spellbook)
+    const k = parNom.get(nom);
+    if (k !== undefined) (groupes.get(k) || groupes.set(k, new Set()).get(k)).add("combos");
+  }
   for (const k of candidats) {
     if ((classeur[B.cartes[k].n] || 0) > 0 && (groupes.has(k) || (theme.get(k) || 0) >= 0.1)) (groupes.get(k) || groupes.set(k, new Set()).get(k)).add("classeur");
   }
   const cartes = [];
   for (const [k, g] of groupes) {
-    const x = B.cartes[k], note = Math.min(1, 0.65 * (theme.get(k) || 0) + 0.35 * popularite(x));
-    cartes.push({ ...sortie(x, {}), note: Math.round(note * 1000) / 1000, groupes: [...g].sort(), combos: [], classeur: classeur[x.n] || 0,
+    const x = B.cartes[k], note = Math.min(1, 0.65 * (theme.get(k) || 0) + 0.35 * popularite(x) + (g.has("combos") ? 0.2 : 0));
+    cartes.push({ ...sortie(x, {}), note: Math.round(note * 1000) / 1000, groupes: [...g].sort(), combos: combos[x.n] || [], classeur: classeur[x.n] || 0,
       ub: ub(x), fonctions: B.familles.filter(([, tags]) => aTag(x, tags)).map(([lib]) => lib) });
   }
   return { cartes: trier(cartes, (s) => -s.note, false), ecartees: [...non].sort() };

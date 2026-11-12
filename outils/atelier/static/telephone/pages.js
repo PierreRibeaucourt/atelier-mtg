@@ -5,7 +5,7 @@
 //
 // o : ce que fournit telephone.js : fiches(noms) → {nom: fiche}, fonctions(noms) → {nom: [familles, fonctions]},
 // impressionImage(nom, set), version(nom, ed, langue) → impression ou null, gcListe() → noms, suggestions(entrees,
-// écartées), budget, categories.
+// écartées, combos), spellbook(deck, entrees) → {sb: analyse de Commander Spellbook ou null, a_jour}, budget, categories.
 window.PAGES = (() => {
   const FORMATS = ["archidekt", "moxfield", "arena", "mtgo", "simple", "fr"];
   const TUTEUR = /search your library for (?:a|an|up to \w+|two|three) (?![\w ,-]*\b(?:basic|lands?|plains|island|swamp|mountain|forest)\b)[\w ,-]*?cards?/i;
@@ -83,30 +83,148 @@ window.PAGES = (() => {
     return res.sort((a, b) => b.date - a.date);
   }
 
-  // ------------------------------------------------------------------ bracket (bracket.bracket, sans Commander Spellbook)
-  function bracket(entrees, fiches, gcListe) {
-    const noms = entrees.filter((e) => MOTEUR.categorie(e) !== "Maybeboard").map((e) => e.nom);
+  // ------------------------------------------------------------------ Commander Spellbook (bracket.py, combos.py), par le relais
+  const TAGS = { R: [4, "Ruthless"], S: [3, "Spicy"], P: [3, "Powerful"], O: [2, "Oddball"], C: [2, "Core"], E: [1, "Exhibition"], B: [null, "carte bannie"] };
+  const tagDe = (t) => TAGS[t] || [null, t ?? null];
+  const PHRASES = {
+    "target opponent loses the game": "Un adversaire ciblé perd la partie", "each opponent loses the game": "Chaque adversaire perd la partie",
+    "win the game": "Vous gagnez la partie", "lock": "Verrou",
+    "you control one opponent on each of their turns": "Vous contrôlez un adversaire pendant chacun de ses tours",
+    "infinitely large creature until end of turn": "Créature infiniment grande jusqu'à la fin du tour", "infinite turns": "Tours supplémentaires à l'infini",
+  };
+  const NOMS = {
+    "damage": "dégâts", "damage to all players": "dégâts à tous les joueurs", "damage to creatures": "dégâts aux créatures",
+    "damage to each opponent": "dégâts à chaque adversaire",
+    "lifegain": "gain de vie", "lifeloss": "perte de vie", "lifeloss for all players": "perte de vie pour tous les joueurs",
+    "lifegain triggers": "déclenchements de gain de vie", "lifeloss triggers": "déclenchements de perte de vie",
+    "creature etb": "arrivées de créatures", "creature ltb": "départs de créatures", "etb": "arrivées", "ltb": "départs",
+    "death triggers": "déclenchements de mort", "creature sacrifice triggers": "sacrifices de créatures",
+    "sacrifice triggers": "sacrifices", "draw triggers": "déclenchements de pioche", "card draw": "pioche",
+    "card draw for each opponent": "pioche pour chaque adversaire", "draw triggers for each opponent": "déclenchements de pioche adverses",
+    "looting": "pioche-défausse", "self-discard triggers": "défausses", "discard triggers": "défausses",
+    "storm count": "compteur de tempête", "blinking of permanents": "clignotements de permanents",
+    "mana": "mana", "colored mana": "mana coloré", "colorless mana": "mana incolore", "red mana": "mana rouge",
+    "black mana": "mana noir", "blue mana": "mana bleu", "white mana": "mana blanc", "green mana": "mana vert",
+    "mana lands you control can produce": "mana de vos terrains", "mana creatures you control can produce": "mana de vos créatures",
+    "magecraft triggers": "déclenchements de magecraft", "cast triggers": "déclenchements de lancement",
+    "+1/+1 counters on a creature": "marqueurs +1/+1 sur une créature", "creature tokens": "jetons de créature",
+    "tokens": "jetons", "mill": "meule", "self-mill": "meule de votre bibliothèque", "untap of creatures": "dégagements de créatures",
+    "untap of permanents": "dégagements de permanents", "untap of creatures you control": "dégagements de vos créatures",
+    "creature tokens with haste": "jetons de créature avec la célérité", "combat phases": "phases de combat", "landfall triggers": "déclenchements d'atterrissage",
+    "attack triggers": "déclenchements d'attaque", "spells cast": "sorts lancés",
+  };
+  const CLASSES = { victoire: "Victoire", verrou: "Verrou", mana: "Mana infini", pioche: "Pioche", boucle: "Boucle infinie", valeur: "Valeur", menace: "Menace", syn: "Synergie" };
+  function enFrancais(feature) {
+    const b = feature.trim().toLowerCase();
+    if (b in PHRASES) return PHRASES[b];
+    const m = b.match(/^(near-)?infinite\s+(.+)$/);
+    if (m && m[2] in NOMS) { const n = NOMS[m[2]]; return n[0].toUpperCase() + n.slice(1) + (m[1] ? " presque à l'infini" : " à l'infini"); }
+    return feature.trim();
+  }
+  function classe(produits) {
+    const p = produits.map((x) => x.toLowerCase());
+    const a = (mots, sauf = []) => p.some((x) => mots.some((m) => x.includes(m)) && !sauf.some((s) => x.includes(s)));
+    if (a(["loses the game", "win the game", "poison", "combat phases"]) || a(["damage", "lifeloss", "mill"], ["to creatures", "self-mill"])) return "victoire";
+    if (a(["lock", "control one opponent", "infinite turns"])) return "verrou";
+    if (a(["mana"], ["magecraft"])) return "mana";
+    if (a(["card draw", "looting"])) return "pioche";
+    if (a(["infinite"])) return "boucle";
+    return "valeur";
+  }
+  // une combo de Spellbook (bracket._combo)
+  function comboSb(c, dans) {
+    const noms = (c.uses || []).map((u) => u.card.name), [b, tag] = tagDe(c.bracketTag);
+    return { id: c.id || "", cartes: noms, manque: noms.filter((n) => !dans.has(n)),
+      autres: (c.requires || []).map((r) => r.template.name + ((r.quantity || 1) > 1 ? ` (×${r.quantity})` : "")),
+      produit: (c.produces || []).map((x) => x.feature.name).slice(0, 8), description: c.description || "",
+      prerequis: c.easyPrerequisites || "", prerequis2: c.notablePrerequisites || "", mana: c.manaNeeded || "",
+      popularite: c.popularity ?? null, identite: c.identity || "", bracket: b, tag, lien: c.id ? `https://commanderspellbook.com/combo/${c.id}/` : "" };
+  }
+  // au format commun de l'onglet Combos (combos._spellbook)
+  const enCommun = (c) => { const k = classe(c.produit); return { ...c, source: "spellbook", classe: k, classe_lib: CLASSES[k], resultats: c.produit.map(enFrancais) }; };
+  const jeuDe = (entrees) => entrees.filter((e) => MOTEUR.categorie(e) !== "Maybeboard");
+  const dansDe = (noms) => new Set(noms.flatMap((n) => [n, n.split(" // ")[0]]));
+  // ce qu'on envoie à Spellbook (bracket._liste)
+  function corpsSpellbook(entrees) {
+    const jeu = jeuDe(entrees);
+    return { main: jeu.filter((e) => MOTEUR.categorie(e) !== "Commander").map((e) => ({ card: e.nom, quantity: e.n })),
+      commanders: jeu.filter((e) => MOTEUR.categorie(e) === "Commander").map((e) => ({ card: e.nom, quantity: 1 })) };
+  }
+  // l'analyse d'une liste (bracket.spellbook) : estimate-bracket et find-my-combos
+  function analyse(est, fmc, entrees) {
+    const dans = dansDe(jeuDe(entrees).map((e) => e.nom)), [b, libelle] = tagDe(est.bracketTag);
+    const drapeau = (f) => (est.cards || []).filter((c) => c[f]).map((c) => c.card.name);
+    return { date: Date.now() / 1000, tag: est.bracketTag ?? null, bracket: b, libelle, banned: drapeau("banned"), gameChanger: drapeau("gameChanger"),
+      massLandDenial: drapeau("massLandDenial"), extraTurn: drapeau("extraTurn"),
+      combos: (fmc.included || []).map((c) => comboSb(c, dans)), presque: (fmc.almostIncluded || []).map((c) => comboSb(c, dans)).slice(0, 80) };
+  }
+  function sansDoublons(liste) {                       // une même combo (mêmes cartes) : la plus populaire
+    const cle = (c) => c.cartes.map((n) => n.split(" // ")[0].toLowerCase()).sort().join("|"), garde = new Map();
+    for (const c of [...liste].sort((a, b) => (b.popularite || 0) - (a.popularite || 0))) if (!garde.has(cle(c))) garde.set(cle(c), c);
+    const retenues = new Set(garde.values());
+    return liste.filter((c) => retenues.has(c));
+  }
+  function avecFiches(liste, I, dans) {                // combos._fiches
+    for (const c of liste) {
+      c.fiches = c.cartes.map((n) => { const f = I[n] || {};
+        return { nom: n, fr: f.fr || "", image: f.image || "", prix: f.prix ?? null, couleurs: f.couleurs || [], dans: dans.has(n) || dans.has(n.split(" // ")[0]) }; });
+    }
+    return liste;
+  }
+  // l'onglet Combos, vue « le deck » (combos.combos_deck), sans MTGPics ni Claude
+  function combosDeck(sb, I, dans, erreur) {
+    const liste = avecFiches(sansDoublons((sb ? sb.combos : []).map(enCommun)), I, dans);
+    liste.sort((a, b) => (b.popularite || 0) - (a.popularite || 0));
+    return { combos: liste, synergies: { actif: false, resultat: null, erreur: "", a_jour: false }, erreur, mtgpics: null };
+  }
+  // vue « une carte » (combos.combos_carte) : resultats de /variants de Spellbook
+  function combosCarte(carte, resultats, I, dans, ident, maybe, erreur) {
+    let liste = avecFiches(sansDoublons(resultats.map((c) => enCommun(comboSb(c, new Set())))), I, dans);
+    if (ident) liste = liste.filter((c) => c.fiches.every((f) => f.couleurs.every((x) => ident.has(x))));
+    for (const c of liste) {
+      c.manque = c.fiches.filter((f) => !f.dans && f.nom !== carte).map((f) => f.nom);
+      c.maybe = c.manque.filter((n) => maybe.has(n));
+    }
+    liste.sort((a, b) => a.manque.length - b.manque.length || (b.popularite || 0) - (a.popularite || 0));
+    return { carte, combos: liste, erreur, mtgpics: null, couleurs: ident ? [...ident].sort().join("") : null };
+  }
+  // les suggestions « combos » : une carte manque (suggestions._combos)
+  function presque(sb) {
+    const res = {};
+    for (const c of (sb && sb.presque) || []) if (c.manque.length === 1) (res[c.manque[0]] = res[c.manque[0]] || []).push(c);
+    return res;
+  }
+
+  // ------------------------------------------------------------------ bracket (bracket.bracket) ; sp : {sb, a_jour, erreur}
+  function bracket(entrees, fiches, gcListe, sp = {}) {
+    const noms = jeuDe(entrees).map((e) => e.nom), sb = sp.sb || null;
     const texte = (n) => (fiches[n] || {}).texte || "";
     const gc = noms.filter((n) => (fiches[n] || {}).gc);
     const tuteurs = noms.filter((n) => TUTEUR.test(texte(n).replace(/\([^)]*\)/g, "")));
-    const tours = [...new Set(noms.filter((n) => /extra turn/i.test(texte(n))))].sort();
-    const raisons = [];
-    let estime;
-    if (gc.length > 3 || tours.length > 2) {
+    const mld = sb ? sb.massLandDenial : [];
+    const tours = [...new Set([...noms.filter((n) => /extra turn/i.test(texte(n))), ...(sb ? sb.extraTurn : [])])].sort();
+    const combos2 = (sb ? sb.combos : []).filter((c) => c.cartes.length <= 2);
+    let raisons = [], estime;
+    if (sb && sb.banned.length) {
+      estime = null;
+      raisons = [`carte bannie en Commander : ${sb.banned.join(", ")}`];
+    } else if (gc.length > 3 || mld.length || tours.length > 2) {
       estime = 4;
       if (gc.length > 3) raisons.push(`${gc.length} Game Changers (3 au plus en bracket 3)`);
+      if (mld.length) raisons.push("destruction massive de terrains : " + mld.join(", "));
       if (tours.length > 2) raisons.push(`${tours.length} cartes de tours supplémentaires`);
-    } else if (gc.length) {
+    } else if (gc.length || combos2.length) {
       estime = 3;
-      raisons.push(`${gc.length} Game Changer${gc.length > 1 ? "s" : ""} : ${gc.join(", ")}`);
+      if (gc.length) raisons.push(`${gc.length} Game Changer${gc.length > 1 ? "s" : ""} : ${gc.join(", ")}`);
+      if (combos2.length) raisons.push(`${combos2.length} combo${combos2.length > 1 ? "s" : ""} infinie${combos2.length > 1 ? "s" : ""} à 2 cartes : à ne pas sortir en début de partie`);
     } else {
       estime = 2;
       raisons.push("aucun Game Changer, aucune combo infinie à 2 cartes : bracket 2 (ou 1 si le deck est très décontracté)");
     }
-    if (tours.length && estime < 4) raisons.push(`tours supplémentaires : ${tours.join(", ")} (peu, jamais enchaînés)`);
+    if (tours.length && estime && estime < 4) raisons.push(`tours supplémentaires : ${tours.join(", ")} (peu, jamais enchaînés)`);
     if (tuteurs.length > 3) raisons.push(`${tuteurs.length} tuteurs : beaucoup pour un bracket 1-2`);
-    return { estime, raisons, gc, gc_liste: gcListe, gc_maj: null, tuteurs, tours, mld: [], spellbook: null,
-      spellbook_erreur: "Commander Spellbook : pas encore depuis le téléphone.", spellbook_a_jour: false };
+    return { estime, raisons, gc, gc_liste: gcListe, gc_maj: null, tuteurs, tours, mld, spellbook: sb,
+      spellbook_erreur: sp.erreur || null, spellbook_a_jour: !!sp.a_jour };
   }
 
   // ------------------------------------------------------------------ la page d'un deck, et tout ce qu'elle demande
@@ -130,17 +248,24 @@ window.PAGES = (() => {
       cartes.push({ nom: n, info: fi, fonctions: fam, fonctions_detail: det, versions: ii ? ii.versions : 0,
         image_ed: ii && ii.edition ? { edition: ii.edition, annee: ii.annee, lang: fi.imp.lang || "en" } : null });
     }
-    const page = MOTEUR.page(id, entrees, { cartes, categories: o.categories, bracket: null, bracket_raisons: [],
+    // Commander Spellbook : sa dernière analyse du deck (o.spellbook), faite par le relais ; l'en-tête montre le bracket
+    // seulement une fois le deck analysé, comme sur le PC (app.bracket_resume)
+    const sp = o.spellbook ? await o.spellbook(id, entrees) : {};
+    const br = bracket(entrees, fiches, await o.gcListe(), sp);
+    const page = MOTEUR.page(id, entrees, { cartes, categories: o.categories, bracket: sp.sb ? br.estime : null, bracket_raisons: sp.sb ? br.raisons : [],
       note: json(f[`${id}/deck.json`], {}).note || "", art: "", image_cmd: "" }, {}, o.budget, vis);
     page.modifie = o.modifie;
     api[R] = page;
     for (const fmt of FORMATS) api[`${R}/export?format=${fmt}`] = exporter(entrees, fmt, fiches);
     const vs = versions(id, f, entrees);
     api[`${R}/versions`] = vs;
-    api[`${R}/bracket`] = bracket(entrees, fiches, await o.gcListe());
+    api[`${R}/bracket`] = br;
+    const nomsCb = [...new Set(((sp.sb && sp.sb.combos) || []).flatMap((c) => c.cartes))];
+    const Icb = { ...(await o.fiches(nomsCb.filter((n) => !fiches[n]))), ...fiches };
+    api[`${R}/combos`] = combosDeck(sp.sb, Icb, dansDe(jeuDe(entrees).map((e) => e.nom)), null);
     const achats = json(f[`${id}/achats.json`], null);
     api[`${R}/achats`] = { possedees: achats ? achats.possedees || {} : Object.fromEntries([...compter(nomsJeu(entrees))]) };
-    api[`${R}/suggestions`] = await o.suggestions(entrees, json(f[`${id}/suggestions.json`], {}).ecartees || []);
+    api[`${R}/suggestions`] = await o.suggestions(entrees, json(f[`${id}/suggestions.json`], {}).ecartees || [], presque(sp.sb));
     // comparer deux versions dans la page : chaque liste, et les fiches de toutes leurs cartes (partage.capturer)
     const listes = {};
     for (const rel of ["", ...vs.map((v) => v.fichier)]) {
@@ -197,5 +322,5 @@ window.PAGES = (() => {
   }
   const decksDe = (f) => [...new Set(Object.keys(f).filter((r) => /^Deck [^/]+\/archidekt\.txt$/.test(r)).map((r) => r.split("/")[0]))];
 
-  return { deck, index, categories, decksDe, exporter, versions, bracket, libelle };
+  return { deck, index, categories, decksDe, exporter, versions, bracket, libelle, corpsSpellbook, analyse, combosCarte, dansDe };
 })();
