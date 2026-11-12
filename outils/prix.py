@@ -15,7 +15,7 @@ import urllib.request
 
 import reglages
 
-ENTETES = {"User-Agent": "MTG-assistant-perso/1.0", "Accept": "application/json"}
+ENTETES = {"User-Agent": "atelier-mtg", "Accept": "application/json"}
 BUDGET = reglages.budget()  # seuil par carte (reglages.json, 5 € par défaut)
 
 

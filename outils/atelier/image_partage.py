@@ -30,7 +30,7 @@ def _image(url):
     if not url:
         return None
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "MTG-assistant-perso/1.0"})
+        req = urllib.request.Request(url, headers={"User-Agent": "atelier-mtg"})
         return Image.open(io.BytesIO(urllib.request.urlopen(req, timeout=30).read())).convert("RGB")
     except Exception:                                       # pas de réseau : l'image se fait sans
         return None
