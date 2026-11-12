@@ -229,10 +229,43 @@
 
   // ------------------------------------------------------------------ l'appli installée sur l'écran d'accueil
   const installee = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
-  const iphone = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const iphone = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   let invite = null;                                   // Android : la demande d'installation du navigateur
-  addEventListener("beforeinstallprompt", (ev) => { ev.preventDefault(); invite = ev; });
+  addEventListener("beforeinstallprompt", (ev) => { ev.preventDefault(); invite = ev; bandeauInstaller(); });
+  addEventListener("appinstalled", () => { const b = document.getElementById("tel-bandeau"); if (b) b.remove(); });
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+
+  // ouverte dans le navigateur (par le QR code) : un bandeau en bas propose de l'installer, tant qu'elle ne l'est pas.
+  // Android : le bouton ouvre la demande du navigateur ; iPhone : la marche à suivre (Safari n'a pas de bouton).
+  const PLUS_TARD = "telephone-installer-plus-tard";
+  function bandeauInstaller() {
+    if (installee() || !acces || !document.body) return;
+    if (Date.now() - Number(lireLocal(PLUS_TARD) || 0) < 3 * 86400 * 1000) return;
+    let b = document.getElementById("tel-bandeau");
+    if (!b) {
+      b = document.createElement("div");
+      b.id = "tel-bandeau";
+      b.className = "tel-bandeau";
+      b.setAttribute("role", "region");
+      b.setAttribute("aria-label", "Installer l'appli");
+      document.body.appendChild(b);
+    }
+    b.innerHTML = `<div class="tel-bandeau-texte"><strong>Installe l'appli</strong>
+        <span>${invite ? "Elle s'ouvrira depuis son icône, même sans réseau."
+          : iphone ? "Touche Partager <span class=\"tel-partager\" aria-hidden=\"true\">⬆</span>, puis «&nbsp;Sur l'écran d'accueil&nbsp;». Ouvre-la ensuite depuis son icône et scanne à nouveau le QR code."
+          : "Menu du navigateur ⋮, puis «&nbsp;Installer l'application&nbsp;» ou «&nbsp;Ajouter à l'écran d'accueil&nbsp;»."}</span></div>
+      <div class="tel-bandeau-boutons">
+        ${invite ? `<button class="btn btn-accent btn-petit" id="tel-installer-oui">Installer</button>` : ""}
+        <button class="btn btn-discret btn-petit" id="tel-installer-non">Plus tard</button></div>`;
+    const oui = b.querySelector("#tel-installer-oui");
+    if (oui) oui.onclick = async () => {
+      invite.prompt();
+      const r = await invite.userChoice.catch(() => ({}));
+      invite = null;
+      if (r.outcome === "accepted") b.remove(); else bandeauInstaller();
+    };
+    b.querySelector("#tel-installer-non").onclick = () => { ecrireLocal(PLUS_TARD, String(Date.now())); b.remove(); };
+  }
 
   const e = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   // l'écran d'attente : relier le téléphone, ou recevoir les decks la première fois
@@ -275,6 +308,7 @@
   // ------------------------------------------------------------------ démarrage
   async function demarrer() {
     if (!acces) return window.route && route();
+    bandeauInstaller();
     if (!T.pret && await fichier("index.json.gz")) {   // ce qu'on a déjà : tout de suite, même sans réseau
       T.pret = true;
       if (window.route) route();
