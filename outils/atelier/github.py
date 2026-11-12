@@ -144,7 +144,10 @@ def _cause(e):
     r = getattr(e, "reason", e)
     texte = str(r)
     if isinstance(r, ssl.SSLCertVerificationError) or "CERTIFICATE" in texte.upper():
-        return "certificat refusé. Vérifie la date et l'heure du PC, ou ton antivirus."
+        # date hors de la période de validité : 9 et 10 pour OpenSSL, CERT_E_EXPIRED pour Windows (truststore)
+        if getattr(r, "verify_code", None) in (9, 10, 0x800B0101) or "expired" in texte or "not yet valid" in texte:
+            return "certificat refusé : la date ou l'heure du PC est fausse."
+        return "certificat refusé. Un antivirus ou un proxy intercepte peut-être la connexion."
     if isinstance(r, ssl.SSLError):
         return "connexion sécurisée impossible. Un antivirus ou un pare-feu bloque peut-être GitHub."
     if isinstance(r, socket.gaierror):

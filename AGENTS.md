@@ -22,7 +22,7 @@ Parle à la personne en français, simplement, sans jargon. Fais tout toi-même 
    - Veut-elle partager ses decks en ligne, avec un lien à envoyer ? Il faut alors un compte GitHub (gratuit).
    - Veut-elle discuter avec Claude depuis l'Atelier ? Il faut alors un abonnement Claude.
 4. **Lancer l'installeur** depuis la racine du dépôt : `python installer.py --budget 5` (avec `py` ou `python3` selon le système). Ajoute `--github <compte>` si elle partage ses decks.
-   - L'installeur crée l'environnement `.venv` et y installe les dépendances (`requirements.txt` : Flask, Pillow, pystray).
+   - L'installeur crée l'environnement `.venv` et y installe les dépendances (`requirements.txt` : Flask, Pillow, pystray, truststore).
    - Il écrit `reglages.json`, vérifie que l'Atelier démarre et crée le raccourci « Atelier MTG » sur le bureau.
    - Il signale enfin ce qui manque pour les fonctions facultatives.
    - On peut le relancer sans risque. Lis sa sortie : s'il affiche « ÉCHEC », règle le problème (voir Dépannage), puis relance-le.
@@ -41,7 +41,7 @@ Testé sous Windows. macOS et Linux devraient marcher (Python et Flask sont mult
 
 ## Atelier installé par l'installeur Windows
 
-Un fichier `installation.json` à la racine le signale. L'installeur (Inno Setup, `installeur/atelier.iss`) met tout dans `%LOCALAPPDATA%\Programs\Atelier MTG`, sans droits d'administrateur : le code, un Python embarqué dans `python\` (avec Flask, Pillow et pystray), puis les decks, le classeur et les réglages que l'Atelier y crée, comme à la racine d'un dépôt. Raccourcis sur le bureau et dans le menu Démarrer ; désinstallation par Paramètres › Applications, qui demande avant d'effacer les decks.
+Un fichier `installation.json` à la racine le signale. L'installeur (Inno Setup, `installeur/atelier.iss`) met tout dans `%LOCALAPPDATA%\Programs\Atelier MTG`, sans droits d'administrateur : le code, un Python embarqué dans `python\` (avec Flask, Pillow, pystray et truststore), puis les decks, le classeur et les réglages que l'Atelier y crée, comme à la racine d'un dépôt. Raccourcis sur le bureau et dans le menu Démarrer ; désinstallation par Paramètres › Applications, qui demande avant d'effacer les decks.
 - Pas de git, pas de `.venv`, pas de pip : ne lance pas `installer.py`. Le Python à utiliser est `python\python.exe` ; dans la discussion, `python` y mène déjà. Son fichier `python312._pth` met `outils/` et `outils/atelier/` dans les chemins de Python.
 - Mises à jour : l'Atelier lit la dernière publication GitHub du dépôt (`installation.json` › `depot`) ; « Mettre à jour » télécharge son installeur et le lance sans fenêtre, puis l'Atelier redémarre. Journal : `%TEMP%\Atelier-MTG-mise-a-jour.log`. Si ça échoue, retélécharger l'installeur et le relancer suffit : il remplace le code et garde les decks.
 - Le partage des decks passe par la connexion à GitHub depuis l'Atelier (voir « Partager des decks ») : pas besoin de git.

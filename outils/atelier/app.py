@@ -22,6 +22,14 @@ if sys.stdout is None or sys.stderr is None:
     _j = open(_log, "a" if os.path.exists(_log) and os.path.getsize(_log) < 1_000_000 else "w", encoding="utf-8", buffering=1)
     sys.stdout, sys.stderr = sys.stdout or _j, sys.stderr or _j
 sys.stdout.reconfigure(encoding="utf-8")
+# les certificats des sites (GitHub, Scryfall…) vérifiés par Windows, comme dans le navigateur. Python a sa propre liste
+# d'autorités, lue dans Windows : il lui manque celles que Windows ne télécharge qu'à la demande (un PC où l'on ne
+# navigue qu'avec Chrome ne les a jamais demandées), et GitHub était refusé (« certificat refusé ») sur certains PC.
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except Exception:                                  # pas encore installé (mise à jour par git) : la liste de Python
+    pass
 
 from flask import Flask, Response, jsonify, request, send_from_directory  # noqa: E402
 
