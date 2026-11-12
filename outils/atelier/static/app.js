@@ -139,6 +139,7 @@ const ICONES = {
   ouvrir: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>',
   telecharger: '<path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/>',
   nuage: '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
+  imprimer: '<path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/>',
   coche: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
   moins: '<path d="M5 12h14"/>',
   terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7.5 9.5 3 2.5-3 2.5M13 15h4"/>',
@@ -389,7 +390,8 @@ const APERCUS = new Map();                         // nom anglais -> promesse de
 const minuscules = (s) => s.toLowerCase().replace(/[’‘]/g, "'");
 const LETTRE = /[\p{L}\p{N}]/u;
 const SANS_CITE = "script, style, textarea, input, select, option, code, pre, svg, h1, h2, .fil, .nc, [data-apercu], [data-image], "
-  + "[data-survol], [data-survol-r], .fs-texte, .texte, .fc-tete, .fiche, .moteur, #apercu, #bulle, #fiche-survol, #toast, #menu, [contenteditable]";
+  + "[data-survol], [data-survol-r], .fs-texte, .texte, .fc-tete, .fiche, .moteur, #apercu, #bulle, #fiche-survol, #toast, #menu, [contenteditable], "
+  + ".px-carte";                                     // les proxies s'impriment : pas de liens soulignés
 
 function apercuCite(el) {
   const nom = el.dataset.apercu;
@@ -610,6 +612,8 @@ function majTitre() {
     t = ["Recherche", p.get("nom") && `« ${p.get("nom")} »`, (p.get("deck") || "").replace(/^Deck /, "")].filter(Boolean).join(" · ");
   } else if (parts[0] === "options") {
     t = "Options";
+  } else if (parts[0] === "proxies") {
+    t = "Proxies · " + (new URLSearchParams(qs || "").get("deck") || "").replace(/^Deck /, "");
   }
   document.title = t + " — Atelier MTG";
 }
@@ -623,8 +627,9 @@ async function route() {
   const parts = chemin.split("/");
   $("#lien-recherche").classList.toggle("actif", parts[0] === "recherche" && !new URLSearchParams(qs || "").get("deck"));   // pour un deck : son bandeau
   $("#lien-options").classList.toggle("actif", parts[0] === "options");
-  vue.classList.toggle("vue-large", parts[0] === "recherche" || parts[0] === "options");
+  vue.classList.toggle("vue-large", parts[0] === "recherche" || parts[0] === "options" || parts[0] === "proxies");
   vue.classList.remove("vue-pleine");                       // la page « C'est quoi » la remet : son en-tête prend toute la largeur
+  document.body.classList.toggle("impression", parts[0] === "proxies");   // à l'impression, rien d'autre que les feuilles
   try {
     if (PARTAGE && parts[0] === "a-propos" && PARTAGE.page !== "a-propos")                              // ancienne adresse
       location.replace(A_PROPOS + (parts[1] === "installation" ? "#installation" : ""));
@@ -636,6 +641,7 @@ async function route() {
     else if (PARTAGE && parts[0] === "deck" && parts[1]) location.replace(lienDeck(decodeURIComponent(parts[1])));
     else if (parts[0] === "recherche") await vueRecherche(new URLSearchParams(qs || ""));
     else if (!PARTAGE && parts[0] === "options") await vueOptions();
+    else if (!PARTAGE && parts[0] === "proxies") await vueProxies(new URLSearchParams(qs || ""));
     else if (parts[0] === "deck" && parts[1]) await vueDeck(decodeURIComponent(parts[1]), parts[2] || "liste", parts[3] ? decodeURIComponent(parts[3]) : null);
     else await vueAccueil();
   } catch (e) {
@@ -1012,7 +1018,8 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
   $("#btn-ajouter").onclick = () => modaleAjout();
   $$(".cmd-entete").forEach((x) => { x.onclick = () => ouvrirCarte(d.cartes[+x.dataset.carte]); });
   $("#btn-deck-menu").onclick = (ev) => ouvrirMenu(ev.currentTarget, [
-    ...(PARTAGE ? [] : [["Partager le deck…", () => modalePartage(d), "", "partager"], null]),
+    ...(PARTAGE ? [] : [["Partager le deck…", () => modalePartage(d), "", "partager"],
+      ["Imprimer les proxies…", () => { location.hash = `#/proxies?deck=${enc(d.id)}`; }, "", "imprimer"], null]),
     "Copier la liste pour",
     ...EXPORTS.map(([fmt, lib]) => [lib, () => copierListe(fmt, lib), "", "copier"]),
     ...(PARTAGE ? [] : [["Cardmarket (à acheter)", () => copierCardmarket(d), "", "panier"]]),
@@ -1337,6 +1344,103 @@ async function copierCardmarket(d) {
     const n = nbAchats(acheter);
     toast(`Copié pour Cardmarket : ${n} carte${n > 1 ? "s" : ""}.`);
   } catch (e) { erreur(e); }
+}
+
+// ------------------------------------------------------------------ proxies à imprimer (menu « … » du deck)
+// Comme la « Machine à Proxies » de Magic-Ville : en texte (nom, coût, type, texte, force et endurance, en noir et blanc :
+// peu d'encre) ou en images (la version choisie dans le deck, verso compris). 9 cartes par page A4, à la taille réelle,
+// bord à bord pour couper d'un trait. Les images ne sont ni recadrées, ni déformées, ni décolorées (règles de Scryfall).
+const PROXIES_PAR_PAGE = 9;
+
+// les cartes à imprimer : celles à acheter, ou tout le deck (sans le Maybeboard), avec ou sans les terrains de base
+function proxiesDuDeck(d, poss, cartes, bases) {
+  const garde = (c) => bases || !estBase(c);
+  const l = cartes === "acheter" ? bilanAchats(d, poss).acheter.filter((x) => garde(x.c))
+    : d.cartes.filter((c) => c.cat !== "Maybeboard" && garde(c)).map((c) => ({ c, n: c.n }));
+  return l.sort((a, b) => (b.c.cat === "Commander") - (a.c.cat === "Commander") || nomAffiche(a.c).localeCompare(nomAffiche(b.c), "fr"));
+}
+
+// une carte en texte : chaque face (« Recto // Verso ») avec son nom, son coût, son type, son texte et sa force
+function proxyTexte(c, langue) {
+  const i = c.info, fr = langue === "fr";
+  const faces = (t) => String(t || "").split(" // ");
+  const noms = faces(fr ? i.fr || c.nom : c.nom), types = faces(fr ? i.fr_type || i.type : i.type);
+  if (!fr && types.length === 1 && i.dos && i.dos.type) types.push(i.dos.type);      // le type du verso, connu en anglais seulement
+  const textes = String((fr ? i.fr_texte || i.texte : i.texte) || "").split(/\n\/\/\n/);
+  const couts = faces(i.cout), forces = faces(i.pt);
+  const n = Math.max(noms.length, textes.length);
+  const face = (k) => `<div class="px-face">
+      <div class="px-tete"><span class="px-nom">${esc(noms[k] || "")}</span>${couts[k] ? mana(couts[k]) : ""}</div>
+      <div class="px-type">${esc(types[k] || "")}</div>
+      <div class="px-regles">${(textes[k] || "").split("\n").filter((l) => l.trim()).map((l) => `<p>${texteMana(l)}</p>`).join("")}</div>
+      ${forces[k] ? `<div class="px-force">${esc(forces[k].replace(/^loyauté /, fr ? "Loyauté " : "Loyalty "))}</div>` : ""}
+    </div>`;
+  return `<div class="px-carte px-texte">${Array.from({ length: n }, (_, k) => face(k)).join("")}</div>`;
+}
+
+// une carte en images : celle de la version choisie dans le deck, en grand ; une carte à deux faces donne aussi son verso
+// (même impression : l'adresse du verso est celle du recto, « back » au lieu de « front »)
+function proxyImages(c) {
+  const grande = (u) => String(u || "").replace(/\/(normal|small)\//, "/large/");
+  const recto = grande(c.info.image);
+  const verso = !c.info.dos ? "" : recto.includes("/front/") ? recto.replace("/front/", "/back/") : grande(c.info.dos.image);
+  return [recto, verso].filter(Boolean).map((u) => `<div class="px-carte px-image"><img src="${esc(u)}" alt=""></div>`);
+}
+
+// un texte trop long pour sa carte : la police rétrécit jusqu'à ce qu'il tienne (comme les cartes à beaucoup de texte)
+function ajusterProxies(el) {
+  for (const f of $$(".px-texte", el)) {
+    let t = 8.4;
+    f.style.setProperty("--px-taille", t + "pt");
+    while (f.scrollHeight > f.clientHeight + 1 && t > 5) {
+      t -= 0.3;
+      f.style.setProperty("--px-taille", t + "pt");
+    }
+  }
+}
+
+async function vueProxies(p) {
+  const id = p.get("deck");
+  vue.innerHTML = `<p class="chargement">Préparation des proxies…</p>`;
+  const [d, poss] = await Promise.all([api(`/api/decks/${enc(id)}`),
+    api(`/api/decks/${enc(id)}/achats`).then((r) => r.possedees).catch(() => ({}))]);
+  const compte = (cartes, bases) => nbAchats(proxiesDuDeck(d, poss, cartes, bases));
+  let cartes = compte("acheter", PREF.get("proxies-bases", "") === "1") ? "acheter" : "tout";
+  const rendre = () => {
+    const format = PREF.get("proxies-format", "texte"), langue = PREF.get("proxies-langue", "fr"), bases = PREF.get("proxies-bases", "") === "1";
+    const proxies = proxiesDuDeck(d, poss, cartes, bases).flatMap(({ c, n }) =>
+      Array.from({ length: n }, () => (format === "images" ? proxyImages(c) : [proxyTexte(c, langue)])).flat());
+    const pages = [];
+    for (let i = 0; i < proxies.length; i += PROXIES_PAR_PAGE) pages.push(proxies.slice(i, i + PROXIES_PAR_PAGE));
+    vue.innerHTML = `<div class="px-outils">
+        <nav class="fil" aria-label="Fil d'Ariane"><a href="#/">Mes decks</a><span aria-hidden="true">›</span><a href="${esc(lienDeck(d.id))}">${esc(d.titre)}</a><span aria-hidden="true">›</span><span aria-current="page">Proxies</span></nav>
+        <div class="px-reglages">
+          ${segments("proxies-format", [["texte", "Texte", "liste"], ["images", "Images", "cartes"]], "texte")}
+          ${format === "texte" ? segments("proxies-langue", [["fr", "Français"], ["en", "Anglais"]], "fr") : ""}
+          <select class="champ champ-petit" id="px-cartes" aria-label="Cartes à imprimer">
+            <option value="acheter" ${cartes === "acheter" ? "selected" : ""}>Les cartes à acheter (${compte("acheter", bases)})</option>
+            <option value="tout" ${cartes === "tout" ? "selected" : ""}>Tout le deck (${compte("tout", bases)})</option></select>
+          <label class="petit"><input type="checkbox" id="px-bases" ${bases ? "checked" : ""}> Terrains de base</label>
+          <span class="px-compte muet petit">${proxies.length} proxie${proxies.length > 1 ? "s" : ""} · ${pages.length} page${pages.length > 1 ? "s" : ""} A4</span>
+          <button class="btn btn-accent" id="px-imprimer" ${proxies.length ? "" : "disabled"}>${ico("imprimer")}Imprimer</button>
+        </div>
+      </div>
+      ${pages.length ? `<div class="px-feuilles">${pages.map((pg) => `<section class="px-feuille"><div class="px-grille">${pg.join("")}</div></section>`).join("")}</div>`
+        : `<p class="muet">Aucune carte à imprimer.</p>`}`;
+    $$("img", vue).forEach((im) => { im.loading = "eager"; });          // toutes chargées avant l'impression
+    if (format === "texte") ajusterProxies(vue);
+    $$(".px-reglages .segments button", vue).forEach((b) => b.addEventListener("click", () => { PREF.set(b.dataset.pref, b.dataset.val); rendre(); }));
+    $("#px-cartes", vue).onchange = (ev) => { cartes = ev.target.value; rendre(); };
+    $("#px-bases", vue).onchange = (ev) => { PREF.set("proxies-bases", ev.target.checked ? "1" : ""); rendre(); };
+    $("#px-imprimer", vue).onclick = async (ev) => {
+      const b = ev.currentTarget;
+      b.disabled = true;
+      await Promise.all($$(".px-feuilles img", vue).map((im) => (im.complete ? null : new Promise((ok) => { im.onload = im.onerror = ok; }))));
+      b.disabled = false;
+      print();
+    };
+  };
+  rendre();
 }
 
 // fiche d'une carte : « Je l'ai » ou « À acheter », un clic pour passer de l'un à l'autre

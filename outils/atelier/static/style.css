@@ -1122,3 +1122,37 @@ summary.sg-puce:hover { background: color-mix(in srgb, var(--accent) 22%, transp
   .sim-grille, .sim-grille.sim-deux { grid-template-columns: 1fr; gap: .25rem; }
   .sim-nom { margin-top: .7rem; }
 }
+
+/* ---------------------------------------------------------------- proxies à imprimer : des feuilles A4, 3 × 3 cartes
+   à la taille réelle (63 × 88 mm), bord à bord ; à l'écran, un aperçu ; à l'impression, rien d'autre que les feuilles */
+.px-outils { display: grid; gap: .8rem; margin-bottom: 1.2rem; }
+.px-reglages { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem; }
+.px-reglages .px-compte { margin-left: auto; }
+.px-reglages select.champ { width: auto; }
+.px-feuilles { display: grid; justify-content: center; gap: 1.5rem; overflow-x: auto; padding-bottom: 1rem; }
+.px-feuille { width: 210mm; height: 297mm; display: grid; place-items: center; background: #fff; box-shadow: 0 2px 14px rgba(0, 0, 0, .35); }
+.px-grille { display: grid; grid-template-columns: repeat(3, 63mm); grid-auto-rows: 88mm; align-content: start; height: 264mm; }
+.px-carte { box-sizing: border-box; width: 63mm; height: 88mm; overflow: hidden; color: #000; background: #fff; }
+.px-image img { display: block; width: 100%; height: auto; }
+.px-texte { display: flex; flex-direction: column; padding: 2mm 2.3mm; border: .3mm solid #000;
+  font: var(--px-taille, 8.4pt)/1.28 Verdana, Arial, sans-serif; }
+.px-face { flex: 1 0 auto; display: flex; flex-direction: column; }
+.px-face + .px-face { margin-top: 1.5mm; padding-top: 1.5mm; border-top: .3mm dashed #000; }
+.px-tete { display: flex; justify-content: space-between; align-items: flex-start; gap: 1mm; font-size: 1.12em; font-weight: 700; }
+.px-tete .cout { flex: none; display: inline-flex; gap: .25mm; margin-top: .2mm; }
+.px-tete .cout img { width: 1em; height: 1em; }
+.px-type { margin: .8mm 0 1.6mm; padding-bottom: 1mm; border-bottom: .2mm solid #000; }
+.px-regles p { margin: 0 0 1.2mm; }
+.px-regles .sym-t { width: .95em; height: .95em; vertical-align: -.14em; }
+.px-regles .rappel { color: #000; }
+.px-force { align-self: flex-end; margin-top: auto; padding: .2mm 1.2mm; border: .2mm solid #000; font-size: 1.12em; font-weight: 700; }
+@media print {
+  @page { size: A4; margin: 0; }
+  body.impression { background: #fff; }
+  body.impression > :not(.cadre), body.impression .cadre > :not(#vue), body.impression .px-outils { display: none !important; }
+  body.impression .cadre { display: block; min-height: 0; }
+  body.impression #vue { max-width: none; margin: 0; padding: 0; }
+  body.impression .px-feuilles { display: block; overflow: visible; padding: 0; }
+  body.impression .px-feuille { height: 296mm; box-shadow: none; break-after: page; }
+  body.impression .px-feuille:last-child { break-after: auto; }
+}
