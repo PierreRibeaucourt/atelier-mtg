@@ -999,16 +999,22 @@ def noms(q, deck=None, n=8):
     qn = _norm(q).strip()
     if b is None or len(qn) < 2:
         return []
+    mots = [m for m in re.split(r"[^\w']+", qn) if m]       # « krenko mob » : Krenko, Mob Boss (la virgule n'est pas tapée)
     trouves = []
     for x in b["cartes"]:
         if x["spe"] in HORS_JEU or x["dig"] or x["fun"]:
             continue
         rang = None
         for h in (x["_n"], x["_nf"]):
-            if not h or qn not in h:
+            if not h:
                 continue
-            faces = h.split(" // ")
-            r = 0 if qn in faces else 1 if any(f.startswith(qn) for f in faces) else 2 if any(m.startswith(qn) for f in faces for m in f.split()) else 3
+            if qn in h:
+                faces = h.split(" // ")
+                r = 0 if qn in faces else 1 if any(f.startswith(qn) for f in faces) else 2 if any(m.startswith(qn) for f in faces for m in f.split()) else 3
+            elif len(mots) > 1 and all(m in h for m in mots):
+                r = 3
+            else:
+                continue
             rang = r if rang is None else min(rang, r)
         if rang is not None:
             trouves.append((rang, x["rk"] is None, x["rk"] or 0, x["_n"], x))
