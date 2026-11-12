@@ -47,3 +47,6 @@ __pycache__/
 *.tmp
 .claude/
 outils/atelier/mtgpics.json
+
+# relais Cloudflare : fichiers temporaires de wrangler
+.wrangler/
