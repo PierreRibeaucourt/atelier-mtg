@@ -13,6 +13,10 @@ const etat = { decks: [], deck: null, filtre: "" };
 // et tout ce qui modifie (classe « ecrit »), la recherche et la discussion sont masqués
 const PARTAGE = window.PARTAGE || null;
 if (PARTAGE) document.documentElement.classList.add("partage");
+// appli du téléphone (static/telephone/telephone.js) : les données viennent de la sauvegarde en ligne, préparées par le
+// PC ; la discussion, la simulation et la recherche restent sur le PC
+const TELEPHONE = window.TELEPHONE || null;
+const PC = !PARTAGE && !TELEPHONE;              // l'Atelier du PC : serveur Python, tâches en fond, mises à jour
 // page partagée : à qui sont ces decks (reglages.json « nom », sinon le compte GitHub qui publie)
 // titre_accueil : la page d'accueil de l'Atelier (site_atelier.py), qui n'est le site de decks de personne
 const MES_DECKS = PARTAGE && PARTAGE.titre_accueil || (PARTAGE && PARTAGE.auteur ? `Decks de ${PARTAGE.auteur}` : "Mes decks");
@@ -34,6 +38,7 @@ const PREF = {
 
 async function api(chemin, opts = {}) {
   if (PARTAGE) return apiPartage(chemin, opts);
+  if (TELEPHONE) return TELEPHONE.api(chemin, opts);
   const init = { ...opts, headers: { "Content-Type": "application/json" } };
   if (opts.body !== undefined) init.body = JSON.stringify(opts.body);
   const r = await fetch(chemin, init);
@@ -63,8 +68,8 @@ function apiPartage(chemin, opts) {
 }
 
 // comparaison de deux versions, comme /api/decks/…/comparer, à partir des listes figées
-function comparerPartage(fa, fb) {
-  const { listes, infos } = PARTAGE.comparer, A = listes[fa], B = listes[fb];
+function comparerPartage(fa, fb, cmp = PARTAGE.comparer) {
+  const { listes, infos } = cmp, A = listes[fa], B = listes[fb];
   if (!A || !B) throw new Error("Version introuvable.");
   const reste = (x, y) => Object.entries(x.cartes).flatMap(([n, k]) => Array(Math.max(0, k - (y.cartes[n] || 0))).fill(n)).sort();
   const sa = reste(A, B), sb = reste(B, A);
@@ -139,6 +144,7 @@ const ICONES = {
   ouvrir: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>',
   telecharger: '<path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/>',
   nuage: '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
+  telephone: '<rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/>',
   imprimer: '<path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/>',
   coche: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
   moins: '<path d="M5 12h14"/>',
@@ -622,6 +628,7 @@ async function route() {
   fermerMenu();
   if (!$("#modale").hidden) fermerModale();
   cacherApercu();
+  if (TELEPHONE && !TELEPHONE.pret) return TELEPHONE.attente(vue);     // téléphone pas encore relié, ou decks en route
   majTitre();
   const [chemin, qs] = location.hash.replace(/^#\/?/, "").split(/\?(.*)/s);
   const parts = chemin.split("/");
@@ -784,7 +791,7 @@ async function vueAccueil() {
             <td class="num"><button class="btn btn-petit" data-recup="${i}">${ico("annuler")}Récupérer</button></td></tr>`).join("")}
         </tbody></table>
       </details>` : "";
-  if (!ds.length && !PARTAGE) {                    // premier lancement, ou nouveau PC : les deux façons de commencer
+  if (!ds.length && PC) {                    // premier lancement, ou nouveau PC : les deux façons de commencer
     vue.innerHTML = `<div class="titre-page"><h1>${esc(MES_DECKS)}</h1></div>
       <div class="accueil-vide">
         <button type="button" class="av-choix" id="av-creer">${ico("plus")}<strong>Créer mon premier deck</strong>
@@ -820,7 +827,7 @@ async function vueAccueil() {
     <div id="d-resultats"></div>
     ${decksSupprimes}`;
   $("#btn-nouveau").onclick = modaleNouveauDeck;
-  if (!PARTAGE) etatSauvegarde($("#etat-sauvegarde"), $("#bandeau-sauvegarde"));
+  if (PC) etatSauvegarde($("#etat-sauvegarde"), $("#bandeau-sauvegarde"));
   const zone = $("#d-resultats");
   let cartes = {}, numero = 0, minuteur;
   const rendre = () => rendreDecks(zone, cartes);
@@ -1059,7 +1066,7 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
           <div class="chiffres" style="margin-top:.5rem">${chiffresDeck(d)}</div>
         </div>
         <div class="actions">
-          <a class="btn" href="${PARTAGE ? "jouer/" : `/jouer?deck=${enc(id)}`}" target="_blank" rel="noopener">${ico("lancer")}Jouer</a>
+          <a class="btn pc-seulement" href="${PARTAGE ? "jouer/" : `/jouer?deck=${enc(id)}`}" target="_blank" rel="noopener">${ico("lancer")}Jouer</a>
           <a class="btn ecrit" href="#/recherche?deck=${enc(id)}">${ico("chercher")}Chercher pour ce deck</a>
           <button class="btn btn-icone ouvre-menu" id="btn-deck-menu" aria-label="Autres actions sur le deck" title="Autres actions">${ico("plus_de")}</button>
         </div>
@@ -1074,12 +1081,12 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
   $("#btn-ajouter").onclick = () => modaleAjout();
   $$(".cmd-entete").forEach((x) => { x.onclick = () => ouvrirCarte(d.cartes[+x.dataset.carte]); });
   $("#btn-deck-menu").onclick = (ev) => ouvrirMenu(ev.currentTarget, [
-    ...(PARTAGE ? [] : [["Partager le deck…", () => modalePartage(d), "", "partager"],
+    ...(!PC ? [] : [["Partager le deck…", () => modalePartage(d), "", "partager"],
       ["Imprimer les proxies…", () => { location.hash = `#/proxies?deck=${enc(d.id)}`; }, "", "imprimer"], null]),
     "Copier la liste pour",
     ...EXPORTS.map(([fmt, lib]) => [lib, () => copierListe(fmt, lib), "", "copier"]),
     ...(PARTAGE ? [] : [["Cardmarket (à acheter)", () => copierCardmarket(d), "", "panier"]]),
-    ...(PARTAGE ? [] : [null, ["Renommer…", () => modaleRenommer(d), "", "crayon"], ["Supprimer ce deck…", () => supprimerDeck(d), "btn-danger", "corbeille"]]),
+    ...(!PC ? [] : [null, ["Renommer…", () => modaleRenommer(d), "", "crayon"], ["Supprimer ce deck…", () => supprimerDeck(d), "btn-danger", "corbeille"]]),
   ]);
   const contenu = $("#contenu");
   if (onglet === "stats") return ongletStats(contenu, d);
@@ -1843,10 +1850,86 @@ try { for (const k of Object.keys(localStorage)) if (k.startsWith("pref-rch-dern
 // ------------------------------------------------------------------ options : réglages de ce PC (reglages.json), démarrage, classeur
 // Options : trois blocs (les cartes, le partage, le programme), puis le classeur
 async function vueOptions() {
+  if (TELEPHONE) return optionsTelephone();
   vue.innerHTML = `<nav class="fil" aria-label="Fil d'Ariane"><a href="#/">Mes decks</a><span aria-hidden="true">›</span><span aria-current="page">Options</span></nav>
     <div class="opt-grille" id="opt-general"><p class="chargement">Chargement…</p></div>
     <section class="panneau options" id="opt-classeur"></section>`;
   optionsGenerales($("#opt-general"), await api("/api/options"));
+  classeurOptions($("#opt-classeur"));
+}
+
+// Options › Téléphone (sur le PC) : préparer les decks pour l'appli du téléphone, et la relier par un QR code
+async function ligneTelephone(el) {
+  let t;
+  try { t = await api("/api/telephone"); } catch (e) { el.innerHTML = `<p class="erreur petit">${esc(e.message)}</p>`; return; }
+  const action = async (a) => { try { t = await api("/api/telephone", { method: "POST", body: { action: a } }); rendre(); } catch (e) { erreur(e); } };
+  const rendre = () => {
+    if (!t.possible) {
+      el.innerHTML = `<p class="muet">Il faut d'abord la sauvegarde en ligne.</p>`;
+      return;
+    }
+    if (!t.voulu) {
+      el.innerHTML = `<button type="button" class="btn btn-accent" id="tel-activer">${ico("telephone")}Installer sur mon téléphone</button>`;
+      $("#tel-activer", el).onclick = async () => { await action("activer"); if (t.lien) modaleQrTelephone(t.lien); };
+      return;
+    }
+    el.innerHTML = `<p class="${t.erreur ? "erreur" : "muet"} petit">${t.erreur ? esc(t.erreur)
+        : t.en_cours ? "Préparation des decks…" : t.derniere ? `${t.decks} deck${t.decks > 1 ? "s" : ""} prêt${t.decks > 1 ? "s" : ""} pour le téléphone · ${esc(new Date(t.derniere * 1000).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }))}` : "Préparation des decks…"}</p>
+      <div class="opt-boutons">
+        ${t.lien ? `<button type="button" class="btn btn-petit" id="tel-qr">${ico("telephone")}Relier un téléphone</button>` : ""}
+        <button type="button" class="btn btn-petit btn-discret" id="tel-couper">Arrêter</button></div>`;
+    if ($("#tel-qr", el)) $("#tel-qr", el).onclick = () => modaleQrTelephone(t.lien);
+    $("#tel-couper", el).onclick = () => { if (confirm("Arrêter l'appli du téléphone ? Elle ne recevra plus tes decks.")) action("couper"); };
+    if (t.en_cours || (!t.derniere && !t.erreur)) setTimeout(async () => {
+      if (!el.isConnected) return;
+      try { t = await api("/api/telephone"); rendre(); } catch (_) {}
+    }, 3000);
+  };
+  rendre();
+}
+
+// le QR code qui relie un téléphone : l'adresse de l'appli, avec le dépôt et la clé GitHub (qui ne quittent pas l'écran)
+async function modaleQrTelephone(lien) {
+  if (!window.qrcode) {
+    await new Promise((ok, ko) => { const s = document.createElement("script"); s.src = "/static/vendor/qrcode.js"; s.onload = ok; s.onerror = ko; document.head.appendChild(s); })
+      .catch(() => null);
+  }
+  if (!window.qrcode) return erreur(new Error("QR code indisponible : recharge la page."));
+  const q = qrcode(0, "M");
+  q.addData(lien);
+  q.make();
+  ouvrirModale(`<div class="fc-tete"><h2>Atelier sur ton téléphone</h2>
+      <button class="btn btn-discret btn-icone" id="qr-fermer" aria-label="Fermer">${ico("fermer")}</button></div>
+    <div class="qr-telephone">${q.createSvgTag({ cellSize: 6, margin: 3, scalable: true })}</div>
+    <ol class="gh-etapes">
+      <li>Scanne ce QR code avec l'appareil photo du téléphone.</li>
+      <li>Installe l'appli. Android : «&nbsp;Installer l'application&nbsp;». iPhone : Partager › «&nbsp;Sur l'écran d'accueil&nbsp;», puis ouvre l'appli et scanne à nouveau ce code.</li>
+    </ol>
+    <p class="muet petit">Ce code ouvre tes decks : ne le montre qu'à tes téléphones.</p>
+    <div class="boutons"><button class="btn btn-petit" id="qr-copier">${ico("copier")}Copier le lien</button></div>`, (b) => {
+    $("#qr-fermer", b).onclick = fermerModale;
+    $("#qr-copier", b).onclick = async () => { try { await navigator.clipboard.writeText(lien); toast("Lien copié."); } catch (e) { erreur(e); } };
+  });
+}
+
+// téléphone : à quel Atelier il est relié, quand les decks sont arrivés, et le classeur (en lecture)
+function optionsTelephone() {
+  const a = TELEPHONE.acces();
+  vue.innerHTML = `<nav class="fil" aria-label="Fil d'Ariane"><a href="#/">Mes decks</a><span aria-hidden="true">›</span><span aria-current="page">Options</span></nav>
+    <section class="panneau options"><div class="opt-titre"><h2>${ico("telephone")}Téléphone</h2></div>
+      <div class="opt-lignes">
+        <p>Relié à la sauvegarde <strong>${esc(a ? a.depot : "")}</strong></p>
+        <div class="form-ligne"><button class="btn" id="tel-maj">${ico("rafraichir")}Recevoir les derniers changements</button>
+          <button class="btn btn-danger" id="tel-delier">Délier ce téléphone</button></div>
+      </div></section>
+    <section class="panneau options" id="opt-classeur"></section>`;
+  $("#tel-maj").onclick = async (ev) => {
+    ev.currentTarget.disabled = true;
+    await TELEPHONE.synchroniser();
+    toast(TELEPHONE.erreur || "À jour.");
+    ev.target.disabled = false;
+  };
+  $("#tel-delier").onclick = () => { if (confirm("Délier ce téléphone ? Ses decks en seront effacés (ils restent sur ton PC).")) TELEPHONE.delier(); };
   classeurOptions($("#opt-classeur"));
 }
 
@@ -1892,6 +1975,7 @@ function optionsGenerales(el, o) {
         dans un espace privé et publie ceux que tu partages.</p>
       <div id="opt-github"></div>
       <label class="opt-champ"><span>Nom sur les pages partagées</span><input class="champ" name="nom" maxlength="60" value="${esc(o.nom)}" placeholder="${esc(o.github)}"></label>`)
+    + bloc("telephone", "Téléphone", `<div id="opt-telephone"></div>`)
     + bloc("options", "L'Atelier", `
       ${o.demarrage == null ? "" : bascule("demarrage", o.demarrage, "Lancer au démarrage de Windows")}
       ${champFermeture(o)}
@@ -1921,6 +2005,7 @@ function optionsGenerales(el, o) {
     } catch (e) { erreur(e); }
   };
   ligneGithub($("#opt-github", el), o);
+  ligneTelephone($("#opt-telephone", el));
 }
 
 // le compte GitHub (connecté par code, github.py ; ou celui du partage avec git, reglages.json) et la sauvegarde en ligne
@@ -2014,9 +2099,9 @@ const carteClasseur = (x) => {
 };
 
 const qteClasseur = (x) => `<span class="cl-qte">
-    <button type="button" class="btn-menu" data-n="${x.n - 1}" aria-label="Un de moins : ${esc(x.nom)}" title="Un de moins">${ico("moins")}</button>
+    <button type="button" class="btn-menu ecrit" data-n="${x.n - 1}" aria-label="Un de moins : ${esc(x.nom)}" title="Un de moins">${ico("moins")}</button>
     <span class="cl-n">${x.n}</span>
-    <button type="button" class="btn-menu" data-n="${x.n + 1}" aria-label="Un de plus : ${esc(x.nom)}" title="Un de plus">${ico("plus")}</button></span>`;
+    <button type="button" class="btn-menu ecrit" data-n="${x.n + 1}" aria-label="Un de plus : ${esc(x.nom)}" title="Un de plus">${ico("plus")}</button></span>`;
 
 function ligneClasseur(x, i) {
   const cher = (x.prix || 0) > BUDGET;
@@ -2056,10 +2141,10 @@ async function classeurOptions(el) {
   let sens = PREF.get("sens-classeur", TRI_CLASSEUR_DESC[tri] ? "desc" : "asc");
   let vueImages = PREF.get("vue-classeur", "liste") === "images";
   el.innerHTML = `<div class="opt-titre"><h2>${ico("livre")}Classeur</h2>
-      <label class="btn btn-petit btn-discret" id="cl-importer">${ico("dossier")}Importer une collection…<input type="file" class="fichier-cache" accept=".csv,.txt,text/csv,text/plain"></label>
+      <label class="btn btn-petit btn-discret ecrit" id="cl-importer">${ico("dossier")}Importer une collection…<input type="file" class="fichier-cache" accept=".csv,.txt,text/csv,text/plain"></label>
       <button type="button" class="btn btn-petit btn-discret" id="cl-copier">${ico("copier")}Copier la liste</button></div>
-    <div class="cl-outils"><div id="cl-ajout"></div><input class="champ" id="cl-filtre" type="search" placeholder="Filtrer…" aria-label="Filtrer le classeur"></div>
-    <details class="cl-coller"><summary>Coller une liste</summary>
+    <div class="cl-outils"><div id="cl-ajout" class="ecrit"></div><input class="champ" id="cl-filtre" type="search" placeholder="Filtrer…" aria-label="Filtrer le classeur"></div>
+    <details class="cl-coller ecrit"><summary>Coller une liste</summary>
       <textarea class="champ" id="cl-liste" rows="6" placeholder="1 Sol Ring&#10;2 Lightning Bolt&#10;…"></textarea>
       <div class="boutons"><button class="btn btn-accent btn-petit" id="cl-ajouter">Ajouter au classeur</button></div></details>
     <details class="cl-coller" id="cl-partagees"><summary>Dans plusieurs decks</summary><div id="cl-partagees-res"></div></details>
@@ -5231,7 +5316,7 @@ document.addEventListener("visibilitychange", async () => {
 // ------------------------------------------------------------------ état de la mise à jour (prix, Game Changers)
 // cette page est ouverte : elle le dit à chaque nouvelle, et prévient quand on la ferme (réglage « Arrêter l'Atelier »)
 const ID_PAGE = Math.random().toString(36).slice(2, 12);
-if (!PARTAGE) addEventListener("pagehide", () => navigator.sendBeacon("/api/presence/fin", ID_PAGE));
+if (PC) addEventListener("pagehide", () => navigator.sendBeacon("/api/presence/fin", ID_PAGE));
 
 async function suivreMaj() {
   try {
@@ -5610,7 +5695,7 @@ async function arreterChat() {
 }
 
 $("#btn-chat").addEventListener("click", () => basculeChat());
-if (!PARTAGE) {
+if (PC) {
   chat.contexte = deckDeLaPage();
   chat.cle = chat.contexte ?? PREF.get("chat-discussion", "");
   window.addEventListener("hashchange", changerDiscussion);
@@ -5621,9 +5706,9 @@ if (!PARTAGE) {
 }
 
 route();
-if (!PARTAGE) suivreMaj();
+if (PC) suivreMaj();
 // les préférences, demandées une fois : fermeture de la page, visuel par défaut des cartes, Universes Beyond
-if (!PARTAGE) setTimeout(() => api("/api/options").then((o) => { if (!o.preferences && $("#modale").hidden) modalePreferences(o); })
+if (PC) setTimeout(() => api("/api/options").then((o) => { if (!o.preferences && $("#modale").hidden) modalePreferences(o); })
   .catch(() => {}), 800);
 
 // nouvelle version de l'Atelier (mise_a_jour.py) : un bandeau propose de l'installer ; l'Atelier redémarre et la page se recharge
@@ -5663,13 +5748,13 @@ async function verifierVersion() {
     }
   };
 }
-if (!PARTAGE) {
+if (PC) {
   verifierVersion();
   setTimeout(verifierVersion, 30000);                // l'Atelier lit le dépôt quelques secondes après son lancement
   setInterval(verifierVersion, 3 * 3600 * 1000);
 }
 // le navigateur garde la page « L'Atelier n'est pas lancé » (avec de quoi le lancer) pour quand l'adresse ne répond plus (sw.js)
-if (!PARTAGE && "serviceWorker" in navigator) {
+if (PC && "serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
   caches.open("atelier-eteint").then((c) => c.add("/eteint")).catch(() => {});     // sa version du jour : bouton Lancer ou non
 }

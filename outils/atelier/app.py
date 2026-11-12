@@ -395,6 +395,37 @@ def api_sauvegarder():
     return jsonify(resume=synchro.synchroniser(), etat=synchro.etat())
 
 
+# ---------------------------------------------------------------- l'Atelier sur téléphone (telephone.py)
+@app.get("/api/telephone")
+def api_telephone():
+    """{voulu, possible, actif, en_cours, derniere, decks, erreur, adresse}, et le lien à mettre dans le QR code."""
+    import telephone
+    e = telephone.etat()
+    if e["actif"]:
+        try:
+            e["lien"] = telephone.lien()
+        except Exception as err:
+            e["erreur"] = str(err)
+    return jsonify(e)
+
+
+@app.post("/api/telephone")
+def api_telephone_action():
+    """action : « activer » (préparer les decks pour le téléphone, tout de suite puis à chaque modification),
+    « maintenant », « couper » (et retirer du dépôt ce qui était prêt)."""
+    import reglages
+    import telephone
+    action = (request.get_json(silent=True) or {}).get("action", "maintenant")
+    if action == "couper":
+        telephone.couper()
+    else:
+        if action == "activer":
+            reglages.ecrire(telephone=True)
+        if telephone.actif() and not telephone.suivi["en_cours"]:
+            en_fond(telephone.preparer, app.test_client().get)
+    return api_telephone()
+
+
 @app.get("/api/sauvegarde/distante")
 def api_sauvegarde_distante():
     """Avant « Récupérer mes decks » : la sauvegarde du compte connecté ({existe, decks, date}), sans rien télécharger."""
@@ -1369,6 +1400,8 @@ if __name__ == "__main__":
         en_fond(partage.surveiller, app.test_client().get)     # pages partagées remises à jour quand un deck change
         import synchro
         en_fond(synchro.surveiller)                            # sauvegarde en ligne : decks envoyés et reçus
+        import telephone
+        en_fond(telephone.surveiller, app.test_client().get)   # decks préparés pour le téléphone, dans la sauvegarde
         en_fond(mise_a_jour.surveiller)                        # nouvelle version de l'Atelier : lue une fois par jour
         enregistrer_lien()
     en_fond(surveiller_fermeture)                  # réglage « Arrêter l'Atelier » quand on ferme la page
