@@ -633,6 +633,8 @@
     }
     if (!(await fichier("index.json.gz"))) throw Object.assign(new Error("Tes decks ne sont pas encore arrivés."), { statut: 503 });
     if (p === "/api/decks") return creerDeck(b);
+    if (p === "/api/decks/importer") return importerDecks(b);
+    if (p === "/api/classeur/importer") return importerClasseur(b);
     const r = p.match(/^\/api\/decks\/([^/]+)\/(renommer|supprimer)$/);
     if (r && r[2] === "renommer") return renommerDeck(decodeURIComponent(r[1]), b.nom);
     if (r) return supprimerDeck(decodeURIComponent(r[1]));
@@ -769,11 +771,8 @@
     const cartes = new Map(((await api("/api/classeur")).cartes || []).map((x) => [x.nom, x]));
     const inconnues = [];
     let op;
-    if (b.liste != null) {                                  // une liste collée (classeur.lire_liste)
-      const lignes = String(b.liste).split(/\r?\n/).filter((l) => l.trim() && !/^\s*(#|\/\/)/.test(l))
-        .map((l) => (/^\s*(SB:\s*)?\d/.test(l) ? l : "1 " + l.trim()));
-      const lues = new Map();
-      for (const e of MOTEUR.lireLignes(lignes)) lues.set(e.nom, (lues.get(e.nom) || 0) + e.n);
+    if (b.liste != null) {                                  // une liste collée
+      const lues = lireListe(String(b.liste));
       const trouves = await fiches([...lues.keys()]);
       const ajouts = {};
       for (const [lu, n] of lues) {
@@ -795,6 +794,118 @@
     await surcharger({ "/api/classeur": { cartes: liste } });
     await enAttente({ f: "classeur", d: op });
     return { cartes: copie(liste), inconnues };
+  }
+
+  // ------------------------------------------------------------------ importer des fichiers exportés d'une autre appli
+  // une liste collée (Archidekt, Moxfield, MTG Arena, « 1 Sol Ring » ou juste « Sol Ring ») : Map nom → exemplaires
+  // (classeur.lire_liste)
+  function lireListe(texte) {
+    const lignes = texte.split(/\r?\n/).filter((l) => l.trim() && !/^\s*(#|\/\/)/.test(l))
+      .map((l) => (/^\s*(SB:\s*)?\d/.test(l) ? l : "1 " + l.trim()));
+    const lues = new Map();
+    for (const e of MOTEUR.lireLignes(lignes)) lues.set(e.nom, (lues.get(e.nom) || 0) + e.n);
+    return lues;
+  }
+  // une collection en CSV (ManaBox, Moxfield, Archidekt, Deckbox, Dragon Shield…) : Map nom → exemplaires ; null si ce
+  // n'est pas un CSV avec une colonne de noms (classeur.lire_csv)
+  const COL_NOM = ["name", "card name", "card", "card_name", "cardname", "nom"];
+  const COL_QTE = ["quantity", "count", "qty", "quantité", "quantite", "qté", "amount", "copies"];
+  function champsCsv(ligne, sep) {
+    const res = [];
+    let x = "", guillemets = false;
+    for (let i = 0; i < ligne.length; i++) {
+      const c = ligne[i];
+      if (guillemets) {
+        if (c === '"' && ligne[i + 1] === '"') { x += '"'; i++; }
+        else if (c === '"') guillemets = false;
+        else x += c;
+      } else if (c === '"' && !x) guillemets = true;
+      else if (c === sep) { res.push(x); x = ""; }
+      else x += c;
+    }
+    res.push(x);
+    return res;
+  }
+  function lireCsv(texte) {
+    let lignes = texte.replace(/^﻿/, "").split(/\r\n|\r|\n/);
+    if (lignes.length && lignes[lignes.length - 1] === "") lignes.pop();
+    if (lignes.length && lignes[0].toLowerCase().startsWith("sep=")) lignes = lignes.slice(1);
+    if (!lignes.length) return null;
+    const compte = (s) => lignes[0].split(s).length - 1;
+    const sep = [",", ";", "\t"].reduce((a, s) => (compte(s) > compte(a) ? s : a));
+    if (!compte(sep)) return null;
+    const cols = champsCsv(lignes[0], sep).map((c) => c.trim().toLowerCase());
+    const iNom = COL_NOM.map((c) => cols.indexOf(c)).find((i) => i >= 0);
+    if (iNom === undefined) return null;
+    const iQte = COL_QTE.map((c) => cols.indexOf(c)).find((i) => i >= 0);
+    const res = new Map();
+    for (const l of lignes.slice(1)) {
+      const r = champsCsv(l, sep);
+      if (r.length <= iNom || !r[iNom].trim()) continue;
+      let n = 1;
+      if (iQte !== undefined && iQte < r.length && r[iQte].trim()) { n = Math.trunc(Number(r[iQte])); if (Number.isNaN(n)) n = 1; }
+      if (n > 0) res.set(r[iNom].trim(), (res.get(r[iNom].trim()) || 0) + n);
+    }
+    return res;
+  }
+  // un nom de deck tiré d'un nom de fichier (« Kels - Dimir.txt »), qui n'existe pas encore : « Kels 2 »… (decks.nom_libre)
+  function nomLibre(nom, pris) {
+    nom = nom.replace(/[<>:"/\\|?*]/g, " ").split(/\s+/).filter(Boolean).join(" ").replace(/[. ]+$/, "").slice(0, 60).trim() || "Importé";
+    const base = nom.replace(/^Deck /, "").trim() || "Importé";
+    for (let k = 2; pris.has(MOTEUR.dossier(nom).toLowerCase()); k++) nom = `${base} ${k}`;
+    return nom;
+  }
+  // plusieurs decks d'un coup : {fichiers: [{nom, texte}], montes} → {decks, echecs} (app.py › api_importer_decks) ;
+  // montes : toutes leurs cartes sont notées comme déjà là (onglet Achats)
+  async function importerDecks(b) {
+    const faits = [], echecs = [], pris = new Set((await api("/api/decks")).map((d) => d.id.toLowerCase()));
+    for (const f of (b.fichiers || []).slice(0, 200)) {
+      const nom = String(f.nom || "").split(/[\\/]/).pop().replace(/\.[^.]*$/, "");
+      let texte = String(f.texte || "");
+      const c = lireCsv(texte);
+      if (c) texte = [...c].map(([carte, n]) => `${n} ${carte}`).join("\n");
+      if (!MOTEUR.lireLignes(texte.split(/\r?\n/)).length) { echecs.push({ nom, erreur: "aucune carte reconnue" }); continue; }
+      try {
+        const { id } = await creerDeck({ nom: nomLibre(nom, pris), commandant: "", liste: texte });
+        pris.add(id.toLowerCase());
+        if (b.montes) {
+          const poss = {};
+          for (const x of (await api(`/api/decks/${id}`)).cartes) if (x.cat !== "Maybeboard") poss[x.nom] = (poss[x.nom] || 0) + x.n;
+          await marquerAchats(id, poss);
+        }
+        faits.push(id);
+      } catch (e) { echecs.push({ nom, erreur: e.message }); }
+    }
+    return { decks: faits, echecs };
+  }
+  // une collection : {texte, sans_decks, remplacer, apercu} → {cartes, en_decks, inconnues} (en exemplaires), et le
+  // classeur s'il a changé (app.py › api_classeur_importer). sans_decks : sans les exemplaires déjà notés dans les decks
+  async function importerClasseur(b) {
+    const texte = String(b.texte || ""), lues = lireCsv(texte) || lireListe(texte);
+    const trouves = lues.size ? await fiches([...lues.keys()]) : {};
+    let propres = new Map();
+    const inconnues = [], infos = new Map();
+    for (const [lu, n] of lues) {
+      const f = trouves[lu];
+      if (!f) { inconnues.push(lu); continue; }
+      propres.set(f.nom, (propres.get(f.nom) || 0) + n);
+      infos.set(f.nom, f);
+    }
+    const ouSont = await api("/api/ou-sont").catch(() => ({}));
+    const dansDecks = (nom) => ((ouSont[nom] || {}).decks || []).reduce((s, x) => s + (x[2] || 0), 0);
+    const r = { cartes: [...propres.values()].reduce((s, n) => s + n, 0), en_decks: [...propres].reduce((s, [nom, n]) => s + Math.min(n, dansDecks(nom)), 0),
+      inconnues: inconnues.sort() };
+    if (b.apercu) return r;
+    if (b.sans_decks) propres = new Map([...propres].map(([nom, n]) => [nom, n - Math.min(n, dansDecks(nom))]).filter(([, n]) => n > 0));
+    const cartes = new Map(b.remplacer ? [] : ((await api("/api/classeur")).cartes || []).map((x) => [x.nom, x]));
+    for (const [nom, n] of propres) {
+      if (cartes.has(nom)) cartes.get(nom).n += n;
+      else cartes.set(nom, { nom, n, info: infos.get(nom) || {} });
+    }
+    const liste = [...cartes.values()].sort((x, y) => (x.nom.toLowerCase() < y.nom.toLowerCase() ? -1 : 1));
+    await surcharger({ "/api/classeur": { cartes: liste } });
+    await enAttente({ f: "classeur", d: b.remplacer ? { remplacer: Object.fromEntries(propres) } : { ajouter: Object.fromEntries(propres) } });
+    return { ...r, classeur: copie(liste) };
   }
 
   // l'envoi : les opérations en attente, rejouées sur les fichiers de la sauvegarde, en un commit
@@ -854,6 +965,7 @@
         nouveaux.push(o.vers ? `${titre(o.deck)} renommé ${titre(o.vers)}` : `${titre(o.deck)} supprimé`);
       } else if (o.f === "classeur") {
         const c = MOTEUR.lireClasseur((await lire("Classeur/classeur.txt")) || "");
+        if (o.d.remplacer) c.cartes = new Map(Object.entries(o.d.remplacer).filter(([, n]) => n > 0));   // classeur.remplacer
         for (const [nom, n] of Object.entries(o.d.ajouter || {})) c.cartes.set(nom, (c.cartes.get(nom) || 0) + n);
         for (const [nom, n] of Object.entries(o.d.fixer || {})) { if (n > 0) c.cartes.set(nom, n); else c.cartes.delete(nom); }
         fichiers.set("Classeur/classeur.txt", MOTEUR.ecrireClasseur(c));
