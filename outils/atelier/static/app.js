@@ -791,7 +791,7 @@ async function vueAccueil() {
             <td class="num"><button class="btn btn-petit" data-recup="${i}">${ico("annuler")}Récupérer</button></td></tr>`).join("")}
         </tbody></table>
       </details>` : "";
-  if (!ds.length && PC) {                    // premier lancement, ou nouveau PC : les deux façons de commencer
+  if (!ds.length && (PC || (TELEPHONE && TELEPHONE.local))) {      // premier lancement, ou nouveau PC : les façons de commencer
     vue.innerHTML = `<div class="titre-page"><h1>${esc(MES_DECKS)}</h1></div>
       <div class="accueil-vide">
         <button type="button" class="av-choix" id="av-creer">${ico("plus")}<strong>Créer mon premier deck</strong>
@@ -1917,13 +1917,16 @@ function optionsTelephone() {
   const a = TELEPHONE.acces();
   vue.innerHTML = `<nav class="fil" aria-label="Fil d'Ariane"><a href="#/">Mes decks</a><span aria-hidden="true">›</span><span aria-current="page">Options</span></nav>
     <section class="panneau options"><div class="opt-titre"><h2>${ico("telephone")}Téléphone</h2></div>
-      <div class="opt-lignes">
-        <p>Relié à la sauvegarde <strong>${esc(a ? a.depot : "")}</strong></p>
+      <div class="opt-lignes">${a ? `
+        <p>Relié à la sauvegarde <strong>${esc(a.depot)}</strong></p>
         <p class="muet petit" id="tel-attente"></p>
         <div class="form-ligne"><button class="btn" id="tel-maj">${ico("rafraichir")}Synchroniser</button>
-          <button class="btn btn-danger" id="tel-delier">Délier ce téléphone</button></div>
+          <button class="btn btn-danger" id="tel-delier">Délier ce téléphone</button></div>` : `
+        <p>Tes decks sont gardés sur ce téléphone.</p>`}
       </div></section>
     <section class="panneau options" id="opt-classeur"></section>`;
+  classeurOptions($("#opt-classeur"));
+  if (!a) return;
   const attente = async () => {
     const n = await TELEPHONE.enAttente();
     $("#tel-attente").textContent = n ? `${n} modification${n > 1 ? "s" : ""} pas encore envoyée${n > 1 ? "s" : ""}` : "";
@@ -1939,7 +1942,6 @@ function optionsTelephone() {
     b.disabled = false;
   };
   $("#tel-delier").onclick = () => { if (confirm("Délier ce téléphone ? Ses decks en seront effacés (ils restent sur ton PC).")) TELEPHONE.delier(); };
-  classeurOptions($("#opt-classeur"));
 }
 
 // les champs des options ; ceux des préférences sont aussi demandés une fois au premier lancement (modalePreferences)

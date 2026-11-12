@@ -446,9 +446,19 @@ function fiche(x) {
     gc: x.gc, prix: x.eur, prix_lien: "", prix_date: null, prix_edition: "", fr: BASES_FR[x.n] || x.fr || "", fr_type: x.tf, fr_texte: texteFr,
     legal: x.cl || (x.lg.includes("commander") ? "legal" : "not_legal"), produit: x.pm, pt: x.pt, gatherer: "",
     dos: x.imd ? { nom: faces[1] || "", type: types[1] || "", image: chemin(x.imd), petite: chemin(x.imd, "small") } : null,
-    assemble: null, peut_commander: x.cm, partenaire: x.pa,
+    assemble: null, peut_commander: x.cm, partenaire: x.pa, lay: x.lay,
+    imp: p ? { set: p[0], num: p[1], lang: p[6] || "en" } : null,
   };
 }
+// une impression précise d'une carte (« (ima) 205 » dans la liste) : son image, son édition
+function impression(nom, set, num) {
+  const x = trouver(nom), p = x && x.pr.find((q) => q[0] === String(set).toLowerCase() && q[1] === String(num));
+  if (!p) return null;
+  const ed = B.editions[p[0]] || {};
+  return { set: p[0], num: p[1], lang: p[6] || "en", nom: x.n, edition: ed.n || p[0].toUpperCase(), annee: p[3].slice(0, 4),
+    image: image(p[5]), petite: image(p[5], "small"), art: image(p[5], "art_crop"), prix: p[4], prix_foil: null };
+}
+const gameChangers = () => B.cartes.filter((x) => x.gc && !x.dig).map((x) => x.n).sort();
 // des noms tapés ou collés (anglais, français, majuscules quelconques) : {nom tapé: fiche} ; absents si inconnus
 function fiches(liste) {
   prete();
@@ -461,7 +471,7 @@ function fiches(liste) {
 }
 
 // ------------------------------------------------------------------ les messages de telephone.js
-const F = { charger, reglages, chercher, editions, fonctions, suggestions, eligibilite, noms, fonctionsCartes, impressionImage, apercu, fiches };
+const F = { charger, reglages, chercher, editions, fonctions, suggestions, eligibilite, noms, fonctionsCartes, impressionImage, apercu, fiches, impression, gameChangers };
 self.onmessage = async (ev) => {
   const { id, f, a } = ev.data;
   try { self.postMessage({ id, r: await F[f](...(a || [])) }); }

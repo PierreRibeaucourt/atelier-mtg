@@ -45,7 +45,7 @@ def construire(dossier):
     os.makedirs(dossier)
     for f in ("app.js", "style.css"):
         shutil.copyfile(os.path.join(STATIQUE, f), os.path.join(dossier, f))
-    for f in ("moteur.js", "cartes.js", "jsQR.js"):
+    for f in ("moteur.js", "pages.js", "cartes.js", "jsQR.js"):
         shutil.copyfile(os.path.join(STATIQUE, "telephone", f), os.path.join(dossier, f))
     with open(os.path.join(STATIQUE, "telephone", "telephone.js"), encoding="utf-8") as f:      # le Worker de la base de cartes
         tel = f.read().replace("__CARTES__", "cartes.js?v=" + _empreinte(os.path.join(dossier, "cartes.js")))
@@ -60,7 +60,7 @@ def construire(dossier):
                               dict(src="icone-512.png", sizes="512x512", type="image/png"),
                               dict(src="icone-masque-512.png", sizes="512x512", type="image/png", purpose="maskable")]),
                   f, ensure_ascii=False, indent=1)
-    v = {f: _empreinte(os.path.join(dossier, f)) for f in ("app.js", "style.css", "moteur.js", "telephone.js", "cartes.js")}
+    v = {f: _empreinte(os.path.join(dossier, f)) for f in ("app.js", "style.css", "moteur.js", "pages.js", "telephone.js", "cartes.js")}
     with open(os.path.join(STATIQUE, "index.html"), encoding="utf-8") as f:
         html = f.read()
     tete = "\n  ".join(['<meta name="robots" content="noindex">',
@@ -77,7 +77,8 @@ def construire(dossier):
         ('href="/static/style.css"', f'href="style.css?v={v["style.css"]}"'),
         ('  <script src="/reglages.js"></script>\n', ""),
         ('<script src="/static/app.js"></script>',
-         f'<script src="moteur.js?v={v["moteur.js"]}"></script>\n  <script src="telephone.js?v={v["telephone.js"]}"></script>\n'
+         f'<script src="moteur.js?v={v["moteur.js"]}"></script>\n  <script src="pages.js?v={v["pages.js"]}"></script>\n'
+         f'  <script src="telephone.js?v={v["telephone.js"]}"></script>\n'
          f'  <script src="app.js?v={v["app.js"]}"></script>'),
     ]
     for a, b in remplacements:
@@ -87,7 +88,7 @@ def construire(dossier):
     with open(os.path.join(dossier, "index.html"), "w", encoding="utf-8", newline="\n") as f:
         f.write(html)
     fichiers = ["./", f"app.js?v={v['app.js']}", f"style.css?v={v['style.css']}", f"moteur.js?v={v['moteur.js']}",
-                f"telephone.js?v={v['telephone.js']}", f"cartes.js?v={v['cartes.js']}",
+                f"pages.js?v={v['pages.js']}", f"telephone.js?v={v['telephone.js']}", f"cartes.js?v={v['cartes.js']}",
                 "jsQR.js", "manifest.webmanifest", *ICONES]
     version = hashlib.sha1("".join(sorted(v.values())).encode() + html.encode()).hexdigest()[:12]
     with open(os.path.join(STATIQUE, "telephone", "sw.js"), encoding="utf-8") as f:

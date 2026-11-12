@@ -301,5 +301,5 @@ window.MOTEUR = (() => {
     return [...notes, ...(notes.length ? [""] : []), ...lignes].join("\n") + "\n";
   }
 
-  return { lire, lireLignes, texte, categorie, modifier, fiche, page, resume, lireClasseur, ecrireClasseur, lienCardmarket, dossier, BASES };
+  return { lire, lireLignes, texte, categorie, ordonner, modifier, fiche, page, resume, lireClasseur, ecrireClasseur, lienCardmarket, dossier, BASES };
 })();

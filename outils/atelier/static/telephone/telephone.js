@@ -17,6 +17,10 @@
   const ecrireLocal = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (_) {} };
   const lireAcces = () => { try { const a = JSON.parse(lireLocal(ACCES) || "null"); return a && a.d && a.c ? a : null; } catch (_) { return null; } };
   let acces = lireAcces();
+  // sans PC (« Commencer ici ») : les decks sont gardés sur le téléphone (@depot, rangés comme dans la sauvegarde), et
+  // leurs pages sont faites ici (pages.js) au lieu d'arriver du PC
+  const LOCAL = "telephone-local";
+  let local = !acces && lireLocal(LOCAL) === "1";
   // le budget par carte et les réglages de la page, connus avant app.js (qui les lit au chargement)
   try { window.REGLAGES = JSON.parse(lireLocal(REGLAGES) || "{}"); } catch (_) { window.REGLAGES = {}; }
 
@@ -69,6 +73,10 @@
   let enCours = null;
   function synchroniser() {
     return enCours || (enCours = (async () => {
+      if (local) {                                      // sans PC : rien à recevoir ; les pages, faites ici si elles manquent
+        if (!(await fichier("index.json.gz"))) { await recalculer(await depot()); return true; }
+        return false;
+      }
       const commit = (await gh(`/repos/${acces.d}/git/ref/heads/${BRANCHE}`)).object.sha;
       if (commit === lireLocal(COMMIT)) return false;
       const c = await gh(`/repos/${acces.d}/git/commits/${commit}`);
@@ -221,7 +229,7 @@
     l.push({ ...o, quand: Date.now(), id: Math.random().toString(36).slice(2) });
     await BD.ecrire("@attente", l);
     clearTimeout(minuterie);
-    minuterie = setTimeout(() => envoyer().catch(() => {}), 2500);       // une série de modifications part en une fois
+    minuterie = setTimeout(() => envoyer().catch(() => {}), local ? 300 : 2500);     // une série de modifications part en une fois
   }
 
   // ------------------------------------------------------------------ la base de cartes (cartes.js, dans un Worker)
@@ -279,6 +287,9 @@
       await message("reglages", [{ sansUb: !!(window.REGLAGES || {}).sans_ub_illustrations }]);
       Object.assign(etatBase, { prete: true, date: r.date, nb: r.nb });
       etatBase.construction.etape = "";
+      if (local) {                                         // sans PC : les pages refaites avec la base (prix, noms français)
+        recalculer(await depot()).then(() => { if (window.route && T.pret && document.querySelector("#modale")?.hidden !== false) route(); }).catch(() => {});
+      }
     })().catch((e) => { baseEnCours = null; etatBase.construction.erreur = e.message; throw e; }));
   }
   // une nouvelle base publiée : téléchargée (pas sur les données mobiles, sauf si on la demande), puis relue
@@ -590,6 +601,10 @@
     const r = p.match(/^\/api\/decks\/([^/]+)\/(renommer|supprimer)$/);
     if (r && r[2] === "renommer") return renommerDeck(decodeURIComponent(r[1]), b.nom);
     if (r) return supprimerDeck(decodeURIComponent(r[1]));
+    const v = p.match(/^\/api\/decks\/([^/]+)\/(versions|versions\/supprimer|restaurer)$/);
+    if (v && v[2] === "versions") return sauverVersion(decodeURIComponent(v[1]), b);
+    if (v && v[2] === "restaurer") return restaurer(decodeURIComponent(v[1]), b.fichier);
+    if (v) return supprimerVersion(decodeURIComponent(v[1]), b.fichier);
     if (m && m[2] === "modifier") return modifierDeck(decodeURIComponent(m[1]), b);
     if (m && m[2] === "achats") return marquerAchats(decodeURIComponent(m[1]), b.possedees || {});
     if (m) return ecarterSuggestion(decodeURIComponent(m[1]), b.nom, b.ecarter !== false);
@@ -764,133 +779,276 @@
     if (!r.ok) throw Object.assign(new Error(`GitHub ne répond pas (${r.status}).`), { statut: r.status });
     return r.text();
   }
+  // les opérations en attente, rejouées sur des fichiers : ceux de la sauvegarde (relié au PC), ou ceux gardés sur le
+  // téléphone (sans PC). source(rel) : le contenu d'un fichier au départ (null s'il n'existe pas). prefixe : devant ce
+  // que l'historique du deck note (« Téléphone : … » quand le PC le lira).
+  async function rejouer(ops, source, prefixe) {
+    const originaux = new Map(), fichiers = new Map(), supprimes = new Set();
+    // un deck renommé ou supprimé : tout son dossier part (effaces), et va sous le nouveau nom (origine : nouveau
+    // dossier → dossier de départ où sont ses fichiers)
+    const origine = new Map(), effaces = new Set();
+    const lire = async (rel) => {
+      if (!originaux.has(rel)) {
+        const dossier = rel.split("/")[0], src = origine.has(dossier) ? origine.get(dossier) : effaces.has(dossier) ? null : dossier;
+        const t = src ? await source(src + rel.slice(dossier.length)) : null;
+        originaux.set(rel, t);
+        fichiers.set(rel, t);
+      }
+      return fichiers.get(rel);
+    };
+    const avant = new Map(), raisons = new Map(), nouveaux = [];
+    const sous = (rel, dossier) => rel.startsWith(dossier + "/");
+    const deplacer = (a, n) => {                        // ce qui est déjà lu ou refait suit le deck
+      for (const m of [originaux, fichiers]) for (const [rel, t] of [...m]) if (sous(rel, a)) { m.delete(rel); if (n) m.set(n + rel.slice(a.length), t); }
+      for (const rel of [...supprimes]) if (sous(rel, a)) supprimes.delete(rel);
+      for (const m of [avant, raisons]) if (m.has(a)) { if (n) m.set(n, m.get(a)); m.delete(a); }
+    };
+    const titre = (id) => id.replace(/^Deck /, "");
+    for (const o of ops) {
+      if (o.f === "creer") {
+        if ((await lire(`${o.deck}/archidekt.txt`)) != null) continue;      // un deck de ce nom vient d'arriver du PC
+        fichiers.set(`${o.deck}/archidekt.txt`, o.texte);
+        if ((await lire(`${o.deck}/achats.json`)) == null) fichiers.set(`${o.deck}/achats.json`, ACHATS_VIDES);
+        nouveaux.push("nouveau deck " + titre(o.deck));
+      } else if (o.f === "renommer" || o.f === "supprimer") {
+        const src = origine.has(o.deck) ? origine.get(o.deck) : o.deck;
+        origine.delete(o.deck);
+        effaces.add(src);
+        deplacer(o.deck, o.vers);
+        if (o.vers) origine.set(o.vers, src);
+        nouveaux.push(o.vers ? `${titre(o.deck)} renommé ${titre(o.vers)}` : `${titre(o.deck)} supprimé`);
+      } else if (o.f === "classeur") {
+        const c = MOTEUR.lireClasseur((await lire("Classeur/classeur.txt")) || "");
+        for (const [nom, n] of Object.entries(o.d.ajouter || {})) c.cartes.set(nom, (c.cartes.get(nom) || 0) + n);
+        for (const [nom, n] of Object.entries(o.d.fixer || {})) { if (n > 0) c.cartes.set(nom, n); else c.cartes.delete(nom); }
+        fichiers.set("Classeur/classeur.txt", MOTEUR.ecrireClasseur(c));
+      } else {
+        const liste = await lire(`${o.deck}/archidekt.txt`);
+        if (liste == null) continue;                        // deck supprimé ailleurs entre-temps
+        const changer = (texte, raison) => {                // la liste change : l'historique gardera celle d'avant
+          if (!avant.has(o.deck)) avant.set(o.deck, liste);
+          fichiers.set(`${o.deck}/archidekt.txt`, texte);
+          raisons.set(o.deck, [...(raisons.get(o.deck) || []), raison]);
+        };
+        if (o.f === "deck") {
+          const e = MOTEUR.lire(liste);
+          // une impression française choisie : notée dans visuels.json, comme sur le PC
+          const vf = `${o.deck}/visuels.json`, L = o.d.edition && o.d.edition.set ? JSON.parse((await lire(vf)) || "{}") : null;
+          const L0 = JSON.stringify(L);
+          try { MOTEUR.modifier(e, o.op, o.d, L); } catch (_) { continue; }
+          if (L && JSON.stringify(L) !== L0) fichiers.set(vf, JSON.stringify(L, null, 1));
+          changer(MOTEUR.texte(e), o.raison);
+        } else if (o.f === "restaurer") {
+          const t = await lire(`${o.deck}/${o.fichier}`);
+          if (t != null) changer(MOTEUR.texte(MOTEUR.lire(t)), o.raison);
+        } else if (o.f === "version") {                      // decks.sauver_version
+          fichiers.set(`${o.deck}/${o.fichier}`, liste);
+          supprimes.delete(`${o.deck}/${o.fichier}`);
+          const mf = `${o.deck}/versions/versions.json`, meta = JSON.parse((await lire(mf)) || "{}");
+          meta[o.fichier.split("/").pop()] = { nom: o.nom, note: o.note, date: o.date };
+          fichiers.set(mf, JSON.stringify(meta, null, 1));
+          nouveaux.push(`version « ${o.nom} » de ${titre(o.deck)}`);
+        } else if (o.f === "supprimerVersion") {             // decks.supprimer_version
+          await lire(`${o.deck}/${o.fichier}`);
+          fichiers.set(`${o.deck}/${o.fichier}`, null);
+          supprimes.add(`${o.deck}/${o.fichier}`);
+          const mf = `${o.deck}/versions/versions.json`, meta = JSON.parse((await lire(mf)) || "{}");
+          delete meta[o.fichier.split("/").pop()];
+          fichiers.set(mf, JSON.stringify(meta, null, 1));
+        } else if (o.f === "achats") {
+          const t = await lire(`${o.deck}/achats.json`);
+          let poss = t ? JSON.parse(t).possedees || {} : null;
+          if (!poss) {                                      // jamais noté : le deck est déjà monté (decks.possedees)
+            poss = {};
+            for (const e of MOTEUR.lire(liste)) if (MOTEUR.categorie(e) !== "Maybeboard") poss[e.nom] = (poss[e.nom] || 0) + e.n;
+          }
+          for (const [nom, n] of Object.entries(o.d)) poss[nom] = Math.max(0, parseInt(n, 10) || 0);
+          fichiers.set(`${o.deck}/achats.json`, JSON.stringify({ possedees: poss }, null, 1));
+        } else if (o.f === "ecarter") {
+          const t = await lire(`${o.deck}/suggestions.json`);
+          const l = ((t && JSON.parse(t).ecartees) || []).filter((n) => n !== o.d.nom);
+          if (o.d.oui) l.push(o.d.nom);
+          fichiers.set(`${o.deck}/suggestions.json`, JSON.stringify({ ecartees: l.sort() }, null, 1));
+        }
+      }
+    }
+    // l'historique du deck, comme sur le PC (decks.instantane) : la liste d'avant, et ce qui a changé
+    const quand = horodatage();
+    for (const [deck, t] of avant) {
+      if (fichiers.get(`${deck}/archidekt.txt`) === t) continue;
+      let nom = `${quand}.txt`, k = 2;                      // deux envois dans la même seconde : _2, _3…
+      while ((await lire(`${deck}/historique/${nom}`)) != null) nom = `${quand}_${k++}.txt`;
+      fichiers.set(`${deck}/historique/${nom}`, t);
+      const j = JSON.parse((await lire(`${deck}/historique/journal.json`)) || "{}");
+      j[nom] = prefixe + raisons.get(deck).join(" · ");
+      fichiers.set(`${deck}/historique/journal.json`, JSON.stringify(j, null, 1));
+    }
+    const resume = [...nouveaux, ...[...raisons.values()].flat()].slice(0, 3).join(" · ");
+    const touches = new Set([...fichiers.keys(), ...supprimes].map((r) => r.split("/")[0]).concat([...origine.keys()], [...effaces]));
+    return { originaux, fichiers, supprimes, origine, effaces, resume, touches, sous };
+  }
+
+  // relié au PC : un commit sur la branche des decks de la sauvegarde ; le PC le recevra par sa synchronisation
+  async function envoyerGithub(ops) {
+    const index = await fichier("index.json.gz");
+    const branche = (index && index.branche) || "main";
+    for (let essai = 0; essai < 3; essai++) {
+      const tete = (await gh(`/repos/${acces.d}/git/ref/heads/${branche}`)).object.sha;
+      const arbre = (await gh(`/repos/${acces.d}/git/commits/${tete}`)).tree.sha;
+      const r = await rejouer(ops, (rel) => contenu(rel, tete), "Téléphone : ");
+      // les dossiers renommés ou supprimés : chaque fichier effacé, ou repris tel quel sous le nouveau nom (sans le télécharger)
+      const entrees = new Map();
+      if (r.effaces.size) {
+        const tout = await gh(`/repos/${acces.d}/git/trees/${arbre}?recursive=1`);
+        if (tout.truncated) throw new Error("La sauvegarde est trop grande pour renommer un deck d'ici : fais-le sur le PC.");
+        const blobs = (tout.tree || []).filter((x) => x.type === "blob");
+        for (const x of blobs) if (r.effaces.has(x.path.split("/")[0])) entrees.set(x.path, { path: x.path, mode: x.mode, type: "blob", sha: null });
+        for (const [n, a] of r.origine) {
+          for (const x of blobs) if (r.sous(x.path, a)) entrees.set(n + x.path.slice(a.length), { path: n + x.path.slice(a.length), mode: x.mode, type: "blob", sha: x.sha });
+        }
+      }
+      for (const rel of r.supprimes) if (r.originaux.get(rel) != null) entrees.set(rel, { path: rel, mode: "100644", type: "blob", sha: null });
+      for (const [rel, t] of r.fichiers) {
+        if (t == null || (t === r.originaux.get(rel) && !entrees.has(rel))) continue;
+        if (t === r.originaux.get(rel) && entrees.get(rel).sha) continue;                 // déplacé tel quel
+        const b = await ghEcrire("POST", `/repos/${acces.d}/git/blobs`, { content: t, encoding: "utf-8" });
+        entrees.set(rel, { path: rel, mode: "100644", type: "blob", sha: b.sha });
+      }
+      if (!entrees.size) return null;
+      const nouvel = await ghEcrire("POST", `/repos/${acces.d}/git/trees`, { base_tree: arbre, tree: [...entrees.values()] });
+      const commit = (await ghEcrire("POST", `/repos/${acces.d}/git/commits`, { message: "Téléphone : " + (r.resume || "achats, classeur"), tree: nouvel.sha, parents: [tete] })).sha;
+      try {
+        await ghEcrire("PATCH", `/repos/${acces.d}/git/refs/heads/${branche}`, { sha: commit });
+        return commit;
+      } catch (err) {
+        if (err.statut !== 422) throw err;                 // 422 : le PC a envoyé entre-temps, on rejoue sur sa version
+      }
+    }
+    throw new Error("La sauvegarde change trop vite : nouvel essai plus tard.");
+  }
+
+  // sans PC : les fichiers du téléphone (@depot), puis les pages des decks touchés, refaites ici
+  async function envoyerLocal(ops) {
+    const d = await depot(), f = d.fichiers, depart = { ...f };
+    const r = await rejouer(ops, async (rel) => (rel in depart ? depart[rel] : null), "");
+    for (const rel of Object.keys(f)) if (r.effaces.has(rel.split("/")[0])) delete f[rel];
+    for (const [n, a] of r.origine) for (const rel of Object.keys(depart)) if (r.sous(rel, a)) f[n + rel.slice(a.length)] = depart[rel];
+    for (const rel of r.supprimes) delete f[rel];
+    for (const [rel, t] of r.fichiers) if (t != null) f[rel] = t;
+    d.modifies = d.modifies || {};
+    for (const [n, a] of r.origine) if (d.modifies[a]) d.modifies[n] = d.modifies[a];
+    for (const id of r.touches) if (f[`${id}/archidekt.txt`] !== depart[`${id}/archidekt.txt`]) d.modifies[id] = Date.now() / 1000;
+    for (const id of Object.keys(d.modifies)) if (!(`${id}/archidekt.txt` in f)) delete d.modifies[id];
+    await BD.ecrire("@depot", d);
+    await recalculer(d, r.touches);
+  }
+
   let envoi = null;
   function envoyer() {
     return envoi || (envoi = (async () => {
       const ops = await attente();
-      if (!ops.length || !acces) return false;
-      const index = await fichier("index.json.gz");
-      const branche = (index && index.branche) || "main";
-      for (let essai = 0; essai < 3; essai++) {
-        const tete = (await gh(`/repos/${acces.d}/git/ref/heads/${branche}`)).object.sha;
-        const arbre = (await gh(`/repos/${acces.d}/git/commits/${tete}`)).tree.sha;
-        const originaux = new Map(), fichiers = new Map();
-        // un deck renommé ou supprimé dans cet envoi : tout son dossier part (effaces), et va sous le nouveau nom
-        // (origine : nouveau dossier → dossier de la sauvegarde où sont ses fichiers)
-        const origine = new Map(), effaces = new Set();
-        const lire = async (rel) => {
-          if (!originaux.has(rel)) {
-            const dossier = rel.split("/")[0], src = origine.has(dossier) ? origine.get(dossier) : effaces.has(dossier) ? null : dossier;
-            const t = src ? await contenu(src + rel.slice(dossier.length), tete) : null;
-            originaux.set(rel, t);
-            fichiers.set(rel, t);
-          }
-          return fichiers.get(rel);
-        };
-        const avant = new Map(), raisons = new Map(), nouveaux = [];
-        const sous = (rel, dossier) => rel.startsWith(dossier + "/");
-        const deplacer = (a, n) => {                        // ce qui est déjà lu ou refait dans cet envoi suit le deck
-          for (const m of [originaux, fichiers]) for (const [rel, t] of [...m]) if (sous(rel, a)) { m.delete(rel); if (n) m.set(n + rel.slice(a.length), t); }
-          for (const m of [avant, raisons]) if (m.has(a)) { if (n) m.set(n, m.get(a)); m.delete(a); }
-        };
-        for (const o of ops) {
-          if (o.f === "creer") {
-            if ((await lire(`${o.deck}/archidekt.txt`)) != null) continue;      // un deck de ce nom vient d'arriver du PC
-            fichiers.set(`${o.deck}/archidekt.txt`, o.texte);
-            if ((await lire(`${o.deck}/achats.json`)) == null) fichiers.set(`${o.deck}/achats.json`, ACHATS_VIDES);
-            nouveaux.push("nouveau deck " + o.deck.replace(/^Deck /, ""));
-          } else if (o.f === "renommer" || o.f === "supprimer") {
-            const src = origine.has(o.deck) ? origine.get(o.deck) : o.deck;
-            origine.delete(o.deck);
-            effaces.add(src);
-            deplacer(o.deck, o.vers);
-            if (o.vers) origine.set(o.vers, src);
-            nouveaux.push(o.vers ? `${o.deck.replace(/^Deck /, "")} renommé ${o.vers.replace(/^Deck /, "")}` : `${o.deck.replace(/^Deck /, "")} supprimé`);
-          } else if (o.f === "deck" || o.f === "achats" || o.f === "ecarter") {
-            const liste = await lire(`${o.deck}/archidekt.txt`);
-            if (liste == null) continue;                    // deck supprimé sur le PC entre-temps
-            if (o.f === "deck") {
-              const e = MOTEUR.lire(liste);
-              // une impression française choisie : notée dans visuels.json, comme sur le PC
-              const vf = `${o.deck}/visuels.json`, L = o.d.edition && o.d.edition.set ? JSON.parse((await lire(vf)) || "{}") : null;
-              const L0 = JSON.stringify(L);
-              try { MOTEUR.modifier(e, o.op, o.d, L); } catch (_) { continue; }
-              if (L && JSON.stringify(L) !== L0) fichiers.set(vf, JSON.stringify(L, null, 1));
-              if (!avant.has(o.deck)) avant.set(o.deck, liste);
-              fichiers.set(`${o.deck}/archidekt.txt`, MOTEUR.texte(e));
-              raisons.set(o.deck, [...(raisons.get(o.deck) || []), o.raison]);
-            } else if (o.f === "achats") {
-              const t = await lire(`${o.deck}/achats.json`);
-              let poss = t ? JSON.parse(t).possedees || {} : null;
-              if (!poss) {                                  // jamais noté : le deck est déjà monté (decks.possedees)
-                poss = {};
-                for (const e of MOTEUR.lire(liste)) if (MOTEUR.categorie(e) !== "Maybeboard") poss[e.nom] = (poss[e.nom] || 0) + e.n;
-              }
-              for (const [nom, n] of Object.entries(o.d)) poss[nom] = Math.max(0, parseInt(n, 10) || 0);
-              fichiers.set(`${o.deck}/achats.json`, JSON.stringify({ possedees: poss }, null, 1));
-            } else {
-              const t = await lire(`${o.deck}/suggestions.json`);
-              const l = ((t && JSON.parse(t).ecartees) || []).filter((n) => n !== o.d.nom);
-              if (o.d.oui) l.push(o.d.nom);
-              fichiers.set(`${o.deck}/suggestions.json`, JSON.stringify({ ecartees: l.sort() }, null, 1));
-            }
-          } else if (o.f === "classeur") {
-            const c = MOTEUR.lireClasseur((await lire("Classeur/classeur.txt")) || "");
-            for (const [nom, n] of Object.entries(o.d.ajouter || {})) c.cartes.set(nom, (c.cartes.get(nom) || 0) + n);
-            for (const [nom, n] of Object.entries(o.d.fixer || {})) { if (n > 0) c.cartes.set(nom, n); else c.cartes.delete(nom); }
-            fichiers.set("Classeur/classeur.txt", MOTEUR.ecrireClasseur(c));
-          }
-        }
-        // l'historique du deck, comme sur le PC (decks.instantane) : la liste d'avant, et ce qui a changé
-        const quand = horodatage();
-        for (const [deck, t] of avant) {
-          if (fichiers.get(`${deck}/archidekt.txt`) === t) continue;
-          fichiers.set(`${deck}/historique/${quand}.txt`, t);
-          const j = JSON.parse((await lire(`${deck}/historique/journal.json`)) || "{}");
-          j[`${quand}.txt`] = "Téléphone : " + raisons.get(deck).join(" · ");
-          fichiers.set(`${deck}/historique/journal.json`, JSON.stringify(j, null, 1));
-        }
-        // les dossiers renommés ou supprimés : chaque fichier effacé, ou repris tel quel sous le nouveau nom (sans le télécharger)
-        const entrees = new Map();
-        if (effaces.size) {
-          const tout = await gh(`/repos/${acces.d}/git/trees/${arbre}?recursive=1`);
-          if (tout.truncated) throw new Error("La sauvegarde est trop grande pour renommer un deck d'ici : fais-le sur le PC.");
-          const blobs = (tout.tree || []).filter((x) => x.type === "blob");
-          for (const x of blobs) if (effaces.has(x.path.split("/")[0])) entrees.set(x.path, { path: x.path, mode: x.mode, type: "blob", sha: null });
-          for (const [n, a] of origine) {
-            for (const x of blobs) if (sous(x.path, a)) entrees.set(n + x.path.slice(a.length), { path: n + x.path.slice(a.length), mode: x.mode, type: "blob", sha: x.sha });
-          }
-        }
-        for (const [rel, t] of fichiers) {
-          if (t == null || (t === originaux.get(rel) && !entrees.has(rel))) continue;
-          if (t === originaux.get(rel) && entrees.get(rel).sha) continue;                 // déplacé tel quel
-          const b = await ghEcrire("POST", `/repos/${acces.d}/git/blobs`, { content: t, encoding: "utf-8" });
-          entrees.set(rel, { path: rel, mode: "100644", type: "blob", sha: b.sha });
-        }
-        let commit = null;
-        if (entrees.size) {
-          const nouvel = await ghEcrire("POST", `/repos/${acces.d}/git/trees`, { base_tree: arbre, tree: [...entrees.values()] });
-          const resume = [...nouveaux, ...[...raisons.values()].flat()].slice(0, 3).join(" · ") || "achats, classeur";
-          commit = (await ghEcrire("POST", `/repos/${acces.d}/git/commits`, { message: "Téléphone : " + resume, tree: nouvel.sha, parents: [tete] })).sha;
-          try {
-            await ghEcrire("PATCH", `/repos/${acces.d}/git/refs/heads/${branche}`, { sha: commit });
-          } catch (err) {
-            if (err.statut === 422) continue;               // le PC a envoyé entre-temps : on rejoue sur sa version
-            throw err;
-          }
-        }
-        // envoyé : ces opérations sont faites ; les pages refaites ici attendent celles du PC qui les contiennent
-        const restent = (await attente()).filter((x) => !ops.some((y) => y.id === x.id));
-        await BD.ecrire("@attente", restent);
-        const s = await lesSurcharges(), fin = Math.max(...ops.map((x) => x.quand));
-        for (const x of Object.values(s)) if (!x.c && x.quand <= fin) x.c = commit || "sans";
-        for (const [k, x] of Object.entries(s)) if (x.c === "sans") delete s[k];
-        await BD.ecrire("@surcharges", s);
-        return true;
+      if (!ops.length || !(acces || local)) return false;
+      const commit = local ? await envoyerLocal(ops) : await envoyerGithub(ops);
+      // fait : ces opérations partent de la file ; sans PC, les pages refaites ici remplacent tout de suite celles
+      // d'attente ; relié au PC, elles attendent celles du PC qui les contiennent
+      const restent = (await attente()).filter((x) => !ops.some((y) => y.id === x.id));
+      await BD.ecrire("@attente", restent);
+      const s = await lesSurcharges(), fin = Math.max(...ops.map((x) => x.quand));
+      for (const [k, x] of Object.entries(s)) {
+        if (x.c || x.quand > fin) continue;
+        if (local || !commit) delete s[k]; else x.c = commit;
       }
-      throw new Error("La sauvegarde change trop vite : nouvel essai plus tard.");
+      await BD.ecrire("@surcharges", s);
+      return true;
     })().finally(() => { envoi = null; }));
   }
+
+  // ------------------------------------------------------------------ sans PC : les pages faites ici
+  const depot = async () => (await BD.lire("@depot").catch(() => null)) || { fichiers: {}, modifies: {} };
+  // ce dont pages.js a besoin : les fiches (base de cartes, sinon Scryfall), les fonctions, les impressions choisies
+  function outilsPages(f) {
+    const avecBase = (fn, defaut) => (...a) => (etatBase.prete ? message(fn, a).catch(() => defaut) : Promise.resolve(defaut));
+    return {
+      fiches: async (noms) => {
+        const res = etatBase.prete ? await message("fiches", [noms]).catch(() => ({})) : {};
+        for (const n of noms) if (!res[n]) { const x = await ficheCarte(n).catch(() => null); if (x && x.image) res[n] = x; }
+        return res;
+      },
+      fonctions: avecBase("fonctionsCartes", {}),
+      impressionImage: avecBase("impressionImage", null),
+      gcListe: avecBase("gameChangers", []),
+      version: async (nom, ed, lang) => {
+        const v = lang && lang !== "en" ? await uneImpression(ed.set, ed.num, lang).catch(() => null) : null;
+        return v || (etatBase.prete ? await message("impression", [nom, ed.set, ed.num]).catch(() => null) : null)
+          || await uneImpression(ed.set, ed.num, "en").catch(() => null);
+      },
+      budget: budget(),
+      categories: PAGES.categories(f),
+    };
+  }
+  // les pages des decks touchés (tous si touches est vide), puis l'accueil, rangées comme celles du PC
+  async function recalculer(d, touches = null) {
+    const f = d.fichiers, o = outilsPages(f), ids = PAGES.decksDe(f);
+    const ancien = (await fichier("index.json.gz")) || { decks: {} }, pages = {}, decks = {};
+    for (const id of ids) {
+      const k = "decks/" + id;
+      if (!touches || touches.has(id) || !ancien.decks[id]) {
+        pages[id] = await PAGES.deck(id, f, { ...o, modifie: (d.modifies || {})[id] || 0 });
+        await BD.ecrire(k, { sha: "local", donnees: pages[id] });
+      } else pages[id] = await fichier(k);
+      decks[id] = k;
+    }
+    for (const k of await BD.cles()) if (String(k).startsWith("decks/") && !Object.values(decks).includes(k)) await BD.effacer(k);
+    const api = await PAGES.index(f, pages, o);
+    api["/api/options"] = { budget: budget() || null, budget_defaut: 5, langues: {}, langue_cartes: "", sans_ub_illustrations: false, sans_ub_suggestions: false };
+    await BD.ecrire("index.json.gz", { sha: "local", donnees: { format: FORMAT, date: Date.now() / 1000, version: "", compte: null,
+      reglages: window.REGLAGES, decks, api, source: null, branche: null, local: true } });
+    memoire.clear();
+    fusion = null;
+  }
+  // « Commencer ici » : un Atelier sur ce téléphone, sans PC ni compte
+  async function commencerIci() {
+    ecrireLocal(LOCAL, "1");
+    local = true;
+    if (!(await BD.lire("@depot").catch(() => null))) await BD.ecrire("@depot", { fichiers: {}, modifies: {} });
+    window.REGLAGES = { budget: 5, sans_ub_illustrations: false, ...(window.REGLAGES || {}) };
+    ecrireLocal(REGLAGES, JSON.stringify(window.REGLAGES));
+    await recalculer(await depot());
+    location.hash = "#/";
+    location.reload();
+  }
+
+  // les versions d'un deck : enregistrer la liste actuelle sous un nom, en supprimer une, revenir à une version
+  const date2Iso = (t = new Date()) => `${t.getFullYear()}-${date2(t.getMonth() + 1)}-${date2(t.getDate())}T${date2(t.getHours())}:${date2(t.getMinutes())}:${date2(t.getSeconds())}`;
+  async function sauverVersion(id, b) {
+    const nom = String(b.nom || "").trim();
+    if (!nom) throw new Error("donne un nom à la version");
+    const slug = nom.toLowerCase().replace(/[^\p{L}\p{N}_-]+/gu, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "version";
+    const fichier = `versions/${horodatage()}_${slug}.txt`, note = String(b.note || "").trim(), page = await api(`/api/decks/${id}`);
+    const vs = await api(`/api/decks/${id}/versions`).catch(() => []);
+    await surcharger({ [`/api/decks/${id}/versions`]: [{ fichier, type: "nommee", nom, note, date: Date.now() / 1000, total: page.total, plus: [], moins: [] }, ...vs] });
+    await enAttente({ f: "version", deck: id, nom, note, fichier, date: date2Iso() });
+    return { fichier };
+  }
+  async function supprimerVersion(id, fichier) {
+    if (!String(fichier).startsWith("versions/")) throw new Error("seules les versions nommées peuvent être supprimées");
+    const vs = await api(`/api/decks/${id}/versions`).catch(() => []);
+    await surcharger({ [`/api/decks/${id}/versions`]: vs.filter((v) => v.fichier !== fichier) });
+    await enAttente({ f: "supprimerVersion", deck: id, fichier });
+    return { ok: true };
+  }
+  async function restaurer(id, fichier) {
+    const texte = local ? (await depot()).fichiers[`${id}/${fichier}`] : await contenu(`${id}/${fichier}`, ((await fichier_("index.json.gz")) || {}).branche || "main");
+    if (texte == null) throw new Error(`version introuvable : ${fichier}`);
+    const v = ((await api(`/api/decks/${id}/versions`).catch(() => [])).find((x) => x.fichier === fichier) || {}).nom || fichier;
+    const prec = await api(`/api/decks/${id}`), entrees = MOTEUR.lire(texte), infos = {};
+    for (const e of entrees) if (!prec.cartes.some((c) => c.nom === e.nom)) infos[e.nom] = await ficheCarte(e.nom);
+    const page = MOTEUR.page(id, entrees, prec, infos, budget());
+    await surcharger({ [`/api/decks/${id}`]: page, [`/api/decks/${id}/export?format=archidekt`]: MOTEUR.texte(entrees) });
+    await enAttente({ f: "restaurer", deck: id, fichier, raison: `retour à « ${v} »` });
+    return copie(page);
+  }
+  const fichier_ = (k) => fichier(k);
 
   // ------------------------------------------------------------------ relier le téléphone au PC
   function appairer(texte) {
@@ -1002,8 +1160,9 @@
     if (!acces) {
       el.innerHTML = `<div class="tel-accueil">
         <h1>Atelier MTG</h1>
-        <p>Sur ton PC, ouvre l'Atelier : Options › Téléphone. Puis scanne le QR code.</p>
-        <button class="btn btn-accent" id="tel-scanner">Scanner le QR code</button>
+        <button class="btn btn-accent" id="tel-commencer">Commencer ici</button>
+        <button class="btn" id="tel-scanner">Scanner le QR code du PC</button>
+        <p class="muet petit">Sur le PC : Atelier › Options › Téléphone.</p>
         <video id="tel-video" playsinline muted hidden></video>
         <details class="tel-coller"><summary>Coller le lien</summary>
           <div class="form-ligne"><input class="champ" id="tel-lien" placeholder="https://atelier-mtg.github.io/#appairer=…" autocomplete="off">
@@ -1023,6 +1182,7 @@
         catch (err) { erreur(err.name === "NotAllowedError" ? "Autorise l'appareil photo, ou colle le lien." : err.message); ev.target.disabled = false; }
       };
       el.querySelector("#tel-relier").onclick = () => relier(el.querySelector("#tel-lien").value);
+      el.querySelector("#tel-commencer").onclick = (ev) => { ev.currentTarget.disabled = true; commencerIci().catch((err) => erreur(err.message)); };
       const inst = el.querySelector("#tel-installer");
       if (inst) inst.onclick = () => (invite ? invite.prompt() : erreur("Menu du navigateur › Installer l'application."));
       return;
@@ -1047,6 +1207,14 @@
 
   async function demarrer() {
     preparerBase();
+    if (local) {                                          // sans PC : tout est ici
+      bandeauInstaller();
+      envoyer().catch(() => {});
+      try { await synchroniser(); T.erreur = ""; } catch (err) { T.erreur = err.message; }
+      T.pret = true;
+      if (window.route) route();
+      return;
+    }
     if (!acces) return window.route && route();
     bandeauInstaller();
     envoyer().catch(() => {});                             // ce qui n'était pas parti (hors ligne)
@@ -1073,6 +1241,7 @@
     enAttente: async () => (await attente()).length,
     envoyer: () => envoyer(),
     acces: () => acces && { depot: acces.d },
+    local,
     delier: () => { oublier(); route(); },
     synchroniser: () => demarrer(),
   };
