@@ -1158,6 +1158,14 @@ summary.sg-puce:hover { background: color-mix(in srgb, var(--accent) 22%, transp
 }
 
 /* ---------------------------------------------------------------- import depuis une autre appli, où sont mes cartes, jetons */
+.boutons .a-gauche { margin-right: auto; }
+.fichier-cache { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.import-zone { position: relative; display: flex; align-items: center; gap: .7rem; margin: .4rem 0 .9rem; padding: 1.1rem 1rem;
+  border: 1px dashed var(--bord); border-radius: var(--rayon); color: var(--texte-2); cursor: pointer; }
+.import-zone:hover, .import-zone:focus-within { border-color: var(--accent); color: var(--texte); }
+.import-zone .ico { width: 1.4rem; height: 1.4rem; flex: none; color: var(--accent); }
+label.btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.accueil-vide { max-width: 72rem; }
 .ou-est { display: flex; flex-wrap: wrap; gap: .2rem 1.1rem; margin: .55rem 0 .2rem; color: var(--texte-2); }
 .ou-est .ico { width: 1em; height: 1em; vertical-align: -.15em; margin-right: .3rem; }
 .ligne .nom .ou-hint { flex-basis: 100%; font-size: .8rem; color: var(--accent); }

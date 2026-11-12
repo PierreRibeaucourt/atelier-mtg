@@ -137,7 +137,7 @@ def infos(noms):
         corps = json.dumps({"identifiers": [{"name": _cle(n)} for n in bloc]}).encode()
         req = urllib.request.Request("https://api.scryfall.com/cards/collection", data=corps,
                                      headers={**ENTETES, "Content-Type": "application/json"})
-        time.sleep(0.1)
+        time.sleep(0.5)                        # Scryfall : 2 requêtes par seconde au plus (gros imports)
         rep = json.load(urllib.request.urlopen(req))
         trouvees = {_cle(c["name"]).lower(): c for c in rep.get("data", [])}
         for n in bloc:
@@ -417,7 +417,7 @@ def impressions(cles):
         corps = json.dumps({"identifiers": [{"set": s, "collector_number": num} for s, num, _ in bloc]}).encode()
         req = urllib.request.Request("https://api.scryfall.com/cards/collection", data=corps,
                                      headers={**ENTETES, "Content-Type": "application/json"})
-        time.sleep(0.1)
+        time.sleep(0.5)
         rep = json.load(urllib.request.urlopen(req))
         trouvees = {(c["set"], c["collector_number"]): _impression(c) for c in rep.get("data", [])}
         with _verrou:

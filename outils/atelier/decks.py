@@ -20,6 +20,9 @@ ETIQUETTE = re.compile(r"\s*(\^[^^]*\^)\s*$")
 EDITION = re.compile(r"\s+\(([A-Za-z0-9]{2,6})\)(?:\s+([\w★-]+))?(?:\s+\*([A-Z]+)\*)?$")   # « (cmm) 410 *F* » : l'impression choisie
 VISUELS = "visuels.json"   # langue des impressions choisies dans l'Atelier, qu'Archidekt ne note pas : {"ima/205": "fr"}
 NOM_INTERDIT = re.compile(r'[<>:"/\\|?*]')
+# titres de section des exports (MTG Arena, Moxfield, ManaBox) : « Commander », « // Sideboard », « Deck (99) »
+SECTION = re.compile(r"^(?://\s*)?(commanders?|commandants?|deck|main|mainboard|main deck|sideboard|maybeboard|considering|"
+                     r"companions?|compagnons?)\s*(?:\(\d+\))?\s*:?$", re.I)
 BASES = {"Mountain", "Swamp", "Island", "Plains", "Forest", "Wastes"}
 
 
@@ -40,16 +43,25 @@ def lire(path):
 
 
 def lire_lignes(lignes):
-    """Lit une liste Archidekt, Moxfield ou MTG Arena (« 1x Nom (set) 123 [Tags] », « 1 Nom », « SB: 1 Nom »)."""
-    entrees, cmd_comment = [], None
+    """Lit une liste Archidekt, Moxfield ou MTG Arena (« 1x Nom (set) 123 [Tags] », « 1 Nom », « SB: 1 Nom »), et les
+    exports en sections (« Commander », « Deck », « Sideboard », avec ou sans « // ») : la section donne le tag."""
+    entrees, cmd_comment, section, reserve, dernier_bloc = [], None, None, [], []
     for ligne in lignes:
         l = ligne.strip()
         if not l:
+            if entrees and dernier_bloc is not None:
+                dernier_bloc = []                            # une ligne vide : le bloc suivant commence
+            continue
+        s = SECTION.match(l)
+        if s:
+            mot = s.group(1).lower()
+            section = "Commander" if mot.startswith("command") else "Maybeboard" if mot in ("sideboard", "maybeboard", "considering") else None
             continue
         if l.startswith(("//", "#")):
             m = re.search(r"commandant\s*:\s*(.+)$", l, re.I)
             if m:
                 cmd_comment = m.group(1).strip()
+            section = None                                   # « // Lands », « // Creatures » : le reste du deck
             continue
         etiquette = None
         m = ETIQUETTE.search(l)
@@ -58,17 +70,33 @@ def lire_lignes(lignes):
             l = l[:m.start()]
         m = LIGNE.match(l)
         if not m:
+            section = None                                   # « Creatures (30) », « About »… : une autre partie
             continue
         tags = [re.sub(r"\{[^}]*\}", "", t).strip() for t in (m.group(3) or "").split(",")]   # « Maybeboard{noDeck} »
         tags = [t for t in tags if t]
         if l.upper().startswith("SB:") and "Commander" not in tags:
             tags.insert(0, "Commander")
+        if section and section not in tags:
+            tags.insert(0, section)
         nom, edition = m.group(2).strip(), None
         ed = EDITION.search(nom)
         if ed:
             nom = nom[:ed.start()].strip()
             edition = dict(set=ed.group(1).lower(), num=ed.group(2) or "", fini=ed.group(3) or "")
         entrees.append(dict(n=int(m.group(1)), nom=nom, tags=tags, etiquette=etiquette, edition=edition))
+        if section == "Maybeboard":
+            reserve.append(entrees[-1])
+        dernier_bloc.append(entrees[-1])
+    # export MTGO (Moxfield…) : sans section « Commander », le commandant est la seule carte (ou le duo) de la réserve
+    if reserve and not cmd_comment and not any("Commander" in e["tags"] for e in entrees) and sum(e["n"] for e in reserve) <= 2:
+        for e in reserve:
+            e["tags"] = ["Commander"] + [t for t in e["tags"] if t != "Maybeboard"]
+    # export « MTGO » sans réserve : le commandant (ou le duo) seul à la fin, après une ligne vide
+    if (not cmd_comment and not any("Commander" in e["tags"] for e in entrees) and dernier_bloc
+            and len(dernier_bloc) < len(entrees) and sum(e["n"] for e in dernier_bloc) <= 2
+            and sum(e["n"] for e in entrees) >= 50 and not any("Maybeboard" in e["tags"] for e in dernier_bloc)):
+        for e in dernier_bloc:
+            e["tags"].insert(0, "Commander")
     if cmd_comment and not any("Commander" in e["tags"] for e in entrees):
         for e in entrees:
             if e["nom"] == cmd_comment:
@@ -343,6 +371,26 @@ def _dossier(nom):
     if NOM_INTERDIT.search(nom) or nom.endswith("."):
         raise ValueError('le nom ne peut pas contenir < > : " / \\ | ? * ni finir par un point')
     return nom if nom.startswith("Deck ") else "Deck " + nom
+
+
+def nom_libre(nom):
+    """Un nom de deck tiré d'un nom de fichier (« Kels - Dimir.txt »), sans les caractères interdits, et qui n'existe pas
+    encore : « Kels 2 » si « Deck Kels » existe déjà."""
+    nom = " ".join(NOM_INTERDIT.sub(" ", nom).split()).rstrip(". ")[:60].strip() or "Importé"
+    base, k = nom.removeprefix("Deck ").strip() or "Importé", 1
+    while os.path.exists(os.path.join(RACINE, _dossier(nom))):
+        k += 1
+        nom = f"{base} {k}"
+    return nom
+
+
+def tout_possede(deck):
+    """Deck importé d'une autre appli, déjà monté : toutes ses cartes (hors Maybeboard) sont notées comme là (Achats)."""
+    poss = Counter()
+    for e in lire(chemin(deck)):
+        if categorie(e) != "Maybeboard":
+            poss[e["nom"]] += e["n"]
+    _ecrire_achats(deck, dict(poss))
 
 
 def creer(nom, commandant="", liste=""):

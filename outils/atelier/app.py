@@ -454,6 +454,37 @@ def api_classeur_modifier():
     return jsonify(cartes=api_classeur().get_json()["cartes"], inconnues=inconnues)
 
 
+@app.post("/api/classeur/importer")
+def api_classeur_importer():
+    """Une collection exportée d'une autre appli (CSV de ManaBox, Moxfield, Archidekt… ou liste) : {texte, sans_decks,
+    remplacer, apercu}. sans_decks : sans les exemplaires déjà notés dans les decks (le classeur, c'est le reste) ;
+    remplacer : le classeur devient cette collection ; apercu : rien n'est écrit. Renvoie {cartes, en_decks, inconnues}
+    (en exemplaires), et le classeur s'il a changé."""
+    import classeur
+    d = request.get_json() or {}
+    lues = classeur.lire_fichier(str(d.get("texte") or ""))
+    I = ic.infos(list(lues))
+    propres, inconnues = {}, []
+    for nom, n in lues.items():
+        if I.get(nom):
+            propres[I[nom]["nom"]] = propres.get(I[nom]["nom"], 0) + n
+        else:
+            inconnues.append(nom)
+    dans_decks = {nom: sum(x[2] for x in v["decks"]) for nom, v in classeur.index().items()}
+    en_decks = sum(min(n, dans_decks.get(nom, 0)) for nom, n in propres.items())
+    r = dict(cartes=sum(propres.values()), en_decks=en_decks, inconnues=sorted(inconnues))
+    if d.get("apercu"):
+        return jsonify(r)
+    if d.get("sans_decks"):
+        propres = {nom: n - min(n, dans_decks.get(nom, 0)) for nom, n in propres.items()}
+    if d.get("remplacer"):
+        classeur.remplacer(propres)
+    else:
+        classeur.ajouter(propres)
+    en_fond(lambda: (ic.noms_francais(list(propres)), ic.rafraichir_prix(list(propres))))
+    return jsonify(**r, classeur=api_classeur().get_json()["cartes"])
+
+
 @app.get("/api/ou-sont")
 def api_ou_sont():
     """Où sont mes cartes, pour ne pas racheter une carte que j'ai déjà : {nom: {classeur, decks: [[deck, joués, que
@@ -485,8 +516,17 @@ def api_decks():
 def api_creer():
     """Nouveau deck : nom, commandant (facultatif), liste collée (facultatif, Archidekt / Moxfield / MTG Arena)."""
     d = request.get_json()
-    deck = decks.creer(d.get("nom", ""), d.get("commandant", ""), d.get("liste", ""))
+    deck, noms = _nouveau_deck(d.get("nom", ""), d.get("commandant", ""), d.get("liste", ""))
+    if noms:
+        en_fond(lambda: (ic.noms_francais(noms), ic.rafraichir_prix(noms)))
+    return jsonify(id=deck)
+
+
+def _nouveau_deck(nom, commandant, liste):
+    """Crée le deck, noms des cartes corrigés et lignes en double réunies. Renvoie (dossier, noms des cartes)."""
+    deck = decks.creer(nom, commandant, liste)
     entrees = decks.lire(decks.chemin(deck))
+    noms = []
     if entrees:
         I = ic.infos(decks.noms(entrees))
         change = False
@@ -508,8 +548,42 @@ def api_creer():
                 fh.write(decks.texte(entrees))
         noms = decks.noms(entrees)
         ic.infos(noms)
-        en_fond(lambda: (ic.noms_francais(noms), ic.rafraichir_prix(noms)))
-    return jsonify(id=deck)
+    return deck, noms
+
+
+@app.post("/api/decks/importer")
+def api_importer_decks():
+    """Plusieurs decks d'un coup, exportés d'une autre appli (ManaBox, Moxfield, Archidekt…) : {fichiers: [{nom, texte}],
+    montes}. Chaque fichier (liste ou CSV) devient un deck nommé comme lui ; montes : ses cartes sont notées comme déjà
+    là (onglet Achats). Renvoie {decks: [dossiers créés], echecs: [{nom, erreur}]}."""
+    import classeur
+    d = request.get_json() or {}
+    listes, echecs = [], []
+    for f in (d.get("fichiers") or [])[:200]:
+        nom = os.path.splitext(os.path.basename(str(f.get("nom") or "")))[0]
+        texte = str(f.get("texte") or "")
+        c = classeur.lire_csv(texte)
+        if c is not None:
+            texte = "\n".join(f"{n} {carte}" for carte, n in c.items())
+        if not decks.lire_lignes(texte.splitlines()):
+            echecs.append(dict(nom=nom, erreur="aucune carte reconnue"))
+        else:
+            listes.append((nom, texte))
+    ic.infos(sorted({e["nom"] for _, t in listes for e in decks.lire_lignes(t.splitlines())}))   # toutes les fiches d'un coup
+    faits, tous = [], set()
+    for nom, texte in listes:
+        try:
+            deck, noms = _nouveau_deck(decks.nom_libre(nom), "", texte)
+        except (ValueError, OSError) as e:
+            echecs.append(dict(nom=nom, erreur=str(e)))
+            continue
+        if d.get("montes"):
+            decks.tout_possede(deck)
+        faits.append(deck)
+        tous.update(noms)
+    if tous:
+        en_fond(lambda: (ic.noms_francais(sorted(tous)), ic.rafraichir_prix(sorted(tous))))
+    return jsonify(decks=faits, echecs=echecs)
 
 
 @app.post("/api/decks/<path:deck>/supprimer")

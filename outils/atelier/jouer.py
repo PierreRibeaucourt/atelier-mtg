@@ -56,7 +56,7 @@ def _collection(identifiants):
         corps = json.dumps({"identifiers": identifiants[i:i + 75]}).encode()
         req = urllib.request.Request("https://api.scryfall.com/cards/collection", data=corps,
                                      headers={**ENTETES, "Content-Type": "application/json"})
-        time.sleep(0.1)
+        time.sleep(0.5)                        # Scryfall : 2 requêtes par seconde au plus
         with urllib.request.urlopen(req, timeout=30) as r:
             cartes += json.load(r).get("data", [])
     return cartes

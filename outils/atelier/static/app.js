@@ -791,8 +791,11 @@ async function vueAccueil() {
           <span>À partir de son commandant, ou d'une liste copiée depuis Moxfield, Archidekt ou MTG Arena.</span></button>
         <button type="button" class="av-choix" id="av-recuperer">${ico("nuage")}<strong>Récupérer mes decks</strong>
           <span>Tu les as sauvegardés en ligne depuis un autre PC.</span></button>
+        <button type="button" class="av-choix" id="av-importer">${ico("dossier")}<strong>Importer mes decks</strong>
+          <span>Exportés de ManaBox, Moxfield, Archidekt… : un fichier par deck.</span></button>
       </div>${decksSupprimes}`;
     $("#av-creer").onclick = modaleNouveauDeck;
+    $("#av-importer").onclick = modaleImportDecks;
     $("#av-recuperer").onclick = () => modaleSauvegarde("recuperer", () => route());
     brancherCorbeille(corbeille);
     return;
@@ -941,7 +944,9 @@ function modaleNouveauDeck() {
     <details class="bloc"><summary>Coller une liste</summary>
       <textarea class="champ" id="nd-liste" rows="8" placeholder="1x Sol Ring [Ramp]&#10;1 Arcane Signet&#10;10 Mountain&#10;…"></textarea>
     </details>
-    <div class="boutons"><button class="btn" id="annuler">Annuler</button><button class="btn btn-accent" id="ok">Créer le deck</button></div>`, (b) => {
+    <div class="boutons"><button class="btn btn-discret a-gauche" id="nd-importer">${ico("dossier")}Importer des fichiers…</button>
+      <button class="btn" id="annuler">Annuler</button><button class="btn btn-accent" id="ok">Créer le deck</button></div>`, (b) => {
+    $("#nd-importer", b).onclick = modaleImportDecks;
     const montreCmd = () => {
       $("#nd-cmd", b).innerHTML = cmd ? `
         <div class="cmd-choisi">
@@ -970,6 +975,57 @@ function modaleNouveauDeck() {
         erreur(e);
         ok.disabled = false;
         ok.textContent = "Créer le deck";
+      }
+    };
+  });
+}
+
+// plusieurs decks d'un coup, exportés d'une autre appli (ManaBox, Moxfield, Archidekt…) : un fichier par deck, qui lui
+// donne son nom. Déjà montés (coché) : leurs cartes sont notées comme là, dans l'onglet Achats.
+function modaleImportDecks() {
+  ouvrirModale(`
+    <h2>Importer des decks</h2>
+    <label class="import-zone"><input type="file" class="fichier-cache" id="im-fichiers" multiple accept=".txt,.csv,text/plain,text/csv">
+      ${ico("dossier")}<span id="im-choix">Choisir les fichiers (.txt ou .csv, un par deck)</span></label>
+    <label class="petit"><input type="checkbox" id="im-montes" checked> Decks déjà montés</label>
+    <div id="im-res"></div>
+    <div class="boutons"><button class="btn" id="annuler">Annuler</button><button class="btn btn-accent" id="ok" disabled>Importer</button></div>`, (b) => {
+    let fichiers = [];
+    const ok = $("#ok", b);
+    $("#im-fichiers", b).onchange = async (ev) => {
+      fichiers = await Promise.all([...ev.target.files].map(async (f) => ({ nom: f.name, texte: await f.text() })));
+      $("#im-choix", b).textContent = fichiers.length
+        ? `${fichiers.length} fichier${fichiers.length > 1 ? "s" : ""} : ${fichiers.map((f) => f.nom).join(", ")}`
+        : "Choisir les fichiers (.txt ou .csv, un par deck)";
+      ok.disabled = !fichiers.length;
+    };
+    $("#annuler", b).onclick = fermerModale;
+    ok.onclick = async () => {
+      ok.disabled = true;
+      ok.textContent = "Import…";
+      try {
+        const r = await api("/api/decks/importer", { method: "POST", body: { fichiers, montes: $("#im-montes", b).checked } });
+        etat.decks = await api("/api/decks");
+        const fini = () => {
+          fermerModale();
+          if (r.decks.length === 1) location.hash = `#/deck/${enc(r.decks[0])}`;
+          else if (location.hash.replace(/^#\/?/, "")) location.hash = "#/";
+          else route();
+        };
+        if (!r.echecs.length) {
+          fini();
+          return toast(`${r.decks.length} deck${r.decks.length > 1 ? "s" : ""} importé${r.decks.length > 1 ? "s" : ""}.`);
+        }
+        $("#im-res", b).innerHTML = `<p class="petit">${r.decks.length} deck${r.decks.length > 1 ? "s" : ""} importé${r.decks.length > 1 ? "s" : ""}. Pas importés :</p>
+          <ul class="petit">${r.echecs.map((x) => `<li>${esc(x.nom)} : ${esc(x.erreur)}</li>`).join("")}</ul>`;
+        $("#annuler", b).hidden = true;
+        ok.disabled = false;
+        ok.textContent = "Fermer";
+        ok.onclick = fini;
+      } catch (e) {
+        erreur(e);
+        ok.disabled = false;
+        ok.textContent = "Importer";
       }
     };
   });
@@ -1996,6 +2052,7 @@ async function classeurOptions(el) {
   let sens = PREF.get("sens-classeur", TRI_CLASSEUR_DESC[tri] ? "desc" : "asc");
   let vueImages = PREF.get("vue-classeur", "liste") === "images";
   el.innerHTML = `<div class="opt-titre"><h2>${ico("livre")}Classeur</h2>
+      <label class="btn btn-petit btn-discret" id="cl-importer">${ico("dossier")}Importer une collection…<input type="file" class="fichier-cache" accept=".csv,.txt,text/csv,text/plain"></label>
       <button type="button" class="btn btn-petit btn-discret" id="cl-copier">${ico("copier")}Copier la liste</button></div>
     <div class="cl-outils"><div id="cl-ajout"></div><input class="champ" id="cl-filtre" type="search" placeholder="Filtrer…" aria-label="Filtrer le classeur"></div>
     <details class="cl-coller"><summary>Coller une liste</summary>
@@ -2091,6 +2148,11 @@ async function classeurOptions(el) {
     } catch (e) { erreur(e); }
     b.disabled = false;
   };
+  $("#cl-importer input", el).onchange = async (ev) => {
+    const f = ev.target.files[0];
+    ev.target.value = "";
+    if (f) importerCollection(f, cartes.length, (nouv) => { cartes = nouv; page = 1; rendre(); });
+  };
   $("#cl-partagees", el).ontoggle = (ev) => { if (ev.target.open) cartesPartagees($("#cl-partagees-res", el)); };
   $("#cl-copier", el).onclick = async () => {
     try {
@@ -2102,6 +2164,46 @@ async function classeurOptions(el) {
     cartes = (await api("/api/classeur")).cartes;
     rendre();
   } catch (e) { res.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
+}
+
+// une collection exportée d'une autre appli (CSV de ManaBox, Moxfield, Archidekt… ou liste) : aperçu, puis ajout au
+// classeur, sans les exemplaires déjà notés dans les decks (le classeur, c'est ce qui n'est pas dans un deck)
+async function importerCollection(fichier, dejaLa, fin) {
+  let texte, a;
+  try {
+    texte = await fichier.text();
+    toast("Lecture de la collection…", 60000);
+    a = await api("/api/classeur/importer", { method: "POST", body: { texte, apercu: true } });
+    toast("Collection lue.", 1);
+  } catch (e) { return erreur(e); }
+  if (!a.cartes) return toast("Aucune carte reconnue dans ce fichier.");
+  ouvrirModale(`
+    <h2>Importer une collection</h2>
+    <p><strong>${sepMilliers(a.cartes)} carte${a.cartes > 1 ? "s" : ""}</strong> dans ${esc(fichier.name)}</p>
+    ${a.en_decks ? `<label class="petit"><input type="checkbox" id="ic-sans" checked> Sans les ${sepMilliers(a.en_decks)} déjà dans mes decks</label>` : ""}
+    ${a.inconnues.length ? `<details class="petit"><summary>${a.inconnues.length} introuvable${a.inconnues.length > 1 ? "s" : ""}</summary>
+      <p class="muet">${a.inconnues.map(esc).join(", ")}</p></details>` : ""}
+    <div class="boutons"><button class="btn" id="annuler">Annuler</button>
+      ${dejaLa ? `<button class="btn" id="ic-remplacer">Remplacer le classeur</button>` : ""}
+      <button class="btn btn-accent" id="ok">Ajouter au classeur</button></div>`, (b) => {
+    $("#annuler", b).onclick = fermerModale;
+    const importer = async (remplacer, bouton) => {
+      $$(".boutons .btn", b).forEach((x) => { x.disabled = true; });
+      bouton.textContent = "Import…";
+      try {
+        const sans = $("#ic-sans", b);
+        const r = await api("/api/classeur/importer", { method: "POST", body: { texte, remplacer, sans_decks: !!(sans && sans.checked) } });
+        fermerModale();
+        fin(r.classeur);
+        toast("Collection importée.");
+      } catch (e) {
+        erreur(e);
+        $$(".boutons .btn", b).forEach((x) => { x.disabled = false; });
+      }
+    };
+    $("#ok", b).onclick = (ev) => importer(false, ev.currentTarget);
+    if ($("#ic-remplacer", b)) $("#ic-remplacer", b).onclick = (ev) => importer(true, ev.currentTarget);
+  });
 }
 
 // les cartes jouées dans plusieurs decks : combien j'en ai (classeur et decks) pour combien il en faut

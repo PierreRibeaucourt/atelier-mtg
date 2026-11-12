@@ -3,6 +3,7 @@
 Une carte par ligne, « quantité nom anglais » (« 1 Sol Ring »), triées par nom : le fichier se colle tel quel dans
 Archidekt, Moxfield ou l'Atelier. Les lignes « # … » du début sont des notes, gardées telles quelles.
 """
+import csv
 import os
 import re
 import threading
@@ -53,6 +54,55 @@ def lire_liste(texte):
     for e in decks.lire_lignes(lignes):
         c[e["nom"]] += e["n"]
     return c
+
+
+# colonnes des collections exportées en CSV : ManaBox (Name, Quantity), Moxfield et Deckbox (Count, Name), Archidekt
+# (Quantity, Name), Dragon Shield (Quantity, Card Name, après une ligne « sep=, »), TCGplayer (Quantity, Name)…
+COL_NOM = ("name", "card name", "card", "card_name", "cardname", "nom")
+COL_QTE = ("quantity", "count", "qty", "quantité", "quantite", "qté", "amount", "copies")
+
+
+def lire_csv(texte):
+    """Une collection exportée en CSV par une autre appli : Counter nom → exemplaires. None si ce n'est pas un CSV
+    avec une colonne de noms (une liste « 1 Sol Ring », par exemple)."""
+    lignes = texte.lstrip("﻿").splitlines()
+    if lignes and lignes[0].lower().startswith("sep="):
+        lignes = lignes[1:]
+    if not lignes:
+        return None
+    sep = max((",", ";", "	"), key=lignes[0].count)
+    if not lignes[0].count(sep):
+        return None
+    lecteur = csv.reader(lignes, delimiter=sep)
+    cols = [c.strip().lower() for c in next(lecteur)]
+    i_nom = next((cols.index(c) for c in COL_NOM if c in cols), None)
+    if i_nom is None:
+        return None
+    i_qte = next((cols.index(c) for c in COL_QTE if c in cols), None)
+    res = Counter()
+    for r in lecteur:
+        if len(r) <= i_nom or not r[i_nom].strip():
+            continue
+        try:
+            n = int(float(r[i_qte])) if i_qte is not None and i_qte < len(r) and r[i_qte].strip() else 1
+        except ValueError:
+            n = 1
+        if n > 0:
+            res[r[i_nom].strip()] += n
+    return res
+
+
+def lire_fichier(texte):
+    """Un fichier exporté (CSV d'une collection) ou une liste (« 1 Sol Ring ») : Counter nom → exemplaires."""
+    c = lire_csv(texte)
+    return lire_liste(texte) if c is None else c
+
+
+def remplacer(cartes_):
+    """Le classeur devient exactement ces cartes ({nom: exemplaires}), notes du début gardées."""
+    with _verrou:
+        notes, _ = _lire()
+        _ecrire(notes, Counter({k: v for k, v in cartes_.items() if v > 0}))
 
 
 def index():
