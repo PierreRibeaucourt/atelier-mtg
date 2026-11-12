@@ -4,7 +4,8 @@
 // cartes. telephone.js les range comme celles du PC : le reste de l'appli ne voit pas la différence.
 //
 // o : ce que fournit telephone.js : fiches(noms) → {nom: fiche}, fonctions(noms) → {nom: [familles, fonctions]},
-// impressionImage(nom, set), version(nom, ed, langue) → impression ou null, gcListe() → noms, budget, categories.
+// impressionImage(nom, set), version(nom, ed, langue) → impression ou null, gcListe() → noms, suggestions(entrees,
+// écartées), budget, categories.
 window.PAGES = (() => {
   const FORMATS = ["archidekt", "moxfield", "arena", "mtgo", "simple", "fr"];
   const TUTEUR = /search your library for (?:a|an|up to \w+|two|three) (?![\w ,-]*\b(?:basic|lands?|plains|island|swamp|mountain|forest)\b)[\w ,-]*?cards?/i;
@@ -139,7 +140,7 @@ window.PAGES = (() => {
     api[`${R}/bracket`] = bracket(entrees, fiches, await o.gcListe());
     const achats = json(f[`${id}/achats.json`], null);
     api[`${R}/achats`] = { possedees: achats ? achats.possedees || {} : Object.fromEntries([...compter(nomsJeu(entrees))]) };
-    api[`${R}/suggestions`] = { cartes: [], ecartees: json(f[`${id}/suggestions.json`], {}).ecartees || [] };
+    api[`${R}/suggestions`] = await o.suggestions(entrees, json(f[`${id}/suggestions.json`], {}).ecartees || []);
     // comparer deux versions dans la page : chaque liste, et les fiches de toutes leurs cartes (partage.capturer)
     const listes = {};
     for (const rel of ["", ...vs.map((v) => v.fichier)]) {

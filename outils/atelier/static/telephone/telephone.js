@@ -324,7 +324,12 @@
   async function rechercheAvancee(u) {
     pret();
     const p = Object.fromEntries(u.searchParams);
-    return { ...(await message("chercher", [p, await dansDeck(p.deck), null])), base: copie(etatBase) };
+    let notes = null;                                     // « Pertinence » : le thème du deck lié (suggestions.py)
+    if (p.ordre === "pertinence" && p.deck) {
+      const t = await api(`/api/decks/${p.deck}/export?format=archidekt`).catch(() => null);
+      if (t) notes = await message("pertinences", [MOTEUR.lire(t)]).catch(() => null);
+    }
+    return { ...(await message("chercher", [p, await dansDeck(p.deck), notes])), base: copie(etatBase) };
   }
   // le champ du haut : les decks qui contiennent une carte dont le nom (anglais ou français) contient le texte
   async function decksAvecCarte(q) {
@@ -981,6 +986,11 @@
         const v = lang && lang !== "en" ? await uneImpression(ed.set, ed.num, lang).catch(() => null) : null;
         return v || (etatBase.prete ? await message("impression", [nom, ed.set, ed.num]).catch(() => null) : null)
           || await uneImpression(ed.set, ed.num, "en").catch(() => null);
+      },
+      suggestions: async (entrees, refus) => {
+        const cl = Object.fromEntries(MOTEUR.lireClasseur(f["Classeur/classeur.txt"] || "").cartes);
+        return etatBase.prete ? message("suggerer", [entrees, refus, cl, budget(), !!(window.REGLAGES || {}).sans_ub_suggestions])
+          .catch(() => ({ cartes: [], ecartees: refus })) : { cartes: [], ecartees: refus };
       },
       budget: budget(),
       categories: PAGES.categories(f),

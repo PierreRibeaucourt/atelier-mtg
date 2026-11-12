@@ -123,8 +123,7 @@ function preparer(b) {
   const parCle = new Map(), parFr = new Map();
   for (const x of cartes) {
     if (x.spe === "ME") continue;
-    const k = cleCarte(x);
-    if (!parCle.has(k)) parCle.set(k, x);
+    parCle.set(cleCarte(x), x);                       // même recto (cartes d'Alchemy…) : la dernière, comme le PC
     if (x._nf) for (const f of [x._nf, x._nf.split(" // ")[0]]) if (!parFr.has(f)) parFr.set(f, x);
   }
   B = { cartes, tags: b.tags, slugs, editions: b.editions, date: b.date, descendants: new Map(), fonctions: {}, parTag, parCle, parFr };
@@ -470,8 +469,107 @@ function fiches(liste) {
   return res;
 }
 
+// ------------------------------------------------------------------ suggestions pour un deck (suggestions.py)
+// Le thème : les étiquettes Tagger fréquentes dans le deck mais rares ailleurs (le commandant compte triple), et les
+// types de créature dominants ; chaque carte notée sur ce profil, puis sur sa popularité. (Sans les combos de Spellbook.)
+const NEUTRES = new Set(["triggered-ability", "activated-ability", "drawback", "intervening-if-clause", "single-target-instant-sorcery",
+  "symmetrical", "impact-effect", "alt-commander", "pair-commander", "mana-ability-with-extra-effect", "delayed-trigger",
+  "additional-cost", "cheaper-than-mv", "refund", "alliteration", "onomatopoeia", "single-english-word-name",
+  "virtual-vanilla", "virtual-french-vanilla", "french-vanilla", "vanilla", "unique-type-line", "meme",
+  "multiplayer", "noncreature-typal", "keyword-soup",
+  "ramp", "mana-rock", "mana-dork", "adds-multiple-mana", "draw", "card-advantage", "pure-draw", "repeatable-pure-draw",
+  "draw-engine", "burst-draw", "cantrip", "removal", "spot-removal", "removal-creature", "removal-artifact",
+  "removal-enchantment", "removal-planeswalker", "removal-land", "removal-exile", "removal-destroy", "multi-removal",
+  "sweeper", "counterspell", "evasion", "tutor", "tutor-to-hand"]);
+const NEUTRES_DEBUT = ["cycle-", "namesake-", "flavor-", "art-", "tutor-land"];
+const POIDS_COMMANDANT = 3, TYPES_COURANTS = 3, PAR_THEME = 60;
+const neutre = (t) => { const s = B.tags[t].s; return NEUTRES.has(s) || NEUTRES_DEBUT.some((d) => s.startsWith(d)); };
+const sousTypes = (x) => x.t.split(" // ").filter((f) => f.includes("—") && f.split("—")[0].includes("Creature"))
+  .flatMap((f) => f.split("—")[1].split(/\s+/).filter(Boolean));
+function partsTypes() {                              // part de chaque type de créature parmi toutes les créatures
+  if (!B.parts) {
+    const st = new Map();
+    let n = 0;
+    for (const x of B.cartes) {
+      if (!aType(x, "Creature") || x.dig || x.fun) continue;
+      n++;
+      for (const s of new Set(sousTypes(x))) st.set(s, (st.get(s) || 0) + 1);
+    }
+    B.parts = new Map([...st].map(([s, c]) => [s, c / Math.max(n, 1)]));
+  }
+  return B.parts;
+}
+const popularite = (x) => (x.rk ? 1 - Math.min(Math.log10(x.rk), 5) / 5 : 0);
+const reference = (notes, candidats) => {
+  const v = candidats.filter((k) => notes.has(k)).map((k) => notes.get(k)).sort((a, b) => b - a);
+  return v.length ? v[Math.min(9, v.length - 1)] : 1;
+};
+// entrees : la liste du deck [{nom, n, tags}] ; la note de thème de chaque carte de la base qui touche au deck
+function analyse(entrees) {
+  prete();
+  const cat = (e) => (e.tags.includes("Commander") ? "Commander" : e.tags.includes("Maybeboard") ? "Maybeboard" : "");
+  const cmd = entrees.filter((e) => cat(e) === "Commander").map((e) => trouver(e.nom)).filter(Boolean);
+  const jeu = entrees.filter((e) => !cat(e)).map((e) => trouver(e.nom)).filter(Boolean);
+  const cles = new Set(entrees.map((e) => cle(e.nom).toLowerCase()));
+  const ident = new Set((cmd.length ? cmd : jeu).flatMap((x) => [...x.ci]));
+  const sorts = jeu.filter((x) => !aType(x, "Land")), compte = new Map();
+  for (const x of sorts) for (const t of x.tg) compte.set(t, (compte.get(t) || 0) + 1);
+  for (const x of cmd) for (const t of x.tg) compte.set(t, (compte.get(t) || 0) + POIDS_COMMANDANT);
+  const N = B.cartes.length, profil = new Map();
+  for (const [t, c] of compte) {
+    const nb = (B.parTag.get(t) || []).length;
+    if (c >= 2 && nb >= 5 && !neutre(t)) profil.set(t, c * Math.log(N / (1 + nb)));
+  }
+  const creatures = sorts.filter((x) => aType(x, "Creature")), st = new Map(), parts = partsTypes();
+  for (const x of creatures) for (const s of new Set(sousTypes(x))) st.set(s, (st.get(s) || 0) + 1);
+  const tribus = [...st].filter(([s, c]) => c >= Math.max(4, creatures.length * 0.3) && c / creatures.length >= TYPES_COURANTS * (parts.get(s) ?? 1)).map(([s]) => s);
+  const motifs = tribus.map((s) => new RegExp(`\\b${s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}s?\\b`));
+  const maxi = profil.size ? Math.max(...profil.values()) : 1, notes = new Map();
+  B.cartes.forEach((x, k) => {
+    const communs = x.tg.filter((t) => profil.has(t)), tribu = motifs.some((m) => m.test(x.t) || m.test(x.o));
+    if (!communs.length && !tribu) return;
+    let s = communs.reduce((a, t) => a + profil.get(t), 0) / Math.sqrt(x.tg.length + 3);
+    if (tribu) s = s ? s * 1.6 : (0.5 * maxi) / Math.sqrt(x.tg.length + 3);
+    notes.set(k, s);
+  });
+  return { cmd, jeu, cles, ident, notes };
+}
+// la recherche, triée par « Pertinence » pour le deck lié : {clé du nom: note de 0 à 1}
+function pertinences(entrees) {
+  const { notes } = analyse(entrees), ref = reference(notes, [...notes.keys()]) || 1, res = {};
+  for (const [k, s] of notes) res[cleCarte(B.cartes[k])] = 0.65 * Math.min(1, s / ref) + 0.35 * popularite(B.cartes[k]);
+  return res;
+}
+// l'onglet Suggestions : refus (« Ne plus proposer »), classeur {nom: exemplaires}, budget (0 : aucun)
+function suggerer(entrees, refus, classeur, budget, sansUb) {
+  const a = analyse(entrees);
+  if (!a.cmd.length && !a.jeu.length) return { cartes: [], ecartees: [...refus].sort() };
+  fonctionsCartes([]);                               // les familles du gabarit, pour le filtre « Fonction »
+  const non = new Set(refus), ub = (x) => x.pr.length > 0 && x.pr.every((p) => p[7]);
+  const proposable = (x) => !a.cles.has(cleCarte(x)) && !non.has(x.n) && x.lg.includes("commander") && [...x.ci].every((c) => a.ident.has(c))
+    && !(sansUb && ub(x)) && !HORS_JEU.has(x.spe) && !x.dig && !x.fun && !aType(x, "Land")
+    && (!budget || (x.eur !== null && x.eur <= budget));
+  const candidats = [];
+  B.cartes.forEach((x, k) => { if (proposable(x)) candidats.push(k); });
+  const ref = reference(a.notes, candidats) || 1, theme = new Map();
+  for (const k of candidats) if (a.notes.has(k)) theme.set(k, Math.min(1, a.notes.get(k) / ref));
+  const groupes = new Map();
+  const tries = trier([...theme.keys()], (k) => -theme.get(k) * (0.6 + 0.4 * popularite(B.cartes[k])), false).slice(0, PAR_THEME);
+  for (const k of tries) if (theme.get(k) >= 0.2) groupes.set(k, new Set(["theme"]));
+  for (const k of candidats) {
+    if ((classeur[B.cartes[k].n] || 0) > 0 && (groupes.has(k) || (theme.get(k) || 0) >= 0.1)) (groupes.get(k) || groupes.set(k, new Set()).get(k)).add("classeur");
+  }
+  const cartes = [];
+  for (const [k, g] of groupes) {
+    const x = B.cartes[k], note = Math.min(1, 0.65 * (theme.get(k) || 0) + 0.35 * popularite(x));
+    cartes.push({ ...sortie(x, {}), note: Math.round(note * 1000) / 1000, groupes: [...g].sort(), combos: [], classeur: classeur[x.n] || 0,
+      ub: ub(x), fonctions: B.familles.filter(([, tags]) => aTag(x, tags)).map(([lib]) => lib) });
+  }
+  return { cartes: trier(cartes, (s) => -s.note, false), ecartees: [...non].sort() };
+}
+
 // ------------------------------------------------------------------ les messages de telephone.js
-const F = { charger, reglages, chercher, editions, fonctions, suggestions, eligibilite, noms, fonctionsCartes, impressionImage, apercu, fiches, impression, gameChangers };
+const F = { charger, reglages, chercher, editions, fonctions, suggestions, eligibilite, noms, fonctionsCartes, impressionImage, apercu, fiches, impression, gameChangers, pertinences, suggerer };
 self.onmessage = async (ev) => {
   const { id, f, a } = ev.data;
   try { self.postMessage({ id, r: await F[f](...(a || [])) }); }
