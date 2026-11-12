@@ -640,7 +640,7 @@ async function route() {
   } catch (e) {
     vue.innerHTML = `<p class="erreur">${esc(e.message || e)}</p>`;
   }
-  majTitre();                                      // l'adresse a pu être complétée (dernière recherche reprise)
+  majTitre();                                      // la vue a pu compléter l'adresse
 }
 window.addEventListener("hashchange", route);
 
@@ -1505,21 +1505,18 @@ function modaleRenommer(d) {
   $("#rn-nom").select();
 }
 
-// ce que le navigateur retient d'un deck (dernière recherche, partie de « Jouer ») suit son nouveau nom
+// ce que le navigateur retient d'un deck (partie de « Jouer ») suit son nouveau nom
 function renommerPrefs(ancien, nouveau) {
   try {
-    for (const k of Object.keys(localStorage)) {
-      let v = localStorage.getItem(k);
-      const k2 = k === "pref-" + cleDerniere(ancien) ? "pref-" + cleDerniere(nouveau) : k === "partie-" + ancien ? "partie-" + nouveau : k;
-      if (k.startsWith("pref-rch-derniere")) {
-        const p = new URLSearchParams(v);
-        if (p.get("deck") === ancien) { p.set("deck", nouveau); v = p.toString(); }
-      }
-      if (k2 !== k) localStorage.removeItem(k);
-      localStorage.setItem(k2, v);
-    }
+    const v = localStorage.getItem("partie-" + ancien);
+    if (v === null) return;
+    localStorage.removeItem("partie-" + ancien);
+    localStorage.setItem("partie-" + nouveau, v);
   } catch (_) {}
 }
+
+// les recherches de cartes ne sont plus retenues (version 1.7.5) : celles gardées avant s'effacent
+try { for (const k of Object.keys(localStorage)) if (k.startsWith("pref-rch-derniere")) localStorage.removeItem(k); } catch (_) {}
 
 // ------------------------------------------------------------------ options : réglages de ce PC (reglages.json), démarrage, classeur
 // Options : trois blocs (les cartes, le partage, le programme), puis le classeur
@@ -3517,7 +3514,6 @@ function critVersHash(c) {
   return p.toString();
 }
 
-const cleDerniere = (deck) => "rch-derniere" + (deck ? ":" + deck : "");
 
 // ---- fenêtres du formulaire
 // couleurs : un clic = « peut » (permise), un second = « doit » (la carte doit l'avoir), un troisième = retirée ;
@@ -3785,18 +3781,7 @@ function resumeCrit(c) {
 
 // ---- la page
 async function vueRecherche(params) {
-  // lien du haut, sans critère : le formulaire avec les critères de la dernière recherche sans deck. Bouton « Chercher
-  // des cartes » d'un deck : un formulaire vierge, aux couleurs du deck (une ancienne recherche pourrait en sortir)
-  if (![...params.keys()].length) {
-    let derniere = new URLSearchParams(PREF.get(cleDerniere(""), ""));
-    if (derniere.get("deck")) derniere = new URLSearchParams();
-    derniere.delete("r");                          // le formulaire, prérempli, sans relancer la recherche
-    derniere.delete("page");
-    if ([...derniere.keys()].length) {
-      history.replaceState(null, "", "#/recherche?" + derniere);
-      params = derniere;
-    }
-  }
+  // lien du haut : un formulaire vierge. Bouton « Chercher pour ce deck » : vierge aussi, aux couleurs du deck
   const neuve = [...params.keys()].every((k) => k === "deck");
   scrollTo(0, 0);
   const c = critDepuis(params);
@@ -4357,14 +4342,9 @@ async function lancerRecherche() {
   }
   if (k !== rch.numero) return;
   rch.res = r;
-  memoriser();
   rendreResultats(z, r);
 }
 
-// la dernière recherche sans deck, que rouvre le lien du haut
-function memoriser() {
-  if (!rch.crit.deck) PREF.set(cleDerniere(""), critVersHash(rch.crit));
-}
 
 async function attendreBase(z) {
   const k = rch.numero;
@@ -4427,7 +4407,6 @@ function rendreResultats(z, r) {
   $$("[data-vue]", z).forEach((b) => b.addEventListener("click", () => {
     rch.crit.vue = b.dataset.vue === "images" ? "images" : "";
     history.replaceState(null, "", "#/recherche?" + critVersHash(rch.crit));
-    memoriser();
     rendreResultats(z, r);
   }));
   $("#rch-tri", z).onchange = (ev) => { location.hash = "#/recherche?" + critVersHash({ ...rch.crit, ordre: ev.target.value, sens: "", page: "" }); };
