@@ -88,12 +88,13 @@
       };
       for (let i = 0; i < a_recevoir.length; i += 4) await Promise.all(a_recevoir.slice(i, i + 4).map(recevoir));
       const garder = new Set(arbre.map((x) => x.path));
-      for (const k of await BD.cles()) if (!garder.has(k)) await BD.effacer(k);
+      for (const k of await BD.cles()) if (!garder.has(k) && !String(k).startsWith("@")) await BD.effacer(k);
       memoire.clear();
       fusion = null;
       const index = await fichier("index.json.gz");
       if (index) ecrireLocal(REGLAGES, JSON.stringify(index.reglages || {}));
       ecrireLocal(COMMIT, commit);
+      if (index) await nettoyerSurcharges(index).catch(() => {});
       return true;
     })().finally(() => { enCours = null; }));
   }
@@ -127,9 +128,9 @@
 
   async function api(chemin, opts = {}) {
     const u = new URL(chemin, "http://atelier"), k = cleDe(u), p = u.pathname;
-    if ((opts.method || "GET") !== "GET") {
-      throw Object.assign(new Error("Sur le téléphone, l'Atelier se consulte pour l'instant : modifie tes decks sur le PC."), { statut: 405 });
-    }
+    if ((opts.method || "GET") !== "GET") return ecrire(u, opts.body || {});
+    const s = (await lesSurcharges())[k];                // modifiée ici, pas encore recalculée par le PC
+    if (s) return copie(s.v);
     // ce qui n'a pas de sens ici : rien ne tourne en fond, pas de discussion avec Claude, pas de mise à jour à installer
     if (p === "/api/etat") return { maj: {} };
     if (p === "/api/corbeille") return [];               // les decks supprimés se récupèrent sur le PC
@@ -161,6 +162,275 @@
       }
     }
     throw absente();
+  }
+
+  // ------------------------------------------------------------------ modifier depuis le téléphone
+  // Chaque modification est faite ici tout de suite (moteur.js) : la page refaite remplace celle du PC (@surcharges), et
+  // l'opération attend d'être envoyée (@attente). L'envoi la rejoue sur la dernière version des fichiers de la sauvegarde
+  // (branche des decks) : une modification faite entre-temps sur le PC n'est pas écrasée. Le PC reçoit les fichiers par
+  // sa synchronisation, recalcule les pages (suggestions, combos, bracket) et les renvoie ; la page refaite ici s'efface
+  // quand celle du PC contient la modification (index.source).
+  let surcharges = null;
+  async function lesSurcharges() {
+    if (!surcharges) surcharges = (await BD.lire("@surcharges").catch(() => null)) || {};
+    return surcharges;
+  }
+  async function surcharger(reponses) {
+    const s = await lesSurcharges();
+    for (const [k, v] of Object.entries(reponses)) s[k] = { v, c: null, quand: Date.now() };
+    await BD.ecrire("@surcharges", s);
+  }
+  async function nettoyerSurcharges(index) {
+    const s = await lesSurcharges(), commits = [...new Set(Object.values(s).map((x) => x.c).filter(Boolean))];
+    let change = false;
+    for (const c of commits) {
+      let inclus = false;
+      if (index.source) {
+        const r = await gh(`/repos/${acces.d}/compare/${c}...${index.source}`).catch(() => null);
+        inclus = !!r && (r.status === "identical" || r.status === "ahead");
+      } else inclus = index.date * 1000 > Math.max(...Object.values(s).filter((x) => x.c === c).map((x) => x.quand)) + 600000;
+      if (!inclus) continue;
+      for (const [k, x] of Object.entries(s)) if (x.c === c) { delete s[k]; change = true; }
+    }
+    if (change) await BD.ecrire("@surcharges", s);
+  }
+
+  async function attente() { return (await BD.lire("@attente").catch(() => null)) || []; }
+  let minuterie = null;
+  async function enAttente(o) {
+    const l = await attente();
+    l.push({ ...o, quand: Date.now(), id: Math.random().toString(36).slice(2) });
+    await BD.ecrire("@attente", l);
+    clearTimeout(minuterie);
+    minuterie = setTimeout(() => envoyer().catch(() => {}), 2500);       // une série de modifications part en une fois
+  }
+
+  // les fiches des cartes : déjà vues dans un deck ou le classeur, sinon demandées à Scryfall (gardées ici)
+  let dernierScryfall = 0;
+  async function scryfall(url, corps) {
+    const pause = dernierScryfall + 500 - Date.now();                     // 2 requêtes par seconde au plus
+    if (pause > 0) await new Promise((r) => setTimeout(r, pause));
+    dernierScryfall = Date.now();
+    const r = await fetch(url, corps ? { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify(corps) }
+      : { headers: { Accept: "application/json" } });
+    if (r.status === 404) return null;
+    if (!r.ok) throw new Error("Scryfall ne répond pas : vérifie la connexion.");
+    return r.json();
+  }
+  async function ficheFr(c) {
+    const r = await scryfall(`https://api.scryfall.com/cards/search?unique=prints&q=${encodeURIComponent(`!"${c.name}" lang:fr`)}`).catch(() => null);
+    return MOTEUR.fiche(c, r && r.data && r.data[0]);
+  }
+  async function ficheCarte(nom) {
+    const cache = (await BD.lire("@cartes").catch(() => null)) || {};
+    if (cache[nom]) return cache[nom];
+    const index = await fichier("index.json.gz");
+    const cl = (((index && index.api["/api/classeur"]) || {}).cartes || []).find((x) => x.nom === nom);
+    if (cl && cl.info && cl.info.image) return cl.info;
+    for (const [id, f] of Object.entries((index && index.decks) || {})) {
+      const d = await fichier(f), c = d && ((d.api[`/api/decks/${id}`] || {}).cartes || []).find((x) => x.nom === nom);
+      if (c && c.info && c.info.image) return c.info;
+    }
+    const c = await scryfall(`https://api.scryfall.com/cards/named?exact=${encodeURIComponent(nom)}`);
+    const f = c ? await ficheFr(c) : { nom };
+    cache[nom] = f;
+    await BD.ecrire("@cartes", cache);
+    return f;
+  }
+  // des noms tapés ou collés (français, fautes de casse…) : le nom anglais de Scryfall, et sa fiche
+  async function trouverNoms(noms) {
+    const res = {};
+    for (let i = 0; i < noms.length; i += 75) {
+      const bloc = noms.slice(i, i + 75);
+      const r = await scryfall("https://api.scryfall.com/cards/collection", { identifiers: bloc.map((name) => ({ name: name.split(" // ")[0] })) });
+      const trouvees = new Map(((r && r.data) || []).map((c) => [c.name.split(" // ")[0].toLowerCase(), c]));
+      for (const n of bloc) {
+        let c = trouvees.get(n.split(" // ")[0].toLowerCase());
+        if (!c) c = await scryfall(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(n)}`).catch(() => null);
+        if (c) res[n] = c;
+      }
+    }
+    return res;
+  }
+
+  const budget = () => Number((window.REGLAGES || {}).budget) || 0;
+  async function ecrire(u, b) {
+    const p = u.pathname, m = p.match(/^\/api\/decks\/([^/]+)\/(modifier|achats|suggestions\/ecarter)$/);
+    if (!(await fichier("index.json.gz"))) throw Object.assign(new Error("Tes decks ne sont pas encore arrivés."), { statut: 503 });
+    if (m && m[2] === "modifier") return modifierDeck(decodeURIComponent(m[1]), b);
+    if (m && m[2] === "achats") return marquerAchats(decodeURIComponent(m[1]), b.possedees || {});
+    if (m) return ecarterSuggestion(decodeURIComponent(m[1]), b.nom, b.ecarter !== false);
+    if (p === "/api/classeur" && (b.liste != null || b.nom != null)) return modifierClasseur(b);
+    throw Object.assign(new Error("Sur le PC seulement, pour l'instant."), { statut: 405 });
+  }
+
+  async function modifierDeck(id, b) {
+    const prec = await api(`/api/decks/${id}`);
+    const entrees = MOTEUR.lire(await api(`/api/decks/${id}/export?format=archidekt`));
+    const d = { ...b };
+    delete d.op;
+    if (d.nom_actuel != null && prec.cartes[d.index]) d.etait_maybe = prec.cartes[d.index].cat === "Maybeboard";
+    const raison = MOTEUR.modifier(entrees, b.op, d);
+    const infos = {};
+    for (const e of entrees) if (!prec.cartes.some((c) => c.nom === e.nom)) infos[e.nom] = await ficheCarte(e.nom);
+    const page = MOTEUR.page(id, entrees, prec, infos, budget());
+    const liste = (await api("/api/decks")).map((x) => (x.id === id ? MOTEUR.resume(page) : x));
+    await surcharger({ [`/api/decks/${id}`]: page, [`/api/decks/${id}/export?format=archidekt`]: MOTEUR.texte(entrees), "/api/decks": liste });
+    await enAttente({ f: "deck", deck: id, op: b.op, d, raison });
+    return copie(page);
+  }
+
+  async function marquerAchats(id, changements) {
+    const poss = { ...((await api(`/api/decks/${id}/achats`)).possedees || {}) };
+    for (const [nom, n] of Object.entries(changements)) poss[String(nom)] = Math.max(0, parseInt(n, 10) || 0);
+    await surcharger({ [`/api/decks/${id}/achats`]: { possedees: poss } });
+    await enAttente({ f: "achats", deck: id, d: changements });
+    return { possedees: poss };
+  }
+
+  async function ecarterSuggestion(id, nom, oui) {
+    const sg = await api(`/api/decks/${id}/suggestions`).catch(() => null);
+    const liste = [...new Set([...((sg && sg.ecartees) || []).filter((n) => n !== nom), ...(oui ? [nom] : [])])].sort();
+    if (sg) await surcharger({ [`/api/decks/${id}/suggestions`]: { ...sg, ecartees: liste } });
+    await enAttente({ f: "ecarter", deck: id, d: { nom, oui } });
+    return { ecartees: liste };
+  }
+
+  async function modifierClasseur(b) {
+    const cartes = new Map(((await api("/api/classeur")).cartes || []).map((x) => [x.nom, x]));
+    const inconnues = [];
+    let op;
+    if (b.liste != null) {                                  // une liste collée (classeur.lire_liste)
+      const lignes = String(b.liste).split(/\r?\n/).filter((l) => l.trim() && !/^\s*(#|\/\/)/.test(l))
+        .map((l) => (/^\s*(SB:\s*)?\d/.test(l) ? l : "1 " + l.trim()));
+      const lues = new Map();
+      for (const e of MOTEUR.lireLignes(lignes)) lues.set(e.nom, (lues.get(e.nom) || 0) + e.n);
+      const trouves = await trouverNoms([...lues.keys()]);
+      const ajouts = {};
+      for (const [lu, n] of lues) {
+        const c = trouves[lu];
+        if (!c) { inconnues.push(lu); continue; }
+        ajouts[c.name] = (ajouts[c.name] || 0) + n;
+        if (cartes.has(c.name)) cartes.get(c.name).n += n;
+        else cartes.set(c.name, { nom: c.name, n, info: await ficheFr(c) });
+      }
+      op = { ajouter: ajouts };
+    } else {
+      const n = Math.max(0, parseInt(b.n, 10) || 0);
+      if (!n) cartes.delete(b.nom);
+      else if (cartes.has(b.nom)) cartes.get(b.nom).n = n;
+      else cartes.set(b.nom, { nom: b.nom, n, info: await ficheCarte(b.nom) });
+      op = { fixer: { [b.nom]: n } };
+    }
+    const liste = [...cartes.values()].sort((x, y) => (x.nom.toLowerCase() < y.nom.toLowerCase() ? -1 : 1));
+    await surcharger({ "/api/classeur": { cartes: liste } });
+    await enAttente({ f: "classeur", d: op });
+    return { cartes: copie(liste), inconnues };
+  }
+
+  // l'envoi : les opérations en attente, rejouées sur les fichiers de la sauvegarde, en un commit
+  const date2 = (n) => String(n).padStart(2, "0");
+  const horodatage = (t = new Date()) => `${t.getFullYear()}-${date2(t.getMonth() + 1)}-${date2(t.getDate())}_${date2(t.getHours())}${date2(t.getMinutes())}${date2(t.getSeconds())}`;
+  const chemin = (rel) => rel.split("/").map(encodeURIComponent).join("/");
+  async function ghEcrire(methode, url, corps) {
+    const r = await fetch(GH + url, { method: methode, headers: { Authorization: "Bearer " + acces.c, "X-GitHub-Api-Version": "2022-11-28",
+      Accept: "application/vnd.github+json", "Content-Type": "application/json" }, body: JSON.stringify(corps) });
+    if (!r.ok) throw Object.assign(new Error(`GitHub refuse l'envoi (${r.status}).`), { statut: r.status });
+    return r.json();
+  }
+  async function contenu(rel, ref) {
+    const r = await fetch(`${GH}/repos/${acces.d}/contents/${chemin(rel)}?ref=${ref}`, { cache: "no-store", headers: {
+      Authorization: "Bearer " + acces.c, "X-GitHub-Api-Version": "2022-11-28", Accept: "application/vnd.github.raw" } });
+    if (r.status === 404) return null;
+    if (!r.ok) throw Object.assign(new Error(`GitHub ne répond pas (${r.status}).`), { statut: r.status });
+    return r.text();
+  }
+  let envoi = null;
+  function envoyer() {
+    return envoi || (envoi = (async () => {
+      const ops = await attente();
+      if (!ops.length || !acces) return false;
+      const index = await fichier("index.json.gz");
+      const branche = (index && index.branche) || "main";
+      for (let essai = 0; essai < 3; essai++) {
+        const tete = (await gh(`/repos/${acces.d}/git/ref/heads/${branche}`)).object.sha;
+        const arbre = (await gh(`/repos/${acces.d}/git/commits/${tete}`)).tree.sha;
+        const originaux = new Map(), fichiers = new Map();
+        const lire = async (rel) => {
+          if (!originaux.has(rel)) { const t = await contenu(rel, tete); originaux.set(rel, t); fichiers.set(rel, t); }
+          return fichiers.get(rel);
+        };
+        const avant = new Map(), raisons = new Map();
+        for (const o of ops) {
+          if (o.f === "deck" || o.f === "achats" || o.f === "ecarter") {
+            const liste = await lire(`${o.deck}/archidekt.txt`);
+            if (liste == null) continue;                    // deck supprimé sur le PC entre-temps
+            if (o.f === "deck") {
+              const e = MOTEUR.lire(liste);
+              try { MOTEUR.modifier(e, o.op, o.d); } catch (_) { continue; }
+              if (!avant.has(o.deck)) avant.set(o.deck, originaux.get(`${o.deck}/archidekt.txt`));
+              fichiers.set(`${o.deck}/archidekt.txt`, MOTEUR.texte(e));
+              raisons.set(o.deck, [...(raisons.get(o.deck) || []), o.raison]);
+            } else if (o.f === "achats") {
+              const t = await lire(`${o.deck}/achats.json`);
+              let poss = t ? JSON.parse(t).possedees || {} : null;
+              if (!poss) {                                  // jamais noté : le deck est déjà monté (decks.possedees)
+                poss = {};
+                for (const e of MOTEUR.lire(liste)) if (MOTEUR.categorie(e) !== "Maybeboard") poss[e.nom] = (poss[e.nom] || 0) + e.n;
+              }
+              for (const [nom, n] of Object.entries(o.d)) poss[nom] = Math.max(0, parseInt(n, 10) || 0);
+              fichiers.set(`${o.deck}/achats.json`, JSON.stringify({ possedees: poss }, null, 1));
+            } else {
+              const t = await lire(`${o.deck}/suggestions.json`);
+              const l = ((t && JSON.parse(t).ecartees) || []).filter((n) => n !== o.d.nom);
+              if (o.d.oui) l.push(o.d.nom);
+              fichiers.set(`${o.deck}/suggestions.json`, JSON.stringify({ ecartees: l.sort() }, null, 1));
+            }
+          } else if (o.f === "classeur") {
+            const c = MOTEUR.lireClasseur((await lire("Classeur/classeur.txt")) || "");
+            for (const [nom, n] of Object.entries(o.d.ajouter || {})) c.cartes.set(nom, (c.cartes.get(nom) || 0) + n);
+            for (const [nom, n] of Object.entries(o.d.fixer || {})) { if (n > 0) c.cartes.set(nom, n); else c.cartes.delete(nom); }
+            fichiers.set("Classeur/classeur.txt", MOTEUR.ecrireClasseur(c));
+          }
+        }
+        // l'historique du deck, comme sur le PC (decks.instantane) : la liste d'avant, et ce qui a changé
+        const quand = horodatage();
+        for (const [deck, t] of avant) {
+          if (fichiers.get(`${deck}/archidekt.txt`) === t) continue;
+          fichiers.set(`${deck}/historique/${quand}.txt`, t);
+          const j = JSON.parse((await lire(`${deck}/historique/journal.json`)) || "{}");
+          j[`${quand}.txt`] = "Téléphone : " + raisons.get(deck).join(" · ");
+          fichiers.set(`${deck}/historique/journal.json`, JSON.stringify(j, null, 1));
+        }
+        const entrees = [];
+        for (const [rel, t] of fichiers) {
+          if (t == null || t === originaux.get(rel)) continue;
+          const b = await ghEcrire("POST", `/repos/${acces.d}/git/blobs`, { content: t, encoding: "utf-8" });
+          entrees.push({ path: rel, mode: "100644", type: "blob", sha: b.sha });
+        }
+        let commit = null;
+        if (entrees.length) {
+          const nouvel = await ghEcrire("POST", `/repos/${acces.d}/git/trees`, { base_tree: arbre, tree: entrees });
+          const resume = [...raisons.values()].flat().slice(0, 3).join(" · ") || "achats, classeur";
+          commit = (await ghEcrire("POST", `/repos/${acces.d}/git/commits`, { message: "Téléphone : " + resume, tree: nouvel.sha, parents: [tete] })).sha;
+          try {
+            await ghEcrire("PATCH", `/repos/${acces.d}/git/refs/heads/${branche}`, { sha: commit });
+          } catch (err) {
+            if (err.statut === 422) continue;               // le PC a envoyé entre-temps : on rejoue sur sa version
+            throw err;
+          }
+        }
+        // envoyé : ces opérations sont faites ; les pages refaites ici attendent celles du PC qui les contiennent
+        const restent = (await attente()).filter((x) => !ops.some((y) => y.id === x.id));
+        await BD.ecrire("@attente", restent);
+        const s = await lesSurcharges(), fin = Math.max(...ops.map((x) => x.quand));
+        for (const x of Object.values(s)) if (!x.c && x.quand <= fin) x.c = commit || "sans";
+        for (const [k, x] of Object.entries(s)) if (x.c === "sans") delete s[k];
+        await BD.ecrire("@surcharges", s);
+        return true;
+      }
+      throw new Error("La sauvegarde change trop vite : nouvel essai plus tard.");
+    })().finally(() => { envoi = null; }));
   }
 
   // ------------------------------------------------------------------ relier le téléphone au PC
@@ -269,7 +539,7 @@
 
   const e = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   // l'écran d'attente : relier le téléphone, ou recevoir les decks la première fois
-  function attente(el) {
+  function attenteVue(el) {
     if (!acces) {
       el.innerHTML = `<div class="tel-accueil">
         <h1>Atelier MTG</h1>
@@ -302,13 +572,14 @@
         <button class="btn" id="tel-reessayer">Réessayer</button></div>`
       : `<p class="chargement">Réception de tes decks…</p>`;
     const r = el.querySelector("#tel-reessayer");
-    if (r) r.onclick = () => { T.erreur = ""; attente(el); demarrer(); };
+    if (r) r.onclick = () => { T.erreur = ""; attenteVue(el); demarrer(); };
   }
 
   // ------------------------------------------------------------------ démarrage
   async function demarrer() {
     if (!acces) return window.route && route();
     bandeauInstaller();
+    envoyer().catch(() => {});                             // ce qui n'était pas parti (hors ligne)
     if (!T.pret && await fichier("index.json.gz")) {   // ce qu'on a déjà : tout de suite, même sans réseau
       T.pret = true;
       if (window.route) route();
@@ -328,7 +599,9 @@
   }
 
   const T = window.TELEPHONE = {
-    api, attente, pret: false, erreur: "",
+    api, attente: attenteVue, pret: false, erreur: "",
+    enAttente: async () => (await attente()).length,
+    envoyer: () => envoyer(),
     acces: () => acces && { depot: acces.d },
     delier: () => { oublier(); route(); },
     synchroniser: () => demarrer(),

@@ -1919,15 +1919,24 @@ function optionsTelephone() {
     <section class="panneau options"><div class="opt-titre"><h2>${ico("telephone")}Téléphone</h2></div>
       <div class="opt-lignes">
         <p>Relié à la sauvegarde <strong>${esc(a ? a.depot : "")}</strong></p>
-        <div class="form-ligne"><button class="btn" id="tel-maj">${ico("rafraichir")}Recevoir les derniers changements</button>
+        <p class="muet petit" id="tel-attente"></p>
+        <div class="form-ligne"><button class="btn" id="tel-maj">${ico("rafraichir")}Synchroniser</button>
           <button class="btn btn-danger" id="tel-delier">Délier ce téléphone</button></div>
       </div></section>
     <section class="panneau options" id="opt-classeur"></section>`;
+  const attente = async () => {
+    const n = await TELEPHONE.enAttente();
+    $("#tel-attente").textContent = n ? `${n} modification${n > 1 ? "s" : ""} pas encore envoyée${n > 1 ? "s" : ""}` : "";
+  };
+  attente();
   $("#tel-maj").onclick = async (ev) => {
-    ev.currentTarget.disabled = true;
+    const b = ev.currentTarget;
+    b.disabled = true;
+    try { await TELEPHONE.envoyer(); } catch (e) { toast(e.message); }
     await TELEPHONE.synchroniser();
+    await attente();
     toast(TELEPHONE.erreur || "À jour.");
-    ev.target.disabled = false;
+    b.disabled = false;
   };
   $("#tel-delier").onclick = () => { if (confirm("Délier ce téléphone ? Ses decks en seront effacés (ils restent sur ton PC).")) TELEPHONE.delier(); };
   classeurOptions($("#opt-classeur"));

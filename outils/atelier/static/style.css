@@ -1179,8 +1179,9 @@ label.btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; 
 /* ---------------------------------------------------------------- l'Atelier sur téléphone (telephone.js) */
 .qr-telephone { width: min(18rem, 70vw); margin: .4rem auto 1rem; padding: .6rem; background: #fff; border-radius: var(--rayon); }
 .qr-telephone svg { display: block; width: 100%; height: auto; }
-/* dans l'appli du téléphone : ce qui modifie (pas encore là), et ce qui ne tourne que sur le PC */
-.telephone :is(.ecrit, .aller, #btn-rafraichir, #etat-maj, #btn-chat, #lien-recherche, .pc-seulement) { display: none !important; }
+/* dans l'appli du téléphone : ce qui ne tourne que sur le PC, et ce qui passe par la recherche de cartes (bientôt) */
+.telephone :is(.aller, #btn-rafraichir, #etat-maj, #btn-chat, #lien-recherche, .pc-seulement, [data-act="version"], #btn-ajouter,
+  #btn-nouveau, #cl-ajout, #cl-importer, a[href^="#/recherche"]) { display: none !important; }
 .tel-accueil { display: grid; gap: 1rem; justify-items: center; max-width: 26rem; margin: 12vh auto 0; padding: 0 1rem; text-align: center; }
 .tel-accueil h1 { margin: 0; }
 .tel-accueil video { width: 100%; border-radius: var(--rayon); background: #000; }

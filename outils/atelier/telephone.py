@@ -131,8 +131,11 @@ def _index(get, fichiers):
         if r.status_code == 200:
             api[chemin] = r.get_json()
     from version import __version__
+    s = synchro._lire_etat()
+    # source : le commit de la sauvegarde que ces pages reflètent (le téléphone sait ainsi si ses propres modifications,
+    # envoyées sur la branche des decks, y sont déjà) ; branche : celle des decks, où le téléphone les envoie
     return dict(format=FORMAT, date=time.time(), version=__version__, compte=github.compte(),
-                reglages=reglages.pour_la_page(), decks=fichiers, api=api)
+                reglages=reglages.pour_la_page(), decks=fichiers, api=api, source=s.get("commit"), branche=s.get("branche"))
 
 
 def _empreintes():
