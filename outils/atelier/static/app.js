@@ -393,6 +393,7 @@ const SANS_CITE = "script, style, textarea, input, select, option, code, pre, sv
 function apercuCite(el) {
   const nom = el.dataset.apercu;
   const remplir = (f) => {
+    if (f === undefined) return;                     // pas de réponse : on redemandera au prochain survol
     if (!f || !f.image) { el.dataset.image = ""; return; }
     const autre = sansAccent(el.textContent.trim()) === sansAccent(f.fr) ? f.nom : f.fr || f.nom;     // l'autre langue
     el.dataset.image = f.image;
@@ -401,7 +402,7 @@ function apercuCite(el) {
   };
   const c = etat.deck && etat.deck.cartes.find((x) => x.nom === nom);        // carte du deck : la version choisie
   if (c && c.info && c.info.image) { remplir({ nom: c.nom, fr: c.info.fr, image: c.info.image, prix: c.info.prix }); return Promise.resolve(); }
-  if (!APERCUS.has(nom)) APERCUS.set(nom, api(`/api/apercu-carte?nom=${enc(nom)}`).catch(() => null));
+  if (!APERCUS.has(nom)) APERCUS.set(nom, api(`/api/apercu-carte?nom=${enc(nom)}`).catch(() => { APERCUS.delete(nom); }));
   return APERCUS.get(nom).then(remplir);
 }
 
@@ -525,7 +526,7 @@ function passeCites() {
 
 async function chargerCites() {
   const r = await api("/api/noms-cartes").catch(() => null);
-  if (!r || !r.noms.length) { if (!PARTAGE) setTimeout(chargerCites, 10000); return; }      // base de cartes en cours de chargement
+  if (!r || !(r.noms || []).length) { if (!PARTAGE) setTimeout(chargerCites, 3000); return; }      // base de cartes en construction
   const cles = new Map(), index = new Map();
   for (const [en] of r.noms) indexerNom(cles, index, en, en);
   for (const [en, fr] of r.noms) if (fr) indexerNom(cles, index, fr, en);

@@ -508,10 +508,8 @@ def verifier(force=False):
 def demarrer():
     """Au lancement de l'Atelier : charge la base, la refait si besoin, puis la surveille tant que l'Atelier est ouvert."""
     try:
-        b = _lire_fichier()
-        if b:
-            _preparer(b)
-            noms_cites()                      # prêts pour la première page
+        if base():
+            noms_cites()                      # prêts pour la première page (refaits si la base ou les pages ont changé)
         verifier()
     except Exception as e:
         etat["erreur"] = str(e)
@@ -580,12 +578,19 @@ def _descendants(slug):
     return vus
 
 
+_chargement = threading.Lock()
+
+
 def base():
+    """La base en mémoire, chargée une seule fois : une demande arrivée pendant le chargement du lancement (une carte
+    survolée…) attend sa fin au lieu de la charger une seconde fois."""
     global _base
     if _base is None:
-        b = _lire_fichier()
-        if b:
-            _preparer(b)
+        with _chargement:
+            if _base is None:
+                b = _lire_fichier()
+                if b:
+                    _preparer(b)
     return _base
 
 
@@ -1015,32 +1020,62 @@ def noms(q, deck=None, n=8):
 
 # ---------------------------------------------------------------- cartes citées dans un texte (aperçu au survol)
 _citees = {}
+CACHE_CITEES = os.path.join(ICI, "cache_noms_cites.json")
+
+
+def _empreinte():
+    """Ce dont dépendent les noms cités : le fichier de la base, et les pages (les mots courants de l'interface)."""
+    try:
+        return "|".join(str(os.path.getmtime(p)) for p in (FICHIER, os.path.join(ICI, "static", "app.js"),
+                                                            os.path.join(ICI, "static", "index.html")))
+    except OSError:
+        return None
 
 
 def noms_cites():
-    """Noms des cartes jouables, pour reconnaître une carte citée n'importe où dans l'Atelier : [anglais] ou
-    [anglais, français], plus les noms d'un seul mot qui sont aussi des mots courants (« Sacrifice », « Endurance »),
-    que l'interface ne lie que dans leur deck ou en gras. Un mot est courant s'il s'écrit en minuscules dans le texte
-    des cartes, ou s'il sert dans l'interface. None tant que la base se charge (au lancement de l'Atelier)."""
+    """Noms des cartes jouables, pour reconnaître une carte citée n'importe où dans l'Atelier : {noms: [anglais] ou
+    [anglais, français], communs: les noms d'un seul mot qui sont aussi des mots courants (« Sacrifice », « Endurance »),
+    que l'interface ne lie que dans leur deck ou en gras}. Un mot est courant s'il s'écrit en minuscules dans le texte
+    des cartes, ou s'il sert dans l'interface. Gardés aussi sur le disque : au lancement, les cartes citées sont liées
+    sans attendre que la base soit chargée. None tant qu'on n'a ni la base ni ce fichier."""
     b = _base
-    if b is None:
-        return None
+    cle = _empreinte()
+    valables = lambda c: bool(c) and c.get("cle") == cle and (b is None or c.get("date") == b["date"])
     with _verrou:
-        if _citees.get("date") != b["date"]:
-            jouables = [x for x in b["cartes"] if x["spe"] not in HORS_JEU and not x["dig"] and not x["fun"]]
-            noms = [[x["n"], x["fr"]] if x.get("fr") and x["fr"] != x["n"] else [x["n"]] for x in jouables]
-            seuls = {a.lower().replace("’", "'") for n in noms for nom in n for a in [nom, *nom.split(" // ")] if not re.search(r"\s", a)}
-            courants = set()
-            for x in b["cartes"]:
-                for k in ("o", "of", "t", "tf"):
-                    courants.update(m for m in re.findall(r"[^\W_][\w'’-]*", (x.get(k) or "").replace("’", "'")) if m == m.lower())
-            for f in ("app.js", "index.html"):
-                with open(os.path.join(ICI, "static", f), encoding="utf-8") as fh:
-                    src = re.sub(r"/\*.*?\*/|(?<!:)//[^\n]*|<!--.*?-->", "", fh.read(), flags=re.S)   # sans les commentaires
-                src = re.sub(r"\b\w+(?=:)", "", src)                       # ni les clés du code (aube: "Dawn of the Dead")
-                courants.update(m.lower() for m in re.findall(r"[^\W_][\w'’-]*", src.replace("’", "'")))
-            _citees.update(date=b["date"], donnees=dict(noms=noms, communs=sorted(seuls & courants)))
-        return _citees["donnees"]
+        if valables(_citees):
+            return _citees
+        try:
+            with open(CACHE_CITEES, encoding="utf-8") as f:
+                disque = json.load(f)
+        except (OSError, ValueError):
+            disque = None
+        if valables(disque):
+            _citees.clear()
+            _citees.update(disque)
+            return _citees
+        if b is None or cle is None:
+            return None
+        jouables = [x for x in b["cartes"] if x["spe"] not in HORS_JEU and not x["dig"] and not x["fun"]]
+        noms = [[x["n"], x["fr"]] if x.get("fr") and x["fr"] != x["n"] else [x["n"]] for x in jouables]
+        seuls = {a.lower().replace("’", "'") for n in noms for nom in n for a in [nom, *nom.split(" // ")] if not re.search(r"\s", a)}
+        courants = set()
+        for x in b["cartes"]:
+            for k in ("o", "of", "t", "tf"):
+                courants.update(m for m in re.findall(r"[^\W_][\w'’-]*", (x.get(k) or "").replace("’", "'")) if m == m.lower())
+        for f in ("app.js", "index.html"):
+            with open(os.path.join(ICI, "static", f), encoding="utf-8") as fh:
+                src = re.sub(r"/\*.*?\*/|(?<!:)//[^\n]*|<!--.*?-->", "", fh.read(), flags=re.S)   # sans les commentaires
+            src = re.sub(r"\b\w+(?=:)", "", src)                       # ni les clés du code (aube: "Dawn of the Dead")
+            courants.update(m.lower() for m in re.findall(r"[^\W_][\w'’-]*", src.replace("’", "'")))
+        _citees.clear()
+        _citees.update(cle=cle, date=b["date"], noms=noms, communs=sorted(seuls & courants))
+        try:
+            with open(CACHE_CITEES + ".tmp", "w", encoding="utf-8") as f:
+                json.dump(_citees, f, ensure_ascii=False, separators=(",", ":"))
+            os.replace(CACHE_CITEES + ".tmp", CACHE_CITEES)
+        except OSError:
+            pass
+        return _citees
 
 
 def fonctions_cartes(noms):

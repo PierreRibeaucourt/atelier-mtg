@@ -786,8 +786,8 @@ def api_noms_cartes():
     d = recherche.noms_cites()
     if d is None:
         return jsonify(noms=[], communs=[])
-    r = jsonify(d)
-    r.set_etag(f"{recherche.base()['date']}-{len(d['noms'])}-{len(d['communs'])}")
+    r = jsonify(noms=d["noms"], communs=d["communs"])
+    r.set_etag(f"{d['date']}-{d['cle']}-{len(d['noms'])}-{len(d['communs'])}")
     r.headers["Cache-Control"] = "no-cache"
     return r.make_conditional(request)
 

@@ -21,6 +21,8 @@ outils/atelier/cache_infos.json
 outils/atelier/cache_spellbook.json
 outils/atelier/cache_jetons.json
 outils/atelier/cache_version.json
+outils/atelier/cache_noms_cites.json
+outils/atelier/cache_noms_cites.json.tmp
 outils/atelier/base_cartes.json.gz
 outils/atelier/base_cartes.json.gz.tmp
 
