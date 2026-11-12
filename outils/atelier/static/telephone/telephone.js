@@ -858,8 +858,10 @@
           fichiers.set(`${o.deck}/${o.fichier}`, null);
           supprimes.add(`${o.deck}/${o.fichier}`);
           const mf = `${o.deck}/versions/versions.json`, meta = JSON.parse((await lire(mf)) || "{}");
+          const nom = (meta[o.fichier.split("/").pop()] || {}).nom || o.fichier.split("/").pop();
           delete meta[o.fichier.split("/").pop()];
           fichiers.set(mf, JSON.stringify(meta, null, 1));
+          nouveaux.push(`version « ${nom} » de ${titre(o.deck)} supprimée`);
         } else if (o.f === "achats") {
           const t = await lire(`${o.deck}/achats.json`);
           let poss = t ? JSON.parse(t).possedees || {} : null;
