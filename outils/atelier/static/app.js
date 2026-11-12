@@ -1925,10 +1925,11 @@ function optionsTelephone() {
           <button class="btn btn-danger" id="tel-delier">Délier ce téléphone</button></div>` : `
         <p>Tes decks sont gardés sur ce téléphone.</p>
         <div id="opt-github"></div>`}
-      </div></section>
+      </div></section>${a ? "" : `
+    <section class="panneau options opt-bloc" id="opt-cartes"></section>`}
     <section class="panneau options" id="opt-classeur"></section>`;
   classeurOptions($("#opt-classeur"));
-  if (!a) return ligneGithub($("#opt-github"), {});
+  if (!a) { ligneGithub($("#opt-github"), {}); return optionsCartes($("#opt-cartes")); }
   const attente = async () => {
     const n = await TELEPHONE.enAttente();
     $("#tel-attente").textContent = n ? `${n} modification${n > 1 ? "s" : ""} pas encore envoyée${n > 1 ? "s" : ""}` : "";
@@ -1944,6 +1945,27 @@ function optionsTelephone() {
     b.disabled = false;
   };
   $("#tel-delier").onclick = () => { if (confirm("Délier ce téléphone ? Ses decks en seront effacés (ils restent sur ton PC).")) TELEPHONE.delier(); };
+}
+
+// sans PC : les réglages des cartes, gardés sur ce téléphone (le bloc « Cartes » des Options du PC, sans la langue)
+async function optionsCartes(el) {
+  const o = await api("/api/options").catch(() => ({ budget: 5 }));
+  const budget = (b) => (b == null ? "" : String(b).replace(".", ","));
+  el.innerHTML = `<h2>${ico("cartes")}Cartes</h2><div class="opt-lignes">
+      <label class="opt-champ"><span>Budget par carte</span><span class="opt-euros"><input class="champ" name="budget" inputmode="decimal" value="${budget(o.budget)}" placeholder="5">€</span></label>
+      ${basculesUB(o)}</div>`;
+  el.onchange = async (ev) => {
+    const c = ev.target;
+    if (!c.name) return;
+    try {
+      Object.assign(o, await api("/api/options", { method: "POST", body: { [c.name]: c.type === "checkbox" ? c.checked : c.value } }));
+      majBudget(o.budget);
+      toast("Enregistré.");
+    } catch (e) { erreur(e); }
+    if (c.type === "checkbox") c.checked = !!o[c.name];
+    else c.value = budget(o.budget);
+  };
+  el.onkeydown = (ev) => { if (ev.key === "Enter" && ev.target.matches("input.champ")) ev.target.blur(); };
 }
 
 // les champs des options ; ceux des préférences sont aussi demandés une fois au premier lancement (modalePreferences)

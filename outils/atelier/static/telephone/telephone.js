@@ -601,9 +601,29 @@
   }
 
   const budget = () => Number((window.REGLAGES || {}).budget) || 0;
+  // sans PC, les réglages des cartes se changent ici (app.py › api_options) : budget par carte (0 : pas d'alerte),
+  // illustrations et suggestions sans Universes Beyond. Gardés sur ce téléphone ; toutes les pages sont refaites.
+  const options = () => { const r = window.REGLAGES || {};
+    return { budget: r.budget ?? 5, budget_defaut: 5, langues: {}, langue_cartes: "", sans_ub_illustrations: !!r.sans_ub_illustrations,
+      sans_ub_suggestions: !!r.sans_ub_suggestions }; };
+  async function ecrireOptions(d) {
+    const r = { budget: 5, ...(window.REGLAGES || {}) };
+    if ("budget" in d) {
+      const b = String(d.budget).replace("€", "").replace(",", ".").trim(), v = b ? Number(b) : 5;
+      if (!Number.isFinite(v) || v < 0 || v > 100000) throw new Error("Le budget est un nombre d'euros.");
+      r.budget = v;
+    }
+    for (const k of ["sans_ub_illustrations", "sans_ub_suggestions"]) if (k in d) r[k] = !!d[k];
+    window.REGLAGES = r;
+    ecrireLocal(REGLAGES, JSON.stringify(r));
+    if (etatBase.prete) await message("reglages", [{ sansUb: !!r.sans_ub_illustrations }]).catch(() => {});
+    await recalculer(null);
+    return options();
+  }
   async function ecrire(u, b) {
     const p = u.pathname, m = p.match(/^\/api\/decks\/([^/]+)\/(modifier|achats|suggestions\/ecarter)$/);
     if (local && /^\/api\/(github|sauvegarde)(\/|$)/.test(p)) { const r = await routeGithub(p, "POST", b); if (r !== undefined) return r; }
+    if (local && p === "/api/options") return ecrireOptions(b);
     if (p === "/api/prix") return prixEtNoms(b.noms || []);
     if (p === "/api/recherche/base") {                    // « Mettre à jour » : une nouvelle base, même sur les données mobiles
       const c = etatBase.construction;
@@ -1381,7 +1401,7 @@
     }
     for (const k of await BD.cles()) if (String(k).startsWith("decks/") && !Object.values(decks).includes(k)) await BD.effacer(k);
     const api = await PAGES.index(f, pages, o);
-    api["/api/options"] = { budget: budget() || null, budget_defaut: 5, langues: {}, langue_cartes: "", sans_ub_illustrations: false, sans_ub_suggestions: false };
+    api["/api/options"] = options();
     await BD.ecrire("index.json.gz", { sha: "local", donnees: { format: FORMAT, date: Date.now() / 1000, version: "", compte: null,
       reglages: window.REGLAGES, decks, api, source: null, branche: null, local: true } });
     memoire.clear();
