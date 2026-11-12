@@ -1173,4 +1173,5 @@ label.btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; 
 .ligne-partagee { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 4rem; }
 .ligne-partagee > :last-child { text-align: right; font-variant-numeric: tabular-nums; }
 .ligne-partagee .manque { color: var(--alerte); font-weight: 600; }
+.ligne-jeton { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr); }
 @media (max-width: 600px) { .ligne-jeton, .ligne-partagee { grid-template-columns: minmax(0, 1fr) auto; } .ligne-jeton > :last-child { grid-column: 1 / -1; } }

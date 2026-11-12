@@ -1408,8 +1408,10 @@ async function copierCardmarket(d) {
 // bord à bord pour couper d'un trait. Les images ne sont ni recadrées, ni déformées, ni décolorées (règles de Scryfall).
 const PROXIES_PAR_PAGE = 9;
 
-// les cartes à imprimer : celles à acheter, ou tout le deck (sans le Maybeboard), avec ou sans les terrains de base
-function proxiesDuDeck(d, poss, cartes, bases) {
+// les cartes à imprimer : celles à acheter, tout le deck (sans le Maybeboard), avec ou sans les terrains de base, ou ses
+// jetons (un de chaque)
+function proxiesDuDeck(d, poss, cartes, bases, jetons = []) {
+  if (cartes === "jetons") return jetons.map((j) => ({ c: { nom: j.nom, cat: "", info: { image: j.image, type: j.type, texte: j.texte, pt: j.pt } }, n: 1 }));
   const garde = (c) => bases || !estBase(c);
   const l = cartes === "acheter" ? bilanAchats(d, poss).acheter.filter((x) => garde(x.c))
     : d.cartes.filter((c) => c.cat !== "Maybeboard" && garde(c)).map((c) => ({ c, n: c.n }));
@@ -1460,11 +1462,12 @@ async function vueProxies(p) {
   vue.innerHTML = `<p class="chargement">Préparation des proxies…</p>`;
   const [d, poss] = await Promise.all([api(`/api/decks/${enc(id)}`),
     api(`/api/decks/${enc(id)}/achats`).then((r) => r.possedees).catch(() => ({}))]);
-  const compte = (cartes, bases) => nbAchats(proxiesDuDeck(d, poss, cartes, bases));
-  let cartes = compte("acheter", PREF.get("proxies-bases", "") === "1") ? "acheter" : "tout";
+  const jetons = await jetonsDuDeck(d);
+  const compte = (cartes, bases) => nbAchats(proxiesDuDeck(d, poss, cartes, bases, jetons));
+  let cartes = p.get("cartes") === "jetons" && jetons.length ? "jetons" : compte("acheter", PREF.get("proxies-bases", "") === "1") ? "acheter" : "tout";
   const rendre = () => {
     const format = PREF.get("proxies-format", "texte"), langue = PREF.get("proxies-langue", "fr"), bases = PREF.get("proxies-bases", "") === "1";
-    const proxies = proxiesDuDeck(d, poss, cartes, bases).flatMap(({ c, n }) =>
+    const proxies = proxiesDuDeck(d, poss, cartes, bases, jetons).flatMap(({ c, n }) =>
       Array.from({ length: n }, () => (format === "images" ? proxyImages(c) : [proxyTexte(c, langue)])).flat());
     const pages = [];
     for (let i = 0; i < proxies.length; i += PROXIES_PAR_PAGE) pages.push(proxies.slice(i, i + PROXIES_PAR_PAGE));
@@ -1475,8 +1478,9 @@ async function vueProxies(p) {
           ${format === "texte" ? segments("proxies-langue", [["fr", "Français"], ["en", "Anglais"]], "fr") : ""}
           <select class="champ champ-petit" id="px-cartes" aria-label="Cartes à imprimer">
             <option value="acheter" ${cartes === "acheter" ? "selected" : ""}>Les cartes à acheter (${compte("acheter", bases)})</option>
-            <option value="tout" ${cartes === "tout" ? "selected" : ""}>Tout le deck (${compte("tout", bases)})</option></select>
-          <label class="petit"><input type="checkbox" id="px-bases" ${bases ? "checked" : ""}> Terrains de base</label>
+            <option value="tout" ${cartes === "tout" ? "selected" : ""}>Tout le deck (${compte("tout", bases)})</option>
+            ${jetons.length ? `<option value="jetons" ${cartes === "jetons" ? "selected" : ""}>Les jetons (${jetons.length})</option>` : ""}</select>
+          ${cartes === "jetons" ? "" : `<label class="petit"><input type="checkbox" id="px-bases" ${bases ? "checked" : ""}> Terrains de base</label>`}
           <span class="px-compte muet petit">${proxies.length} proxie${proxies.length > 1 ? "s" : ""} · ${pages.length} page${pages.length > 1 ? "s" : ""} A4</span>
           <button class="btn btn-accent" id="px-imprimer" ${proxies.length ? "" : "disabled"}>${ico("imprimer")}Imprimer</button>
         </div>
@@ -1487,7 +1491,7 @@ async function vueProxies(p) {
     if (format === "texte") ajusterProxies(vue);
     $$(".px-reglages .segments button", vue).forEach((b) => b.addEventListener("click", () => { PREF.set(b.dataset.pref, b.dataset.val); rendre(); }));
     $("#px-cartes", vue).onchange = (ev) => { cartes = ev.target.value; rendre(); };
-    $("#px-bases", vue).onchange = (ev) => { PREF.set("proxies-bases", ev.target.checked ? "1" : ""); rendre(); };
+    if ($("#px-bases", vue)) $("#px-bases", vue).onchange = (ev) => { PREF.set("proxies-bases", ev.target.checked ? "1" : ""); rendre(); };
     $("#px-imprimer", vue).onclick = async (ev) => {
       const b = ev.currentTarget;
       b.disabled = true;
@@ -3209,6 +3213,7 @@ function ongletStats(el, d) {
       <h3 style="margin-top:0">Base de mana</h3>
       ${tableauBaseMana(S, d)}
     </div>
+    <div class="panneau" id="st-jetons" hidden></div>
     <div class="panneau">
       <h3 style="margin-top:0">Main de départ</h3>
       <div class="form-ligne" style="margin-top:0">
@@ -3238,7 +3243,23 @@ function ongletStats(el, d) {
   };
   roles();
   montageMain(el, S);
+  if (!PARTAGE) jetonsDuDeck(d).then((jetons) => {
+    const z = $("#st-jetons", el);
+    if (!z || !jetons.length) return;
+    const fr = (n) => { const c = d.cartes.find((x) => x.nom === n); return c ? nomAffiche(c) : n; };
+    z.innerHTML = `<div class="panneau-tete"><h3>Jetons</h3>
+        <a class="btn btn-petit" href="#/proxies?deck=${enc(d.id)}&cartes=jetons">${ico("imprimer")}Imprimer</a></div>
+      ${jetons.map((j) => `<div class="ligne ligne-jeton">
+        <span class="nom"><span class="en" data-image="${esc(j.image)}">${esc(j.nom)}</span>${j.pt ? ` <span class="muet">${esc(j.pt)}</span>` : ""}</span>
+        <span class="petit muet">${esc(j.type)}</span>
+        <span class="petit muet">${j.cartes.map((n) => esc(fr(n))).join(", ")}</span>
+      </div>`).join("")}`;
+    z.hidden = false;
+  });
 }
+
+// les jetons (et donjons) que créent les cartes du deck, d'après Scryfall : à prévoir pour jouer, ou à imprimer
+const jetonsDuDeck = (d) => api(`/api/jouer/jetons?deck=${enc(d.id)}`).then((r) => r.jetons || []).catch(() => []);
 
 // tirage d'une main de départ, comme les testeurs d'Archidekt ou de Moxfield
 function montageMain(el, S) {
