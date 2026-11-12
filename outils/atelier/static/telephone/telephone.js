@@ -155,6 +155,7 @@
     if (p === "/api/recherche/tags") return demander("suggestions", u.searchParams.get("q") || "");
     if (p === "/api/recherche/noms") { pret(); return message("noms", [u.searchParams.get("q") || "", await dansDeck(u.searchParams.get("deck")), 8]); }
     if (p === "/api/recherche-cartes") return decksAvecCarte(u.searchParams.get("q") || "");
+    if (local && /^\/api\/(github|sauvegarde)(\/|$)/.test(p)) { const r = await routeGithub(p, "GET"); if (r !== undefined) return r; }
     // Commander Spellbook, par le relais : les combos d'une carte ; sans PC, le bracket et les combos du deck à jour
     const sbm = p.match(/^\/api\/decks\/([^/]+)\/(bracket|combos|combos\/carte)$/);
     if (sbm && sbm[2] === "combos/carte") return combosCarte(decodeURIComponent(sbm[1]), u);
@@ -602,6 +603,7 @@
   const budget = () => Number((window.REGLAGES || {}).budget) || 0;
   async function ecrire(u, b) {
     const p = u.pathname, m = p.match(/^\/api\/decks\/([^/]+)\/(modifier|achats|suggestions\/ecarter)$/);
+    if (local && /^\/api\/(github|sauvegarde)(\/|$)/.test(p)) { const r = await routeGithub(p, "POST", b); if (r !== undefined) return r; }
     if (p === "/api/prix") return prixEtNoms(b.noms || []);
     if (p === "/api/recherche/base") {                    // « Mettre à jour » : une nouvelle base, même sur les données mobiles
       const c = etatBase.construction;
@@ -963,7 +965,8 @@
     return envoi || (envoi = (async () => {
       const ops = await attente();
       if (!ops.length || !(acces || local)) return false;
-      const commit = local ? await envoyerLocal(ops) : await envoyerGithub(ops);
+      const commit = local ? await avecVerrou(() => envoyerLocal(ops)) : await envoyerGithub(ops);
+      if (local) planifierSauvegarde();                 // sauvegardé sur GitHub une fois la série de modifications finie
       // fait : ces opérations partent de la file ; sans PC, les pages refaites ici remplacent tout de suite celles
       // d'attente ; relié au PC, elles attendent celles du PC qui les contiennent
       const restent = (await attente()).filter((x) => !ops.some((y) => y.id === x.id));
@@ -1087,6 +1090,274 @@
     const I = noms.length ? await fiches(noms).catch(() => ({})) : {};
     return PAGES.combosCarte(nom, res, I, PAGES.dansDe(jeu.map((c) => c.nom)),
       filtre, new Set(page.cartes.filter((c) => c.cat === "Maybeboard").map((c) => c.nom)), erreur);
+  }
+
+  // ------------------------------------------------------------------ sans PC : la sauvegarde sur GitHub (synchro.py)
+  // Le téléphone se connecte lui-même à GitHub (le code à recopier, comme sur le PC, par le relais) et range ses decks
+  // dans le même dépôt privé que l'Atelier du PC : un PC les récupère ensuite (« Récupérer mes decks »), un autre
+  // téléphone aussi. Synchroniser compare trois états : les fichiers du téléphone (@depot), ceux du dépôt et ceux de la
+  // dernière synchronisation (@sauvegarde). Ce qui a changé d'un seul côté passe de l'autre ; changé des deux côtés, la
+  // version du téléphone l'emporte et la liste d'en face entre dans l'historique du deck.
+  const NOM_DEPOT = "atelier-mtg-sauvegarde";
+  const DESCRIPTION = "Sauvegarde privée de l'Atelier MTG : decks et classeur (ne pas modifier à la main)";
+  const LISEZMOI = "README.md";                       // synchro.TEXTE_LISEZMOI, à l'identique
+  const TEXTE_LISEZMOI = "# Sauvegarde de l'Atelier MTG\n\nCe dépôt est **privé** : toi seul le vois. L'Atelier MTG y range une copie de tes decks (listes, versions,\nsimulations, discussions, achats) et de ton classeur, pour les retrouver si ton PC tombe en panne, ou sur un autre PC.\n\n- L'Atelier le tient à jour tout seul : ne modifie pas ces fichiers à la main.\n- Sur un autre PC : installe l'Atelier MTG, puis « Récupérer mes decks » sur sa page d'accueil.\n- Les photos rangées dans les dossiers des decks ne sont pas sauvegardées.\n";
+  const GITHUB = "@github", SAUVEGARDE = "@sauvegarde";
+  const CALME = 5000;                                 // ms sans modification avant d'envoyer : une série d'ajouts part une fois
+  const leCompte = async () => (await BD.lire(GITHUB).catch(() => null)) || null;    // {jeton, compte, id}
+  // l'état de la dernière synchronisation, s'il est celui de ce compte
+  const lEtat = async (g) => { const e = (await BD.lire(SAUVEGARDE).catch(() => null)) || {}; return !g || e.compte === g.compte ? e : { voulue: e.voulue }; };
+  async function ghCompte(jeton, methode, url, corps) {
+    const r = await fetch(GH + url, { method: methode, cache: "no-store", body: corps ? JSON.stringify(corps) : undefined, headers: {
+      Authorization: "Bearer " + jeton, "X-GitHub-Api-Version": "2022-11-28", Accept: "application/vnd.github+json",
+      ...(corps ? { "Content-Type": "application/json" } : {}) } });
+    if (r.status === 401) {
+      await BD.effacer(GITHUB).catch(() => {});
+      throw Object.assign(new Error("GitHub ne reconnaît plus ce téléphone : reconnecte-le."), { statut: 401 });
+    }
+    if (!r.ok) throw Object.assign(new Error(`GitHub ne répond pas (${r.status}).`), { statut: r.status });
+    return r.status === 204 ? null : r.json();
+  }
+  async function shaBlob(texte) {                     // l'empreinte d'un fichier pour git (github.sha_blob)
+    const o = new TextEncoder().encode(texte), t = new TextEncoder().encode(`blob ${o.length}\0`), tout = new Uint8Array(t.length + o.length);
+    tout.set(t);
+    tout.set(o, t.length);
+    return [...new Uint8Array(await crypto.subtle.digest("SHA-1", tout))].map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+  function texteDe(base64) {                          // le contenu d'un blob ; null s'il n'est pas du texte (une photo)
+    const s = atob(base64.replace(/\s/g, "")), o = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) o[i] = s.charCodeAt(i);
+    try { return new TextDecoder("utf-8", { fatal: true }).decode(o); } catch (_) { return null; }
+  }
+
+  // se connecter : un code à recopier sur github.com/login/device (github.connecter, etat_connexion). La connexion en
+  // cours est gardée : l'appli peut être rouverte pendant qu'on est sur GitHub (iPhone), elle la finit alors seule
+  const FLUX = "telephone-connexion-github";
+  let flux = (() => { try { const f = JSON.parse(lireLocal(FLUX) || "null"); return f && Date.now() < f.expire ? f : null; } catch (_) { return null; } })();
+  const garderFlux = () => ecrireLocal(FLUX, flux && flux.etat === "attente" ? JSON.stringify({ ...flux, demande: false }) : null);
+  async function connecterGithub() {
+    const c = await relais("/github/code", {}).catch((e) => { throw new Error(`GitHub ne répond pas : ${e.message}`); });
+    if (!c.device_code) throw new Error(c.error_description || "GitHub ne répond pas.");
+    const pas = (c.interval || 5) * 1000;
+    flux = { code: c.device_code, pas, prochain: Date.now() + pas, expire: Date.now() + (c.expires_in || 900) * 1000, etat: "attente" };
+    garderFlux();
+    return { etat: "attente", code: c.user_code, url: c.verification_uri };
+  }
+  async function etatConnexion() {
+    const f = flux;
+    if (!f) return { etat: "erreur", erreur: "Aucune connexion en cours." };
+    if (f.etat === "attente" && Date.now() > f.expire) f.etat = "expire";
+    if (f.etat === "attente" && !f.demande && Date.now() >= f.prochain) {
+      f.demande = true;
+      try {
+        const r = await relais("/github/jeton", { device_code: f.code });
+        f.prochain = Date.now() + f.pas;
+        if (r.access_token) {
+          const moi = await ghCompte(r.access_token, "GET", "/user");
+          await BD.ecrire(GITHUB, { jeton: r.access_token, compte: moi.login, id: moi.id });
+          Object.assign(f, { etat: "ok", compte: moi.login });
+        } else if (r.error === "slow_down") f.pas += 5000;
+        else if (r.error === "access_denied") f.etat = "refus";
+        else if (r.error === "expired_token") f.etat = "expire";
+        else if (r.error !== "authorization_pending") Object.assign(f, { etat: "erreur", erreur: r.error_description || r.error || "Connexion impossible." });
+      } catch (_) { f.prochain = Date.now() + f.pas; }   // pas de réseau : on réessaie
+      finally { f.demande = false; garderFlux(); }
+    }
+    return { etat: f.etat, compte: f.compte || null, erreur: f.erreur || "" };
+  }
+  async function reprendreConnexion() {
+    while (flux && flux.etat === "attente" && Date.now() < flux.expire) {
+      await new Promise((ok) => setTimeout(ok, 2000));
+      await etatConnexion();
+    }
+    if (flux && flux.etat === "ok") {
+      await sauvegarderEnFond();
+      if (window.route && document.querySelector("#modale")?.hidden !== false) route();
+    }
+  }
+
+  // le dépôt de sauvegarde du compte : {depot, branche, id}, créé (privé) s'il n'existe pas et creer ; null sinon
+  async function leDepot(q, g, creer) {
+    let r;
+    try { r = await q("GET", `/repos/${g.compte}/${NOM_DEPOT}`); }
+    catch (e) {
+      if (e.statut !== 404) throw e;
+      if (!creer) return null;
+      r = await q("POST", "/user/repos", { name: NOM_DEPOT, private: true, description: DESCRIPTION, auto_init: true,
+        has_issues: false, has_projects: false, has_wiki: false });
+    }
+    if (!r.private) throw new Error(`Ton dépôt GitHub « ${NOM_DEPOT} » est public : l'Atelier n'y range pas ta sauvegarde. Rends-le privé sur GitHub (Settings › Danger Zone), ou supprime-le.`);
+    return { depot: r.full_name, branche: r.default_branch, id: r.id };
+  }
+  // le dernier commit : {tete, arbre, distant: {chemin: empreinte}, date} ; attend un dépôt tout juste créé
+  async function laTete(q, d) {
+    for (let essai = 0; ; essai++) {
+      try {
+        const tete = (await q("GET", `/repos/${d.depot}/git/ref/heads/${d.branche}`)).object.sha;
+        const c = await q("GET", `/repos/${d.depot}/git/commits/${tete}`);
+        const t = await q("GET", `/repos/${d.depot}/git/trees/${c.tree.sha}?recursive=1`);
+        const distant = {};
+        for (const x of t.tree) if (x.type === "blob") distant[x.path] = x.sha;
+        return { tete, arbre: c.tree.sha, distant, date: c.committer && c.committer.date };
+      } catch (e) {
+        if (![404, 409].includes(e.statut) || essai === 7) throw e;
+        await new Promise((ok) => setTimeout(ok, 2000));
+      }
+    }
+  }
+  // ce qu'il y a dans la sauvegarde, sans rien télécharger (« Récupérer mes decks »)
+  async function sauvegardeDistante() {
+    const g = await leCompte();
+    if (!g) throw Object.assign(new Error("Connecte ce téléphone à GitHub."), { statut: 401 });
+    const q = (m, u, c) => ghCompte(g.jeton, m, u, c), d = await leDepot(q, g, false);
+    if (!d) return { existe: false, decks: [] };
+    const { distant, date } = await laTete(q, d);
+    const noms = [...new Set(Object.keys(distant).filter((p) => p.startsWith("Deck ") && p.split("/").length === 2 && p.endsWith("/archidekt.txt"))
+      .map((p) => p.split("/")[0]))].sort();
+    return { existe: noms.length > 0, decks: noms.map((n) => n.slice(5)), date };
+  }
+
+  // un seul à la fois : les modifications faites ici (envoyerLocal) et la synchronisation touchent aux mêmes fichiers
+  let verrouDepot = Promise.resolve();
+  const avecVerrou = (fn) => { const p = verrouDepot.then(fn); verrouDepot = p.catch(() => {}); return p; };
+  let sauvegarde = null, erreurSauvegarde = "";
+  // synchroniser : {envoyes, recus, conflits, decks, decks_recus} ; {vide: true} sans dépôt quand creer est faux
+  function sauvegarder(creer = true) {
+    return sauvegarde || (sauvegarde = avecVerrou(() => synchroniserGithub(creer))
+      .then((r) => { erreurSauvegarde = ""; return r; }, (e) => { erreurSauvegarde = e.message; throw e; })
+      .finally(() => { sauvegarde = null; }));
+  }
+  async function synchroniserGithub(creer) {
+    const g = await leCompte();
+    if (!g) throw Object.assign(new Error("Connecte ce téléphone à GitHub (compte gratuit)."), { statut: 401 });
+    const q = (m, u, c) => ghCompte(g.jeton, m, u, c), d = await leDepot(q, g, creer);
+    if (!d) return { vide: true };
+    let e = await lEtat(g);
+    if (e.id !== d.id) e = { voulue: e.voulue, fichiers: {} };   // autre dépôt (premier passage, ou refait) : rien de connu
+    Object.assign(e, d, { compte: g.compte });
+    for (let essai = 0; essai < 3; essai++) {
+      const { tete, arbre, distant } = await laTete(q, d);
+      const lisezmoi = distant[LISEZMOI];
+      delete distant[LISEZMOI];
+      if (e.commit && tete !== e.commit) {               // le dernier commit connu a disparu (dépôt refait) : on repart de zéro
+        try { await q("GET", `/repos/${d.depot}/git/commits/${e.commit}`); }
+        catch (x) { if (![404, 422].includes(x.statut)) throw x; Object.assign(e, { commit: null, fichiers: {} }); }
+      }
+      const avant = e.commit ? e.fichiers : {}, dep = await depot(), ici = {};
+      for (const [rel, t] of Object.entries(dep.fichiers)) ici[rel] = await shaBlob(t);
+      for (const rel of e.ignores || []) if (rel in distant) ici[rel] = distant[rel];   // les photos : pas sur le téléphone
+      const envois = [], retraits = [], recus = [], effaces = [], conflits = [];
+      for (const rel of [...new Set([...Object.keys(ici), ...Object.keys(distant), ...Object.keys(avant)])].sort()) {
+        const l = ici[rel] ?? null, r = distant[rel] ?? null, b = avant[rel] ?? null;
+        if (l === r) continue;
+        if (l === b) (r === null ? effaces : recus).push(rel);              // changé sur GitHub seulement
+        else if (r === b) (l === null ? retraits : envois).push(rel);       // changé ici seulement
+        else if (l === null) recus.push(rel);                                // supprimé ici, changé là-bas : il revient
+        else { envois.push(rel); if (r !== null) conflits.push(rel); }      // changé des deux côtés : celui d'ici gagne
+      }
+      // 1. ce qui part : un seul commit
+      let nouveau = tete;
+      const entrees = envois.map((rel) => ({ path: rel, mode: "100644", type: "blob", content: dep.fichiers[rel] }));
+      for (const rel of retraits) entrees.push({ path: rel, mode: "100644", type: "blob", sha: null });
+      if (lisezmoi !== await shaBlob(TEXTE_LISEZMOI)) entrees.push({ path: LISEZMOI, mode: "100644", type: "blob", content: TEXTE_LISEZMOI });
+      if (entrees.length) {
+        let base = arbre, lot = [], taille = 0;
+        const lots = [];
+        for (const x of entrees) {                       // par lots, comme synchro._nouvel_arbre
+          const n = (x.content || "").length + 200;
+          if (lot.length && (taille + n > 2000000 || lot.length >= 400)) { lots.push(lot); lot = []; taille = 0; }
+          lot.push(x);
+          taille += n;
+        }
+        if (lot.length) lots.push(lot);
+        for (const l of lots) base = (await q("POST", `/repos/${d.depot}/git/trees`, { base_tree: base, tree: l })).sha;
+        const t = new Date(), quand = `${date2(t.getDate())}/${date2(t.getMonth() + 1)}/${t.getFullYear()} ${date2(t.getHours())}:${date2(t.getMinutes())}`;
+        nouveau = (await q("POST", `/repos/${d.depot}/git/commits`, { message: `Sauvegarde du ${quand} (téléphone)`, tree: base, parents: [tete] })).sha;
+        try { await q("PATCH", `/repos/${d.depot}/git/refs/heads/${d.branche}`, { sha: nouveau }); }
+        catch (x) { if (x.statut === 422 && essai < 2) continue; throw x; }   // un autre appareil a envoyé entre-temps
+      }
+      // 2. ce qui arrive ; la liste d'en face, quand celle d'ici l'emporte, dans l'historique du deck
+      const lus = new Map(), ignores = new Set(e.ignores || []);
+      const aLire = [...recus, ...conflits.filter((rel) => rel.endsWith("/archidekt.txt"))];
+      for (let i = 0; i < aLire.length; i += 6) {
+        await Promise.all(aLire.slice(i, i + 6).map(async (rel) => {
+          const t = texteDe((await q("GET", `/repos/${d.depot}/git/blobs/${distant[rel]}`)).content);
+          if (t === null) ignores.add(rel); else lus.set(rel, t);
+        }));
+      }
+      const f = dep.fichiers, touches = new Set(), avantDecks = new Set(PAGES.decksDe(f));
+      dep.modifies = dep.modifies || {};
+      for (const rel of recus) {
+        if (!lus.has(rel)) continue;
+        f[rel] = lus.get(rel);
+        touches.add(rel.split("/")[0]);
+        if (rel.endsWith("/archidekt.txt")) dep.modifies[rel.split("/")[0]] = Date.now() / 1000;
+      }
+      for (const rel of conflits) {
+        if (!rel.endsWith("/archidekt.txt") || !lus.has(rel)) continue;
+        const deck = rel.split("/")[0], nom = `${horodatage()}_autre-appareil.txt`, jf = `${deck}/historique/journal.json`;
+        f[`${deck}/historique/${nom}`] = lus.get(rel);
+        let j = {};
+        try { j = JSON.parse(f[jf] || "{}"); } catch (_) {}
+        j[nom] = "Liste d'un autre appareil (sauvegarde en ligne)";
+        f[jf] = JSON.stringify(j, null, 1);
+        touches.add(deck);
+      }
+      // 3. ce qui a disparu là-bas (sans avoir changé ici) : retiré ici aussi
+      for (const rel of effaces) { delete f[rel]; touches.add(rel.split("/")[0]); }
+      for (const id of Object.keys(dep.modifies)) if (!(`${id}/archidekt.txt` in f)) delete dep.modifies[id];
+      if (touches.size) await BD.ecrire("@depot", dep);
+      const fichiers = { ...distant };
+      for (const rel of envois) fichiers[rel] = ici[rel];
+      for (const rel of retraits) delete fichiers[rel];
+      const nb = new Set(Object.keys(fichiers).filter((rel) => rel.startsWith("Deck ")).map((rel) => rel.split("/")[0])).size;
+      Object.assign(e, { commit: nouveau, fichiers, derniere: Date.now() / 1000, decks: nb, ignores: [...ignores] });
+      await BD.ecrire(SAUVEGARDE, e);
+      if (touches.size) await recalculer(null, touches);
+      if (conflits.length) setTimeout(() => planifierSauvegarde(1000));   // la liste d'en face, gardée dans l'historique, part aussi
+      return { envoyes: envois.length + retraits.length, recus: recus.length, decks: nb,
+        conflits: [...new Set(conflits.filter((rel) => rel.endsWith("/archidekt.txt")).map((rel) => rel.split("/")[0]))].sort(),
+        decks_recus: PAGES.decksDe(f).filter((x) => !avantDecks.has(x)).sort() };
+    }
+    throw new Error("La sauvegarde n'a pas pu s'enregistrer : réessaie.");
+  }
+  // en fond : après une série de modifications, au lancement, et un coup d'œil toutes les cinq minutes (un autre
+  // appareil a pu changer un deck) ; la page se refait si des fichiers sont arrivés
+  let minuteurSauvegarde = null;
+  async function sauvegarderEnFond() {
+    const g = await leCompte();
+    if (!g || (await lEtat(g)).voulue === false) return;
+    const r = await sauvegarder().catch(() => null);
+    if (r && r.recus && window.route && T.pret && document.querySelector("#modale")?.hidden !== false) route();
+  }
+  function planifierSauvegarde(ms = CALME) {
+    clearTimeout(minuteurSauvegarde);
+    minuteurSauvegarde = setTimeout(sauvegarderEnFond, ms);
+  }
+  async function etatSauvegarde() {
+    const g = await leCompte(), e = await lEtat(g), voulue = e.voulue !== false;
+    return { connecte: !!g, compte: g ? g.compte : null, prive: !!g, voulue, active: !!g && voulue, en_cours: !!sauvegarde,
+      derniere: e.derniere || null, erreur: g ? erreurSauvegarde : "", url: e.depot ? `https://github.com/${e.depot}` : null, decks: e.decks ?? null };
+  }
+  // les demandes de l'écran GitHub de l'Atelier (app.py › api_github, api_sauvegarde…)
+  async function routeGithub(p, methode, b) {
+    const g = await leCompte(), compte = () => leCompte().then((x) => ({ compte: x ? x.compte : null, git: null, disponible: true, prive: !!x }));
+    if (methode === "GET") {
+      if (p === "/api/github") return compte();
+      if (p === "/api/github/connexion") return etatConnexion();
+      if (p === "/api/sauvegarde") return etatSauvegarde();
+      if (p === "/api/sauvegarde/distante") return sauvegardeDistante();
+      return undefined;
+    }
+    if (p === "/api/github/connexion") return connecterGithub();
+    if (p === "/api/github/deconnexion") { flux = null; garderFlux(); await BD.effacer(GITHUB); return compte(); }
+    if (p === "/api/sauvegarde" || p === "/api/sauvegarde/recuperer") {
+      const action = p.endsWith("/recuperer") ? "activer" : b.action || "maintenant", e = await lEtat(g);
+      if (action === "couper" || action === "activer") await BD.ecrire(SAUVEGARDE, { ...e, voulue: action !== "couper" });
+      if (action === "couper") return { etat: await etatSauvegarde() };
+      return { resume: await sauvegarder(!p.endsWith("/recuperer")), etat: await etatSauvegarde() };
+    }
+    return undefined;
   }
 
   // les pages des decks touchés (tous si touches est vide), puis l'accueil, rangées comme celles du PC ; une seule à la
@@ -1325,6 +1596,8 @@
       T.pret = true;
       if (window.route) route();
       setTimeout(async () => spellbookEnFond(PAGES.decksDe((await depot()).fichiers)), 3000);
+      sauvegarderEnFond();
+      if (flux) reprendreConnexion();
       return;
     }
     if (!acces) return window.route && route();
@@ -1366,4 +1639,7 @@
   } else demarrer();
   document.addEventListener("visibilitychange", () => { if (!document.hidden && acces) demarrer(); });
   setInterval(() => { if (!document.hidden && acces) demarrer(); }, DISTANT);
+  // sans PC : la sauvegarde sur GitHub regarde aussi s'il y a du nouveau
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && local) planifierSauvegarde(500); });
+  setInterval(() => { if (!document.hidden && local) sauvegarderEnFond(); }, DISTANT);
 })();

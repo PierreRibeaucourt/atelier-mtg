@@ -17,6 +17,7 @@ if (PARTAGE) document.documentElement.classList.add("partage");
 // PC ; la discussion, la simulation et la recherche restent sur le PC
 const TELEPHONE = window.TELEPHONE || null;
 const PC = !PARTAGE && !TELEPHONE;              // l'Atelier du PC : serveur Python, tâches en fond, mises à jour
+const CET_APPAREIL = TELEPHONE ? "ce téléphone" : "ce PC", AUTRE_APPAREIL = TELEPHONE ? "un autre appareil" : "un autre PC";
 // page partagée : à qui sont ces decks (reglages.json « nom », sinon le compte GitHub qui publie)
 // titre_accueil : la page d'accueil de l'Atelier (site_atelier.py), qui n'est le site de decks de personne
 const MES_DECKS = PARTAGE && PARTAGE.titre_accueil || (PARTAGE && PARTAGE.auteur ? `Decks de ${PARTAGE.auteur}` : "Mes decks");
@@ -797,7 +798,7 @@ async function vueAccueil() {
         <button type="button" class="av-choix" id="av-creer">${ico("plus")}<strong>Créer mon premier deck</strong>
           <span>À partir de son commandant, ou d'une liste copiée depuis Moxfield, Archidekt ou MTG Arena.</span></button>
         <button type="button" class="av-choix" id="av-recuperer">${ico("nuage")}<strong>Récupérer mes decks</strong>
-          <span>Tu les as sauvegardés en ligne depuis un autre PC.</span></button>
+          <span>Tu les as sauvegardés en ligne depuis ${AUTRE_APPAREIL}.</span></button>
         <button type="button" class="av-choix" id="av-importer">${ico("dossier")}<strong>Importer mes decks</strong>
           <span>Exportés de ManaBox, Moxfield, Archidekt… : un fichier par deck.</span></button>
       </div>${decksSupprimes}`;
@@ -827,7 +828,7 @@ async function vueAccueil() {
     <div id="d-resultats"></div>
     ${decksSupprimes}`;
   $("#btn-nouveau").onclick = modaleNouveauDeck;
-  if (PC) etatSauvegarde($("#etat-sauvegarde"), $("#bandeau-sauvegarde"));
+  if (PC || (TELEPHONE && TELEPHONE.local)) etatSauvegarde($("#etat-sauvegarde"), $("#bandeau-sauvegarde"));
   const zone = $("#d-resultats");
   let cartes = {}, numero = 0, minuteur;
   const rendre = () => rendreDecks(zone, cartes);
@@ -1644,16 +1645,16 @@ function modalePartage(d) {
 function introGithub(zone, suite, contexte = "") {
   const pourquoi = {
     sauvegarde: "Pour sauvegarder tes decks, l'Atelier passe par GitHub.",
-    recuperer: "Ta sauvegarde est sur GitHub : connecte l'Atelier au compte GitHub de ton autre PC.",
+    recuperer: `Ta sauvegarde est sur GitHub : connecte l'Atelier au compte GitHub de ton autre ${TELEPHONE ? "appareil" : "PC"}.`,
     partage: "Pour publier la page de ton deck, l'Atelier passe par GitHub.",
   }[contexte];
   const connecter = () => connexionGithub(zone, suite);
   zone.innerHTML = `${pourquoi ? `<p class="gh-contexte">${pourquoi}</p>` : ""}
     <div class="gh-presente">
-      <p><strong>GitHub</strong> est un service gratuit de Microsoft qui garde des fichiers en ligne. L'Atelier s'en sert pour deux choses :</p>
+      <p><strong>GitHub</strong> est un service gratuit de Microsoft qui garde des fichiers en ligne.${TELEPHONE ? "" : " L'Atelier s'en sert pour deux choses :"}</p>
       <ul class="gh-usages">
-        <li>${ico("nuage")}<span><strong>Sauvegarder tes decks</strong> dans un espace privé, que toi seul vois : tu les retrouves si ton PC tombe en panne, ou sur un autre PC.</span></li>
-        <li>${ico("partager")}<span><strong>Publier les decks que tu partages</strong>, sur une page à envoyer à ton groupe de jeu.</span></li>
+        <li>${ico("nuage")}<span><strong>Sauvegarder tes decks</strong> dans un espace privé, que toi seul vois : tu les retrouves si ton ${TELEPHONE ? "téléphone" : "PC"} tombe en panne, ou sur ${AUTRE_APPAREIL}.</span></li>
+        ${TELEPHONE ? "" : `<li>${ico("partager")}<span><strong>Publier les decks que tu partages</strong>, sur une page à envoyer à ton groupe de jeu.</span></li>`}
       </ul>
     </div>
     <p class="gh-compte">Il faut un compte GitHub : gratuit, avec une adresse e-mail.</p>
@@ -1694,9 +1695,9 @@ async function connexionGithub(zone, suite) {
   zone.innerHTML = `<ol class="gh-etapes">
       <li><p class="gh-code" aria-label="Code de connexion">${esc(c.code)}</p>
         <a class="btn btn-accent" id="gh-ouvrir" href="${esc(c.url)}" target="_blank" rel="noopener">${ico("copier")}Copier le code et ouvrir GitHub</a></li>
-      <li>Sur GitHub, connecte-toi si besoin, colle le code (Ctrl+V), puis clique sur «&nbsp;Continue&nbsp;».</li>
+      <li>Sur GitHub, connecte-toi si besoin, colle le code${TELEPHONE ? "" : " (Ctrl+V)"}, puis clique sur «&nbsp;Continue&nbsp;».</li>
       <li>GitHub te montre ce que l'Atelier pourra faire : écrire dans tes dépôts, les dossiers de ton compte. C'est là
-        qu'il range ta sauvegarde et tes pages. Clique sur «&nbsp;Authorize Atelier MTG&nbsp;», puis reviens ici.</li>
+        qu'il range ta sauvegarde${TELEPHONE ? "" : " et tes pages"}. Clique sur «&nbsp;Authorize Atelier MTG&nbsp;», puis reviens ici.</li>
     </ol>
     <p class="gh-attente" role="status">En attente de GitHub…</p>`;
   $("#gh-ouvrir", zone).onclick = () => { navigator.clipboard.writeText(c.code).catch(() => {}); };
@@ -1749,7 +1750,7 @@ async function activerSauvegarde(zone, fin) {
   const n = r.resume.decks || 0;
   zone.innerHTML = `<p class="sv-ok">${ico("nuage")}<span><strong>${n > 1 ? `Tes ${n} decks sont sauvegardés.` : n ? "Ton deck est sauvegardé." : "La sauvegarde est prête."}</strong>
       Ensuite, chaque modification est sauvegardée toute seule.</span></p>
-    <p class="muet petit">Sur un autre PC : installe l'Atelier, puis «&nbsp;Récupérer mes decks&nbsp;» sur sa page d'accueil.</p>
+    <p class="muet petit">${TELEPHONE ? "Sur un autre appareil : «&nbsp;Récupérer mes decks&nbsp;» sur la page d'accueil de l'Atelier." : "Sur un autre PC : installe l'Atelier, puis «&nbsp;Récupérer mes decks&nbsp;» sur sa page d'accueil."}</p>
     <div class="boutons">${r.etat.url ? `<a class="btn" href="${esc(r.etat.url)}" target="_blank" rel="noopener">${ico("ouvrir")}Voir sur GitHub</a>` : ""}
       <button class="btn btn-accent" id="sv-fin">OK</button></div>`;
   $("#sv-fin", zone).onclick = fin;
@@ -1762,7 +1763,7 @@ async function recupererDecks(zone, fin) {
   catch (e) { return echecSauvegarde(zone, e, () => recupererDecks(zone, fin), "recuperer"); }
   if (!s.existe) {
     zone.innerHTML = `<p>Aucune sauvegarde de decks sur le compte GitHub <strong>${esc(g.compte)}</strong>.</p>
-      <p class="muet petit">Elle se crée depuis ton autre PC : bandeau «&nbsp;Les sauvegarder en ligne&nbsp;» de sa page d'accueil, ou Options.</p>
+      <p class="muet petit">Elle se crée depuis ton autre ${TELEPHONE ? "appareil" : "PC"} : bandeau «&nbsp;Les sauvegarder en ligne&nbsp;» de sa page d'accueil, ou Options.</p>
       <div class="boutons"><button class="btn btn-accent" id="sv-fin">OK</button></div>`;
     $("#sv-fin", zone).onclick = fin;
     return;
@@ -1771,7 +1772,7 @@ async function recupererDecks(zone, fin) {
   zone.innerHTML = `<p>La sauvegarde du compte <strong>${esc(g.compte)}</strong> contient ${s.decks.length > 1 ? `${s.decks.length} decks` : "1 deck"},
       modifiée le ${esc(quand)} :</p>
     <p class="sv-decks">${s.decks.map((n) => `<strong>${esc(n)}</strong>`).join(" · ")}</p>
-    <div class="boutons"><button class="btn btn-accent" id="sv-go">${ico("telecharger")}Récupérer sur ce PC</button></div>`;
+    <div class="boutons"><button class="btn btn-accent" id="sv-go">${ico("telecharger")}Récupérer sur ${CET_APPAREIL}</button></div>`;
   $("#sv-go", zone).onclick = async () => {
     zone.innerHTML = `<p class="chargement">Récupération de tes decks…</p>`;
     try {
@@ -1798,7 +1799,7 @@ async function etatSauvegarde(petit, bandeau) {
   let tard = 0;
   try { tard = +localStorage.getItem("pref-sauvegarde-plus-tard") || 0; } catch (_) {}
   if ((s.connecte && s.prive && !s.voulue) || Date.now() - tard < PLUS_TARD_SAUVEGARDE) return;   // coupée exprès, ou « Plus tard »
-  bandeau.innerHTML = `<div class="bandeau-sauvegarde">${ico("nuage")}<p>Tes decks ne sont que sur ce PC : si tu le changes ou s'il tombe en panne, ils sont perdus.</p>
+  bandeau.innerHTML = `<div class="bandeau-sauvegarde">${ico("nuage")}<p>Tes decks ne sont que sur ${CET_APPAREIL} : si tu le changes ou s'il tombe en panne, ils sont perdus.</p>
     <button class="btn btn-accent btn-petit" id="bs-oui">Les sauvegarder en ligne</button>
     <button class="btn btn-discret btn-petit" id="bs-tard">Plus tard</button></div>`;
   $("#bs-oui", bandeau).onclick = () => modaleSauvegarde("sauvegarde", () => etatSauvegarde(petit, bandeau));
@@ -1922,11 +1923,12 @@ function optionsTelephone() {
         <p class="muet petit" id="tel-attente"></p>
         <div class="form-ligne"><button class="btn" id="tel-maj">${ico("rafraichir")}Synchroniser</button>
           <button class="btn btn-danger" id="tel-delier">Délier ce téléphone</button></div>` : `
-        <p>Tes decks sont gardés sur ce téléphone.</p>`}
+        <p>Tes decks sont gardés sur ce téléphone.</p>
+        <div id="opt-github"></div>`}
       </div></section>
     <section class="panneau options" id="opt-classeur"></section>`;
   classeurOptions($("#opt-classeur"));
-  if (!a) return;
+  if (!a) return ligneGithub($("#opt-github"), {});
   const attente = async () => {
     const n = await TELEPHONE.enAttente();
     $("#tel-attente").textContent = n ? `${n} modification${n > 1 ? "s" : ""} pas encore envoyée${n > 1 ? "s" : ""}` : "";
