@@ -603,6 +603,9 @@ document.addEventListener("click", (ev) => { if (!ev.target.closest("#menu, .btn
 addEventListener("resize", fermerMenu);
 addEventListener("scroll", fermerMenu);
 
+// au doigt, le bouton « retour » du téléphone ferme la fenêtre ouverte au lieu de quitter la page : chaque fenêtre ajoute
+// une étape à l'historique, retirée quand on la ferme autrement (sauf si une autre page s'est ouverte entre-temps)
+const RETOUR_FERME = matchMedia("(pointer: coarse)").matches;
 function ouvrirModale(html, monte, { focus = true, large = false } = {}) {
   cacherApercu();
   fermerMenu();
@@ -614,8 +617,22 @@ function ouvrirModale(html, monte, { focus = true, large = false } = {}) {
   const champ = focus && $("input, textarea", m);
   if (champ) champ.focus();
   else $(".modale-boite", m).focus({ preventScroll: true });
+  if (RETOUR_FERME && !(history.state && history.state.modale)) history.pushState({ modale: true }, "");
 }
-function fermerModale() { $("#modale").hidden = true; $("#modale").innerHTML = ""; cacherApercu(); }
+function fermerModale(parRetour) {
+  const ouverte = !$("#modale").hidden;
+  $("#modale").hidden = true;
+  $("#modale").innerHTML = "";
+  cacherApercu();
+  if (ouverte && parRetour !== true && history.state && history.state.modale) {
+    const url = location.href;                     // après : une autre fenêtre ou une autre page a pu s'ouvrir
+    setTimeout(() => { if ($("#modale").hidden && history.state && history.state.modale && location.href === url) history.back(); });
+  }
+}
+addEventListener("popstate", () => {
+  if (!$("#modale").hidden) fermerModale(true);
+  else if (history.state && history.state.modale) history.back();      // l'étape d'une fenêtre déjà fermée : on la passe
+});
 document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { fermerModale(); fermerMenu(); } });
 
 // ------------------------------------------------------------------ navigation
