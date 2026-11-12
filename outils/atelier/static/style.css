@@ -329,7 +329,7 @@ select.champ.champ-petit, .moteur select.champ.champ-petit { padding-right: 1.8r
 .bloc { display: block; margin-top: .8rem; }
 .bloc .champ { margin-top: .3rem; }
 .cmd-choisi { display: flex; align-items: center; gap: .8rem; margin-top: .4rem; padding: .5rem; border: 1px solid var(--bord); border-radius: 8px; }
-.cmd-choisi img { width: 64px; border-radius: 4px; }
+.cmd-choisi > img { width: 64px; border-radius: 4px; }                 /* l'image seule : pas les symboles de mana */
 .cmd-choisi > div { flex: 1; min-width: 0; }
 @media (max-width: 560px) { .res-carte { grid-template-columns: minmax(0, 1fr) 4.2rem; } .res-carte .cout, .res-badges { display: none; } }
 .fiche { display: grid; grid-template-columns: 180px 1fr; gap: 1rem; margin-top: .75rem; }
@@ -1199,3 +1199,18 @@ label.btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; 
 .tel-bandeau-texte span { color: var(--texte-2); }
 .tel-bandeau-boutons { display: flex; gap: .4rem; margin-left: auto; }
 .tel-partager { display: inline-block; padding: 0 .25rem; border: 1px solid var(--bord); border-radius: 4px; font-size: .8em; }
+
+/* au doigt (téléphone, tablette, écran tactile) : des cibles d'au moins 36 à 40 px. Les petites étiquettes et les liens
+   dans le texte gardent leur taille : la zone qu'on touche déborde autour d'eux, invisible. */
+@media (pointer: coarse) {
+  .btn, .segments button, .onglets a { min-height: 40px; }
+  .btn-petit, .segments-petits button, .rch-bascule, .lien-discret { min-height: 36px; }
+  .btn-menu { width: 40px; height: 40px; }
+  .couleur { padding: 7px; }
+  input[type=checkbox], input[type=radio] { width: 20px; height: 20px; }
+  summary { padding-block: .45rem; }
+  /* iPhone : un champ écrit en moins de 16 px fait zoomer la page à chaque fois qu'on le touche */
+  input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea { font-size: 16px; }
+  .tag, a.prix, .aide-q, .fil a, .rch-nom { position: relative; }
+  .tag::after, a.prix::after, .aide-q::after, .fil a::after, .rch-nom::after { content: ""; position: absolute; inset: -8px -4px; }
+}

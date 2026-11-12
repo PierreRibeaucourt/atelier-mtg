@@ -99,6 +99,7 @@
       for (const k of await BD.cles()) if (!garder.has(k) && !String(k).startsWith("@")) await BD.effacer(k);
       memoire.clear();
       fusion = null;
+      connus = null;
       const index = await fichier("index.json.gz");
       if (index) ecrireLocal(REGLAGES, JSON.stringify(index.reglages || {}));
       ecrireLocal(COMMIT, commit);
@@ -477,20 +478,33 @@
     }
     return res;
   }
-  // une carte d'un deck : déjà vue dans un deck ou le classeur, sinon demandée à Scryfall (gardée ici)
-  async function ficheCarte(nom) {
-    const cache = (await BD.lire("@cartes").catch(() => null)) || {};
-    if (cache[nom]) return cache[nom];
-    const index = await fichier("index.json.gz");
-    const cl = (((index && index.api["/api/classeur"]) || {}).cartes || []).find((x) => x.nom === nom);
-    if (cl && cl.info && cl.info.image) return cl.info;
+  // les fiches que le PC a déjà faites (decks et classeur) : leur prix est celui que montre la fiche d'une carte, la
+  // recherche le reprend pour ne pas en montrer un autre. Refaites quand les pages changent.
+  let connus = null;
+  async function fichesConnues() {
+    if (connus) return connus;
+    const m = new Map(), index = await fichier("index.json.gz");
+    for (const x of (((index && index.api["/api/classeur"]) || {}).cartes || [])) if (x.info && x.info.image) m.set(x.nom, x.info);
     for (const [id, f] of Object.entries((index && index.decks) || {})) {
-      const d = await fichier(f), c = d && ((d.api[`/api/decks/${id}`] || {}).cartes || []).find((x) => x.nom === nom);
-      if (c && c.info && c.info.image) return c.info;
+      const d = await fichier(f);
+      for (const c of ((d && d.api[`/api/decks/${id}`]) || {}).cartes || []) if (c.info && c.info.image) m.set(c.nom, c.info);
     }
+    return (connus = m);
+  }
+  const prixConnus = async (res) => {
+    const m = await fichesConnues();
+    return res.map((x) => { const i = m.get(x.nom); return i && i.prix != null ? { ...x, prix: i.prix, prix_lien: i.prix_lien || x.prix_lien } : x; });
+  };
+  // une carte d'un deck : déjà vue dans un deck ou le classeur, sinon demandée (base de cartes, Scryfall) et gardée ici
+  // une semaine (son prix change)
+  async function ficheCarte(nom) {
+    const connue = (await fichesConnues()).get(nom);
+    if (connue) return connue;
+    const cache = (await BD.lire("@cartes").catch(() => null)) || {};
+    if (cache[nom] && cache[nom].garde > Date.now() - 7 * 86400000) return cache[nom];
     const f = (await fiches([nom]))[nom] || { nom };
     if (f.image) {
-      cache[nom] = f;
+      cache[nom] = { ...f, garde: Date.now() };
       await BD.ecrire("@cartes", cache);
     }
     return f;
@@ -503,7 +517,7 @@
     const garde = gardeDe(++tourRecherche);
     texte = texte.trim();
     if (texte.length < 2) return [];
-    if (etatBase.prete) return (await message("noms", [texte, {}, 20])).map((x) => ({ ...x, legal: x.legal || "not_legal" }));
+    if (etatBase.prete) return prixConnus((await message("noms", [texte, {}, 20])).map((x) => ({ ...x, legal: x.legal || "not_legal" })));
     let res = [];
     const noms = new Set();
     const ac = await scryfall(`${SCRYFALL}/cards/autocomplete?q=${encodeURIComponent(texte)}`, null, garde);
@@ -523,11 +537,11 @@
     const rang = (x) => { const v = [simple(x.nom), simple(cle(x.nom)), simple(x.fr)]; return v.includes(q) ? 0 : v.some((n) => n.startsWith(q)) ? 1 : 2; };
     res = res.map((x, i) => [rang(x), i, x]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map((x) => x[2]).slice(0, 20);
     const m = await cartes(res.map((x) => x.nom), garde);
-    return res.filter((x) => m.get(x.nom)).map((x) => {
+    return prixConnus(res.filter((x) => m.get(x.nom)).map((x) => {
       const c = m.get(x.nom), f = MOTEUR.fiche(c), p = prixDe(c), t = fr.get(c.name);
       return { nom: c.name, fr: x.fr || (t ? t.fr || "" : BASES_FR[c.name] || null), cout: f.cout, type: f.type, image: f.image, gc: f.gc,
         prix: p.prix, prix_lien: p.prix_lien, legal: f.legal, couleurs: f.couleurs };
-    });
+    }));
   }
   // le prix du jour et le nom français des résultats d'une recherche (infos_cartes.prix_et_noms)
   async function prixEtNoms(noms) {
@@ -1518,6 +1532,7 @@
       reglages: window.REGLAGES, decks, api, source: null, branche: null, local: true } });
     memoire.clear();
     fusion = null;
+    connus = null;
     setTimeout(() => spellbookEnFond(touches ? [...touches] : ids), 1000);
   }
   // « Commencer ici » : un Atelier sur ce téléphone, sans PC ni compte
@@ -1578,6 +1593,7 @@
     ecrireLocal(COMMIT, null);
     memoire.clear();
     fusion = null;
+    connus = null;
     return BD.vider().catch(() => {});
   }
   function oublier() {
@@ -1586,6 +1602,7 @@
     ecrireLocal(COMMIT, null);
     memoire.clear();
     fusion = null;
+    connus = null;
     T.pret = false;
     BD.vider().catch(() => {});
   }

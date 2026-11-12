@@ -317,9 +317,16 @@ function ficheSurvol(c) {
     </div>`;
 }
 
+// au doigt, pas d'aperçu « au survol » : le navigateur simule un survol à chaque toucher, et l'aperçu resterait affiché
+// par-dessus la page. Un nom de carte cité dans un texte se touche pour voir la carte (plus bas)
+let toucheA = 0;
+addEventListener("touchstart", () => { toucheA = Date.now(); }, { passive: true, capture: true });
+const auDoigt = () => Date.now() - toucheA < 1500;
+
 document.addEventListener("mouseover", (ev) => {
   const el = ev.target.closest("[data-survol], [data-survol-r]");
   const fs = $("#fiche-survol");
+  if (auDoigt()) { fs.hidden = true; survolCarte = null; return; }
   const c = !el ? null : el.dataset.survolR != null ? (rch.res && rch.res.cartes[+el.dataset.survolR] ? survolRecherche(rch.res.cartes[+el.dataset.survolR]) : null)
     : etat.deck && etat.deck.cartes[+el.dataset.survol];
   if (!c) { fs.hidden = true; survolCarte = null; return; }
@@ -361,6 +368,7 @@ function montrerApercu(el) {
 document.addEventListener("mouseover", (ev) => {
   const el = ev.target.closest("[data-image], [data-apercu]");
   const ap = $("#apercu");
+  if (auDoigt()) { ap.hidden = true; survol = null; $("#bulle").hidden = true; return; }
   if (el && el.dataset.image == null) {          // carte citée : son image est cherchée au premier survol
     if (el !== survol) {
       survol = el;
@@ -373,6 +381,15 @@ document.addEventListener("mouseover", (ev) => {
   const bu = $("#bulle");
   if (!b || !b.dataset.bulle) bu.hidden = true;
   else { bu.textContent = b.dataset.bulle; bu.hidden = false; }
+});
+// au doigt : toucher un nom de carte cité montre la carte ; le toucher suivant, ailleurs, la cache (survol ci-dessus)
+document.addEventListener("click", (ev) => {
+  const el = auDoigt() && ev.target.closest(".nc[data-apercu]");
+  if (!el || el.closest("a, button")) return;
+  souris.x = ev.clientX;
+  souris.y = ev.clientY;
+  survol = el;
+  (el.dataset.image ? Promise.resolve() : apercuCite(el)).then(() => { if (survol === el && el.dataset.image) montrerApercu(el); });
 });
 document.addEventListener("mousemove", (ev) => {
   souris.x = ev.clientX;
