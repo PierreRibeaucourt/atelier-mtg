@@ -340,7 +340,8 @@ def api_github():
     """Le compte GitHub connecté (partage sans git), et le compte du partage avec git (reglages.json), s'il y en a un."""
     import github
     import reglages
-    return jsonify(compte=github.compte(), git=reglages.github(), disponible=bool(github.CLIENT_ID))
+    return jsonify(compte=github.compte(), git=reglages.github(), disponible=bool(github.CLIENT_ID),
+                   prive=bool(github.compte()) and github.prive())
 
 
 @app.post("/api/github/connexion")
@@ -361,6 +362,45 @@ def api_github_deconnecter():
     import github
     github.deconnecter()
     return api_github()
+
+
+# ---------------------------------------------------------------- sauvegarde en ligne (synchro.py)
+@app.get("/api/sauvegarde")
+def api_sauvegarde():
+    import synchro
+    return jsonify(synchro.etat())
+
+
+@app.post("/api/sauvegarde")
+def api_sauvegarder():
+    """action : « maintenant » (synchroniser tout de suite), « activer », « couper ». Renvoie l'état, et le résumé de
+    la synchronisation faite ({envoyes, recus, decks_recus, conflits, decks}). 409 : GitHub doit autoriser une fois de
+    plus (connexion d'avant la sauvegarde)."""
+    import reglages
+    import synchro
+    action = (request.get_json(silent=True) or {}).get("action", "maintenant")
+    if action == "couper":
+        reglages.ecrire(sauvegarde=False)
+        return jsonify(etat=synchro.etat())
+    if action == "activer":
+        reglages.ecrire(sauvegarde=None)
+    return jsonify(resume=synchro.synchroniser(), etat=synchro.etat())
+
+
+@app.get("/api/sauvegarde/distante")
+def api_sauvegarde_distante():
+    """Avant « Récupérer mes decks » : la sauvegarde du compte connecté ({existe, decks, date}), sans rien télécharger."""
+    import synchro
+    return jsonify(synchro.distante())
+
+
+@app.post("/api/sauvegarde/recuperer")
+def api_sauvegarde_recuperer():
+    """Ramène les decks de la sauvegarde sur ce PC (sans créer de dépôt s'il n'y en a pas)."""
+    import reglages
+    import synchro
+    reglages.ecrire(sauvegarde=None)
+    return jsonify(resume=synchro.synchroniser(creer=False), etat=synchro.etat())
 
 
 @app.post("/api/ouvrir-dossier")
@@ -469,7 +509,9 @@ def api_renommer(deck):
     nouveau = decks.renommer(deck, (request.get_json() or {}).get("nom", ""))
     if nouveau != deck:
         import partage
+        import synchro
         partage.renommer(deck, nouveau)
+        synchro.renomme(deck, nouveau)
     return jsonify(id=nouveau)
 
 
@@ -1222,10 +1264,14 @@ if __name__ == "__main__":
     en_fond(ic.mise_a_jour, tous_les_noms())
     import recherche
     en_fond(recherche.demarrer)                    # base de la recherche de cartes : chargée, puis surveillée (nouvelles cartes, prix)
+    import synchro
+    synchro.quand_recu = lambda: en_fond(ic.mise_a_jour, tous_les_noms())     # decks venus d'un autre PC : fiches, prix
     if "--essai" not in sys.argv:                  # un Atelier d'essai lancé à côté ne publie rien et ne se met pas à jour
         import mise_a_jour
         import partage
         en_fond(partage.surveiller, app.test_client().get)     # pages partagées remises à jour quand un deck change
+        import synchro
+        en_fond(synchro.surveiller)                            # sauvegarde en ligne : decks envoyés et reçus
         en_fond(mise_a_jour.surveiller)                        # nouvelle version de l'Atelier : lue une fois par jour
         enregistrer_lien()
     en_fond(surveiller_fermeture)                  # réglage « Arrêter l'Atelier » quand on ferme la page

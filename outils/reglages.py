@@ -13,6 +13,8 @@
 - sans_ub_suggestions : ne pas suggérer les cartes qui n'existent qu'en Universes Beyond (Marvel, Final Fantasy…).
 - preferences : true une fois que la page a posé ses questions (fermeture, impression, Universes Beyond).
 - non_partages : decks retirés du partage à la main, que l'Atelier ne publie plus tout seul (voir partage.py).
+- sauvegarde : false = sauvegarde en ligne coupée (Options) ; sinon elle marche dès qu'on est connecté à GitHub
+  (voir atelier/synchro.py).
 """
 import json
 import os

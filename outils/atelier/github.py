@@ -1,9 +1,11 @@
-"""Connexion à GitHub depuis l'Atelier, pour partager ses decks sans git ni ligne de commande.
+"""Connexion à GitHub depuis l'Atelier, pour sauvegarder et partager ses decks sans git ni ligne de commande.
 
 Flux « par appareil » d'une application OAuth : l'Atelier demande un code à GitHub, la personne le colle sur
-github.com/login/device (où elle peut aussi créer son compte) et accepte ; l'Atelier reçoit alors un jeton, limité aux
-dépôts publics (public_repo), gardé sur ce PC seulement (chiffré par Windows pour cette session). Aucun mot de passe ni
-jeton ne passe par la page.
+github.com/login/device (où elle peut aussi créer son compte) et accepte ; l'Atelier reçoit alors un jeton, gardé sur ce
+PC seulement (chiffré par Windows pour cette session). Aucun mot de passe ni jeton ne passe par la page. Le jeton ouvre
+les dépôts publics et privés (repo) : la sauvegarde va dans un dépôt privé (synchro.py), les pages partagées dans un
+dépôt public (partage.py). Les connexions d'avant la sauvegarde n'ont que les dépôts publics (public_repo) : la
+sauvegarde demande alors de se reconnecter une fois.
 
 Publier, c'est recopier un dossier local dans un dépôt GitHub par l'API Git (blobs, arbre, commit) : seuls les fichiers
 changés partent. Voir partage.py, qui s'en sert quand l'Atelier est connecté.
@@ -24,7 +26,7 @@ import urllib.request
 ICI = os.path.dirname(os.path.abspath(__file__))
 # l'application OAuth « Atelier MTG » (flux par appareil activé) : un identifiant public, pas un secret
 CLIENT_ID = os.environ.get("ATELIER_GITHUB_CLIENT_ID", "Ov23li9fE6JyGKnCmR3L")
-PORTEE = "public_repo"
+PORTEE = "repo"                 # dépôts publics (pages partagées) et privés (sauvegarde)
 FICHIER = os.path.join(ICI, "connexion_github.dat")
 API = "https://api.github.com"
 _verrou = threading.Lock()
@@ -94,6 +96,29 @@ def auteur():
         c["id"] = _appel("GET", "/user")["id"]
         _garder(c)
     return dict(name=c["compte"], email=f"{c['id']}+{c['compte']}@users.noreply.github.com")
+
+
+def portees():
+    """Ce que le jeton permet (« repo », « public_repo »…). Les connexions d'avant la sauvegarde ne l'ont pas noté :
+    GitHub le dit dans l'en-tête X-OAuth-Scopes de chaque réponse."""
+    c = _lire()
+    if not c.get("jeton"):
+        return set()
+    if "portees" not in c:
+        req = urllib.request.Request(API + "/user", headers={"Accept": "application/vnd.github+json", "User-Agent": "atelier-mtg",
+                                                            "Authorization": f"Bearer {c['jeton']}"})
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                c["portees"] = [p.strip() for p in (r.headers.get("X-OAuth-Scopes") or "").split(",") if p.strip()]
+        except OSError:
+            return set()
+        _garder(c)
+    return set(c["portees"])
+
+
+def prive():
+    """La connexion ouvre-t-elle les dépôts privés (la sauvegarde) ?"""
+    return "repo" in portees()
 
 
 def deconnecter():
@@ -175,7 +200,8 @@ def _attendre(code_appareil, intervalle, ticket):
         if r.get("access_token"):
             try:
                 moi = _appel("GET", "/user", jeton_acces=r["access_token"])
-                _garder({"jeton": r["access_token"], "compte": moi["login"], "id": moi["id"]})
+                _garder({"jeton": r["access_token"], "compte": moi["login"], "id": moi["id"],
+                         "portees": [p.strip() for p in (r.get("scope") or "").split(",") if p.strip()]})
                 etat = dict(etat="ok", compte=moi["login"])
             except (Erreur, OSError) as e:
                 etat = dict(etat="erreur", erreur=str(e))
@@ -205,7 +231,7 @@ def etat_connexion():
 def _appel(methode, chemin, donnees=None, jeton_acces=None, ok=(200, 201)):
     jeton_acces = jeton_acces or _lire().get("jeton")
     if not jeton_acces:
-        raise NonConnecte("Pour partager tes decks, connecte l'Atelier à GitHub (compte gratuit).")
+        raise NonConnecte("Connecte l'Atelier à GitHub (compte gratuit).")
     req = urllib.request.Request(API + chemin, method=methode,
                                  data=None if donnees is None else json.dumps(donnees).encode(),
                                  headers={"Accept": "application/vnd.github+json", "Authorization": f"Bearer {jeton_acces}",
@@ -263,6 +289,22 @@ def arbre(depot, branche):
 
 def telecharger(depot, sha):
     return base64.b64decode(appel("GET", f"/repos/{depot}/git/blobs/{sha}")["content"])
+
+
+def archive(depot, ref):
+    """Tout le dépôt à ce commit, en un seul téléchargement (zip) : pour récupérer beaucoup de fichiers d'un coup."""
+    jeton = _lire().get("jeton")
+    if not jeton:
+        raise NonConnecte("Connecte l'Atelier à GitHub.")
+    req = urllib.request.Request(f"{API}/repos/{depot}/zipball/{ref}", headers={
+        "Accept": "application/vnd.github+json", "Authorization": f"Bearer {jeton}", "User-Agent": "atelier-mtg"})
+    try:
+        with urllib.request.urlopen(req, timeout=180) as r:
+            return r.read()
+    except urllib.error.HTTPError as e:
+        raise Erreur(f"GitHub refuse le téléchargement ({e.code}).", e.code) from None
+    except OSError as e:
+        raise Erreur(f"GitHub ne répond pas : {_cause(e)}") from None
 
 
 def envoyer(depot, branche, dossier, message, exclus=()):

@@ -12,9 +12,10 @@ Les pages sont rangées dans « Partage Atelier/ », puis publiées de l'une des
   même compte que l'Atelier, avec la même identité git ; adresse : https://<compte>.github.io/decks/<deck>/.
 La racine du site liste les decks partagés.
 
-Une fois le partage en place, tous les decks sont partagés et tenus à jour sans qu'on y pense (surveiller) : un nouveau
-deck dès qu'il a des cartes, un deck modifié deux minutes après la dernière modification, et chaque page une fois par
-jour, avec les prix du jour. Un deck qu'on retire du partage n'est plus publié tout seul, jusqu'à ce qu'on le repartage.
+Seuls les decks qu'on partage (bouton « Partager ») sont publiés : se connecter à GitHub pour la sauvegarde en ligne
+(synchro.py) ne publie rien. Une fois partagé, un deck est tenu à jour sans qu'on y pense (surveiller) : deux minutes
+après sa dernière modification, et chaque page une fois par jour, avec les prix du jour. Un deck qu'on retire du
+partage n'est plus publié, jusqu'à ce qu'on le repartage.
 """
 import hashlib
 import json
@@ -626,7 +627,7 @@ def publier(liste, get):
 
 
 def actif():
-    """Le partage est en place (connecté à GitHub, ou avec git) : tous les decks sont alors partagés."""
+    """Le partage est en place (connecté à GitHub, ou avec git) : les decks partagés se republient tout seuls."""
     import reglages
     return bool(github.compte() or reglages.github())
 
@@ -670,18 +671,17 @@ def derniere_modif(deck):
 
 
 def a_republier(maintenant=None):
-    """Les decks à publier, sans échec trop récent, quand le partage est en place :
-    - partagés et modifiés depuis leur publication, au calme depuis CALME secondes ;
-    - partagés et publiés par une autre version de l'Atelier (ou avant qu'elle soit notée), pour que leur page ait
-      l'interface et les liens de celle-ci, ou avant aujourd'hui : prix du jour, suggestions, Game Changers (toutes les
-      pages partent alors ensemble, au premier passage de la journée) ;
-    - pas encore partagés, s'ils ont des cartes et ne sont pas retirés du partage à la main, au calme.
-    Les deux derniers cas attendent que la base de cartes soit chargée : la page s'en sert."""
+    """Les decks à republier, sans échec trop récent, quand le partage est en place (seulement ceux qu'on a partagés :
+    se connecter à GitHub pour la sauvegarde ne publie rien) :
+    - modifiés depuis leur publication, au calme depuis CALME secondes ;
+    - publiés par une autre version de l'Atelier (ou avant qu'elle soit notée), pour que leur page ait l'interface et
+      les liens de celle-ci, ou avant aujourd'hui : prix du jour, suggestions, Game Changers (toutes les pages partent
+      alors ensemble, au premier passage de la journée). Ce cas attend que la base de cartes soit chargée."""
     import recherche
     if not actif():
         return []
     maintenant = maintenant or time.time()
-    reg, retires, base = _registre(), _retires(), []
+    reg, base = _registre(), []
     jour = time.strftime("%Y-%m-%d", time.localtime(maintenant))
 
     def base_prete():
@@ -700,8 +700,6 @@ def a_republier(maintenant=None):
         elif p:
             vieille = p.get("version") != __version__ or time.strftime("%Y-%m-%d", time.localtime(p["date"])) != jour
             pret = vieille and base_prete()
-        elif deck not in retires and _a_des_cartes(deck):
-            pret = maintenant - t >= CALME and base_prete()
         else:
             pret = False
         if pret:
@@ -709,15 +707,8 @@ def a_republier(maintenant=None):
     return r
 
 
-def _a_des_cartes(deck):
-    try:
-        return os.path.getsize(decks.chemin(deck)) > 0
-    except (OSError, KeyError):
-        return False
-
-
 def surveiller(get, pause=30):
-    """En fond tant que l'Atelier est ouvert : publie les decks pas encore partagés et republie une page quand on a
+    """En fond tant que l'Atelier est ouvert : republie la page d'un deck partagé quand on a
     fini de modifier son deck, depuis l'Atelier, le Claude de l'Atelier ou un éditeur, ou quand elle date de la veille.
     Au lancement, rattrape ce qui a changé Atelier fermé, et après une mise à jour de l'Atelier, republie toutes les
     pages. Avant de publier, les prix et les Game Changers sont mis à jour (rien n'est refait s'ils sont du jour)."""

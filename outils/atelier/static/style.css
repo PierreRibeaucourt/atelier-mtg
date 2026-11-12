@@ -974,6 +974,9 @@ button.badge:hover { box-shadow: inset 0 0 0 1px currentColor; }
 .opt-lignes > * { padding: .8rem 0; }
 .opt-lignes > * + * { border-top: 1px solid var(--bord); }
 .opt-lignes > :last-child { padding-bottom: 0; }
+#opt-github { display: grid; padding: 0; }          /* ses lignes (compte, sauvegarde) séparées comme les autres */
+#opt-github > * { padding: .8rem 0; }
+#opt-github > * + * { border-top: 1px solid var(--bord); }
 .opt-explication { margin: 0; font-size: .88rem; color: var(--texte-2); }
 .opt-champ { display: grid; gap: .4rem; }
 .opt-champ > span:first-child { font-size: .85rem; color: var(--texte-2); }
@@ -998,7 +1001,37 @@ button.badge:hover { box-shadow: inset 0 0 0 1px currentColor; }
 .gh-code { margin: 0 0 .6rem; font: 600 1.9rem/1.2 ui-monospace, "Cascadia Mono", Consolas, monospace; letter-spacing: .12em;
   user-select: all; }
 .gh-action { margin-top: 1rem; }
-.gh-pourquoi { margin: 0 0 1rem; color: var(--texte-2); }
+/* ce qu'est GitHub, avant de s'y connecter : ses deux usages, chacun avec son icône */
+.gh-contexte { margin: .3rem 0 .9rem; font-weight: 600; }
+.gh-presente { padding: .9rem 1rem; border-radius: var(--rayon); background: var(--surface-2); }
+.gh-presente > p { margin: 0 0 .7rem; }
+.gh-usages { list-style: none; margin: 0; padding: 0; display: grid; gap: .7rem; }
+.gh-usages li { display: grid; grid-template-columns: 1.4rem 1fr; gap: .6rem; align-items: start; line-height: 1.45; }
+.gh-usages .ico { width: 1.25rem; height: 1.25rem; margin-top: .1rem; color: var(--accent); }
+.gh-compte { margin: .9rem 0 0; font-size: .88rem; color: var(--texte-2); }
+/* sauvegarde en ligne : le résultat, les decks d'une sauvegarde à récupérer */
+.sv-ok { display: grid; grid-template-columns: 1.6rem 1fr; gap: .6rem; align-items: start; line-height: 1.45; }
+.sv-ok .ico { width: 1.5rem; height: 1.5rem; color: var(--bon); }
+.sv-decks { line-height: 1.6; }
+.opt-sauvegarde { display: flex; flex-wrap: wrap; align-items: center; gap: .2rem .8rem; margin-top: -.3rem; }
+.opt-sauvegarde a { color: var(--texte-2); }
+/* accueil : vide, les deux façons de commencer ; sinon, l'état de la sauvegarde ou le bandeau qui la propose */
+.accueil-vide { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; margin-top: 1.4rem; max-width: 46rem; }
+.av-choix { display: grid; gap: .45rem; justify-items: start; align-content: start; text-align: left; padding: 1.3rem 1.3rem 1.4rem; cursor: pointer;
+  font: inherit; color: var(--texte); background: var(--surface); border: 1px solid var(--bord); border-radius: var(--rayon); }
+.av-choix:hover, .av-choix:focus-visible { border-color: var(--accent); }
+.av-choix .ico { width: 1.6rem; height: 1.6rem; color: var(--accent); }
+.av-choix strong { font-size: 1.1rem; }
+.av-choix span { font-size: .88rem; color: var(--texte-2); line-height: 1.45; }
+#etat-sauvegarde { margin-right: auto; align-self: center; }
+.etat-sauvegarde { display: inline-flex; align-items: center; gap: .35rem; font-size: .82rem; color: var(--texte-2); text-decoration: none; }
+.etat-sauvegarde .ico { width: 1rem; height: 1rem; color: var(--bon); }
+.etat-sauvegarde:hover { color: var(--texte); }
+.etat-sauvegarde.en-echec, .etat-sauvegarde.en-echec .ico { color: var(--alerte); }
+.bandeau-sauvegarde { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem; margin-top: 1rem; padding: .75rem 1rem;
+  border: 1px solid var(--bord); border-radius: var(--rayon); background: var(--surface); }
+.bandeau-sauvegarde > .ico { width: 1.3rem; height: 1.3rem; color: var(--accent); flex: none; }
+.bandeau-sauvegarde p { flex: 1 1 18rem; margin: 0; }
 .gh-attente { display: flex; align-items: center; gap: .5rem; margin: .8rem 0 0; color: var(--texte-2); }
 .gh-attente::before { content: ""; width: .9rem; height: .9rem; border-radius: 50%; border: 2px solid currentColor;
   border-right-color: transparent; animation: maj-roue .9s linear infinite; }
