@@ -277,8 +277,26 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .menu-titre { padding: .35rem .7rem .15rem; font-size: .78rem; color: var(--texte-2); }
 .menu-sep { border: 0; border-top: 1px solid var(--bord); margin: .3rem .2rem; }
 .modale { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.35); display: flex; align-items: flex-start; justify-content: center; padding: 6vh 1rem; }
-.modale-boite { width: min(680px, 100%); max-height: 88vh; overflow: auto; background: var(--surface); border-radius: 12px; box-shadow: var(--ombre); padding: 1.1rem 1.2rem 1.2rem; }
+.modale-boite { position: relative; display: flex; flex-direction: column; width: min(680px, 100%); max-height: 88vh; overflow: hidden;
+  background: var(--surface); border-radius: 12px; box-shadow: var(--ombre); }
+.modale-corps { overflow: auto; overscroll-behavior: contain; padding: 1.1rem 1.2rem 1.2rem; }
+.modale-fermer { position: absolute; z-index: 2; top: .55rem; right: .55rem; }
+.modale-corps h2, .modale-corps .versions-tete { padding-right: 2.6rem; }
 .modale-boite h2 { margin-top: 0; }
+@media (max-width: 600px) {
+  .modale { align-items: flex-end; padding: 0; }
+  .modale-boite, .modale-boite.large { width: 100%; max-height: calc(100vh - 2.5rem); max-height: calc(100dvh - 2.5rem); border-radius: 16px 16px 0 0;
+    animation: monte .18s ease-out; }
+  .modale-corps { padding: 1.4rem 1rem calc(1.25rem + env(safe-area-inset-bottom)); }
+  .modale-boite::before { content: ""; position: absolute; z-index: 2; top: 7px; left: 50%; width: 36px; height: 4px; margin-left: -18px;
+    border-radius: 2px; background: var(--bord); }                 /* la poignée : on tire la fenêtre vers le bas pour la fermer */
+  .menu { left: 0 !important; right: 0; top: auto !important; bottom: 0; min-width: 0; max-height: 75dvh !important; border-radius: 16px 16px 0 0;
+    padding: .5rem .5rem calc(.5rem + env(safe-area-inset-bottom)); animation: monte .18s ease-out; }
+  .menu button { min-height: 48px; font-size: 1rem; }
+  body:has(#menu:not([hidden]))::after { content: ""; position: fixed; inset: 0; z-index: 65; background: rgba(0, 0, 0, .35); }
+}
+@keyframes monte { from { transform: translateY(24px); opacity: .6; } }
+@media (prefers-reduced-motion: reduce) { .modale-boite, .menu { animation: none; } }
 .modale-boite:focus { outline: none; }
 .modale-boite.large { width: min(860px, 100%); }
 /* fiche d'une carte */
@@ -1226,3 +1244,71 @@ label.btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; 
   .tag, a.prix, .aide-q, .fil a, .rch-nom { position: relative; }
   .tag::after, a.prix::after, .aide-q::after, .fil a::after, .rch-nom::after { content: ""; position: absolute; inset: -8px -4px; }
 }
+/* ---------------------------------------------------------------- l'appli du téléphone, comme une appli (app.js › barreAppli)
+   En haut : le retour (ou le chaudron), le titre de l'écran, la recherche, « … ». En bas : Decks, Recherche, Options.
+   Le « + » de l'écran flotte au-dessus. */
+#app-retour, #app-titre, #app-chercher, #app-menu, #app-fin-recherche, .app-onglets, .outils-plus { display: none; }
+.telephone .barre { gap: 0; min-height: 56px; box-sizing: border-box; padding: .3rem .35rem; }
+.telephone .barre :where(.aller, #lien-recherche, #lien-options, #btn-theme, #btn-chat, .espace) { display: none; }
+.telephone .barre-droite { gap: 0; margin-left: auto; }
+.telephone .barre .logo { padding: 0 .6rem 0 .75rem; font-size: 0; }
+.telephone .barre .logo::before { width: 26px; height: 26px; }
+.telephone .barre .btn-icone { width: 44px; height: 44px; padding: 0; }
+.telephone .barre .btn-icone .ico { width: 22px; height: 22px; }
+.telephone #app-titre { display: block; flex: 1; min-width: 0; font-size: 1.15rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.telephone.appli-prete #app-chercher, .telephone #app-menu, .telephone #app-retour { display: inline-flex; }
+/* la recherche du haut : toute la barre, ses résultats tout l'écran */
+.telephone.app-recherche .barre .aller { display: flex; align-items: center; gap: .2rem; position: absolute; inset: 0; z-index: 3; padding: .3rem .6rem .3rem .35rem; background: var(--surface); }
+.telephone.app-recherche #app-fin-recherche { display: inline-flex; }
+.telephone .aller .champ { flex: 1; min-width: 0; height: 42px; }
+.telephone .aller-liste { position: fixed; top: var(--haut-barre, 56px); left: 0 !important; right: 0; bottom: 0; width: auto; max-width: none; max-height: none;
+  border: 0; border-top: 1px solid var(--bord); border-radius: 0; box-shadow: none; padding: .3rem .4rem calc(1rem + env(safe-area-inset-bottom)); }
+.telephone .aller-item { padding: .6rem .55rem; }
+/* les écrans principaux, en bas */
+.telephone.appli-prete .app-onglets { display: flex; position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; padding-bottom: env(safe-area-inset-bottom);
+  background: var(--surface); border-top: 1px solid var(--bord); }
+.app-onglets a { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 56px;
+  text-decoration: none; color: var(--texte-2); font-size: .75rem; -webkit-tap-highlight-color: transparent; }
+.app-onglets a .ico { width: 24px; height: 24px; }
+.app-onglets a.actif { color: var(--accent); font-weight: 600; }
+.telephone.appli-prete body { padding-bottom: calc(56px + env(safe-area-inset-bottom)); }
+.telephone.appli-prete .toast { bottom: calc(56px + 1rem + env(safe-area-inset-bottom)); max-width: calc(100vw - 2rem); box-sizing: border-box; }
+.telephone.appli-prete .tel-bandeau { bottom: calc(56px + .6rem + env(safe-area-inset-bottom)); }
+/* le « + » de l'écran (Nouveau deck, Ajouter des cartes), flottant */
+.telephone :is(#btn-nouveau, #btn-ajouter) { position: fixed; z-index: 19; right: 16px; bottom: calc(56px + 16px + env(safe-area-inset-bottom));
+  width: 56px; height: 56px; padding: 0; border-radius: 16px; font-size: 0; box-shadow: 0 6px 18px rgba(0, 0, 0, .35); }
+.telephone :is(#btn-nouveau, #btn-ajouter) .ico { width: 26px; height: 26px; stroke-width: 2.2; }
+/* au clavier : ni les onglets du bas ni le « + » (ils monteraient avec lui) */
+.telephone body:has(:is(input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea):focus) :is(.app-onglets, #btn-nouveau, #btn-ajouter) { display: none; }
+.telephone body:has(:is(input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea):focus) { padding-bottom: 0; }
+/* le titre est dans la barre : ni fil d'Ariane ni grand titre ; l'en-tête du deck, compact */
+.telephone :is(.fil, .vue .titre-page > h1, .entete-deck h1, .entete-deck .actions) { display: none; }
+.telephone .vue { padding: .75rem .75rem 6rem; }
+.telephone .entete-deck .bandeau { height: 72px; }
+.telephone .entete-deck .cmds-entete { position: absolute; top: 26px; left: .75rem; margin: 0; --l: 64px; }
+.telephone .entete-deck.duo .cmds-entete { left: 1rem; }
+.telephone .entete-deck.duo .cmd-entete + .cmd-entete { margin-left: -36px; }
+.telephone .entete-deck .infos { padding: .55rem .75rem .7rem; min-height: 0; }
+.telephone .entete-deck.avec-cmd .infos { padding-left: calc(64px + 1.5rem); min-height: 0; }
+.telephone .entete-deck.duo .infos { padding-left: calc(2 * 64px - 36px + 2rem); }
+.telephone .entete-deck .chiffres { margin-top: .4rem !important; }
+.telephone .onglets-deck { margin: .5rem -.75rem .25rem; padding: 0 .25rem; }
+.telephone .onglets a { padding: .55rem .75rem; }
+.telephone .onglets a .ico { display: none; }
+/* barres d'outils : le filtre et l'affichage ; le reste derrière le bouton des réglages */
+.telephone .repliable { gap: .5rem; }
+.telephone .barre-outils.repliable { flex-wrap: wrap; margin-top: .75rem; }
+.telephone .repliable .filtre, .telephone .sg-filtres.repliable input[type=search] { order: -2; flex: 1 1 0; min-width: 0; }
+.telephone .repliable > .segments { order: -1; }
+.telephone .repliable .seg-txt { display: none; }
+.telephone .repliable .outils-plus { display: inline-flex; order: -1; width: 44px; }
+.telephone .repliable .outils-plus[aria-expanded=true] { color: var(--accent); border-color: var(--accent); }
+.telephone .repliable:not(.ouvert) > .pli { display: none; }
+.telephone .repliable.ouvert > .pli { order: 1; }
+.telephone .repliable.ouvert::after { content: ""; order: 0; flex-basis: 100%; }      /* les réglages dépliés : à la ligne */
+.telephone .sg-tete { flex-wrap: nowrap; }
+.telephone .sg-tete .segments { flex-wrap: nowrap; }
+.telephone .sg-tete .segments:first-child { overflow-x: auto; min-width: 0; }
+.telephone .sg-tete .segments:last-child { flex: none; }
+.telephone .sg-tete .segments button { white-space: nowrap; }
+@media (pointer: coarse) { .modale-fermer { width: 44px; height: 44px; padding: 0; } .modale-fermer .ico { width: 22px; height: 22px; } }

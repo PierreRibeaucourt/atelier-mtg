@@ -31,9 +31,8 @@ const SUR_PC = {
   proxies: "L'impression des proxies se fait sur le PC.",
 };
 function surPC(quoi) {
-  ouvrirModale(`<div class="fc-tete"><h2>Sur le PC</h2>
-      <button class="btn btn-discret btn-icone" id="spc-fermer" aria-label="Fermer">${ico("fermer")}</button></div>
-    <p>${esc(SUR_PC[quoi] || "Ça se fait sur le PC.")}</p>`, (b) => { $("#spc-fermer", b).onclick = fermerModale; });
+  ouvrirModale(`<h2>Sur le PC</h2>
+    <p>${esc(SUR_PC[quoi] || "Ça se fait sur le PC.")}</p>`);
 }
 // page partagée : à qui sont ces decks (reglages.json « nom », sinon le compte GitHub qui publie)
 // titre_accueil : la page d'accueil de l'Atelier (site_atelier.py), qui n'est le site de decks de personne
@@ -228,6 +227,58 @@ function erreur(e) {
     try { localStorage.setItem("theme", nouveau); } catch (_) {}
   });
 })();
+
+// ------------------------------------------------------------------ l'appli du téléphone : comme une appli
+// En haut : le retour (ou le chaudron), le titre de l'écran, la recherche et « … » pour les actions de l'écran. En bas :
+// les trois écrans principaux. Le « + » de l'écran flotte au-dessus. Le thème passe dans les Options.
+ICONES.engrenage = '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>';
+ICONES.reglages = '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>';
+const ECRANS_APPLI = [["", "Decks", "cartes"], ["recherche", "Recherche", "chercher"], ["options", "Options", "engrenage"]];
+if (TELEPHONE) {
+  const barre = $(".barre"), champ = $("#aller");
+  barre.insertAdjacentHTML("afterbegin", `<a id="app-retour" class="btn btn-discret btn-icone" aria-label="Retour" hidden>${ico("precedent")}</a>`);
+  $(".logo", barre).insertAdjacentHTML("afterend", `<div id="app-titre" class="app-titre"></div>`);
+  $(".barre-droite", barre).insertAdjacentHTML("beforeend",
+    `<button type="button" id="app-chercher" class="btn btn-discret btn-icone" aria-label="Chercher une carte ou un deck">${ico("chercher")}</button>
+     <button type="button" id="app-menu" class="btn btn-discret btn-icone ouvre-menu" aria-label="Autres actions" hidden>${ico("plus_de")}</button>`);
+  $(".aller", barre).insertAdjacentHTML("afterbegin",
+    `<button type="button" id="app-fin-recherche" class="btn btn-discret btn-icone" aria-label="Fermer la recherche">${ico("precedent")}</button>`);
+  document.body.insertAdjacentHTML("beforeend", `<nav class="app-onglets" aria-label="Écrans">${ECRANS_APPLI.map(([k, l, i]) =>
+    `<a href="#/${k}" data-ecran="${k}">${ico(i)}<span>${l}</span></a>`).join("")}</nav>`);
+  // la recherche du haut prend toute la barre, ses résultats tout l'écran
+  const finRecherche = () => { document.documentElement.classList.remove("app-recherche"); champ.blur(); };
+  $("#app-chercher").onclick = () => { document.documentElement.classList.add("app-recherche"); champ.focus(); };
+  $("#app-fin-recherche").onclick = () => { champ.value = ""; $("#aller-liste").hidden = true; finRecherche(); };
+  champ.addEventListener("blur", () => { if (!champ.value) document.documentElement.classList.remove("app-recherche"); });
+  addEventListener("hashchange", finRecherche);
+  $("#app-menu").onclick = (ev) => { if (etat.menuEcran) ouvrirMenu(ev.currentTarget, etat.menuEcran()); };
+  hauteurBarre();
+}
+// après chaque écran : son titre, le retour, ses actions, et l'onglet du bas allumé
+function barreAppli(parts, qs) {
+  if (!TELEPHONE) return;
+  const deck = parts[0] === "deck" && parts[1], rd = parts[0] === "recherche" && new URLSearchParams(qs || "").get("deck");
+  let titre = MES_DECKS, retour = null;
+  etat.menuEcran = null;
+  if (deck) {
+    titre = etat.deck ? etat.deck.titre : decodeURIComponent(parts[1]).replace(/^Deck /, "");
+    retour = "#/";
+    if (etat.deck) etat.menuEcran = () => menuDeck(etat.deck);
+  } else if (parts[0] === "recherche") {
+    titre = "Recherche";
+    if (rd) retour = `#/deck/${enc(rd)}`;
+  } else if (parts[0] === "options") titre = "Options";
+  else if (parts[0]) retour = "#/";
+  else etat.menuEcran = () => [["Importer des decks…", modaleImportDecks, "", "dossier"], ["Demander à Claude", () => surPC("claude"), "", "discussion"]];
+  $("#app-titre").textContent = titre;
+  const r = $("#app-retour");
+  r.hidden = !retour;
+  if (retour) r.href = retour;
+  $(".barre .logo").hidden = !!retour;
+  $("#app-menu").hidden = !etat.menuEcran;
+  const ecran = ["recherche", "options"].includes(parts[0]) && !rd ? parts[0] : "";
+  $$(".app-onglets a").forEach((a) => a.classList.toggle("actif", a.dataset.ecran === ecran));
+}
 
 // ------------------------------------------------------------------ aperçu d'une carte (image + prix) et infobulles au survol
 let survol = null;
@@ -623,13 +674,18 @@ addEventListener("scroll", fermerMenu);
 // au doigt, le bouton « retour » du téléphone ferme la fenêtre ouverte au lieu de quitter la page : chaque fenêtre ajoute
 // une étape à l'historique, retirée quand on la ferme autrement (sauf si une autre page s'est ouverte entre-temps)
 const RETOUR_FERME = matchMedia("(pointer: coarse)").matches;
-function ouvrirModale(html, monte, { focus = true, large = false } = {}) {
+// toutes les fenêtres se ferment par la croix en haut à droite (fermer : ce qu'elle fait, quand c'est plus que fermer)
+function ouvrirModale(html, monte, { focus = true, large = false, fermer = null } = {}) {
   cacherApercu();
   fermerMenu();
   const m = $("#modale");
-  m.innerHTML = `<div class="modale-boite ${large ? "large" : ""}" role="dialog" aria-modal="true" tabindex="-1">${html}</div>`;
+  m.innerHTML = `<div class="modale-boite ${large ? "large" : ""}" role="dialog" aria-modal="true" tabindex="-1">
+    <button type="button" class="btn btn-discret btn-icone modale-fermer" aria-label="Fermer" title="Fermer">${ico("fermer")}</button>
+    <div class="modale-corps">${html}</div></div>`;
   m.hidden = false;
-  m.onclick = (ev) => { if (ev.target === m) fermerModale(); };
+  const ferme = () => (fermer ? fermer() : fermerModale());
+  $(".modale-fermer", m).onclick = ferme;
+  m.onclick = (ev) => { if (ev.target === m) ferme(); };
   if (monte) monte($(".modale-boite", m));
   const champ = focus && $("input, textarea", m);
   if (champ) champ.focus();
@@ -646,6 +702,37 @@ function fermerModale(parRetour) {
     setTimeout(() => { if ($("#modale").hidden && history.state && history.state.modale && location.href === url) history.back(); });
   }
 }
+// au doigt, sur un écran étroit, la fenêtre monte du bas : on la ferme aussi en la tirant vers le bas (par sa poignée,
+// ou n'importe où quand son contenu est tout en haut)
+(function tirerPourFermer() {
+  const m = $("#modale");
+  let depart = null, boite = null, dy = 0;
+  m.addEventListener("touchstart", (ev) => {
+    depart = null;
+    boite = ev.target.closest(".modale-boite");
+    if (!boite || ev.touches.length > 1 || !matchMedia("(max-width: 600px)").matches) return;
+    const t = ev.touches[0], corps = $(".modale-corps", boite);
+    if (t.clientY - boite.getBoundingClientRect().top > 48 && corps && corps.scrollTop > 0) return;
+    if (ev.target.closest("input, textarea, select, [type=range]")) return;
+    depart = { x: t.clientX, y: t.clientY };
+    dy = 0;
+  }, { passive: true });
+  m.addEventListener("touchmove", (ev) => {
+    if (!depart) return;
+    const t = ev.touches[0], d = t.clientY - depart.y;
+    if (!dy && (d < 8 || Math.abs(t.clientX - depart.x) > d)) { if (d < -4 || Math.abs(t.clientX - depart.x) > 8) depart = null; return; }
+    dy = Math.max(0, d);
+    boite.style.transition = "none";
+    boite.style.transform = `translateY(${dy}px)`;
+  }, { passive: true });
+  m.addEventListener("touchend", () => {
+    if (!depart || !boite) return;
+    depart = null;
+    if (dy > 110) { $(".modale-fermer", boite).click(); return; }
+    boite.style.transition = "transform .15s ease-out";
+    boite.style.transform = "";
+  });
+})();
 addEventListener("popstate", () => {
   if (!$("#modale").hidden) fermerModale(true);
   else if (history.state && history.state.modale) history.back();      // l'étape d'une fenêtre déjà fermée : on la passe
@@ -680,10 +767,13 @@ async function route() {
   fermerMenu();
   if (!$("#modale").hidden) fermerModale();
   cacherApercu();
+  if (TELEPHONE) document.documentElement.classList.toggle("appli-prete", !!TELEPHONE.pret);
   if (TELEPHONE && !TELEPHONE.pret) return TELEPHONE.attente(vue);     // téléphone pas encore relié, ou decks en route
   majTitre();
   const [chemin, qs] = location.hash.replace(/^#\/?/, "").split(/\?(.*)/s);
   const parts = chemin.split("/");
+  const ecran = parts[0] === "deck" ? "deck/" + parts[1] : parts[0];      // un autre écran s'ouvre en haut de page
+  if (ecran !== etat.ecran) { etat.ecran = ecran; scrollTo(0, 0); }
   $("#lien-recherche").classList.toggle("actif", parts[0] === "recherche" && !new URLSearchParams(qs || "").get("deck"));   // pour un deck : son bandeau
   $("#lien-options").classList.toggle("actif", parts[0] === "options");
   vue.classList.toggle("vue-large", parts[0] === "recherche" || parts[0] === "options" || parts[0] === "proxies");
@@ -707,6 +797,7 @@ async function route() {
     vue.innerHTML = `<p class="erreur">${esc(e.message || e)}</p>`;
   }
   majTitre();                                      // la vue a pu compléter l'adresse
+  barreAppli(parts, qs);
 }
 window.addEventListener("hashchange", route);
 
@@ -866,15 +957,16 @@ async function vueAccueil() {
       <button class="btn btn-accent ecrit" id="btn-nouveau">${ico("plus")}Nouveau deck</button>
     </div>
     <div id="bandeau-sauvegarde"></div>
-    <div class="barre-outils">
+    <div class="barre-outils repliable ${(etat.couleurs || []).length ? "ouvert" : ""}">
       <input class="champ filtre" id="d-filtre" type="search" placeholder="Chercher un deck, un commandant ou une carte…" value="${esc(etat.filtreDecks || "")}" aria-label="Chercher un deck">
-      <span class="outil"><span class="petit muet">Couleurs</span>
+      <span class="outil pli"><span class="petit muet">Couleurs</span>
         <span class="choix-couleurs">${["W", "U", "B", "R", "G", "C"].map((x) => `<button type="button" class="couleur ${etat.couleurs.includes(x) ? "actif" : ""}"
           data-couleur="${x}" aria-pressed="${etat.couleurs.includes(x)}" title="${x === "C" ? "Decks incolores" : `Decks qui jouent le ${NOMS_COULEURS[x]}`}">${symbole(x)}</button>`).join("")}</span></span>
-      <label class="outil petit muet">Trier par
+      <label class="outil pli petit muet">Trier par
         <select class="champ champ-petit" id="d-tri">${[["recent", "récents"], ["nom", "nom"], ["prix", "prix"], ["gc", "Game Changers"]].map(([v, l]) =>
           `<option value="${v}" ${PREF.get("tri-decks", "recent") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       ${segments("vue-decks", [["grille", "Grille", "grille"], ["liste", "Liste", "liste"]], "grille")}
+      ${boutonPlis("Couleurs et tri", (etat.couleurs || []).length > 0)}
     </div>
     <div id="d-resultats"></div>
     ${decksSupprimes}`;
@@ -1004,7 +1096,7 @@ function modaleNouveauDeck() {
       <textarea class="champ" id="nd-liste" rows="8" placeholder="1x Sol Ring [Ramp]&#10;1 Arcane Signet&#10;10 Mountain&#10;…"></textarea>
     </details>
     <div class="boutons"><button class="btn btn-discret a-gauche" id="nd-importer">${ico("dossier")}Importer des fichiers…</button>
-      <button class="btn" id="annuler">Annuler</button><button class="btn btn-accent" id="ok">Créer le deck</button></div>`, (b) => {
+      <button class="btn btn-accent" id="ok">Créer le deck</button></div>`, (b) => {
     $("#nd-importer", b).onclick = modaleImportDecks;
     const montreCmd = () => {
       $("#nd-cmd", b).innerHTML = cmd ? `
@@ -1019,7 +1111,6 @@ function modaleNouveauDeck() {
     };
     rech = rechercheCarte($("#nd-rech", b), { deck: () => null,
       surChoix: (x) => { cmd = x; montreCmd(); } });
-    $("#annuler", b).onclick = fermerModale;
     $("#ok", b).onclick = async () => {
       const ok = $("#ok", b);
       try {
@@ -1048,7 +1139,7 @@ function modaleImportDecks() {
       ${ico("dossier")}<span id="im-choix">Choisir les fichiers (.txt ou .csv, un par deck)</span></label>
     <label class="petit"><input type="checkbox" id="im-montes" checked> Decks déjà montés</label>
     <div id="im-res"></div>
-    <div class="boutons"><button class="btn" id="annuler">Annuler</button><button class="btn btn-accent" id="ok" disabled>Importer</button></div>`, (b) => {
+    <div class="boutons"><button class="btn btn-accent" id="ok" disabled>Importer</button></div>`, (b) => {
     let fichiers = [];
     const ok = $("#ok", b);
     $("#im-fichiers", b).onchange = async (ev) => {
@@ -1058,7 +1149,6 @@ function modaleImportDecks() {
         : "Choisir les fichiers (.txt ou .csv, un par deck)";
       ok.disabled = !fichiers.length;
     };
-    $("#annuler", b).onclick = fermerModale;
     ok.onclick = async () => {
       ok.disabled = true;
       ok.textContent = "Import…";
@@ -1077,9 +1167,8 @@ function modaleImportDecks() {
         }
         $("#im-res", b).innerHTML = `<p class="petit">${r.decks.length} deck${r.decks.length > 1 ? "s" : ""} importé${r.decks.length > 1 ? "s" : ""}. Pas importés :</p>
           <ul class="petit">${r.echecs.map((x) => `<li>${esc(x.nom)} : ${esc(x.erreur)}</li>`).join("")}</ul>`;
-        $("#annuler", b).hidden = true;
         ok.disabled = false;
-        ok.textContent = "Fermer";
+        ok.textContent = "OK";
         ok.onclick = fini;
       } catch (e) {
         erreur(e);
@@ -1134,15 +1223,7 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
   const actif = $(".onglets a.actif");                // l'onglet ouvert, en vue dans la barre qui défile (téléphone)
   if (actif) { const n = actif.parentElement; n.scrollLeft += actif.getBoundingClientRect().left - n.getBoundingClientRect().left - (n.clientWidth - actif.offsetWidth) / 2; }
   $$(".cmd-entete").forEach((x) => { x.onclick = () => ouvrirCarte(d.cartes[+x.dataset.carte]); });
-  $("#btn-deck-menu").onclick = (ev) => ouvrirMenu(ev.currentTarget, [
-    ...(PARTAGEABLE ? [["Partager le deck…", () => modalePartage(d), "", "partager"]] : []),
-    ...(PARTAGE ? [] : [["Imprimer les proxies…", () => { if (TELEPHONE) surPC("proxies"); else location.hash = `#/proxies?deck=${enc(d.id)}`; }, "", "imprimer"]]),
-    ...(PARTAGEABLE ? [null] : []),
-    "Copier la liste pour",
-    ...EXPORTS.map(([fmt, lib]) => [lib, () => copierListe(fmt, lib), "", "copier"]),
-    ...(PARTAGE ? [] : [["Cardmarket (à acheter)", () => copierCardmarket(d), "", "panier"]]),
-    ...(PARTAGE ? [] : [null, ["Renommer…", () => modaleRenommer(d), "", "crayon"], ["Supprimer ce deck…", () => supprimerDeck(d), "btn-danger", "corbeille"]]),
-  ]);
+  $("#btn-deck-menu").onclick = (ev) => ouvrirMenu(ev.currentTarget, menuDeck(d));
   const contenu = $("#contenu");
   if (onglet === "stats") return ongletStats(contenu, d);
   if (onglet === "bracket") return ongletBracket(contenu, d);
@@ -1152,6 +1233,22 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
   if (onglet === "achats" && !PARTAGE) return ongletAchats(contenu, d);
   if (onglet === "suggestions") return ongletSuggestions(contenu, d, extra);
   ongletListe(contenu, d);
+}
+
+// les actions sur le deck ; dans l'appli du téléphone, aussi celles des boutons de l'en-tête (la barre du haut les remplace)
+function menuDeck(d) {
+  const copier = ["Copier la liste pour", ...EXPORTS.map(([fmt, lib]) => [lib, () => copierListe(fmt, lib), "", "copier"]),
+    ...(PARTAGE ? [] : [["Cardmarket (à acheter)", () => copierCardmarket(d), "", "panier"]])];
+  return [
+    ...(TELEPHONE ? [["Chercher pour ce deck", () => { location.hash = `#/recherche?deck=${enc(d.id)}`; }, "", "chercher"],
+      ["Jouer", () => surPC("jouer"), "", "lancer"], ["Demander à Claude", () => surPC("claude"), "", "discussion"], null] : []),
+    ...(PARTAGEABLE ? [["Partager le deck…", () => modalePartage(d), "", "partager"]] : []),
+    ...(PARTAGE ? [] : [["Imprimer les proxies…", () => { if (TELEPHONE) surPC("proxies"); else location.hash = `#/proxies?deck=${enc(d.id)}`; }, "", "imprimer"]]),
+    ...(PARTAGEABLE ? [null] : []),
+    // sur le téléphone, les formats dans un second menu : le premier tient à l'écran
+    ...(TELEPHONE ? [["Copier la liste…", () => setTimeout(() => ouvrirMenu($("#app-menu"), copier)), "", "copier"]] : copier),
+    ...(PARTAGE ? [] : [null, ["Renommer…", () => modaleRenommer(d), "", "crayon"], ["Supprimer ce deck…", () => supprimerDeck(d), "btn-danger", "corbeille"]]),
+  ];
 }
 
 const EXPORTS = [["archidekt", "Archidekt"], ["moxfield", "Moxfield"], ["arena", "MTG Arena"], ["mtgo", "MTGO"],
@@ -1300,12 +1397,13 @@ async function ongletSuggestions(el, d, demande = null) {
   // les filtres ne se redessinent pas (le champ texte garde la main pendant qu'on tape)
   el.innerHTML = `
     <div class="sg-tete"></div>
-    <div class="sg-filtres">
+    <div class="sg-filtres repliable">
       <input class="champ champ-petit" type="search" data-f="q" placeholder="Filtrer…" aria-label="Filtrer : nom, type, texte">
-      <select class="champ champ-petit" data-f="type" aria-label="Type">${optionsSugg("Type", TYPES_SUGG)}</select>
-      <select class="champ champ-petit" data-f="fn" aria-label="Fonction">${optionsSugg("Fonction", fonctions)}</select>
-      <select class="champ champ-petit" data-f="mv" aria-label="Valeur de mana">${optionsSugg("Coût", COUTS_SUGG)}</select>
-      <label class="sg-prix"><input class="champ champ-petit" type="text" inputmode="decimal" data-f="prix" placeholder="Prix max" aria-label="Prix maximum, en euros"> €</label>
+      ${boutonPlis("Type, fonction, coût et prix")}
+      <select class="champ champ-petit pli" data-f="type" aria-label="Type">${optionsSugg("Type", TYPES_SUGG)}</select>
+      <select class="champ champ-petit pli" data-f="fn" aria-label="Fonction">${optionsSugg("Fonction", fonctions)}</select>
+      <select class="champ champ-petit pli" data-f="mv" aria-label="Valeur de mana">${optionsSugg("Coût", COUTS_SUGG)}</select>
+      <label class="sg-prix pli"><input class="champ champ-petit" type="text" inputmode="decimal" data-f="prix" placeholder="Prix max" aria-label="Prix maximum, en euros"> €</label>
       <button type="button" class="lien-discret" data-effacer hidden>Effacer</button>
     </div>
     <div class="sg-res"></div>`;
@@ -1641,18 +1739,19 @@ async function ongletAchats(el, d, poss = null) {
   };
 }
 
-// page du deck publiée sur GitHub Pages (partage.py) : lien, mise à jour, retrait
+// page du deck publiée sur GitHub Pages (partage.py) : lien, mise à jour, retrait ; au doigt, « Partager » ouvre le
+// partage du téléphone (messagerie, e-mail…)
+const PARTAGE_NATIF = !!navigator.share && matchMedia("(pointer: coarse)").matches;
 function modalePartage(d) {
-  ouvrirModale(`<div class="fc-tete"><h2>Partager ${esc(d.titre)}</h2>
-      <button class="btn btn-discret btn-icone" id="pt-fermer" aria-label="Fermer">${ico("fermer")}</button></div>
+  ouvrirModale(`<h2>Partager ${esc(d.titre)}</h2>
     <div id="pt-zone"><p class="chargement">Chargement…</p></div>`, async (b) => {
-    $("#pt-fermer", b).onclick = fermerModale;
     const zone = $("#pt-zone", b);
     const rendre = (s) => {
       zone.innerHTML = `
         <div class="form-ligne">
           <input class="champ" id="pt-url" readonly value="${esc(s.url)}" style="flex:1;min-width:240px" aria-label="Lien de la page">
-          <button class="btn btn-accent" id="pt-copier">${ico("copier")}Copier le lien</button>
+          ${PARTAGE_NATIF ? `<button class="btn btn-accent" id="pt-envoyer">${ico("partager")}Partager</button>` : ""}
+          <button class="btn ${PARTAGE_NATIF ? "" : "btn-accent"}" id="pt-copier">${ico("copier")}Copier le lien</button>
           <a class="btn" href="${esc(s.url)}" target="_blank" rel="noopener">${ico("ouvrir")}Ouvrir</a>
         </div>
         <p class="muet petit">Mise à jour le ${esc(new Date(s.date * 1000).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" }))}</p>
@@ -1662,6 +1761,7 @@ function modalePartage(d) {
           <button class="btn" id="pt-maj">${ico("rafraichir")}Mettre à jour</button>
         </div>`;
       $("#pt-url", zone).onclick = (ev) => ev.target.select();
+      if (PARTAGE_NATIF) $("#pt-envoyer", zone).onclick = () => navigator.share({ title: d.titre, url: s.url }).catch(() => {});
       $("#pt-copier", zone).onclick = async () => {
         try { await navigator.clipboard.writeText(s.url); toast("Lien copié."); } catch (e) { erreur(e); }
       };
@@ -1773,8 +1873,7 @@ async function connexionGithub(zone, suite) {
 // de reconnecter cet appareil ; un téléphone relié au PC, lui, est délié (sa clé était celle du PC)
 const TOUS_APPAREILS = "Déconnecter tous mes appareils";
 function modaleRetirerAcces(appli, intro = "", fin = () => {}) {
-  ouvrirModale(`<div class="fc-tete"><h2>${TOUS_APPAREILS}</h2>
-      <button class="btn btn-discret btn-icone" id="ra-fermer" aria-label="Fermer">${ico("fermer")}</button></div>
+  ouvrirModale(`<h2>${TOUS_APPAREILS}</h2>
     <div id="ra-zone">${intro ? `<p>${esc(intro)}</p>` : ""}
       <p><strong>${TELEPHONE ? "Ce téléphone, ton PC" : "Ce PC, ton téléphone"}</strong> et tout appareil perdu ou volé
         perdront l'accès à ta sauvegarde.</p>
@@ -1782,7 +1881,6 @@ function modaleRetirerAcces(appli, intro = "", fin = () => {}) {
       <div class="gh-action"><a class="btn btn-accent" id="ra-ouvrir" href="${esc(appli)}" target="_blank" rel="noopener">Ouvrir GitHub</a></div>
       <p class="gh-attente" role="status" hidden>En attente de GitHub…</p></div>`, (b) => {
     const zone = $("#ra-zone", b), fini = () => { fermerModale(); fin(); };
-    $("#ra-fermer", b).onclick = fini;
     let suivi = false;
     $("#ra-ouvrir", b).onclick = async () => {
       $(".gh-attente", zone).hidden = false;
@@ -1798,11 +1896,11 @@ function modaleRetirerAcces(appli, intro = "", fin = () => {}) {
           <div class="gh-action"><button class="btn btn-accent" id="ra-suite">${relie ? "OK" : `Reconnecter ${CET_APPAREIL}`}</button></div>`;
         const delie = () => { fermerModale(); location.hash = "#/"; TELEPHONE.delier(); };
         $("#ra-suite", zone).onclick = relie ? delie : () => connexionGithub(zone, fini);
-        if (relie) $("#ra-fermer", b).onclick = delie;
+        if (relie) $(".modale-fermer", b).onclick = delie;
         return;
       }
     };
-  }, { focus: false });
+  }, { focus: false, fermer: () => { fermerModale(); fin(); } });
 }
 
 // ------------------------------------------------------------------ sauvegarde en ligne (synchro.py)
@@ -1810,10 +1908,8 @@ function modaleRetirerAcces(appli, intro = "", fin = () => {}) {
 // Chacune mène, si besoin, à la présentation de GitHub puis à la connexion ; fin() est appelé une fois tout fini
 function modaleSauvegarde(contexte, fin = () => {}) {
   const titre = contexte === "recuperer" ? "Récupérer mes decks" : "Sauvegarder mes decks en ligne";
-  ouvrirModale(`<div class="fc-tete"><h2>${titre}</h2>
-      <button class="btn btn-discret btn-icone" id="sv-fermer" aria-label="Fermer">${ico("fermer")}</button></div>
+  ouvrirModale(`<h2>${titre}</h2>
     <div id="sv-zone"><p class="chargement">Chargement…</p></div>`, async (b) => {
-    $("#sv-fermer", b).onclick = () => { fermerModale(); fin(); };
     const zone = $("#sv-zone", b);
     const fini = () => { fermerModale(); fin(); };
     const apres = () => (contexte === "recuperer" ? recupererDecks(zone, fini) : activerSauvegarde(zone, fini));
@@ -1821,7 +1917,7 @@ function modaleSauvegarde(contexte, fin = () => {}) {
     if (g.compte && g.prive) apres();
     else if (g.compte) autoriserGithub(zone, apres);
     else introGithub(zone, apres, contexte === "recuperer" ? "recuperer" : "sauvegarde");
-  }, { focus: false });
+  }, { focus: false, fermer: () => { fermerModale(); fin(); } });
 }
 
 // un échec : se reconnecter s'il le faut (401 : plus connecté ; 409 : connexion d'avant la sauvegarde), sinon réessayer
@@ -1901,7 +1997,7 @@ function modaleRenommer(d) {
   ouvrirModale(`
     <h2>Renommer le deck</h2>
     <label class="bloc">Nom du deck<input class="champ" id="rn-nom" maxlength="60" value="${esc(d.titre)}"></label>
-    <div class="boutons"><button class="btn" id="annuler">Annuler</button><button class="btn btn-accent" id="ok">Renommer</button></div>`, (b) => {
+    <div class="boutons"><button class="btn btn-accent" id="ok">Renommer</button></div>`, (b) => {
     const champ = $("#rn-nom", b), ok = $("#ok", b);
     const valider = async () => {
       if (ok.disabled) return;
@@ -1919,7 +2015,6 @@ function modaleRenommer(d) {
         toast("Deck renommé.");
       } catch (e) { erreur(e); ok.disabled = false; }
     };
-    $("#annuler", b).onclick = fermerModale;
     ok.onclick = valider;
     champ.onkeydown = (ev) => { if (ev.key === "Enter") valider(); };
   });
@@ -1996,8 +2091,7 @@ async function modaleQrTelephone(lien) {
   const q = qrcode(0, "M");
   q.addData(lien);
   q.make();
-  ouvrirModale(`<div class="fc-tete"><h2>Atelier sur ton téléphone</h2>
-      <button class="btn btn-discret btn-icone" id="qr-fermer" aria-label="Fermer">${ico("fermer")}</button></div>
+  ouvrirModale(`<h2>Atelier sur ton téléphone</h2>
     <div class="qr-telephone">${q.createSvgTag({ cellSize: 6, margin: 3, scalable: true })}</div>
     <ol class="gh-etapes">
       <li>Scanne ce QR code avec l'appareil photo du téléphone.</li>
@@ -2005,7 +2099,6 @@ async function modaleQrTelephone(lien) {
     </ol>
     <p class="muet petit">Ce code ouvre tes decks : ne le montre qu'à tes téléphones.</p>
     <div class="boutons"><button class="btn btn-petit" id="qr-copier">${ico("copier")}Copier le lien</button></div>`, (b) => {
-    $("#qr-fermer", b).onclick = fermerModale;
     $("#qr-copier", b).onclick = async () => { try { await navigator.clipboard.writeText(lien); toast("Lien copié."); } catch (e) { erreur(e); } };
   });
 }
@@ -2025,7 +2118,19 @@ function optionsTelephone() {
         <div id="opt-github"></div>`}
       </div></section>
     <section class="panneau options opt-bloc" id="opt-cartes"></section>
+    <section class="panneau options"><div class="opt-titre"><h2>${ico("theme")}Thème</h2></div>
+      <div class="segments" role="group" aria-label="Thème" id="opt-theme">${[["", "Auto"], ["light", "Clair"], ["dark", "Sombre"]].map(([k, l]) => {
+        const actif = (document.documentElement.dataset.theme || "") === k;
+        return `<button type="button" data-theme="${k}" class="${actif ? "actif" : ""}" aria-pressed="${actif}">${l}</button>`;
+      }).join("")}</div></section>
     <section class="panneau options" id="opt-classeur"></section>`;
+  $$("#opt-theme button").forEach((b) => b.addEventListener("click", () => {        // le bouton du thème du PC, ici
+    const t = b.dataset.theme;
+    if (t) document.documentElement.dataset.theme = t;
+    else delete document.documentElement.dataset.theme;
+    try { if (t) localStorage.setItem("theme", t); else localStorage.removeItem("theme"); } catch (_) {}
+    $$("#opt-theme button").forEach((x) => { x.classList.toggle("actif", x === b); x.setAttribute("aria-pressed", x === b); });
+  }));
   classeurOptions($("#opt-classeur"));
   // sans PC : où sont les decks, et à quoi sert GitHub tant qu'on n'est pas connecté
   const ouSont = (g, s) => {
@@ -2422,10 +2527,9 @@ async function importerCollection(fichier, dejaLa, fin) {
     ${a.en_decks ? `<label class="petit"><input type="checkbox" id="ic-sans" checked> Sans les ${sepMilliers(a.en_decks)} déjà dans mes decks</label>` : ""}
     ${a.inconnues.length ? `<details class="petit"><summary>${a.inconnues.length} introuvable${a.inconnues.length > 1 ? "s" : ""}</summary>
       <p class="muet">${a.inconnues.map(esc).join(", ")}</p></details>` : ""}
-    <div class="boutons"><button class="btn" id="annuler">Annuler</button>
+    <div class="boutons">
       ${dejaLa ? `<button class="btn" id="ic-remplacer">Remplacer le classeur</button>` : ""}
       <button class="btn btn-accent" id="ok">Ajouter au classeur</button></div>`, (b) => {
-    $("#annuler", b).onclick = fermerModale;
     const importer = async (remplacer, bouton) => {
       $$(".boutons .btn", b).forEach((x) => { x.disabled = true; });
       bouton.textContent = "Import…";
@@ -2541,26 +2645,36 @@ function legendeCarte(c) {
   return `${f.fr && f.fr !== c.nom ? f.fr + " — " : ""}${f.prix == null ? "prix inconnu" : euros(f.prix)}${f.prix_edition ? ` (${f.prix_edition})` : ""}${f.gc ? " · Game Changer" : ""}`;
 }
 
+// sur le téléphone, les réglages moins courants d'une barre d'outils (.pli) se replient derrière ce bouton
+function boutonPlis(libelle, ouvert = false) {
+  return `<button type="button" class="btn btn-icone outils-plus" aria-label="${esc(libelle)}" title="${esc(libelle)}" aria-expanded="${ouvert}">${ico("reglages")}</button>`;
+}
+document.addEventListener("click", (ev) => {
+  const b = ev.target.closest(".outils-plus");
+  if (b) b.setAttribute("aria-expanded", b.closest(".repliable").classList.toggle("ouvert"));
+});
+
 function segments(pref, valeurs, def) {
   const v = PREF.get(pref, def);
   return `<div class="segments" role="group">${valeurs.map(([k, l, i]) =>
-    `<button type="button" data-pref="${pref}" data-val="${k}" class="${k === v ? "actif" : ""}" aria-pressed="${k === v}">${i ? ico(i) : ""}${l}</button>`).join("")}</div>`;
+    `<button type="button" data-pref="${pref}" data-val="${k}" class="${k === v ? "actif" : ""}" aria-pressed="${k === v}" ${i ? `aria-label="${l}"` : ""}>${i ? ico(i) : ""}<span class="seg-txt">${l}</span></button>`).join("")}</div>`;
 }
 
 function ongletListe(el, d) {
   el.innerHTML = `
     ${!d.cartes.length ? `<div class="panneau vide"><p>Ce deck est vide.</p><button class="btn btn-accent ecrit" id="vide-ajouter">${ico("plus")}Ajouter des cartes</button></div>` : `
-    <div class="barre-outils">
+    <div class="barre-outils repliable">
       ${segments("affichage", [["visuel", "Visuel", "cartes"], ["liste", "Liste", "liste"]], AFFICHAGE)}
-      <label class="outil petit muet" id="outil-taille" ${PREF.get("affichage", AFFICHAGE) === "visuel" ? "" : "hidden"}>Taille
+      <label class="outil pli petit muet" id="outil-taille" ${PREF.get("affichage", AFFICHAGE) === "visuel" ? "" : "hidden"}>Taille
         <input type="range" id="taille" min="80" max="220" step="5" value="${tailleCartes()}" aria-label="Taille des cartes"></label>
-      <label class="outil petit muet">Ranger par
+      <label class="outil pli petit muet">Ranger par
         <select class="champ champ-petit" id="rangement">${[["type", "type"], ["tags", "tags"], ["fonction", "fonction"]].map(([v, l]) =>
           `<option value="${v}" ${PREF.get("rangement", "type") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
-      <label class="outil petit muet">Trier par
+      <label class="outil pli petit muet">Trier par
         <select class="champ champ-petit" id="tri">${[["cout", "coût"], ["nom", "nom"], ["prix", "prix"]].map(([v, l]) =>
           `<option value="${v}" ${PREF.get("tri", "cout") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       <input class="champ filtre" id="filtre" type="search" placeholder="Filtrer…" value="${esc(etat.filtre)}" aria-label="Filtrer les cartes">
+      ${boutonPlis("Rangement et tri")}
     </div>
     <div id="groupes"></div>
     <h2>Statistiques</h2>
@@ -2776,7 +2890,6 @@ function ouvrirCarte(c) {
       <div class="fc-infos">
         <div class="fc-tete">
           <div><h2>${esc(f.fr || c.nom)} ${mana(f.cout)}</h2>${f.fr && f.fr !== c.nom ? `<div class="muet">${esc(c.nom)}</div>` : ""}</div>
-          <button class="btn btn-discret btn-icone" id="fc-fermer" aria-label="Fermer">${ico("fermer")}</button>
         </div>
         <div class="petit muet">${esc(f.fr_type || f.type || "")}${f.pt ? " · " + esc(f.pt) : ""}${cmd ? " · commandant" : maybe ? " · Maybeboard" : ""}</div>
         <div class="chiffres">
@@ -2821,7 +2934,6 @@ function ouvrirCarte(c) {
       </div>
     </div>`, (b) => {
     const retrouver = (nd) => nd && nd.cartes.find((x) => x.nom === c.nom);
-    $("#fc-fermer", b).onclick = fermerModale;
     const achat = $('[data-act="achat"]', b);
     if (achat) possedeesDeck(d).then((poss) => boutonAchat(achat, d, c, poss)).catch(() => {});
     ouEst($(".ou-est", b), c.nom, d.id);
@@ -2884,7 +2996,7 @@ function modaleTags(c, retourFiche = false) {
     </div>
     <div class="petit muet" style="margin-top:.9rem">Déjà utilisés</div>
     <div id="tags-dispo" class="puces"></div>
-    <div class="boutons"><button class="btn" id="annuler">Annuler</button><button class="btn btn-accent" id="ok">Enregistrer</button></div>`, (b) => {
+    <div class="boutons"><button class="btn btn-accent" id="ok">Enregistrer</button></div>`, (b) => {
     const rendre = () => {
       $("#tags-carte", b).innerHTML = tags.length ? tags.map((t, i) => `<span class="puce ${i === 0 ? "puce-1" : ""}">
           <button type="button" class="puce-nom" data-premier="${i}" title="${i === 0 ? "Range la carte" : "Mettre en premier"}">${i === 0 ? "★ " : ""}${esc(t)}</button>
@@ -2912,14 +3024,13 @@ function modaleTags(c, retourFiche = false) {
       if (ev.key === "Enter") { ev.preventDefault(); champ.value.split(",").forEach(ajoute); champ.value = ""; }
     });
     $("#tag-ajout", b).onclick = () => { champ.value.split(",").forEach(ajoute); champ.value = ""; champ.focus(); };
-    $("#annuler", b).onclick = () => (retourFiche ? ouvrirCarte(c) : fermerModale());
     $("#ok", b).onclick = async () => {
       champ.value.split(",").forEach(ajoute);
       fermerModale();
       const nd = await modifier("categorie", c, { tags });
       if (retourFiche && nd) ouvrirCarte(nd.cartes.find((x) => x.nom === c.nom));
     };
-  });
+  }, { fermer: retourFiche ? () => ouvrirCarte(c) : null });
 }
 
 // ------------------------------------------------------------------ choisir la version (le visuel) d'une carte
@@ -3174,7 +3285,7 @@ function modaleAjout() {
       </div>
     </div>
     <div id="journal" class="journal petit"></div>
-    <div class="boutons"><button class="btn" id="fermer">Fermer</button>
+    <div class="boutons">
       <button class="btn" id="ok-maybe" disabled>${ico("maybe")}Maybeboard</button>
       <button class="btn btn-accent" id="ok" disabled>${ico("plus")}<span>Ajouter au deck</span></button></div>`, (b) => {
     let choix = null;
@@ -3216,7 +3327,6 @@ function modaleAjout() {
         } catch (e) { $("#fiche", b).innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
       },
     });
-    $("#fermer", b).onclick = fermerModale;
     const valider = async (maybe) => {
       if (!choix) return;
       boutonsFiche(false);
@@ -3598,8 +3708,7 @@ async function ongletVersions(el, d) {
     <h2>Enregistrer une version</h2>
     <label>Nom<input class="champ" id="v-nom"></label>
     <label style="display:block;margin-top:.6rem">Note<textarea class="champ" id="v-note" rows="3"></textarea></label>
-    <div class="boutons"><button class="btn" id="annuler">Annuler</button><button class="btn btn-accent" id="ok">Enregistrer</button></div>`, (b) => {
-    $("#annuler", b).onclick = fermerModale;
+    <div class="boutons"><button class="btn btn-accent" id="ok">Enregistrer</button></div>`, (b) => {
     $("#ok", b).onclick = async () => {
       try {
         await api(`/api/decks/${enc(d.id)}/versions`, { method: "POST", body: { nom: $("#v-nom", b).value, note: $("#v-note", b).value } });
@@ -4339,13 +4448,11 @@ function penseBeteTexte(form) {
       <p class="muet petit">Anglais : <code class="brut">{T}: Add {C}{C}.</code> Français : <code class="brut">{T} : Ajoutez {C}{C}.</code></p>
       <h3>Exemples</h3>
       <table>${PB_EXEMPLES.map(([c, t]) => ligne(c, t, true)).join("")}</table>
-    </div>
-    <div class="form-ligne" style="justify-content:flex-end;margin:1rem 0 0"><button type="button" class="btn" data-act="fermer">Fermer</button></div>`,
+    </div>`,
   (b) => {
     $$("[data-exemple]", b).forEach((x) => {
       x.onclick = () => { form.elements.texte.value = x.dataset.exemple; fermerModale(); form.elements.texte.focus(); };
     });
-    $('[data-act="fermer"]', b).onclick = fermerModale;
   }, { focus: false, large: true });
 }
 
@@ -5387,7 +5494,6 @@ function ficheRecherche(i, ctx = null) {
       <div class="fc-infos">
         <div class="fc-tete">
           <div><h2>${esc(x.fr || x.nom)} ${mana(x.cout)}</h2>${x.fr && x.fr !== x.nom ? `<div class="muet">${esc(x.nom)}</div>` : ""}</div>
-          <button class="btn btn-discret btn-icone" data-act="fermer" aria-label="Fermer">${ico("fermer")}</button>
         </div>
         <div class="petit muet">${esc(x.type_fr || x.type)}${x.pt ? " · " + esc(x.pt) : ""}</div>
         <div class="chiffres" id="rf-prix">

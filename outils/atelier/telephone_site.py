@@ -83,7 +83,7 @@ def construire(dossier):
     remplacements = [
         ('<html lang="fr">', '<html lang="fr" class="telephone">'),
         ('<meta name="viewport" content="width=device-width, initial-scale=1">',
-         '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n  ' + tete),
+         '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">\n  ' + tete),
         ('href="/static/style.css"', f'href="style.css?v={v["style.css"]}"'),
         ('  <script src="/reglages.js"></script>\n', ""),
         ('<script src="/static/app.js"></script>',
