@@ -925,17 +925,20 @@
 
   // ------------------------------------------------------------------ importer des fichiers exportés d'une autre appli
   // une liste collée (Archidekt, Moxfield, MTG Arena, « 1 Sol Ring » ou juste « Sol Ring ») : Map nom → exemplaires
-  // (classeur.lire_liste)
+  // (classeur.lire_liste), sans les titres de section (MTG Arena : « Commander », « Deck », « Sideboard »…)
+  const SECTIONS = new Set(["about", "commander", "commandant", "companion", "compagnon", "deck", "main", "mainboard", "sideboard",
+    "réserve", "maybeboard", "considering", "tokens"]);
   function lireListe(texte) {
-    const lignes = texte.split(/\r?\n/).filter((l) => l.trim() && !/^\s*(#|\/\/)/.test(l))
+    const lignes = texte.split(/\r?\n/)
+      .filter((l) => l.trim() && !/^\s*(#|\/\/)/.test(l) && !SECTIONS.has(l.trim().replace(/:$/, "").trim().toLowerCase()))
       .map((l) => (/^\s*(SB:\s*)?\d/.test(l) ? l : "1 " + l.trim()));
     const lues = new Map();
     for (const e of MOTEUR.lireLignes(lignes)) lues.set(e.nom, (lues.get(e.nom) || 0) + e.n);
     return lues;
   }
-  // une collection en CSV (ManaBox, Moxfield, Archidekt, Deckbox, Dragon Shield…) : Map nom → exemplaires ; null si ce
-  // n'est pas un CSV avec une colonne de noms (classeur.lire_csv)
-  const COL_NOM = ["name", "card name", "card", "card_name", "cardname", "nom"];
+  // une collection en CSV (ManaBox, Moxfield, Archidekt, Deckbox, Dragon Shield, TCGplayer, Cardmarket…) : Map nom →
+  // exemplaires ; null si ce n'est pas un CSV avec une colonne de noms (classeur.lire_csv)
+  const COL_NOM = ["simple name", "name", "english name", "card name", "card", "card_name", "cardname", "nom"];
   const COL_QTE = ["quantity", "count", "qty", "quantité", "quantite", "qté", "amount", "copies"];
   function champsCsv(ligne, sep) {
     const res = [];

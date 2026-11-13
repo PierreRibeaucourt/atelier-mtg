@@ -46,10 +46,17 @@ def cartes():
     return dict(_lire()[1])
 
 
+# titres de section d'une liste exportée (MTG Arena : « Commander », « Deck », « Sideboard » ; Moxfield : « SIDEBOARD: ») :
+# pas des cartes
+SECTIONS = {"about", "commander", "commandant", "companion", "compagnon", "deck", "main", "mainboard", "sideboard", "réserve",
+            "maybeboard", "considering", "tokens"}
+
+
 def lire_liste(texte):
     """Une liste collée (Archidekt, Moxfield, MTG Arena, « 1 Sol Ring » ou juste « Sol Ring ») : Counter nom → exemplaires."""
     lignes = [l if re.match(r"\s*(SB:\s*)?\d", l) else "1 " + l.strip()
-              for l in texte.splitlines() if l.strip() and not l.lstrip().startswith(("#", "//"))]
+              for l in texte.splitlines() if l.strip() and not l.lstrip().startswith(("#", "//"))
+              and l.strip().rstrip(":").strip().lower() not in SECTIONS]
     c = Counter()
     for e in decks.lire_lignes(lignes):
         c[e["nom"]] += e["n"]
@@ -57,8 +64,9 @@ def lire_liste(texte):
 
 
 # colonnes des collections exportées en CSV : ManaBox (Name, Quantity), Moxfield et Deckbox (Count, Name), Archidekt
-# (Quantity, Name), Dragon Shield (Quantity, Card Name, après une ligne « sep=, »), TCGplayer (Quantity, Name)…
-COL_NOM = ("name", "card name", "card", "card_name", "cardname", "nom")
+# (Quantity, Name), Dragon Shield (Quantity, Card Name, après une ligne « sep=, »), TCGplayer (Quantity, Simple Name : son
+# Name dit aussi la version, « Ancient Tomb (Borderless) »), Cardmarket (English Name, Amount, séparées par « ; »)…
+COL_NOM = ("simple name", "name", "english name", "card name", "card", "card_name", "cardname", "nom")
 COL_QTE = ("quantity", "count", "qty", "quantité", "quantite", "qté", "amount", "copies")
 
 
