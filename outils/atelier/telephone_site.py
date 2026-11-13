@@ -47,6 +47,16 @@ def construire(dossier):
         shutil.copyfile(os.path.join(STATIQUE, f), os.path.join(dossier, f))
     for f in ("moteur.js", "pages.js", "cartes.js", "jsQR.js"):
         shutil.copyfile(os.path.join(STATIQUE, "telephone", f), os.path.join(dossier, f))
+    # partager un deck sans PC (partage.js) : la version de l'Atelier, et les modèles de la page publiée (partage.py)
+    sys.path.insert(0, ICI)
+    from version import __version__
+    with open(os.path.join(STATIQUE, "telephone", "partage.js"), encoding="utf-8") as f:
+        js = f.read().replace("__VERSION_ATELIER__", __version__)
+    with open(os.path.join(dossier, "partage.js"), "w", encoding="utf-8", newline="\n") as f:
+        f.write(js)
+    os.makedirs(os.path.join(dossier, "partage"))
+    for f in ("index.html", "jouer.html", "jouer.js", "jouer.css"):
+        shutil.copyfile(os.path.join(STATIQUE, f), os.path.join(dossier, "partage", f))
     with open(os.path.join(STATIQUE, "telephone", "telephone.js"), encoding="utf-8") as f:      # le Worker de la base de cartes
         tel = f.read().replace("__CARTES__", "cartes.js?v=" + _empreinte(os.path.join(dossier, "cartes.js")))
     with open(os.path.join(dossier, "telephone.js"), "w", encoding="utf-8", newline="\n") as f:
@@ -60,7 +70,7 @@ def construire(dossier):
                               dict(src="icone-512.png", sizes="512x512", type="image/png"),
                               dict(src="icone-masque-512.png", sizes="512x512", type="image/png", purpose="maskable")]),
                   f, ensure_ascii=False, indent=1)
-    v = {f: _empreinte(os.path.join(dossier, f)) for f in ("app.js", "style.css", "moteur.js", "pages.js", "telephone.js", "cartes.js")}
+    v = {f: _empreinte(os.path.join(dossier, f)) for f in ("app.js", "style.css", "moteur.js", "pages.js", "partage.js", "telephone.js", "cartes.js")}
     with open(os.path.join(STATIQUE, "index.html"), encoding="utf-8") as f:
         html = f.read()
     tete = "\n  ".join(['<meta name="robots" content="noindex">',
@@ -78,6 +88,7 @@ def construire(dossier):
         ('  <script src="/reglages.js"></script>\n', ""),
         ('<script src="/static/app.js"></script>',
          f'<script src="moteur.js?v={v["moteur.js"]}"></script>\n  <script src="pages.js?v={v["pages.js"]}"></script>\n'
+         f'  <script src="partage.js?v={v["partage.js"]}"></script>\n'
          f'  <script src="telephone.js?v={v["telephone.js"]}"></script>\n'
          f'  <script src="app.js?v={v["app.js"]}"></script>'),
     ]
@@ -88,7 +99,7 @@ def construire(dossier):
     with open(os.path.join(dossier, "index.html"), "w", encoding="utf-8", newline="\n") as f:
         f.write(html)
     fichiers = ["./", f"app.js?v={v['app.js']}", f"style.css?v={v['style.css']}", f"moteur.js?v={v['moteur.js']}",
-                f"pages.js?v={v['pages.js']}", f"telephone.js?v={v['telephone.js']}", f"cartes.js?v={v['cartes.js']}",
+                f"pages.js?v={v['pages.js']}", f"partage.js?v={v['partage.js']}", f"telephone.js?v={v['telephone.js']}", f"cartes.js?v={v['cartes.js']}",
                 "jsQR.js", "manifest.webmanifest", *ICONES]
     version = hashlib.sha1("".join(sorted(v.values())).encode() + html.encode()).hexdigest()[:12]
     with open(os.path.join(STATIQUE, "telephone", "sw.js"), encoding="utf-8") as f:

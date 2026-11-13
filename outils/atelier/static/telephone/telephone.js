@@ -186,6 +186,8 @@
     if (p === "/api/recherche/noms") { pret(); return message("noms", [u.searchParams.get("q") || "", await dansDeck(u.searchParams.get("deck")), 8]); }
     if (p === "/api/recherche-cartes") return decksAvecCarte(u.searchParams.get("q") || "");
     if (p === "/api/github/valide") return cleValide();
+    const pm = p.match(/^\/api\/decks\/([^/]+)\/partage$/);
+    if (pm && local) return lePartage().etat(decodeURIComponent(pm[1]));
     if (local && /^\/api\/(github|sauvegarde)(\/|$)/.test(p)) { const r = await routeGithub(p, "GET"); if (r !== undefined) return r; }
     // Commander Spellbook, par le relais : les combos d'une carte ; sans PC, le bracket et les combos du deck à jour
     const sbm = p.match(/^\/api\/decks\/([^/]+)\/(bracket|combos|combos\/carte)$/);
@@ -686,6 +688,8 @@
     }
     if (!(await fichier("index.json.gz"))) throw Object.assign(new Error("Tes decks ne sont pas encore arrivés."), { statut: 503 });
     if (!local && T.arrete) throw Object.assign(new Error("Ton PC n'envoie plus tes decks."), { statut: 409 });
+    const pt = p.match(/^\/api\/decks\/([^/]+)\/partage(\/retirer)?$/);
+    if (pt && local) return pt[2] ? lePartage().retirer(decodeURIComponent(pt[1])) : lePartage().partager([decodeURIComponent(pt[1])]);
     if (p === "/api/decks") return creerDeck(b);
     if (p === "/api/decks/importer") return importerDecks(b);
     if (p === "/api/classeur/importer") return importerClasseur(b);
@@ -1152,7 +1156,7 @@
       const ops = await attente();
       if (!ops.length || !(acces || local) || (!local && T.arrete)) return false;
       const commit = local ? await avecVerrou(() => envoyerLocal(ops)) : await envoyerGithub(ops);
-      if (local) planifierSauvegarde();                 // sauvegardé sur GitHub une fois la série de modifications finie
+      if (local) { planifierSauvegarde(); planifierPartage(); }      // sauvegarde, puis pages partagées, une fois la série finie
       // fait : ces opérations partent de la file ; sans PC, les pages refaites ici remplacent tout de suite celles
       // d'attente ; relié au PC, elles attendent celles du PC qui les contiennent
       const restent = (await attente()).filter((x) => !ops.some((y) => y.id === x.id));
@@ -1190,6 +1194,27 @@
       } catch (_) { /* pas de réseau : la prochaine fois */ }
     }
     return Object.fromEntries(noms.filter((n) => garde[n]).map((n) => [n, garde[n].eds]));
+  }
+
+  // ------------------------------------------------------------------ partager un deck sans PC (partage.js)
+  // La même page que celle du PC, dans le même site GitHub du compte. Un deck partagé qui change est republié deux
+  // minutes après la dernière modification (partage.CALME), comme sur le PC.
+  let partageTel = null, minuteriePartage = null;
+  const lePartage = () => partageTel || (partageTel = PARTAGE_TELEPHONE({
+    api, compte: leCompte, gh: ghCompte, scryfall: (url, corps) => scryfall(url, corps),
+    page: async (id) => { await calculs; return fichier("decks/" + id); },
+    lire: (k) => BD.lire(k).catch(() => null), ecrire: (k, v) => BD.ecrire(k, v),
+    reglages: () => ({ budget: budget(), sans_ub_illustrations: !!(window.REGLAGES || {}).sans_ub_illustrations }),
+  }));
+  function planifierPartage(ms = 120000) {
+    clearTimeout(minuteriePartage);
+    minuteriePartage = setTimeout(() => republier().catch(() => {}), ms);
+  }
+  async function republier() {
+    if (!local || !(await leCompte())) return;
+    const reg = await lePartage().partages(), d = await depot();
+    const ids = Object.keys(reg).filter((id) => `${id}/archidekt.txt` in d.fichiers && ((d.modifies || {})[id] || 0) > (reg[id].date || 0));
+    if (ids.length) await lePartage().partager(ids);
   }
 
   // ------------------------------------------------------------------ sans PC : les pages faites ici
@@ -1833,6 +1858,7 @@
       if (window.route) route();
       setTimeout(async () => spellbookEnFond(PAGES.decksDe((await depot()).fichiers)), 3000);
       sauvegarderEnFond();
+      planifierPartage(30000);
       if (flux) reprendreConnexion();
       return;
     }
