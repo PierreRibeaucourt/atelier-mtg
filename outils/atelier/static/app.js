@@ -3679,10 +3679,16 @@ function ligneVersion(v, i) {
     <td class="petit">${diffCourt(v)}</td>
     <td class="num">
       <button class="btn btn-petit" data-act="comparer" data-i="${i}">${ico("comparer")}Comparer</button>
-      <button class="btn btn-petit ecrit" data-act="simuler" data-i="${i}">${ico("simulation")}Simuler</button>
-      <button class="btn btn-petit ecrit" data-act="restaurer" data-i="${i}">${ico("annuler")}Restaurer</button>
-      ${v.type === "nommee" ? `<button class="btn btn-petit btn-danger ecrit" data-act="supprimer" data-i="${i}">${ico("corbeille")}Supprimer</button>` : ""}
-    </td></tr>`;
+      <button type="button" class="btn-menu ecrit" data-act="menu" data-i="${i}" aria-label="Autres actions sur « ${esc(v.nom)} »">${ico("plus_de")}</button>
+    </div>
+    ${v.note ? `<p class="version-note petit">${esc(v.note)}</p>` : ""}
+    ${v.plus.length || v.moins.length ? `<details class="version-diff petit">
+      <summary><span class="ok">+${v.plus.length}</span> <span class="alerte-texte">−${v.moins.length}</span> <span class="muet">par rapport à la liste actuelle</span></summary>
+      <div class="version-listes">
+        ${v.plus.length ? `<div><div class="ok">En plus</div><ul>${nomsComptes(v.plus)}</ul></div>` : ""}
+        ${v.moins.length ? `<div><div class="alerte-texte">En moins</div><ul>${nomsComptes(v.moins)}</ul></div>` : ""}
+      </div></details>` : `<p class="muet petit version-diff">Identique à la liste actuelle</p>`}
+  </article>`;
 }
 
 async function ongletVersions(el, d) {
@@ -3896,20 +3902,22 @@ function ligneCombo(c, carte = null) {
       etatCarte = `Pas dans le deck : ${manque.map((f) => `${nc(f.nom, f.fr || f.nom)} <span class="${(f.prix || 0) > BUDGET ? "cher" : "muet"}">${euros(f.prix)}</span>`).join(" · ")}${maybe}`;
     }
   }
-  return `<div class="combo">
-    <div class="combo-ligne">
-      <div class="combo-cartes">${fiches.map(nomCombo).join(`<span class="plus">+</span>`)}${(c.autres || []).map((t) =>
-        `<span class="plus">+</span><span class="cc-autre" title="N'importe quelle carte de ce genre">${esc(t)}</span>`).join("")}</div>
-      <div class="combo-source">${SOURCES[c.source]}${info ? ` · ${info}` : ""}</div>
-      <div><span class="classe classe-${esc(c.classe)}">${esc(c.classe_lib)}</span></div>
-    </div>
+  const images = c.fiches.filter((f) => f.image).slice(0, 4);
+  return `<article class="combo">
+    <div class="combo-images" aria-hidden="true">${images.map((f) => `<img src="${esc(f.image)}" alt="" loading="lazy">`).join("")}</div>
+    <div class="combo-corps">
+    <div class="combo-haut"><span class="classe classe-${esc(c.classe)}">${esc(c.classe_lib)}</span>
+      <span class="combo-source">${SOURCES[c.source]}${info ? ` · ${info}` : ""}</span></div>
+    <div class="combo-cartes">${fiches.map(nomCombo).join(`<span class="plus">+</span>`)}${(c.autres || []).map((t) =>
+      `<span class="plus">+</span><span class="cc-autre" title="N'importe quelle carte de ce genre">${esc(t)}</span>`).join("")}</div>
     ${etatCarte ? `<div class="combo-manque petit">${etatCarte}</div>` : ""}
     ${details ? `<details class="combo-details"><summary>${esc(c.titre || (c.resultats || []).join(" · ") || "Comment ça marche")}</summary>
         ${c.explication ? `<p class="petit">${esc(c.explication)}</p>` : ""}
         ${c.prerequis ? `<p class="petit"><strong>Il faut :</strong> ${esc(c.prerequis)}</p>` : ""}
         ${etapes.length ? `<ol class="etapes petit">${etapes.map((l) => `<li>${esc(l)}</li>`).join("")}</ol>` : ""}
         ${lien}</details>` : lien ? `<div class="combo-lien">${lien}</div>` : ""}
-  </div>`;
+    </div>
+  </article>`;
 }
 
 // ---- vue « le deck » : les combos présentes
@@ -3923,21 +3931,26 @@ async function vueCombosDeck(zone, d) {
     <p><strong>${r.combos.length ? `${r.combos.length} combo${r.combos.length > 1 ? "s" : ""} dans le deck` : "Aucune combo connue dans le deck"}</strong></p>
     ${r.erreur ? `<p class="erreur petit">Commander Spellbook ne répond pas : ${esc(r.erreur)}</p>` : ""}
     ${r.combos.length ? `<div class="combos">${r.combos.map((c) => ligneCombo(c)).join("")}</div>` : ""}
-    <div id="cb-mtgpics" class="petit ligne-outil"></div>
-    <div id="cb-claude" class="petit ligne-outil"></div>`;
+    <div class="cb-sources">
+      <div id="cb-mtgpics" class="petit ligne-outil"></div>
+      <div id="cb-claude" class="petit ligne-outil"></div>
+    </div>`;
   rendreMtgpics($("#cb-mtgpics", zone), d, r.mtgpics, () => vueCombosDeck(zone, d));
   rendreClaude($("#cb-claude", zone), d, r.synergies, () => vueCombosDeck(zone, d));
 }
 
+// une source de combos, en bas de l'onglet : son nom et son état, puis son bouton
+const ligneSource = (nom, etat, bouton = "") => `<div class="source-texte"><strong>${nom}</strong><span class="muet">${etat}</span></div>${bouton}`;
+
 // Combos MTGPics : lues carte par carte (une requête toutes les 1,5 s), gardées 30 jours
 function rendreMtgpics(zone, d, st, apres) {
   if (!st) {                                         // téléphone sans PC : rien de lu ici
-    if (TELEPHONE) zone.innerHTML = `<button class="btn btn-petit" data-pc="mtgpics">Lire les combos MTGPics</button>`;
+    if (TELEPHONE) zone.innerHTML = ligneSource("MTGPics", "Pas encore lues", `<button class="btn btn-petit" data-pc="mtgpics">Lire</button>`);
     return;
   }
-  if (st.actif && TELEPHONE) { zone.innerHTML = `<span class="pulse">●</span> MTGPics : lecture en cours sur le PC…`; return; }
+  if (st.actif && TELEPHONE) { zone.innerHTML = ligneSource("MTGPics", `<span class="pulse">●</span> lecture en cours sur le PC…`); return; }
   if (st.actif) {
-    zone.innerHTML = `<span class="pulse">●</span> MTGPics : ${st.fait} / ${st.total}…`;
+    zone.innerHTML = ligneSource("MTGPics", `<span class="pulse">●</span> ${st.fait} / ${st.total}…`);
     setTimeout(async () => {
       if (!zone.isConnected) return;
       const s = await api(`/api/decks/${enc(d.id)}/mtgpics`).catch(() => null);
@@ -3949,11 +3962,11 @@ function rendreMtgpics(zone, d, st, apres) {
   }
   const reste = st.cartes - st.connues;
   const minutes = Math.max(1, Math.round((reste * 4 * 1.5) / 60));
+  const err = st.erreur ? ` · <span class="erreur">${esc(st.erreur)}</span>` : "";
   zone.innerHTML = reste
-    ? `MTGPics : ${st.connues} / ${st.cartes} cartes lues
-       <button class="btn btn-petit" id="btn-mtgpics" ${TELEPHONE ? 'data-pc="mtgpics"' : ""}>Lire ${reste === st.cartes ? "tout" : `les ${reste} autres`} (≈ ${minutes} min)</button>`
-    : "";
-  if (st.erreur) zone.insertAdjacentHTML("beforeend", ` <span class="erreur">${esc(st.erreur)}</span>`);
+    ? ligneSource("MTGPics", `${st.connues} / ${st.cartes} cartes lues · ≈ ${minutes} min pour ${reste === st.cartes ? "tout lire" : "le reste"}${err}`,
+      `<button class="btn btn-petit" id="btn-mtgpics" ${TELEPHONE ? 'data-pc="mtgpics"' : ""}>Lire ${reste === st.cartes ? "tout" : `les ${reste} autres`}</button>`)
+    : ligneSource("MTGPics", `${st.cartes} cartes lues${err}`);
   const b = $("#btn-mtgpics", zone);
   if (b) b.onclick = async () => {
     try { rendreMtgpics(zone, d, await api(`/api/decks/${enc(d.id)}/mtgpics`, { method: "POST", body: {} }), apres); }
@@ -3963,10 +3976,10 @@ function rendreMtgpics(zone, d, st, apres) {
 
 function rendreClaude(zone, d, st, apres) {
   st = st || {};                                     // téléphone sans PC : jamais lancé ici
-  if (st.actif && TELEPHONE) { zone.innerHTML = `<span class="pulse">●</span> Claude cherche les synergies sur le PC…`; return; }
+  if (st.actif && TELEPHONE) { zone.innerHTML = ligneSource("Claude", `<span class="pulse">●</span> cherche les synergies sur le PC…`); return; }
   if (st.actif) {
     const duree = (debut) => { const m = debut ? Math.floor((Date.now() / 1000 - debut) / 60) : 0; return m >= 1 ? ` · ${m} min` : ""; };
-    zone.innerHTML = `<span class="pulse">●</span> Claude cherche les synergies…<span class="muet" data-duree>${duree(st.debut)}</span>`;
+    zone.innerHTML = ligneSource("Claude", `<span class="pulse">●</span> cherche les synergies…<span data-duree>${duree(st.debut)}</span>`);
     (async () => {
       while (zone.isConnected) {
         await attendre(3000);
@@ -3982,9 +3995,9 @@ function rendreClaude(zone, d, st, apres) {
     return;
   }
   const r = st.resultat;
-  zone.innerHTML = `${st.erreur ? `<span class="erreur">${esc(st.erreur)}</span> ` : ""}
-    ${r ? `Synergies Claude du ${new Date(r.date * 1000).toLocaleDateString("fr-FR")}${st.a_jour ? "" : " · la liste a changé"}` : ""}
-    <button class="btn btn-petit" id="btn-claude" ${TELEPHONE ? 'data-pc="synergies"' : ""}>${ico("discussion")}${r ? "Relancer" : "Chercher les synergies avec Claude"}</button>`;
+  zone.innerHTML = ligneSource("Claude", `${r ? `Synergies du ${new Date(r.date * 1000).toLocaleDateString("fr-FR")}${st.a_jour ? "" : " · la liste a changé"}`
+      : "Synergies entre les cartes du deck"}${st.erreur ? ` · <span class="erreur">${esc(st.erreur)}</span>` : ""}`,
+    `<button class="btn btn-petit" id="btn-claude" ${TELEPHONE ? 'data-pc="synergies"' : ""}>${ico("discussion")}${r ? "Relancer" : "Chercher"}</button>`);
   $("#btn-claude", zone).onclick = async () => {
     try { rendreClaude(zone, d, await api(`/api/decks/${enc(d.id)}/synergies`, { method: "POST", body: {} }), apres); }
     catch (e) { erreur(e); }

@@ -545,16 +545,31 @@ button.puce-dispo:hover { border-color: var(--accent); color: var(--accent); }
 /* ---- onglet Combos : le deck, ou une carte */
 a.btn { display: inline-flex; align-items: center; text-decoration: none; color: inherit; font: inherit; }
 a.btn-accent { color: var(--accent-texte); }      /* un lien en bouton orange : même texte que les autres boutons orange */
-.combos { border-top: 1px solid var(--bord); margin-top: .4rem; }
-.combo { border-bottom: 1px solid var(--bord); padding: .6rem .25rem; }
-.combo-ligne { display: grid; grid-template-columns: minmax(0, 1fr) auto 7.5rem; gap: .8rem; align-items: center; }
+/* une combo : les images de ses cartes en éventail, sa nature, ses cartes, puis comment elle marche */
+.combos { display: grid; gap: .6rem; margin-top: .5rem; }
+.combo { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .85rem; align-items: start; padding: .75rem .85rem;
+  background: var(--surface); border: 1px solid var(--bord); border-radius: var(--rayon); }
+.combo-images { display: flex; padding-top: .15rem; }
+.combo-images:empty { display: none; }
+.combo:has(.combo-images:empty) { grid-template-columns: minmax(0, 1fr); }
+.combo-images img { display: block; width: 50px; aspect-ratio: 488 / 680; border-radius: 3px; box-shadow: 0 2px 8px rgba(0, 0, 0, .4); background: var(--surface-2); }
+.combo-images img + img { margin-left: -28px; }
+.combo-corps { min-width: 0; display: grid; gap: .3rem; }
+.combo-haut { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .3rem .6rem; }
+/* les sources de combos : un encadré, une ligne par source (son nom et son état, puis son bouton) */
+.cb-sources { display: grid; margin-top: 1.2rem; padding: 0 .9rem; background: var(--surface); border: 1px solid var(--bord); border-radius: var(--rayon); }
+.cb-sources .ligne-outil { display: flex; flex-wrap: nowrap; align-items: center; gap: .8rem; margin: 0; padding: .6rem 0; }
+.cb-sources .ligne-outil:empty { display: none; }
+.cb-sources .ligne-outil:not(:empty) ~ .ligne-outil:not(:empty) { border-top: 1px solid var(--bord); }
+.cb-sources:not(:has(.ligne-outil:not(:empty))) { display: none; }
+.source-texte { flex: 1; min-width: 0; display: grid; gap: .1rem; }
 .combo-cartes { display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem .35rem; min-width: 0; }
 .cc { border: 0; background: none; padding: 0; font: inherit; font-weight: 600; color: var(--accent); cursor: pointer; text-align: left; }
 .cc:hover { text-decoration: underline; text-underline-offset: 3px; }
 .cc-dans { color: var(--texte); }
 .cc-autre { font-style: italic; color: var(--texte-2); font-size: .88rem; }
 .combo-cartes .plus { color: var(--texte-2); }
-.combo-source { font-size: .8rem; color: var(--texte-2); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.combo-source { font-size: .8rem; color: var(--texte-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .classe { display: inline-block; font-size: .78rem; font-weight: 600; padding: .1rem .55rem; border-radius: 999px; border: 1px solid var(--bord); background: var(--surface-2); color: var(--texte-2); }
 .classe-victoire { background: var(--alerte-doux); border-color: transparent; color: var(--alerte); }
 .classe-verrou { background: var(--info-doux); border-color: transparent; color: var(--info); }
