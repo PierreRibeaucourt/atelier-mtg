@@ -81,28 +81,66 @@ def fil_recherche():
     return f'<script type="application/ld+json">\n{js}\n  </script>'
 
 
-def donnees_structurees():
-    d = {
-        "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        "name": "Atelier MTG",
-        "alternateName": "L'Atelier MTG",
-        "description": partage.DESCRIPTION_ATELIER,
-        "url": SITE,
-        "inLanguage": "fr",
-        "applicationCategory": "UtilitiesApplication",
-        "applicationSubCategory": "Gestionnaire de decks Magic: The Gathering (Commander)",
-        "operatingSystem": "Windows 10, Windows 11, macOS, Linux",
-        "softwareVersion": __version__,
-        "downloadUrl": f"{DEPOT}/releases/latest/download/Atelier-MTG-Windows.exe",
-        "isAccessibleForFree": True,
-        "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR"},
-        "license": f"{DEPOT}/blob/main/LICENSE",
-        "image": partage.IMAGE_ATELIER,
-        "screenshot": [f"{CAPTURES}{f}.webp" for f in ("decks", "suggestions", "statistiques")],
-        "author": {"@type": "Person", "name": "PierreRibeaucourt", "url": "https://github.com/PierreRibeaucourt"},
-        "sameAs": [DEPOT],
-    }
+MAGIC = {"@type": "Thing", "name": "Magic: The Gathering",
+         "sameAs": ["https://fr.wikipedia.org/wiki/Magic_:_L%27Assembl%C3%A9e", "https://en.wikipedia.org/wiki/Magic:_The_Gathering"]}
+
+
+def _texte(h):
+    """Le texte d'un morceau de HTML pré-rendu, sur une ligne."""
+    h = re.sub(r"</?(?:p|li|ul|ol|br)\b[^>]*>", " ", h)
+    t = html_.unescape(re.sub(r"<[^>]+>", "", h)).replace(" ", " ").replace(" ", " ")
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def faq(rendu):
+    """Les questions fréquentes de la page pré-rendue (app.js › FAQ_ATELIER), pour FAQPage."""
+    qr = re.findall(r'<details class="ap-faq"><summary>(.*?)</summary>\s*<div class="ap-faq-rep">(.*?)</div></details>', rendu, re.S)
+    if len(qr) < 5:
+        raise SystemExit("Questions fréquentes introuvables dans la page pré-rendue.")
+    return [{"@type": "Question", "name": _texte(q), "acceptedAnswer": {"@type": "Answer", "text": _texte(r)}} for q, r in qr]
+
+
+def donnees_structurees(rendu=""):
+    """Le site (son nom dans les résultats de Google), la page, l'application et son auteur ; avec rendu (la page
+    pré-rendue), ses questions fréquentes."""
+    auteur = {"@type": "Person", "@id": SITE + "#auteur", "name": "PierreRibeaucourt", "url": "https://github.com/PierreRibeaucourt"}
+    graphe = [
+        {"@type": "WebSite", "@id": SITE + "#site", "name": "Atelier MTG", "alternateName": "L'Atelier MTG", "url": SITE,
+         "inLanguage": "fr", "publisher": {"@id": auteur["@id"]}},
+        {"@type": "WebPage", "@id": SITE + "#page", "url": SITE, "name": partage.TITRE_ATELIER,
+         "description": partage.DESCRIPTION_ATELIER, "inLanguage": "fr", "isPartOf": {"@id": SITE + "#site"},
+         "about": {"@id": SITE + "#application"}, "primaryImageOfPage": partage.IMAGE_ATELIER},
+        {"@type": "SoftwareApplication", "@id": SITE + "#application",
+         "name": "Atelier MTG",
+         "alternateName": "L'Atelier MTG",
+         "description": partage.DESCRIPTION_ATELIER,
+         "url": SITE,
+         "inLanguage": "fr",
+         "applicationCategory": "UtilitiesApplication",
+         "applicationSubCategory": "Deck builder Magic: The Gathering (Commander)",
+         "about": MAGIC,
+         "operatingSystem": "Windows 10, Windows 11, Android, iOS, macOS, Linux",
+         "softwareVersion": __version__,
+         "downloadUrl": f"{DEPOT}/releases/latest/download/Atelier-MTG-Windows.exe",
+         "isAccessibleForFree": True,
+         "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR"},
+         "license": f"{DEPOT}/blob/main/LICENSE",
+         "image": partage.IMAGE_ATELIER,
+         "screenshot": [f"{CAPTURES}{f}.webp" for f in ("decks", "suggestions", "statistiques")],
+         "featureList": ["Création et import de decks Commander (Moxfield, Archidekt, MTG Arena)",
+                         "Statistiques et base de mana", "Combos (Commander Spellbook, MTGPics)",
+                         "Bracket estimé selon les règles officielles, Game Changers",
+                         "Simulateur de parties à quatre joueurs", "Table de jeu en solo",
+                         "Recherche avancée de cartes en français", "Prix Cardmarket et budget",
+                         "Suggestions de cartes", "Versions et historique des decks", "Partage des decks en ligne",
+                         "Discussion avec Claude (optionnelle)"],
+         "author": {"@id": auteur["@id"]},
+         "sameAs": [DEPOT]},
+        auteur,
+    ]
+    if rendu:
+        graphe.append({"@type": "FAQPage", "@id": SITE + "#faq", "isPartOf": {"@id": SITE + "#page"}, "mainEntity": faq(rendu)})
+    d = {"@context": "https://schema.org", "@graph": graphe}
     js = json.dumps(d, ensure_ascii=False, indent=2).replace("</", "<\\/")
     return f'<script type="application/ld+json">\n{js}\n  </script>'
 
@@ -370,6 +408,7 @@ def construire(dossier):
                   image=partage.IMAGE_ATELIER, alt=partage.ALT_ATELIER, indexer=True, tete=[donnees_structurees()])
     partage._page(dossier, donnees(SOURCE_CAPTURES), entete)        # pré-rendue avec les captures de la source…
     rendu = captures(dossier, pre_rendre(dossier))
+    entete["tete"] = [donnees_structurees(rendu)]                    # avec les questions fréquentes
     partage._page(dossier, donnees("a-propos/"), entete)            # … publiée avec sa copie
     inserer(dossier, rendu)
     page_recherche(dossier)
