@@ -17,7 +17,11 @@ if (PARTAGE) document.documentElement.classList.add("partage");
 // PC ; la discussion, la simulation et la recherche restent sur le PC
 const TELEPHONE = window.TELEPHONE || null;
 const PC = !PARTAGE && !TELEPHONE;              // l'Atelier du PC : serveur Python, tâches en fond, mises à jour
-const CET_APPAREIL = TELEPHONE ? "ce téléphone" : "ce PC", AUTRE_APPAREIL = "un autre appareil";      // PC ou téléphone
+// l'appli sur un grand écran à la souris (telephone_site.py › habillage) : la barre du PC, sans les onglets du bas
+const ECRAN_TELEPHONE = !!TELEPHONE && !document.documentElement.classList.contains("ordinateur");
+// où sont les decks : sur le PC, le téléphone, ou dans le navigateur (l'appli sur un ordinateur)
+const CET_APPAREIL = !TELEPHONE ? "ce PC" : ECRAN_TELEPHONE ? "ce téléphone" : "ce navigateur", AUTRE_APPAREIL = "un autre appareil";
+const SUR_CET_APPAREIL = (TELEPHONE && !ECRAN_TELEPHONE ? "dans " : "sur ") + CET_APPAREIL;
 // partager un deck (page sur GitHub Pages) : depuis le PC ou le téléphone (partage.js), relié au PC ou non
 const PARTAGEABLE = PC || !!TELEPHONE;
 // le PC et le téléphone ont les mêmes droits sur les decks ; ce qui demande la puissance du PC reste visible sur le
@@ -339,7 +343,7 @@ function erreur(e) {
 ICONES.engrenage = '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>';
 ICONES.reglages = '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>';
 const ECRANS_APPLI = [["", "Decks", "cartes"], ["classeur", "Classeur", "livre"], ["recherche", "Recherche", "chercher"], ["options", "Options", "engrenage"]];
-if (TELEPHONE) {
+if (ECRAN_TELEPHONE) {
   const barre = $(".barre"), champ = $("#aller");
   barre.insertAdjacentHTML("afterbegin", `<a id="app-retour" class="btn btn-discret btn-icone" aria-label="Retour" hidden>${ico("precedent")}</a>`);
   $(".logo", barre).insertAdjacentHTML("afterend", `<div id="app-titre" class="app-titre"></div>`);
@@ -361,7 +365,7 @@ if (TELEPHONE) {
 }
 // après chaque écran : son titre, le retour, ses actions, et l'onglet du bas allumé
 function barreAppli(parts, qs) {
-  if (!TELEPHONE) return;
+  if (!ECRAN_TELEPHONE) return;
   const deck = parts[0] === "deck" && parts[1], rd = parts[0] === "recherche" && new URLSearchParams(qs || "").get("deck");
   let titre = MES_DECKS, retour = null;
   etat.menuEcran = null;
@@ -1375,13 +1379,13 @@ function menuDeck(d) {
   const copier = ["Copier la liste pour", ...EXPORTS.map(([fmt, lib]) => [lib, () => copierListe(fmt, lib), "", "copier"]),
     ...(PARTAGE ? [] : [["Cardmarket (à acheter)", () => copierCardmarket(d), "", "panier"]])];
   return [
-    ...(TELEPHONE ? [["Chercher pour ce deck", () => { location.hash = `#/recherche?deck=${enc(d.id)}`; }, "", "chercher"],
+    ...(ECRAN_TELEPHONE ? [["Chercher pour ce deck", () => { location.hash = `#/recherche?deck=${enc(d.id)}`; }, "", "chercher"],
       ["Jouer", () => surPC("jouer"), "", "lancer"], ["Demander à Claude", () => surPC("claude"), "", "discussion"], null] : []),
     ...(PARTAGEABLE ? [["Partager le deck…", () => modalePartage(d), "", "partager"]] : []),
     ...(PARTAGE ? [] : [["Imprimer les proxies…", () => { if (TELEPHONE) surPC("proxies"); else location.hash = `#/proxies?deck=${enc(d.id)}`; }, "", "imprimer"]]),
     ...(PARTAGEABLE ? [null] : []),
     // sur le téléphone, les formats dans un second menu : le premier tient à l'écran
-    ...(TELEPHONE ? [["Copier la liste…", () => setTimeout(() => ouvrirMenu($("#app-menu"), copier)), "", "copier"]] : copier),
+    ...(ECRAN_TELEPHONE ? [["Copier la liste…", () => setTimeout(() => ouvrirMenu($("#app-menu"), copier)), "", "copier"]] : copier),
     ...(PARTAGE ? [] : [null, ["Renommer…", () => modaleRenommer(d), "", "crayon"], ["Supprimer ce deck…", () => supprimerDeck(d), "btn-danger", "corbeille"]]),
   ];
 }
@@ -1986,7 +1990,7 @@ function introGithub(zone, suite, contexte = "") {
     <div class="gh-presente">
       <p><strong>GitHub</strong> est un service gratuit de Microsoft qui garde des fichiers en ligne.${PARTAGEABLE ? " L'Atelier s'en sert pour deux choses :" : ""}</p>
       <ul class="gh-usages">
-        <li>${ico("nuage")}<span><strong>Sauvegarder tes decks</strong> dans un espace privé, que toi seul vois : tu les retrouves si ton ${TELEPHONE ? "téléphone" : "PC"} tombe en panne, ou sur ${AUTRE_APPAREIL}.</span></li>
+        <li>${ico("nuage")}<span><strong>Sauvegarder tes decks</strong> dans un espace privé, que toi seul vois : tu les retrouves si ton ${!TELEPHONE ? "PC" : ECRAN_TELEPHONE ? "téléphone" : "ordinateur"} tombe en panne, ou sur ${AUTRE_APPAREIL}.</span></li>
         ${PARTAGEABLE ? `<li>${ico("partager")}<span><strong>Publier les decks que tu partages</strong>, sur une page à envoyer à ton groupe de jeu.</span></li>` : ""}
       </ul>
     </div>
@@ -2054,7 +2058,7 @@ const TOUS_APPAREILS = "Déconnecter tous mes appareils";
 function modaleRetirerAcces(appli, intro = "", fin = () => {}) {
   ouvrirModale(`<h2>${TOUS_APPAREILS}</h2>
     <div id="ra-zone">${intro ? `<p>${esc(intro)}</p>` : ""}
-      <p><strong>${TELEPHONE ? "Ce téléphone, ton PC" : "Ce PC, ton téléphone"}</strong> et tout appareil perdu ou volé
+      <p><strong>${TELEPHONE ? `${CET_APPAREIL[0].toUpperCase() + CET_APPAREIL.slice(1)}, ton PC` : "Ce PC, ton téléphone"}</strong> et tout appareil perdu ou volé
         perdront l'accès à ta sauvegarde.</p>
       <p>Sur GitHub, clique sur «&nbsp;Revoke access&nbsp;», puis reconnecte les appareils que tu gardes.</p>
       <div class="gh-action"><a class="btn btn-accent" id="ra-ouvrir" href="${esc(appli)}" target="_blank" rel="noopener">Ouvrir GitHub</a></div>
@@ -2138,7 +2142,7 @@ async function recupererDecks(zone, fin) {
   zone.innerHTML = `<p>La sauvegarde du compte <strong>${esc(g.compte)}</strong> contient ${s.decks.length > 1 ? `${s.decks.length} decks` : "1 deck"},
       modifiée le ${esc(quand)} :</p>
     <p class="sv-decks">${s.decks.map((n) => `<strong>${esc(n)}</strong>`).join(" · ")}</p>
-    <div class="boutons"><button class="btn btn-accent" id="sv-go">${ico("telecharger")}Récupérer sur ${CET_APPAREIL}</button></div>`;
+    <div class="boutons"><button class="btn btn-accent" id="sv-go">${ico("telecharger")}Récupérer ${SUR_CET_APPAREIL}</button></div>`;
   $("#sv-go", zone).onclick = async () => {
     zone.innerHTML = `<p class="chargement">Récupération de tes decks…</p>`;
     try {
@@ -2165,7 +2169,7 @@ async function etatSauvegarde(petit, bandeau) {
   let tard = 0;
   try { tard = +localStorage.getItem("pref-sauvegarde-plus-tard") || 0; } catch (_) {}
   if ((s.connecte && s.prive && !s.voulue) || Date.now() - tard < PLUS_TARD_SAUVEGARDE) return;   // coupée exprès, ou « Plus tard »
-  bandeau.innerHTML = `<div class="bandeau-sauvegarde">${ico("nuage")}<p>Tes decks ne sont que sur ${CET_APPAREIL} : si tu le changes ou s'il tombe en panne, ils sont perdus.</p>
+  bandeau.innerHTML = `<div class="bandeau-sauvegarde">${ico("nuage")}<p>Tes decks ne sont que ${SUR_CET_APPAREIL} : ${TELEPHONE && !ECRAN_TELEPHONE ? "s'il les efface, ou si tu changes d'ordinateur, ils sont perdus" : "si tu le changes ou s'il tombe en panne, ils sont perdus"}.</p>
     <button class="btn btn-accent btn-petit" id="bs-oui">Les sauvegarder en ligne</button>
     <button class="btn btn-discret btn-petit" id="bs-tard">Plus tard</button></div>`;
   $("#bs-oui", bandeau).onclick = () => modaleSauvegarde("sauvegarde", () => etatSauvegarde(petit, bandeau));
@@ -2291,15 +2295,15 @@ async function modaleQrTelephone(lien) {
 function optionsTelephone() {
   const a = TELEPHONE.acces();
   vue.innerHTML = `<nav class="fil" aria-label="Fil d'Ariane"><a href="#/">Mes decks</a><span aria-hidden="true">›</span><span aria-current="page">Options</span></nav>
-    <section class="panneau options"><div class="opt-titre"><h2>${ico("telephone")}Téléphone</h2></div>
-      <div class="opt-lignes">${TELEPHONE.installee && !TELEPHONE.installee() ? `
+    <section class="panneau options"><div class="opt-titre"><h2>${ECRAN_TELEPHONE ? `${ico("telephone")}Téléphone` : `${ico("dossier")}Ce navigateur`}</h2></div>
+      <div class="opt-lignes">${ECRAN_TELEPHONE && TELEPHONE.installee && !TELEPHONE.installee() ? `
         <p><button class="btn btn-accent" id="tel-installer-app">${ico("telecharger")}Installer l'appli</button></p>` : ""}${a ? `
         <p>Relié à la sauvegarde <strong>${esc(a.depot)}</strong></p>
         <p class="muet petit" id="tel-attente" hidden></p>
         <div class="form-ligne"><button class="btn" id="tel-maj">${ico("rafraichir")}Synchroniser</button>
-          <button class="btn btn-danger" id="tel-delier">Délier ce téléphone</button>
+          <button class="btn btn-danger" id="tel-delier">Délier ${CET_APPAREIL}</button>
           <button class="btn btn-discret" id="tel-retirer">${TOUS_APPAREILS}</button></div>` : `
-        <p id="tel-ou">Tes decks sont gardés sur ce téléphone.</p>
+        <p id="tel-ou">Tes decks sont gardés ${SUR_CET_APPAREIL}.</p>
         <div id="opt-github"></div>
         <div class="form-ligne"><button class="btn" id="tel-fichier">${ico("telecharger")}Enregistrer dans un fichier</button>
           <button class="btn btn-discret" id="tel-restaurer-fichier">Restaurer un fichier</button></div>`}
@@ -2320,10 +2324,10 @@ function optionsTelephone() {
   // sans PC : où sont les decks, et à quoi sert GitHub tant qu'on n'est pas connecté
   const ouSont = (g, s) => {
     const p = $("#tel-ou");
-    if (p) p.textContent = s.active ? "Tes decks sont sur ce téléphone et sauvegardés en ligne, sur ton compte GitHub."
-      : g.compte ? "Tes decks sont gardés seulement sur ce téléphone."
-      : "Tes decks sont gardés seulement sur ce téléphone. Avec un compte GitHub (gratuit), sauvegarde-les en ligne : "
-        + "tu les retrouves si tu perds ton téléphone, ou sur ton PC, et tu peux les partager.";
+    if (p) p.textContent = s.active ? `Tes decks sont ${SUR_CET_APPAREIL} et sauvegardés en ligne, sur ton compte GitHub.`
+      : g.compte ? `Tes decks sont gardés seulement ${SUR_CET_APPAREIL}.`
+      : `Tes decks sont gardés seulement ${SUR_CET_APPAREIL}. Avec un compte GitHub (gratuit), sauvegarde-les en ligne : `
+        + `tu les retrouves si tu perds ${ECRAN_TELEPHONE ? "ton téléphone" : "ce navigateur"}, ou sur ton PC, et tu peux les partager.`;
   };
   optionsCartes($("#opt-cartes"));                 // les mêmes réglages sur tous les appareils
   if ($("#tel-installer-app")) $("#tel-installer-app").onclick = () => TELEPHONE.installer();
@@ -2350,7 +2354,7 @@ function optionsTelephone() {
     toast(TELEPHONE.erreur || "À jour.");
     b.disabled = false;
   };
-  $("#tel-delier").onclick = () => { if (confirm("Délier ce téléphone ? Ses decks en seront effacés (ils restent sur ton PC).")) TELEPHONE.delier(); };
+  $("#tel-delier").onclick = () => { if (confirm(`Délier ${CET_APPAREIL} ? Ses decks en seront effacés (ils restent sur ton PC).`)) TELEPHONE.delier(); };
   $("#tel-retirer").onclick = () => modaleRetirerAcces(TELEPHONE.appliGithub);
 }
 

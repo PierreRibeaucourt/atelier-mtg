@@ -17,7 +17,9 @@
   // voir/ (lien instantané d'un deck) : ce script y fait la page du deck, puis charge app.js (VOIR : son adresse) en
   // page partagée, sans démarrer l'appli. ICI : le dossier de l'appli, pour ses fichiers (worker, base), d'où que l'on soit
   const VOIR = window.ATELIER_VOIR || "", ICI = new URL(".", document.currentScript.src).href;
-  if (!VOIR) document.documentElement.classList.add("telephone");
+  // ORDI : l'appli sur un grand écran à la souris (telephone_site.py › habillage) ; ses decks sont alors dans « ce navigateur »
+  const ORDI = document.documentElement.classList.contains("ordinateur"), CET_APPAREIL = ORDI ? "ce navigateur" : "ce téléphone";
+  if (!VOIR && !ORDI) document.documentElement.classList.add("telephone");
 
   const lireLocal = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
   const ecrireLocal = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (_) {} };
@@ -69,7 +71,7 @@
       Accept: brut ? "application/vnd.github.raw" : "application/vnd.github+json" } });
     if (r.status === 401) {
       oublier();
-      throw Object.assign(new Error("La clé de ton Atelier n'est plus valable : relie à nouveau ce téléphone."), { statut: 401 });
+      throw Object.assign(new Error(`La clé de ton Atelier n'est plus valable : relie à nouveau ${CET_APPAREIL}.`), { statut: 401 });
     }
     if (r.status === 404) throw Object.assign(new Error("Tes decks ne sont pas encore prêts : ouvre l'Atelier sur ton PC, Options › Téléphone."), { statut: 404 });
     if (!r.ok) throw Object.assign(new Error(`GitHub ne répond pas (${r.status}).`), { statut: r.status });
@@ -1527,7 +1529,7 @@
       ...(corps ? { "Content-Type": "application/json" } : {}) } });
     if (r.status === 401) {
       await BD.effacer(GITHUB).catch(() => {});
-      throw Object.assign(new Error("GitHub ne reconnaît plus ce téléphone : reconnecte-le."), { statut: 401 });
+      throw Object.assign(new Error(`GitHub ne reconnaît plus ${CET_APPAREIL} : reconnecte-le.`), { statut: 401 });
     }
     if (!r.ok) throw Object.assign(new Error(`GitHub ne répond pas (${r.status}).`), { statut: r.status });
     return r.status === 204 ? null : r.json();
@@ -1622,7 +1624,7 @@
   // ce qu'il y a dans la sauvegarde, sans rien télécharger (« Récupérer mes decks »)
   async function sauvegardeDistante() {
     const g = await leCompte();
-    if (!g) throw Object.assign(new Error("Connecte ce téléphone à GitHub."), { statut: 401 });
+    if (!g) throw Object.assign(new Error(`Connecte ${CET_APPAREIL} à GitHub.`), { statut: 401 });
     const q = (m, u, c) => ghCompte(g.jeton, m, u, c), d = await leDepot(q, g, false);
     if (!d) return { existe: false, decks: [] };
     const { distant, date } = await laTete(q, d);
@@ -1643,7 +1645,7 @@
   }
   async function synchroniserGithub(creer) {
     const g = await leCompte();
-    if (!g) throw Object.assign(new Error("Connecte ce téléphone à GitHub (compte gratuit)."), { statut: 401 });
+    if (!g) throw Object.assign(new Error(`Connecte ${CET_APPAREIL} à GitHub (compte gratuit).`), { statut: 401 });
     const q = (m, u, c) => ghCompte(g.jeton, m, u, c), d = await leDepot(q, g, creer);
     if (!d) return { vide: true };
     let e = await lEtat(g);
@@ -1963,13 +1965,13 @@
       document.body.appendChild(b);
     }
     b.innerHTML = `<div class="tel-bandeau-texte"><strong>Ton PC n'envoie plus tes decks</strong></div>
-      <div class="tel-bandeau-boutons"><button class="btn btn-danger btn-petit" id="tel-arrete-delier">Délier ce téléphone</button></div>`;
+      <div class="tel-bandeau-boutons"><button class="btn btn-danger btn-petit" id="tel-arrete-delier">Délier ${CET_APPAREIL}</button></div>`;
     majBandeau();
-    b.querySelector("#tel-arrete-delier").onclick = () => { if (confirm("Délier ce téléphone ? Ses decks en seront effacés.")) T.delier(); };
+    b.querySelector("#tel-arrete-delier").onclick = () => { if (confirm(`Délier ${CET_APPAREIL} ? Ses decks en seront effacés.`)) T.delier(); };
   }
 
   function bandeauInstaller() {
-    if (installee() || !(acces || local) || !document.body || T.arrete) return;
+    if (ORDI || installee() || !(acces || local) || !document.body || T.arrete) return;     // ordinateur : l'Atelier à installer, c'est l'autre
     if (Date.now() - Number(lireLocal(PLUS_TARD) || 0) < 3 * 86400 * 1000) return;
     let b = document.getElementById("tel-bandeau");
     if (!b) {
@@ -2008,7 +2010,7 @@
       const dabord = iphone && !installee() && !el.dataset.safari;
       el.innerHTML = `<div class="tel-accueil">
         <div class="tel-marque"><h1>Atelier MTG</h1>
-          <p class="tel-accroche">Tes decks Commander, dans ta poche.</p>
+          <p class="tel-accroche">Tes decks Commander, ${ORDI ? "sans rien installer" : "dans ta poche"}.</p>
           <p class="tel-rassure">Gratuit · sans compte · sans pub</p></div>
         ${dabord ? `<section class="tel-choix">
           <h2>D'abord, installe l'appli</h2>
@@ -2017,11 +2019,11 @@
         </section>
         <button class="lien-discret" id="tel-safari">Continuer dans Safari</button>` : `<section class="tel-choix">
           <h2>Nouveau sur l'Atelier ?</h2>
-          <p>Tes decks restent sur ce téléphone.</p>
+          <p>Tes decks restent ${ORDI ? "dans ce navigateur" : "sur ce téléphone"}.</p>
           <button class="btn btn-accent" id="tel-commencer">Commencer</button>
           <button class="lien-discret" id="tel-restaurer">Restaurer un fichier</button>
         </section>
-        <section class="tel-choix">
+        <section class="tel-choix tel-choix-pc">
           <h2>Déjà l'Atelier sur ton PC ?</h2>
           <p>Retrouve ici les decks de ton PC.</p>
           <button class="btn" id="tel-relier-pc" aria-expanded="false" aria-controls="tel-relier">Relier à mon PC</button>
