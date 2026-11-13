@@ -30,7 +30,7 @@ import reglages
 import synchro
 
 ICI = os.path.dirname(os.path.abspath(__file__))
-ADRESSE = "https://atelier-mtg.github.io/"      # l'appli du téléphone (organisation GitHub « atelier-mtg »)
+ADRESSE = "https://app.atelier-mtg.com/"        # l'appli du téléphone (organisation GitHub « atelier-mtg », dépôt « app »)
 BRANCHE = "telephone"
 FORMAT = 1                                       # version des fichiers : l'appli refuse un format qu'elle ne connaît pas
 ETAT = os.path.join(ICI, "telephone.json")       # ce qui a été envoyé : empreinte et fichier de chaque deck (propre à ce PC)

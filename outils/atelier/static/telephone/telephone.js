@@ -2027,7 +2027,7 @@
             <video id="tel-video" playsinline muted hidden></video>
             <details class="tel-coller"><summary>Pas d'appareil photo ?</summary>
               <p>Sur le PC, touche «&nbsp;Copier le lien&nbsp;» sous le QR code, envoie-le sur ce téléphone et colle-le ici.</p>
-              <div class="form-ligne"><input class="champ" id="tel-lien" placeholder="https://atelier-mtg.github.io/#appairer=…" autocomplete="off" aria-label="Lien du PC">
+              <div class="form-ligne"><input class="champ" id="tel-lien" placeholder="https://app.atelier-mtg.com/#appairer=…" autocomplete="off" aria-label="Lien du PC">
               <button class="btn" id="tel-relier-lien">Relier</button></div></details>
           </div>
         </section>`}

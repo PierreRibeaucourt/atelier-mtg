@@ -49,7 +49,7 @@ FAN_CONTENT = "https://company.wizards.com/en/legal/fancontentpolicy"
 # l'onglet « Installeur » ouvert dans le HTML, comme pour la plupart des visiteurs
 # la recherche de cartes (recherche/) : le moteur de l'appli du téléphone (static/telephone/cartes.js, copié ici) et sa
 # base, publiée sur le site de l'appli (base_telephone.py) ; le navigateur du visiteur la télécharge de là
-BASE_CARTES = "https://atelier-mtg.github.io/base/"
+BASE_CARTES = "https://app.atelier-mtg.com/base/"
 SOURCE_MOTEUR = os.path.join(partage.STATIQUE, "telephone", "cartes.js")
 MOTEUR = "cartes.js?v=" + partage._version(SOURCE_MOTEUR)                 # dans recherche/
 TITRE_RECHERCHE = "Recherche avancée de cartes Magic en français | Atelier MTG"
@@ -275,7 +275,7 @@ def mentions_legales(dossier):
       <ul>
         <li><strong>Ce site</strong> ({DOMAINE}) : o2switch, SAS au capital de 100 000 €, Chemin des Pardiaux,
           63000 Clermont-Ferrand, France · RCS Clermont-Ferrand 510 909 807 · 04 44 44 60 40 · {_lien("https://www.o2switch.fr/")}</li>
-        <li><strong>L'appli du téléphone</strong> (atelier-mtg.github.io) et <strong>le code source</strong> : GitHub, Inc.,
+        <li><strong>L'appli</strong> (app.atelier-mtg.com) et <strong>le code source</strong> : GitHub, Inc.,
           88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis · {_lien("https://github.com/")}</li>
         <li><strong>Le relais de l'appli du téléphone</strong> (relais.atelier-mtg.workers.dev) : Cloudflare, Inc.,
           101 Townsend Street, San Francisco, CA 94107, États-Unis · {_lien("https://www.cloudflare.com/")}</li>
@@ -326,8 +326,8 @@ def confidentialite(dossier):
         propre compte Anthropic : vos messages et les decks dont vous parlez sont alors envoyés à Anthropic, selon ses
         conditions. Rien ne part si vous ne vous en servez pas.</p>
 
-      <h2>L'appli du téléphone</h2>
-      <p>L'appli (atelier-mtg.github.io) garde vos decks dans le stockage de votre navigateur, sur votre téléphone.
+      <h2>L'appli</h2>
+      <p>L'appli (app.atelier-mtg.com) garde vos decks dans le stockage de votre navigateur, sur votre appareil.
         Elle interroge Scryfall, et Commander Spellbook par un petit relais (Cloudflare) qui transmet les demandes sans
         rien garder. Elle et sa base de cartes sont hébergées par GitHub Pages, qui tient ses propres journaux
         techniques.</p>

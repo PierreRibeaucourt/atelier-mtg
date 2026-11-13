@@ -5,8 +5,8 @@
 Le site reprend l'interface de l'Atelier (static/index.html, app.js, style.css) avec telephone.js, qui lit les decks dans
 la sauvegarde en ligne au lieu du serveur Python (voir telephone.py), plus ce qu'il faut à une appli installable : le
 manifeste, les icônes et le service worker (sw.js), qui la garde pour l'ouvrir sans réseau. Il est publié à
-https://atelier-mtg.github.io/ par l'organisation GitHub « atelier-mtg » (son dépôt atelier-mtg.github.io le fabrique
-à partir de ce dépôt-ci).
+https://app.atelier-mtg.com/ par l'organisation GitHub « atelier-mtg » (son dépôt « app » le fabrique à partir
+de ce dépôt-ci) ; son ancienne adresse, https://atelier-mtg.github.io/, n'est plus qu'une passerelle (passerelle()).
 """
 import hashlib
 import json
