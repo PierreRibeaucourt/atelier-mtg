@@ -4776,7 +4776,7 @@ const SUR_TELEPHONE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (
 const CLAUDE_BUREAU = "https://code.claude.com/docs/fr/desktop-quickstart";
 // [capture, titre, texte] ; « Les bases » : ce qu'on attend de tout gestionnaire de decks
 const MODULES_BASES = [
-  ["decks", "Vos decks, à votre façon", "Créez, importez et éditez vos decks comme partout, avec une vue personnalisable : liste ou visuel, taille des cartes, rangement par type, par tag ou par fonction."],
+  ["appareils", "Vos decks, sans compte ni prise de tête", "Création, import, affichage en liste ou visuel, taille des cartes réglable, tri par type, tag ou fonction : organisez vos cartes exactement comme vous l'entendez. Utilisez l'outil sur ordinateur, sur mobile, ou synchronisez les deux selon vos besoins."],
   ["recherche", "Recherche avancée", "Une recherche multicritère comme celle de Magic-Ville, avec en plus un filtre de prix Cardmarket et une catégorisation automatique des cartes : ramp, pioche, tuteur, removal…"],
   ["jouer", "Table de jeu", "Jouez vos decks en solo pour tester les mains de départ et les premiers tours : pioche, mulligan, jetons, marqueurs, planeswalkers, tout au clic ou au glisser."],
   ["versions", "Versions et historique", "Chaque modification est gardée. Enregistrez des versions, comparez deux listes, revenez en arrière."],
@@ -4854,9 +4854,13 @@ function vueAPropos(installation = false) {
   const capture = (f, alt) => `<img src="${PARTAGE ? CAPTURES_ATELIER : "/a-propos/"}${f}.webp" data-f="${f}" alt="${esc(alt)}"`;
   const consigne = `Installe et lance l'Atelier MTG depuis ${(PARTAGE && PARTAGE.atelier || DEPOT_ATELIER).replace("https://", "")}`;
   const fonction = (titre, texte) => `<div class="ap-carte"><h3>${titre}</h3><p>${texte}</p></div>`;
+  // « appareils » : la même page sur ordinateur, et sur téléphone posé devant
   const modules = (liste) => liste.map(([f, titre, texte]) => `<section class="ap-module">
         <h3>${esc(titre)}</h3><p>${esc(texte)}</p>
-        <figure>${capture(f, titre)} loading="lazy"></figure>
+        ${f === "appareils" ? `<div class="ap-appareils">
+          <figure class="ap-ecran-pc"><span class="ap-fenetre" aria-hidden="true"><i></i><i></i><i></i></span>${capture("appareils-pc", "Un deck dans l'Atelier, sur ordinateur")} loading="lazy"></figure>
+          <figure class="ap-ecran-tel">${capture("appareils-tel", "Le même deck dans l'Atelier, sur téléphone")} loading="lazy"></figure>
+        </div>` : `<figure>${capture(f, titre)} loading="lazy"></figure>`}
       </section>`).join("");
   // installation : Windows et le téléphone côte à côte (le téléphone d'abord, lu sur un téléphone) ; l'assistant IA et
   // l'installation à la main en dessous, repliés (l'assistant ouvert pour qui lit sur Mac ou Linux)
@@ -4920,7 +4924,6 @@ function vueAPropos(installation = false) {
       <h2>Et aussi</h2>
       <div class="ap-grille">
         ${fonction("Import en un collage", "Une liste copiée depuis Moxfield, Archidekt ou MTG Arena devient un deck, rangé par catégories.")}
-        ${fonction("Sur votre téléphone", `L'Atelier s'ajoute à l'écran d'accueil, sans passer par un store. Seul ou relié à votre PC par un QR code, il garde vos decks même sans réseau. <a href="${APPLI_TELEPHONE}">Ouvrir l'appli</a>`)}
         ${fonction("Partage simplifié", `Chaque deck a sa page en ligne, tenue à jour toute seule, à envoyer à votre groupe de jeu : liste, visuel, statistiques, et une table pour le tester. <a href="${EXEMPLES_ATELIER}">Voir des exemples</a>`)}
       </div>
 

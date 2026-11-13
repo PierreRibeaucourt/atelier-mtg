@@ -1002,6 +1002,22 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
   cursor: pointer; }
 .ap-commande button:hover { filter: brightness(1.08); }
 .a-propos .ap-install-sous { margin-top: 1rem; font-size: .9rem; color: var(--texte-2); }
+/* « Vos decks, à votre façon » : la même page sur ordinateur, et sur téléphone posé devant l'écran */
+.ap-appareils { position: relative; padding: 0 11% 9% 0; }
+.ap-appareils .ap-ecran-pc { margin: 0; padding: 0; border-radius: 12px; overflow: hidden; background: var(--surface); border: 1px solid var(--bord);
+  box-shadow: var(--ombre); }
+.ap-fenetre { display: flex; gap: 6px; padding: 9px 12px; background: var(--surface-2); border-bottom: 1px solid var(--bord); }
+.ap-fenetre i { width: 9px; height: 9px; border-radius: 50%; background: var(--bord); }
+.ap-appareils .ap-ecran-pc img { display: block; width: 100%; height: auto; border-radius: 0; }
+.ap-appareils .ap-ecran-tel { position: absolute; right: 0; bottom: 0; width: 25%; margin: 0; padding: 6px; background: #0b0a09; border: 0;
+  border-radius: 26px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .1), 0 22px 48px rgba(0, 0, 0, .5); transform: rotate(3deg);
+  transform-origin: bottom right; }
+.ap-appareils .ap-ecran-tel img { display: block; width: 100%; height: auto; border-radius: 20px; }
+@media (max-width: 560px) {
+  .ap-appareils { padding-right: 16%; }
+  .ap-appareils .ap-ecran-tel { width: 30%; padding: 4px; border-radius: 18px; }
+  .ap-appareils .ap-ecran-tel img { border-radius: 14px; }
+}
 /* installation : Windows et le téléphone côte à côte ; les autres façons en dessous, repliées */
 .ap-install-duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: .9rem; align-items: start; }
 .ap-install-duo .ap-install { margin-top: 0; display: grid; gap: .85rem; align-content: start; }
