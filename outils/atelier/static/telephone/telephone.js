@@ -9,6 +9,7 @@
   const FORMAT = 1;                                   // telephone.py › FORMAT
   const GH = "https://api.github.com";
   const BRANCHE = "telephone";
+  const CORBEILLE = "Corbeille Atelier";               // decks.CORBEILLE
   // la page GitHub de l'appli « Atelier MTG » (relais.js › CLIENT_ID) : « Revoke access » y retire toutes ses clés
   const APPLI_GITHUB = "https://github.com/settings/connections/applications/Ov23li9fE6JyGKnCmR3L";
   const ACCES = "telephone-acces", COMMIT = "telephone-commit", REGLAGES = "telephone-reglages";
@@ -185,7 +186,7 @@
     if (s) return copie(s.v);
     // ce qui n'a pas de sens ici : rien ne tourne en fond, pas de discussion avec Claude, pas de mise à jour à installer
     if (p === "/api/etat") return { maj: {} };
-    if (p === "/api/corbeille") return [];               // les decks supprimés se récupèrent sur le PC
+    if (p === "/api/corbeille") return local ? corbeilleLocale() : (((await fichier("index.json.gz")) || {}).api || {})["/api/corbeille"] || [];
     if (p.startsWith("/api/discussion")) return { actif: false, actives: [], erreur: "", etapes: [], mode: "", outils: [], messages: [] };
     // les cartes : sur Scryfall
     if (p === "/api/chercher") return chercher(u.searchParams.get("q") || "");
@@ -715,6 +716,7 @@
     }
     if (!(await fichier("index.json.gz"))) throw Object.assign(new Error("Tes decks ne sont pas encore arrivés."), { statut: 503 });
     if (!local && T.arrete) throw Object.assign(new Error("Ton PC n'envoie plus tes decks."), { statut: 409 });
+    if (p === "/api/corbeille/recuperer") return local ? recupererLocal(b.fichier) : recupererRelie(b.fichier);
     const pt = p.match(/^\/api\/decks\/([^/]+)\/partage(\/retirer)?$/);
     if (pt) return pt[2] ? lePartage().retirer(decodeURIComponent(pt[1])) : lePartage().partager([decodeURIComponent(pt[1])]);
     if (p === "/api/decks") return creerDeck(b);
@@ -1173,6 +1175,8 @@
   async function envoyerLocal(ops) {
     const d = await depot(), f = d.fichiers, depart = { ...f };
     const r = await rejouer(ops, async (rel) => (rel in depart ? depart[rel] : null), "");
+    const renommes = new Set(r.origine.values());
+    for (const id of r.effaces) if (!renommes.has(id)) jeter(f, id);          // supprimé : dans la corbeille
     for (const rel of Object.keys(f)) if (r.effaces.has(rel.split("/")[0])) delete f[rel];
     for (const [n, a] of r.origine) for (const rel of Object.keys(depart)) if (r.sous(rel, a)) f[n + rel.slice(a.length)] = depart[rel];
     for (const rel of r.supprimes) delete f[rel];
@@ -1229,6 +1233,57 @@
       } catch (_) { /* pas de réseau : la prochaine fois */ }
     }
     return Object.fromEntries(noms.filter((n) => garde[n]).map((n) => [n, garde[n].eds]));
+  }
+
+  // ------------------------------------------------------------------ la corbeille (decks.supprimer, corbeille, recuperer)
+  // Sans PC, un deck supprimé (ici ou sur un autre appareil) va dans « Corbeille Atelier/<deck>__<date> », comme sur le
+  // PC ; elle reste sur le téléphone (pas dans la sauvegarde). Relié au PC, c'est la corbeille du PC (index) ; un deck
+  // récupéré revient par la sauvegarde, repris de son historique.
+  function jeter(f, id) {
+    const dest = `${CORBEILLE}/${id}__${horodatage()}/`;
+    for (const rel of Object.keys(f)) if (rel.startsWith(id + "/")) f[dest + rel.slice(id.length + 1)] = f[rel];
+  }
+  async function corbeilleLocale() {
+    const vus = new Map();
+    for (const rel of Object.keys((await depot()).fichiers)) {
+      const m = rel.match(/^Corbeille Atelier\/((.+)__(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})\d{2})\//);
+      if (m && !vus.has(m[1])) vus.set(m[1], { fichier: m[1], nom: m[2], date: `${m[3]} ${m[4]}:${m[5]}` });
+    }
+    return [...vus.values()].sort((a, b) => (a.fichier.split("__")[1] < b.fichier.split("__")[1] ? 1 : -1));
+  }
+  async function recupererLocal(fichierCorbeille) {
+    return avecVerrou(async () => {
+      const d = await depot(), f = d.fichiers, pre = `${CORBEILLE}/${fichierCorbeille}/`, nom = String(fichierCorbeille).replace(/__[^_]+_\d{6}$/, "");
+      if (!Object.keys(f).some((rel) => rel.startsWith(pre))) throw new Error("Deck introuvable dans la corbeille.");
+      if (`${nom}/archidekt.txt` in f) throw new Error(`Un deck « ${nom.replace(/^Deck /, "")} » existe déjà : renomme ou supprime-le d'abord.`);
+      for (const rel of Object.keys(f)) if (rel.startsWith(pre)) { f[nom + "/" + rel.slice(pre.length)] = f[rel]; delete f[rel]; }
+      d.modifies = { ...(d.modifies || {}), [nom]: Date.now() / 1000 };
+      await BD.ecrire("@depot", d);
+      await recalculer(d, new Set([nom]));
+      planifierSauvegarde();
+      return { id: nom };
+    });
+  }
+  async function recupererRelie(fichierCorbeille) {
+    const nom = String(fichierCorbeille).replace(/__[^_]+_\d{6}$/, ""), index = await fichier("index.json.gz");
+    const branche = (index && index.branche) || "main", D = `/repos/${acces.d}`;
+    for (let essai = 0; essai < 3; essai++) {
+      const tete = (await gh(`${D}/git/ref/heads/${branche}`)).object.sha, arbre = (await gh(`${D}/git/commits/${tete}`)).tree.sha;
+      const ici = await gh(`${D}/git/trees/${arbre}?recursive=1`);
+      if ((ici.tree || []).some((x) => x.path.startsWith(nom + "/"))) throw new Error(`Le deck « ${nom.replace(/^Deck /, "")} » est déjà là : il arrive dès que ton PC l'aura préparé.`);
+      // le dernier commit qui touche sa liste est celui qui l'a supprimé : son dossier est dans le commit d'avant
+      const c = (await gh(`${D}/commits?path=${encodeURIComponent(nom + "/archidekt.txt")}&sha=${encodeURIComponent(branche)}&per_page=1`))[0];
+      const avant = c && (await gh(`${D}/git/commits/${c.sha}`)).parents[0];
+      const vieux = avant ? await gh(`${D}/git/trees/${(await gh(`${D}/git/commits/${avant.sha}`)).tree.sha}?recursive=1`) : { tree: [] };
+      const entrees = (vieux.tree || []).filter((x) => x.type === "blob" && x.path.startsWith(nom + "/")).map((x) => ({ path: x.path, mode: x.mode, type: "blob", sha: x.sha }));
+      if (!entrees.length) throw new Error("Ce deck n'est plus dans l'historique de la sauvegarde : récupère-le depuis l'Atelier de ton PC.");
+      const nouvel = await ghEcrire("POST", `${D}/git/trees`, { base_tree: arbre, tree: entrees });
+      const commit = (await ghEcrire("POST", `${D}/git/commits`, { message: `Téléphone : ${nom.replace(/^Deck /, "")} récupéré`, tree: nouvel.sha, parents: [tete] })).sha;
+      try { await ghEcrire("PATCH", `${D}/git/refs/heads/${branche}`, { sha: commit }); }
+      catch (e) { if (e.statut === 422) continue; throw e; }
+      return { id: null, message: `${nom.replace(/^Deck /, "")} est récupéré : il revient ici dès que ton PC l'aura reçu.` };
+    }
+    throw new Error("La sauvegarde change trop vite : réessaie dans un instant.");
   }
 
   // ------------------------------------------------------------------ partager un deck sans PC (partage.js)
@@ -1558,7 +1613,7 @@
         catch (x) { if (![404, 422].includes(x.statut)) throw x; Object.assign(e, { commit: null, fichiers: {} }); }
       }
       const avant = e.commit ? e.fichiers : {}, dep = await depot(), ici = {};
-      for (const [rel, t] of Object.entries(dep.fichiers)) ici[rel] = await shaBlob(t);
+      for (const [rel, t] of Object.entries(dep.fichiers)) if (!rel.startsWith(CORBEILLE + "/")) ici[rel] = await shaBlob(t);
       for (const rel of e.ignores || []) if (rel in distant) ici[rel] = distant[rel];   // les photos : pas sur le téléphone
       const envois = [], retraits = [], recus = [], effaces = [], conflits = [];
       for (const rel of [...new Set([...Object.keys(ici), ...Object.keys(distant), ...Object.keys(avant)])].sort()) {
@@ -1618,6 +1673,10 @@
         touches.add(deck);
       }
       // 3. ce qui a disparu là-bas (sans avoir changé ici) : retiré ici aussi
+      const partis = new Set(effaces);                    // un deck supprimé sur un autre appareil : dans la corbeille d'ici
+      for (const id of new Set(effaces.map((rel) => rel.split("/")[0]))) {
+        if (id.startsWith("Deck ") && !Object.keys(f).some((rel) => rel.startsWith(id + "/") && !partis.has(rel))) jeter(f, id);
+      }
       for (const rel of effaces) { delete f[rel]; touches.add(rel.split("/")[0]); }
       for (const id of Object.keys(dep.modifies)) if (!(`${id}/archidekt.txt` in f)) delete dep.modifies[id];
       if (touches.size) await BD.ecrire("@depot", dep);

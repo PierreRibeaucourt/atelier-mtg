@@ -924,8 +924,8 @@ function brancherCorbeille(corbeille) {
   $$("[data-recup]").forEach((b) => b.addEventListener("click", async () => {
     try {
       const r = await api("/api/corbeille/recuperer", { method: "POST", body: { fichier: corbeille[+b.dataset.recup].fichier } });
-      toast("Deck récupéré.");
-      location.hash = `#/deck/${enc(r.id)}`;
+      if (r.id) { toast("Deck récupéré."); location.hash = `#/deck/${enc(r.id)}`; }
+      else { toast(r.message || "Deck récupéré.", 6000); b.disabled = true; }   // relié : il revient par le PC
     } catch (e) { erreur(e); }
   }));
 }

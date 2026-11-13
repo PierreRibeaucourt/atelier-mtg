@@ -126,7 +126,7 @@ def capturer(deck, get):
 def _index(get, fichiers):
     """Ce que montrent l'accueil et les Options : les decks, le classeur, où sont mes cartes, les réglages."""
     api = {}
-    for chemin in ("/api/decks", "/api/classeur", "/api/ou-sont", "/api/options"):
+    for chemin in ("/api/decks", "/api/classeur", "/api/ou-sont", "/api/options", "/api/corbeille"):
         r = get(chemin)
         if r.status_code == 200:
             api[chemin] = r.get_json()
