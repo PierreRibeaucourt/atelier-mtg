@@ -67,8 +67,9 @@ async function api(chemin, opts = {}) {
 
 // même clé que partage.py : chemin décodé, paramètres triés
 function apiPartage(chemin, opts) {
-  if ((opts.method || "GET") !== "GET") throw new Error("Page en lecture seule.");
   const u = new URL(chemin, "http://atelier");
+  if (BASE_WEB && BASE_WEB.routes[u.pathname]) return BASE_WEB.routes[u.pathname](u.searchParams, opts.method || "GET");
+  if ((opts.method || "GET") !== "GET") throw new Error("Page en lecture seule.");
   const p = [...u.searchParams].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   const cle = decodeURIComponent(u.pathname) + (p.length ? "?" + p.map(([k, v]) => `${k}=${v}`).join("&") : "");
   if (u.pathname.endsWith("/comparer") && PARTAGE.comparer) return comparerPartage(u.searchParams.get("a") || "", u.searchParams.get("b") || "");
@@ -83,6 +84,91 @@ function apiPartage(chemin, opts) {
   if (!(cle in PARTAGE.api)) throw new Error("Indisponible sur cette page.");
   return structuredClone(PARTAGE.api[cle]);
 }
+
+// atelier-mtg.com/recherche/ (site_atelier.py) : la vraie recherche de cartes, celle de l'appli du téléphone (cartes.js,
+// dans un Worker), avec la base publiée sur le site de l'appli (base_telephone.py, ≈ 10 Mo). Téléchargée au premier geste
+// du visiteur (pas pour qui ne fait que passer), puis gardée par le navigateur tant qu'elle ne change pas.
+const BASE_WEB = PARTAGE && PARTAGE.base ? (() => {
+  const etat = { prete: false, date: null, nb: 0, construction: { actif: false, etape: "", fait: 0, total: 0, unite: "octets", erreur: "" } };
+  let travailleur = null, enCours = null, num = 0;
+  const reponses = new Map();
+  function message(f, a = [], transfert = []) {
+    if (!travailleur) {
+      travailleur = new Worker(PARTAGE.moteur);
+      travailleur.onmessage = (ev) => {
+        const r = reponses.get(ev.data.id);
+        if (!r) return;
+        reponses.delete(ev.data.id);
+        if ("e" in ev.data) r.ko(new Error(ev.data.e)); else r.ok(ev.data.r);
+      };
+      travailleur.onerror = (ev) => { for (const r of reponses.values()) r.ko(new Error(ev.message || "La base de cartes ne répond pas.")); reponses.clear(); };
+    }
+    return new Promise((ok, ko) => { const id = ++num; reponses.set(id, { ok, ko }); travailleur.postMessage({ id, f, a }, transfert); });
+  }
+  const garde = async () => { try { return await caches.open("atelier-base"); } catch (_) { return null; } };
+  async function telecharger(idx, cache) {
+    const c = etat.construction;
+    Object.assign(c, { etape: "Téléchargement de la base de cartes", fait: 0, total: idx.taille });
+    const r = await fetch(PARTAGE.base + idx.fichier);
+    if (!r.ok) throw new Error(`La base de cartes ne répond pas (${r.status}).`);
+    const lecteur = r.body.getReader(), morceaux = [];
+    for (;;) {
+      const { done, value } = await lecteur.read();
+      if (done) break;
+      morceaux.push(value);
+      c.fait += value.length;
+    }
+    const blob = new Blob(morceaux);
+    if (cache) {
+      for (const k of await cache.keys()) await cache.delete(k).catch(() => {});
+      await cache.put(idx.fichier, new Response(blob)).catch(() => {});
+    }
+    return blob.arrayBuffer();
+  }
+  // celle gardée par le navigateur si c'est encore la dernière (ou sans réseau), sinon la dernière
+  function charger() {
+    return enCours || (enCours = (async () => {
+      const c = etat.construction;
+      Object.assign(c, { actif: true, etape: "Recherche de la base de cartes", fait: 0, total: 0, erreur: "" });
+      const cache = await garde(), gardee = cache ? (await cache.keys())[0] : null;
+      let idx = null, donnees = null;
+      try { idx = await (await fetch(PARTAGE.base + "index.json", { cache: "no-store" })).json(); } catch (e) { if (!gardee) throw e; }
+      if (gardee && (!idx || gardee.url.endsWith("/" + idx.fichier))) donnees = await (await cache.match(gardee)).arrayBuffer();
+      else donnees = await telecharger(idx, cache);
+      Object.assign(c, { etape: "Lecture de la base de cartes", total: 0 });
+      const r = await message("charger", [donnees], [donnees]);
+      Object.assign(etat, { prete: true, date: r.date, nb: r.nb });
+    })().catch((e) => {
+      enCours = null;
+      etat.construction.erreur = e instanceof TypeError ? "Pas de réseau : la base de cartes n'a pas pu arriver." : e.message;
+      throw e;
+    }).finally(() => Object.assign(etat.construction, { actif: false, etape: "" })));
+  }
+  const pret = () => {
+    if (etat.prete) return;
+    charger().catch(() => {});
+    throw Object.assign(new Error("La base de cartes n'est pas encore prête."), { statut: 503 });
+  };
+  const demander = (f, ...a) => { pret(); return message(f, a); };
+  if (location.protocol !== "file:") {                // pas pendant le pré-rendu
+    garde().then((c) => c && c.keys()).then((k) => { if (k && k.length) charger().catch(() => {}); });
+    const geste = () => { charger().catch(() => {}); for (const t of ["pointerdown", "keydown"]) removeEventListener(t, geste, true); };
+    for (const t of ["pointerdown", "keydown"]) addEventListener(t, geste, true);
+  }
+  return {
+    routes: {
+      "/api/recherche/base": (_, methode) => {                 // POST : « Relancer » après une erreur
+        if (methode === "POST") etat.construction.erreur = "";
+        if (!etat.prete && !enCours && !etat.construction.erreur) charger().catch(() => {});
+        return structuredClone(etat);
+      },
+      "/api/recherche": async (q) => ({ ...(await demander("chercher", Object.fromEntries(q), {}, null)), base: structuredClone(etat) }),
+      "/api/recherche/editions": () => demander("editions"),
+      "/api/recherche/tags": (q) => demander("suggestions", q.get("q") || ""),
+      "/api/recherche/noms": (q) => demander("noms", q.get("q") || "", {}, 8),
+    },
+  };
+})() : null;
 
 // comparaison de deux versions, comme /api/decks/…/comparer, à partir des listes figées
 function comparerPartage(fa, fb, cmp = PARTAGE.comparer) {
@@ -177,17 +263,20 @@ $$("[data-ico]").forEach((el) => el.insertAdjacentHTML("afterbegin", ico(el.data
 // « C'est quoi, l'Atelier MTG ? » : la page d'accueil de l'Atelier, la même pour tous les sites de decks
 const TITRE_PARTAGE = document.title;
 const ACCUEIL_ATELIER = "https://atelier-mtg.com/";
-const A_PROPOS = !PARTAGE ? "#/a-propos" : PARTAGE.page === "a-propos" ? "./" : ACCUEIL_ATELIER;
+const A_PROPOS = !PARTAGE ? "#/a-propos" : PARTAGE.page === "a-propos" ? "./" : PARTAGE.page === "recherche" ? "../" : ACCUEIL_ATELIER;
+// pages du site de l'Atelier (site_atelier.py) : la page d'accueil et sa recherche de cartes
+const SITE_ATELIER = !!PARTAGE && ["a-propos", "recherche"].includes(PARTAGE.page);
 // « Installer l'Atelier MTG » : la section Installation de cette page, pas GitHub (un débutant y attend un fichier à
 // télécharger, il y trouve du code)
 const INSTALLER = !PARTAGE ? "#/a-propos/installation" : PARTAGE.page === "a-propos" ? "#installation" : A_PROPOS + "#installation";
 if (PARTAGE) {
   const depot = PARTAGE.atelier ? esc(PARTAGE.atelier) : "";
-  if (PARTAGE.page !== "a-propos") $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-partage">
+  if (PARTAGE.recherche) $("#lien-recherche").href = PARTAGE.recherche;
+  if (!SITE_ATELIER) $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-partage">
     <p>Page ${PARTAGE.auteur ? `de <strong>${esc(PARTAGE.auteur)}</strong>, ` : ""}partagée avec <a href="${A_PROPOS}">l'Atelier MTG</a>. Pour gérer, tester et partager vos propres decks Commander, l'Atelier est gratuit.</p>
     <a class="btn btn-accent btn-petit" href="${INSTALLER}">${ico("telecharger")}Installer l'Atelier MTG</a>
   </div>`);
-  $(".cadre").insertAdjacentHTML("afterend", piedPartage(PARTAGE.page === "a-propos" ? "" : A_PROPOS, depot, PARTAGE.page === "a-propos"));
+  $(".cadre").insertAdjacentHTML("afterend", piedPartage(PARTAGE.page === "a-propos" ? "" : A_PROPOS, depot, SITE_ATELIER, PARTAGE.page === "recherche" ? "../" : ""));
 }
 
 // pied des pages partagées et de la page d'accueil de l'Atelier (site_atelier.py écrit le même sous ses pages légales) :
@@ -803,6 +892,7 @@ async function route() {
   majTitre();
   const [chemin, qs] = location.hash.replace(/^#\/?/, "").split(/\?(.*)/s);
   const parts = chemin.split("/");
+  if (PARTAGE && PARTAGE.page === "recherche" && !parts[0]) parts[0] = "recherche";
   const ecran = parts[0] === "deck" ? "deck/" + parts[1] : parts[0];      // un autre écran s'ouvre en haut de page
   if (ecran !== etat.ecran) { etat.ecran = ecran; scrollTo(0, 0); }
   $("#lien-recherche").classList.toggle("actif", parts[0] === "recherche" && !new URLSearchParams(qs || "").get("deck"));   // pour un deck : son bandeau
@@ -816,7 +906,8 @@ async function route() {
       location.replace(A_PROPOS + (parts[1] === "installation" ? "#installation" : ""));
     else if (parts[0] === "a-propos") vueAPropos(parts[1] === "installation");
     else if (PARTAGE && PARTAGE.page === "a-propos" && (!parts[0] || parts[0] === "installation")) vueAPropos(parts[0] === "installation");
-    else if (PARTAGE && parts[0] === "recherche") vueRechercheVitrine();
+    else if (PARTAGE && parts[0] === "recherche" && PARTAGE.recherche) location.replace(PARTAGE.recherche);   // page d'accueil
+    else if (PARTAGE && parts[0] === "recherche" && !BASE_WEB) vueRechercheVitrine();
     else if (PARTAGE && PARTAGE.deck) await vueDeck(PARTAGE.deck, (parts[0] === "deck" && parts[2]) || "liste",
       parts[0] === "deck" && parts[2] === "suggestions" && parts[3] ? parts[3] : null);   // « Trouver d'autres combos »
     else if (PARTAGE && parts[0] === "deck" && parts[1]) location.replace(lienDeck(decodeURIComponent(parts[1])));
@@ -4698,8 +4789,8 @@ async function vueRecherche(params) {
   rch.ouvrir = false;
   vue.innerHTML = `
     <div class="rch-tete">
-      <nav class="fil" aria-label="Fil d'Ariane"><a href="#/">Mes decks</a><span aria-hidden="true">›</span>${rch.deck ? `<a href="#/deck/${enc(rch.deck.id)}">${esc(rch.deck.titre)}</a><span aria-hidden="true">›</span>` : ""}<span aria-current="page">Recherche de cartes</span></nav>
-      ${rch.deck ? "" : `<div class="rch-deck">
+      <nav class="fil" aria-label="Fil d'Ariane"><a href="${PARTAGE ? esc(PARTAGE.accueil) : "#/"}">${esc(MES_DECKS)}</a><span aria-hidden="true">›</span>${rch.deck ? `<a href="#/deck/${enc(rch.deck.id)}">${esc(rch.deck.titre)}</a><span aria-hidden="true">›</span>` : ""}<span aria-current="page">Recherche de cartes</span></nav>
+      ${rch.deck || PARTAGE ? "" : `<div class="rch-deck">
         <label class="petit muet" for="rch-deck">Pour le deck</label>
         <select class="champ champ-petit" id="rch-deck">
           <option value="">— aucun —</option>
@@ -4708,6 +4799,7 @@ async function vueRecherche(params) {
         </select>
       </div>`}
     </div>
+    ${PARTAGE ? `<h1 class="rch-h1">Recherche avancée de cartes Magic</h1>` : ""}
     ${rch.deck ? `<div class="rch-bandeau ${rch.deck.art ? "" : "sans-art"}"${rch.deck.art ? ` style="background-image:url('${esc(rch.deck.art)}')"` : ""}>
       <span class="rch-bandeau-nom">${esc(rch.deck.titre)}</span>
       <span id="rch-deck-info" class="petit"></span>
@@ -4726,7 +4818,7 @@ async function vueRecherche(params) {
     location.hash = "#/recherche?" + critVersHash(nc);
   };
   if (rch.deck) $("#rch-sans-deck").onclick = () => changerDeck("");
-  else $("#rch-deck").onchange = (ev) => changerDeck(ev.target.value);
+  else if (!PARTAGE) $("#rch-deck").onchange = (ev) => changerDeck(ev.target.value);
   rendreFormulaire();
   if (c.r === "1") await lancerRecherche();
 }
@@ -4857,6 +4949,7 @@ function vueAPropos(installation = false) {
   // « appareils » : la même page sur ordinateur, et sur téléphone posé devant
   const modules = (liste) => liste.map(([f, titre, texte]) => `<section class="ap-module">
         <h3>${esc(titre)}</h3><p>${esc(texte)}</p>
+        ${f === "recherche" && PARTAGE && PARTAGE.recherche ? `<p><a class="btn" href="${esc(PARTAGE.recherche)}">${ico("chercher")}Essayer la recherche</a></p>` : ""}
         ${f === "appareils" ? `<div class="ap-appareils">
           <figure class="ap-ecran-pc"><span class="ap-fenetre" aria-hidden="true"><i></i><i></i><i></i></span>${capture("appareils-pc", "Un deck dans l'Atelier, sur ordinateur")} loading="lazy"></figure>
           <figure class="ap-ecran-tel">${capture("appareils-tel", "Le même deck dans l'Atelier, sur téléphone")} loading="lazy"></figure>
@@ -5263,7 +5356,7 @@ async function attendreBase(z) {
     const e = (b && b.construction) || {};
     const pc = e.total ? Math.round((100 * e.fait) / e.total) : 0;
     z.innerHTML = `<div class="panneau">
-      <h3>La base de cartes ${TELEPHONE ? "arrive" : "se construit"}</h3>
+      <h3>La base de cartes ${TELEPHONE || PARTAGE ? "arrive" : "se construit"}</h3>
       <p>${esc(e.etape || (e.erreur ? "Arrêtée" : "En attente…"))}${e.total ? ` · ${pc} %` : ""}</p>
       ${e.total ? `<div class="barre-prog"><div style="width:${pc}%"></div></div>` : ""}
       ${e.erreur ? `<p class="erreur petit">${esc(e.erreur)}</p><button class="btn" id="rch-relancer">Relancer</button>` : ""}
@@ -5359,7 +5452,7 @@ function baseTexte(b) {
     const pc = e.total ? ` · ${Math.round((100 * e.fait) / e.total)} %` : "";
     return `<span class="pulse">Mise à jour de la base : ${esc(e.etape || "en cours")}${pc}</span>`;
   }
-  return `Base du ${heureCourte(b.date)} · <button type="button" class="lien-discret" data-act="maj-base">Mettre à jour</button>
+  return `Base du ${heureCourte(b.date)}${PARTAGE ? "" : ` · <button type="button" class="lien-discret" data-act="maj-base">Mettre à jour</button>`}
     ${e.erreur ? `<br><span class="erreur-texte">Dernière mise à jour incomplète : ${esc(e.erreur)}</span>` : ""}`;
 }
 
@@ -5599,7 +5692,8 @@ function ficheRecherche(i, ctx = null) {
         </div>
       </div>
     </div>
-    ${piedFiche(d && !PARTAGE ? blocAjoutRch(x, d) : "")}`, (b) => {
+    ${BASE_WEB ? `<div class="modale-pied fc-pied"><a class="btn btn-accent" href="${INSTALLER}">${ico("plus")}Créer un deck</a></div>`
+      : piedFiche(d && !PARTAGE ? blocAjoutRch(x, d) : "")}`, (b) => {
     let dest = x.dans === "maybe" ? "deck" : PREF.get("rf-dest", "deck");
     ouEst($(".ou-est", b), x.nom, d && d.id);
     b.addEventListener("click", async (ev) => {

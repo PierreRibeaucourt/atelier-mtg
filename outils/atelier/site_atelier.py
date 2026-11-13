@@ -8,7 +8,7 @@ Hébergée chez o2switch. GitHub Actions la construit à chaque changement de l'
 la récupère toutes les 15 minutes. L'ancienne adresse, https://pierreribeaucourt.github.io/atelier-mtg/ (GitHub
 Pages), ne garde qu'une redirection, pour toujours : les Ateliers installés jusqu'à la 2.0.0 y renvoient.
 
-    python outils/atelier/site_atelier.py <dossier>                  la page d'accueil (Chrome nécessaire)
+    python outils/atelier/site_atelier.py <dossier>                  la page d'accueil et recherche/ (Chrome nécessaire)
     python outils/atelier/site_atelier.py --redirection <dossier>    l'ancienne adresse
 """
 import html as html_
@@ -42,6 +42,12 @@ CONTACT = "contact@" + DOMAINE                                           # renvo
 MAJ_LEGAL = "13 novembre 2026"                                           # date des textes légaux : à changer avec eux
 FAN_CONTENT = "https://company.wizards.com/en/legal/fancontentpolicy"
 # l'onglet « Installeur » ouvert dans le HTML, comme pour la plupart des visiteurs
+# la recherche de cartes (recherche/) : le moteur de l'appli du téléphone (static/telephone/cartes.js, copié ici) et sa
+# base, publiée sur le site de l'appli (base_telephone.py) ; le navigateur du visiteur la télécharge de là
+BASE_CARTES = "https://atelier-mtg.github.io/base/"
+TITRE_RECHERCHE = "Recherche avancée de cartes Magic en français | Atelier MTG"
+DESCRIPTION_RECHERCHE = ("Cherchez parmi toutes les cartes Magic, en français : couleur, type, fonction (ramp, pioche, "
+                         "removal…), édition et prix Cardmarket. Gratuit, sans compte.")
 UA_WINDOWS = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 "
               "Safari/537.36")
 
@@ -50,10 +56,27 @@ def donnees(captures):
     """window.PARTAGE de la page : celle d'à propos, sans decks ni auteur ; la barre ramène à l'accueil ; captures : où
     sont ses images."""
     return dict(page=partage.A_PROPOS, accueil="./", titre_accueil="Atelier MTG", auteur=None, atelier=DEPOT,
-                captures=captures,
+                captures=captures, recherche="recherche/",
                 reglages={"budget": 0},
                 api={"/api/decks": [], "/api/corbeille": [], "/api/noms-cartes": dict(noms=[], communs=[]),
                      "/api/recherche/fonctions": recherche.fonctions()})
+
+
+def donnees_recherche(moteur):
+    """window.PARTAGE de recherche/ : la recherche de cartes, sans deck ; moteur : cartes.js?v=…"""
+    return dict(page="recherche", accueil="../", titre_accueil="Atelier MTG", auteur=None, atelier=DEPOT,
+                captures="../a-propos/", base=BASE_CARTES, moteur=moteur,
+                reglages={"budget": 0},
+                api={"/api/decks": [], "/api/corbeille": [], "/api/noms-cartes": dict(noms=[], communs=[]),
+                     "/api/recherche/fonctions": recherche.fonctions()})
+
+
+def fil_recherche():
+    d = {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Atelier MTG", "item": SITE},
+        {"@type": "ListItem", "position": 2, "name": "Recherche de cartes", "item": SITE + "recherche/"}]}
+    js = json.dumps(d, ensure_ascii=False, indent=2).replace("</", "<\\/")
+    return f'<script type="application/ld+json">\n{js}\n  </script>'
 
 
 def donnees_structurees():
@@ -93,7 +116,7 @@ def chrome():
     raise SystemExit("Chrome introuvable (variable CHROME : son chemin) : la page ne peut pas être pré-rendue.")
 
 
-def pre_rendre(dossier):
+def pre_rendre(dossier, marque='id="installation"'):
     """Ce que dessine app.js dans la page : les moteurs de recherche le lisent sans JavaScript (inserer), et app.js le
     redessine à l'identique au chargement. Une image introuvable y est retirée : elles doivent être en ligne."""
     index = os.path.join(dossier, "index.html")
@@ -103,12 +126,12 @@ def pre_rendre(dossier):
                             "--virtual-time-budget=15000", "--dump-dom", pathlib.Path(index).as_uri()],
                            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
     m = re.search(r'<main id="vue"[^>]*>(.*?)</main>', r.stdout, re.S)
-    if not m or 'id="installation"' not in m.group(1):
+    if not m or marque not in m.group(1):
         raise SystemExit("Pré-rendu impossible : Chrome n'a pas dessiné la page.\n" + r.stderr[-2000:])
     return m.group(1)
 
 
-def inserer(dossier, rendu):
+def inserer(dossier, rendu, installation="#installation", classe="vue vue-pleine"):
     """Le pré-rendu dans la page ; en haut à droite, « Créer un deck » (vers l'installation) à la place de « Demander à
     Claude », dont le panneau n'est qu'une vitrine ici."""
     index = os.path.join(dossier, "index.html")
@@ -118,8 +141,8 @@ def inserer(dossier, rendu):
     chat = re.search(r'<button id="btn-chat".*?</button>', html)
     if vide not in html or not chat:
         raise SystemExit("static/index.html a changé : pré-rendu impossible.")
-    creer = '<a href="#installation" id="btn-creer" class="btn btn-accent" data-ico="plus">Créer un deck</a>'
-    partage._ecrire(index, html.replace(vide, f'<main id="vue" class="vue vue-pleine">{rendu}</main>').replace(chat.group(0), creer))
+    creer = f'<a href="{installation}" id="btn-creer" class="btn btn-accent" data-ico="plus">Créer un deck</a>'
+    partage._ecrire(index, html.replace(vide, f'<main id="vue" class="{classe}">{rendu}</main>').replace(chat.group(0), creer))
 
 
 def captures(dossier, rendu):
@@ -285,7 +308,7 @@ def confidentialite(dossier):
 def sitemap(dossier):
     jour = time.strftime("%Y-%m-%d", time.gmtime())
     urls = "\n".join(f"  <url><loc>{SITE}{p}</loc><lastmod>{jour}</lastmod></url>"
-                     for p in ("", "mentions-legales/", "confidentialite/"))
+                     for p in ("", "recherche/", "mentions-legales/", "confidentialite/"))
     partage._ecrire(os.path.join(dossier, "sitemap.xml"), f"""<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 {urls}
@@ -321,6 +344,19 @@ RewriteRule ^ https://{DOMAINE}%{{REQUEST_URI}} [L,R=301]
 """)
 
 
+def page_recherche(dossier):
+    """recherche/ : la recherche de cartes, pré-rendue (le formulaire) ; les résultats viennent de la base de cartes,
+    téléchargée par le navigateur du visiteur."""
+    d = os.path.join(dossier, "recherche")
+    os.makedirs(d, exist_ok=True)
+    moteur = os.path.join(d, "cartes.js")
+    shutil.copyfile(os.path.join(partage.STATIQUE, "telephone", "cartes.js"), moteur)
+    entete = dict(titre=TITRE_RECHERCHE, description=DESCRIPTION_RECHERCHE, url=SITE + "recherche/",
+                  image=partage.IMAGE_ATELIER, alt=partage.ALT_ATELIER, indexer=True, tete=[fil_recherche()])
+    partage._page(d, donnees_recherche("cartes.js?v=" + partage._version(moteur)), entete)
+    inserer(d, pre_rendre(d, 'id="moteur"'), installation="../#installation", classe="vue vue-large")
+
+
 def construire(dossier):
     entete = dict(titre=partage.TITRE_ATELIER, description=partage.DESCRIPTION_ATELIER, url=SITE,
                   image=partage.IMAGE_ATELIER, alt=partage.ALT_ATELIER, indexer=True, tete=[donnees_structurees()])
@@ -328,6 +364,7 @@ def construire(dossier):
     rendu = captures(dossier, pre_rendre(dossier))
     partage._page(dossier, donnees("a-propos/"), entete)            # … publiée avec sa copie
     inserer(dossier, rendu)
+    page_recherche(dossier)
     mentions_legales(dossier)
     confidentialite(dossier)
     sitemap(dossier)
