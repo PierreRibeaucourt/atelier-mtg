@@ -5018,7 +5018,12 @@ function vueAPropos(installation = false) {
   scrollTo(0, 0);
   etat.deck = null;
   const depot = esc((PARTAGE && PARTAGE.atelier) || DEPOT_ATELIER);
-  const capture = (f, alt) => `<img src="${PARTAGE ? CAPTURES_ATELIER : "/a-propos/"}${f}.webp" data-f="${f}" alt="${esc(alt)}"`;
+  // une capture existe en sombre (<f>.webp) et en clair (<f>-clair.webp) : la page montre celle de son thème (style.css,
+  // .cap-sombre / .cap-clair), et l'autre, cachée et chargée au besoin (lazy), ne se télécharge pas ; theme = false : une seule
+  const capture = (f, alt, theme = true) => {
+    const img = (n, classe) => `<img${classe ? ` class="${classe}"` : ""} src="${PARTAGE ? CAPTURES_ATELIER : "/a-propos/"}${n}.webp" data-f="${n}" alt="${esc(alt)}" loading="lazy">`;
+    return theme ? img(f, "cap-sombre") + img(f + "-clair", "cap-clair") : img(f);
+  };
   const consigne = `Installe et lance l'Atelier MTG depuis ${(PARTAGE && PARTAGE.atelier || DEPOT_ATELIER).replace("https://", "")}`;
   const fonction = (titre, texte) => `<div class="ap-carte"><h3>${titre}</h3><p>${texte}</p></div>`;
   // « appareils » : la même page sur ordinateur, et sur téléphone posé devant
@@ -5026,9 +5031,9 @@ function vueAPropos(installation = false) {
         <h3>${esc(titre)}</h3><p>${esc(texte)}</p>
         ${f === "recherche" && PARTAGE && PARTAGE.recherche ? `<p><a class="btn" href="${esc(PARTAGE.recherche)}">${ico("chercher")}Essayer la recherche</a></p>` : ""}
         ${f === "appareils" ? `<div class="ap-appareils">
-          <figure class="ap-ecran-pc"><span class="ap-fenetre" aria-hidden="true"><i></i><i></i><i></i></span>${capture("appareils-pc", "Un deck dans l'Atelier, sur ordinateur")} loading="lazy"></figure>
-          <figure class="ap-ecran-tel">${capture("appareils-tel", "Le même deck dans l'Atelier, sur téléphone")} loading="lazy"></figure>
-        </div>` : `<figure>${capture(f, titre)} loading="lazy"></figure>`}
+          <figure class="ap-ecran-pc"><span class="ap-fenetre" aria-hidden="true"><i></i><i></i><i></i></span>${capture("appareils-pc", "Un deck dans l'Atelier, sur ordinateur")}</figure>
+          <figure class="ap-ecran-tel">${capture("appareils-tel", "Le même deck dans l'Atelier, sur téléphone")}</figure>
+        </div>` : `<figure>${capture(f, titre)}</figure>`}
       </section>`).join("");
   // installation : Windows et le téléphone côte à côte (le téléphone d'abord, lu sur un téléphone) ; l'assistant IA et
   // l'installation à la main en dessous, repliés (l'assistant ouvert pour qui lit sur Mac ou Linux)
@@ -5061,9 +5066,9 @@ function vueAPropos(installation = false) {
     <header class="ap-tete">
       <div class="ap-tete-dedans">
         <div class="ap-scene" aria-hidden="true">
-          <figure class="ap-ecran e1">${capture("discussion", "")}></figure>
-          <figure class="ap-ecran e2">${capture("statistiques", "")}></figure>
-          <figure class="ap-ecran e3">${capture("decks", "")}></figure>
+          <figure class="ap-ecran e1">${capture("discussion", "")}</figure>
+          <figure class="ap-ecran e2">${capture("statistiques", "")}</figure>
+          <figure class="ap-ecran e3">${capture("decks", "")}</figure>
         </div>
         <div class="ap-tete-texte">
           <h1>L'Atelier <span>MTG</span></h1>
@@ -5149,7 +5154,7 @@ python installer.py</code><button type="button" data-copier>Copier</button></div
 
       <h2>Genèse du projet</h2>
       <p class="ap-signature">Par ${esc(AUTEUR_ATELIER)}, créateur de l'Atelier</p>
-      <figure class="ap-portrait">${capture("auteur", `${AUTEUR_ATELIER}, en partie de Magic`)}></figure>
+      <figure class="ap-portrait">${capture("auteur", `${AUTEUR_ATELIER}, en partie de Magic`, false)}</figure>
       <p>À l'origine, mes listes tenaient sur de simples fichiers texte que j'analysais en ligne de commande avec un LLM et
         quelques ressources théoriques (ratios de mana, moteurs de pioche, conditions de victoire).</p>
       <p>Manipuler du code brut a vite montré ses limites. Pour ajuster un <em>cut</em> ou évaluer instantanément l'impact d'une
@@ -5166,6 +5171,7 @@ python installer.py</code><button type="button" data-copier>Copier</button></div
   $$(".ap-tete img[data-f], .a-propos img[data-f]").forEach((img) => {
     img.onerror = () => {                       // dans l'Atelier : la capture de ce PC, sinon celle du site de l'auteur
       if (!PARTAGE && !img.dataset.enLigne) { img.dataset.enLigne = "1"; img.src = CAPTURES_ATELIER + img.dataset.f + ".webp"; }
+      else if (img.classList.contains("cap-clair") && !img.dataset.sombre) { img.dataset.sombre = "1"; img.src = img.previousElementSibling.src; }  // pas encore en clair
       else img.closest("figure").remove();                           // hors ligne, ou capture introuvable : le texte suffit
     };
     if (img.closest(".ap-module")) img.onclick = () => zoomer(img);

@@ -484,6 +484,8 @@ def _page(dossier, donnees, entete):
                  '<meta name="twitter:card" content="summary_large_image">']
     else:
         meta.append('<meta name="twitter:card" content="summary">')
+    # le thème choisi (bouton ◐), avant tout affichage : la page et ses captures (claires ou sombres) sont justes d'emblée
+    meta.append('<script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>')
     meta += entete.get("tete", [])
     html = (html.replace('<html lang="fr">', '<html lang="fr" class="partage">')    # barre de page partagée dès l'affichage
             .replace("<title>Atelier MTG</title>", "\n  ".join(meta))
