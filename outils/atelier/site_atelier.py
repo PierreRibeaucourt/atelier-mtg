@@ -45,6 +45,8 @@ FAN_CONTENT = "https://company.wizards.com/en/legal/fancontentpolicy"
 # la recherche de cartes (recherche/) : le moteur de l'appli du téléphone (static/telephone/cartes.js, copié ici) et sa
 # base, publiée sur le site de l'appli (base_telephone.py) ; le navigateur du visiteur la télécharge de là
 BASE_CARTES = "https://atelier-mtg.github.io/base/"
+SOURCE_MOTEUR = os.path.join(partage.STATIQUE, "telephone", "cartes.js")
+MOTEUR = "cartes.js?v=" + partage._version(SOURCE_MOTEUR)                 # dans recherche/
 TITRE_RECHERCHE = "Recherche avancée de cartes Magic en français | Atelier MTG"
 DESCRIPTION_RECHERCHE = ("Cherchez parmi toutes les cartes Magic, en français : couleur, type, fonction (ramp, pioche, "
                          "removal…), édition et prix Cardmarket. Gratuit, sans compte.")
@@ -54,18 +56,18 @@ UA_WINDOWS = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHT
 
 def donnees(captures):
     """window.PARTAGE de la page : celle d'à propos, sans decks ni auteur ; la barre ramène à l'accueil ; captures : où
-    sont ses images."""
+    sont ses images ; le champ du haut cherche dans la base de cartes, avec le moteur de recherche/."""
     return dict(page=partage.A_PROPOS, accueil="./", titre_accueil="Atelier MTG", auteur=None, atelier=DEPOT,
-                captures=captures, recherche="recherche/",
+                captures=captures, recherche="recherche/", base=BASE_CARTES, moteur="recherche/" + MOTEUR,
                 reglages={"budget": 0},
                 api={"/api/decks": [], "/api/corbeille": [], "/api/noms-cartes": dict(noms=[], communs=[]),
                      "/api/recherche/fonctions": recherche.fonctions()})
 
 
-def donnees_recherche(moteur):
-    """window.PARTAGE de recherche/ : la recherche de cartes, sans deck ; moteur : cartes.js?v=…"""
+def donnees_recherche():
+    """window.PARTAGE de recherche/ : la recherche de cartes, sans deck."""
     return dict(page="recherche", accueil="../", titre_accueil="Atelier MTG", auteur=None, atelier=DEPOT,
-                captures="../a-propos/", base=BASE_CARTES, moteur=moteur,
+                captures="../a-propos/", base=BASE_CARTES, moteur=MOTEUR,
                 reglages={"budget": 0},
                 api={"/api/decks": [], "/api/corbeille": [], "/api/noms-cartes": dict(noms=[], communs=[]),
                      "/api/recherche/fonctions": recherche.fonctions()})
@@ -132,8 +134,8 @@ def pre_rendre(dossier, marque='id="installation"'):
 
 
 def inserer(dossier, rendu, installation="#installation", classe="vue vue-pleine"):
-    """Le pré-rendu dans la page ; en haut à droite, « Créer un deck » (vers l'installation) à la place de « Demander à
-    Claude », dont le panneau n'est qu'une vitrine ici."""
+    """Le pré-rendu dans la page ; en haut, le champ « Rechercher une carte… » (app.js › BASE_WEB) et, à droite,
+    « Créer un deck » (vers l'installation) à la place de « Demander à Claude », dont le panneau n'est qu'une vitrine ici."""
     index = os.path.join(dossier, "index.html")
     with open(index, encoding="utf-8") as f:
         html = f.read()
@@ -142,7 +144,14 @@ def inserer(dossier, rendu, installation="#installation", classe="vue vue-pleine
     if vide not in html or not chat:
         raise SystemExit("static/index.html a changé : pré-rendu impossible.")
     creer = f'<a href="{installation}" id="btn-creer" class="btn btn-accent" data-ico="plus">Créer un deck</a>'
-    partage._ecrire(index, html.replace(vide, f'<main id="vue" class="{classe}">{rendu}</main>').replace(chat.group(0), creer))
+    html = html.replace(vide, f'<main id="vue" class="{classe}">{rendu}</main>').replace(chat.group(0), creer)
+    for a, b in (('class="partage"', 'class="partage site-atelier"'),                # le champ du haut : une carte
+                 ('placeholder="Chercher une carte ou un deck…"', 'placeholder="Rechercher une carte…"'),
+                 ('aria-label="Chercher une carte ou un deck"', 'aria-label="Rechercher une carte"')):
+        if html.count(a) != 1:
+            raise SystemExit(f"static/index.html a changé : {a} introuvable.")
+        html = html.replace(a, b)
+    partage._ecrire(index, html)
 
 
 def captures(dossier, rendu):
@@ -348,16 +357,15 @@ def page_recherche(dossier):
     """recherche/ : la recherche de cartes, pré-rendue (le formulaire) ; les résultats viennent de la base de cartes,
     téléchargée par le navigateur du visiteur."""
     d = os.path.join(dossier, "recherche")
-    os.makedirs(d, exist_ok=True)
-    moteur = os.path.join(d, "cartes.js")
-    shutil.copyfile(os.path.join(partage.STATIQUE, "telephone", "cartes.js"), moteur)
     entete = dict(titre=TITRE_RECHERCHE, description=DESCRIPTION_RECHERCHE, url=SITE + "recherche/",
                   image=partage.IMAGE_ATELIER, alt=partage.ALT_ATELIER, indexer=True, tete=[fil_recherche()])
-    partage._page(d, donnees_recherche("cartes.js?v=" + partage._version(moteur)), entete)
+    partage._page(d, donnees_recherche(), entete)
     inserer(d, pre_rendre(d, 'id="moteur"'), installation="../#installation", classe="vue vue-large")
 
 
 def construire(dossier):
+    os.makedirs(os.path.join(dossier, "recherche"), exist_ok=True)              # le moteur de la recherche, pour les deux pages
+    shutil.copyfile(SOURCE_MOTEUR, os.path.join(dossier, "recherche", "cartes.js"))
     entete = dict(titre=partage.TITRE_ATELIER, description=partage.DESCRIPTION_ATELIER, url=SITE,
                   image=partage.IMAGE_ATELIER, alt=partage.ALT_ATELIER, indexer=True, tete=[donnees_structurees()])
     partage._page(dossier, donnees(SOURCE_CAPTURES), entete)        # pré-rendue avec les captures de la source…

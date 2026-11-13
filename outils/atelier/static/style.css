@@ -72,6 +72,17 @@ button, input, select, textarea { font: inherit; color: inherit; }
 @media (max-width: 700px) { .etat-maj { display: none; } }
 @media (max-width: 560px) { .barre { gap: .5rem; padding: .5rem .6rem; } .logo { font-size: 0; gap: 0; }
   .lien-recherche > span, #btn-chat .txt { display: none; } }
+/* site de l'Atelier, sur téléphone : le champ du haut et « Recherche avancée » sur une 2e ligne */
+@media (max-width: 560px) {
+  .site-atelier .barre { flex-wrap: wrap; row-gap: 0; }
+  .site-atelier .barre::after { content: ""; order: 2; flex-basis: 100%; }
+  .site-atelier .barre-droite { order: 1; }
+  .site-atelier :is(.aller, #lien-recherche) { order: 3; margin-top: .5rem; }
+  .site-atelier .aller { flex: 1 1 0; }
+  .site-atelier .logo { font-size: inherit; gap: .45rem; }
+  .site-atelier #lien-recherche > span, .site-atelier #lien-recherche .long { display: inline; }
+}
+@media (max-width: 400px) { .site-atelier #lien-recherche .ico { display: none; } }
 .fil { display: flex; gap: .45rem; align-items: center; font-size: .85rem; color: var(--texte-2); margin: -.25rem 0 .6rem; }
 .fil a { color: var(--texte-2); }
 .fil a:hover { color: var(--accent); }
@@ -870,7 +881,8 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .aller-liste { max-height: min(70vh, 560px); overflow: auto; }
 
 /* page partagée (lecture seule) : ni ce qui modifie, ni la recherche, ni la discussion */
-.partage :is(.ecrit, .aller, #btn-rafraichir, #etat-maj, .ligne-outil, #lien-options, #lien-classeur) { display: none !important; }
+.partage:not(.site-atelier) .aller { display: none !important; }      /* site de l'Atelier : le champ du haut cherche une carte */
+.partage :is(.ecrit, #btn-rafraichir, #etat-maj, .ligne-outil, #lien-options, #lien-classeur) { display: none !important; }
 /* nouvelle version de l'Atelier à installer */
 /* une ligne fine, de la couleur de l'en-tête, avec une pastille orange ; les nouveautés sur une ligne (en entier au survol) */
 .bandeau-maj { position: relative; display: flex; align-items: center; justify-content: center; gap: .4rem 1rem; padding: .35rem 1rem;

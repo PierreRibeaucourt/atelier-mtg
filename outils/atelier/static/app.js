@@ -85,9 +85,10 @@ function apiPartage(chemin, opts) {
   return structuredClone(PARTAGE.api[cle]);
 }
 
-// atelier-mtg.com/recherche/ (site_atelier.py) : la vraie recherche de cartes, celle de l'appli du téléphone (cartes.js,
-// dans un Worker), avec la base publiée sur le site de l'appli (base_telephone.py, ≈ 10 Mo). Téléchargée au premier geste
-// du visiteur (pas pour qui ne fait que passer), puis gardée par le navigateur tant qu'elle ne change pas.
+// atelier-mtg.com (site_atelier.py) : la vraie recherche de cartes, celle de l'appli du téléphone (cartes.js, dans un
+// Worker), avec la base publiée sur le site de l'appli (base_telephone.py, ≈ 10 Mo), pour recherche/ et le champ du haut.
+// Téléchargée au premier geste sur recherche/, ou quand on clique dans le champ du haut de la page d'accueil (pas pour qui
+// ne fait que passer), puis gardée par le navigateur tant qu'elle ne change pas.
 const BASE_WEB = PARTAGE && PARTAGE.base ? (() => {
   const etat = { prete: false, date: null, nb: 0, construction: { actif: false, etape: "", fait: 0, total: 0, unite: "octets", erreur: "" } };
   let travailleur = null, enCours = null, num = 0;
@@ -150,11 +151,12 @@ const BASE_WEB = PARTAGE && PARTAGE.base ? (() => {
     throw Object.assign(new Error("La base de cartes n'est pas encore prête."), { statut: 503 });
   };
   const demander = (f, ...a) => { pret(); return message(f, a); };
-  if (location.protocol !== "file:") {                // pas pendant le pré-rendu
+  if (location.protocol === "file:") { /* pas pendant le pré-rendu */ }
+  else if (PARTAGE.page === "recherche") {
     garde().then((c) => c && c.keys()).then((k) => { if (k && k.length) charger().catch(() => {}); });
     const geste = () => { charger().catch(() => {}); for (const t of ["pointerdown", "keydown"]) removeEventListener(t, geste, true); };
     for (const t of ["pointerdown", "keydown"]) addEventListener(t, geste, true);
-  }
+  } else document.getElementById("aller").addEventListener("focus", () => charger().catch(() => {}));      // page d'accueil
   return {
     routes: {
       "/api/recherche/base": (_, methode) => {                 // POST : « Relancer » après une erreur
@@ -952,7 +954,7 @@ function deckDeLaPage() {
   const marque = () => $$(".aller-item", liste).forEach((el, i) => el.classList.toggle("choisi", i === actif));
   const tous = (q) => {
     const d = deckDeLaPage();
-    return "#/recherche?" + new URLSearchParams({ nom: q, r: "1", ...(d ? { deck: d.id } : {}) });
+    return ((PARTAGE && PARTAGE.recherche) || "") + "#/recherche?" + new URLSearchParams({ nom: q, r: "1", ...(d ? { deck: d.id } : {}) });
   };
   const rendre = async () => {
     const k = ++numero;
@@ -960,9 +962,9 @@ function deckDeLaPage() {
     const deck = deckDeLaPage();
     const [ds, cartes] = await Promise.all([listeDecks(),
       q.length >= 2 ? api("/api/recherche/noms?q=" + enc(brut) + (deck ? "&deck=" + enc(deck.id) : "")).catch(() => []) : Promise.resolve([])]);
-    // rien trouvé : la base de cartes est peut-être encore en construction (premier lancement)
-    const enConstruction = q.length >= 2 && !cartes.length
-      && !((await api("/api/recherche/base").catch(() => null)) || { prete: true }).prete;
+    // rien trouvé : la base de cartes est peut-être encore en construction (premier lancement), ou en route (site de l'Atelier)
+    const base = q.length >= 2 && !cartes.length ? await api("/api/recherche/base").catch(() => null) : null;
+    const enConstruction = !!base && !base.prete, cb = (base && base.construction) || {};
     if (k !== numero) return;
     const score = (d) => !q ? 0 : sansAccent(d.titre).startsWith(q) ? 0 : sansAccent(d.titre).includes(q) ? 1 : 2;
     const decksTrouves = ds.filter((d) => !q || sansAccent(`${d.titre} ${nomsCommandants(d)}`).includes(q))
@@ -985,12 +987,15 @@ function deckDeLaPage() {
       </a>`;
     const nc = cartes.length;
     liste.innerHTML = (q.length >= 2 ? `<div class="aller-section">Cartes</div>` + (nc ? items.slice(0, nc).map(ligneCarte).join("")
+        : enConstruction && BASE_WEB ? `<div class="aller-vide petit ${cb.erreur ? "erreur" : "pulse"}">${esc(cb.erreur
+            || `La base de cartes arrive${cb.total ? ` (${Math.round((100 * cb.fait) / cb.total)} %)` : ""}…`)}</div>`
         : enConstruction ? `<div class="aller-vide petit">La base de cartes ${TELEPHONE ? "arrive" : "se construit"} : la recherche marchera quand elle sera prête.
             <a href="${esc(tous(brut))}">Voir l'avancement →</a></div>`
         : `<div class="aller-vide muet petit">Aucune carte.</div>`) : "")
       + (decksTrouves.length ? (q.length >= 2 ? `<div class="aller-section">Decks</div>` : "") + items.slice(nc).map((it, j) => ligneDeck(it, nc + j)).join("") : "")
       + (q.length >= 2 && !enConstruction ? `<div class="aller-pied petit"><a href="${esc(tous(brut))}">Toutes les cartes « ${esc(brut)} » →</a></div>` : "");
     liste.hidden = !liste.innerHTML;
+    if (enConstruction && BASE_WEB && !cb.erreur) setTimeout(() => { if (k === numero && document.activeElement === champ) rendre(); }, 700);
     // plus large que le champ : sur un écran étroit, elle se décale vers la gauche pour ne pas dépasser à droite
     // (largeur de la page, pas innerWidth : sur téléphone, innerWidth grandit avec ce qui dépasse)
     liste.style.left = "";
