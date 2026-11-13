@@ -1956,7 +1956,7 @@ function optionsTelephone() {
     <section class="panneau options"><div class="opt-titre"><h2>${ico("telephone")}Téléphone</h2></div>
       <div class="opt-lignes">${a ? `
         <p>Relié à la sauvegarde <strong>${esc(a.depot)}</strong></p>
-        <p class="muet petit" id="tel-attente"></p>
+        <p class="muet petit" id="tel-attente" hidden></p>
         <div class="form-ligne"><button class="btn" id="tel-maj">${ico("rafraichir")}Synchroniser</button>
           <button class="btn btn-danger" id="tel-delier">Délier ce téléphone</button></div>` : `
         <p>Tes decks sont gardés sur ce téléphone.</p>
@@ -1968,7 +1968,9 @@ function optionsTelephone() {
   if (!a) { ligneGithub($("#opt-github"), {}); return optionsCartes($("#opt-cartes")); }
   const attente = async () => {
     const n = await TELEPHONE.enAttente();
-    $("#tel-attente").textContent = n ? `${n} modification${n > 1 ? "s" : ""} pas encore envoyée${n > 1 ? "s" : ""}` : "";
+    const el = $("#tel-attente");
+    el.textContent = n ? `${n} modification${n > 1 ? "s" : ""} pas encore envoyée${n > 1 ? "s" : ""}` : "";
+    el.hidden = !n;
   };
   attente();
   $("#tel-maj").onclick = async (ev) => {

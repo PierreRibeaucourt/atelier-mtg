@@ -77,7 +77,17 @@
         if (!(await fichier("index.json.gz"))) { await recalculer(await depot()); return true; }
         return false;
       }
-      const commit = (await gh(`/repos/${acces.d}/git/ref/heads/${BRANCHE}`)).object.sha;
+      // la branche des decks a disparu alors qu'on l'avait reçue : le PC a arrêté l'appli du téléphone (telephone.couper)
+      let commit;
+      try { commit = (await gh(`/repos/${acces.d}/git/ref/heads/${BRANCHE}`)).object.sha; }
+      catch (e) {
+        if (e.statut === 404 && await fichier("index.json.gz")) {
+          T.arrete = true;
+          throw Object.assign(new Error("Ton PC n'envoie plus tes decks."), { statut: 404 });
+        }
+        throw e;
+      }
+      T.arrete = false;
       if (commit === lireLocal(COMMIT)) return false;
       const c = await gh(`/repos/${acces.d}/git/commits/${commit}`);
       const arbre = (await gh(`/repos/${acces.d}/git/trees/${c.tree.sha}?recursive=1`)).tree.filter((x) => x.type === "blob");
@@ -646,6 +656,7 @@
       return copie(etatBase);
     }
     if (!(await fichier("index.json.gz"))) throw Object.assign(new Error("Tes decks ne sont pas encore arrivés."), { statut: 503 });
+    if (!local && T.arrete) throw Object.assign(new Error("Ton PC n'envoie plus tes decks."), { statut: 409 });
     if (p === "/api/decks") return creerDeck(b);
     if (p === "/api/decks/importer") return importerDecks(b);
     if (p === "/api/classeur/importer") return importerClasseur(b);
@@ -1110,7 +1121,7 @@
   function envoyer() {
     return envoi || (envoi = (async () => {
       const ops = await attente();
-      if (!ops.length || !(acces || local)) return false;
+      if (!ops.length || !(acces || local) || (!local && T.arrete)) return false;
       const commit = local ? await avecVerrou(() => envoyerLocal(ops)) : await envoyerGithub(ops);
       if (local) planifierSauvegarde();                 // sauvegardé sur GitHub une fois la série de modifications finie
       // fait : ces opérations partent de la file ; sans PC, les pages refaites ici remplacent tout de suite celles
@@ -1604,6 +1615,8 @@
     fusion = null;
     connus = null;
     T.pret = false;
+    T.arrete = false;
+    bandeauArrete();
     BD.vider().catch(() => {});
   }
 
@@ -1656,8 +1669,27 @@
   // ouverte dans le navigateur (par le QR code) : un bandeau en bas propose de l'installer, tant qu'elle ne l'est pas.
   // Android : le bouton ouvre la demande du navigateur ; iPhone : la marche à suivre (Safari n'a pas de bouton).
   const PLUS_TARD = "telephone-installer-plus-tard";
+  // relié au PC : le PC a arrêté l'appli du téléphone (Options › Téléphone › Arrêter). Ses decks restent lisibles ici,
+  // sans modification possible ; relancée sur le PC, l'appli reprend toute seule
+  function bandeauArrete() {
+    let b = document.getElementById("tel-arrete");
+    if (!T.arrete || !acces || !document.body) { if (b) b.remove(); return; }
+    const installer = document.getElementById("tel-bandeau");
+    if (installer) installer.remove();
+    if (!b) {
+      b = document.createElement("div");
+      b.id = "tel-arrete";
+      b.className = "tel-bandeau";
+      b.setAttribute("role", "status");
+      document.body.appendChild(b);
+    }
+    b.innerHTML = `<div class="tel-bandeau-texte"><strong>Ton PC n'envoie plus tes decks</strong></div>
+      <div class="tel-bandeau-boutons"><button class="btn btn-danger btn-petit" id="tel-arrete-delier">Délier ce téléphone</button></div>`;
+    b.querySelector("#tel-arrete-delier").onclick = () => { if (confirm("Délier ce téléphone ? Ses decks en seront effacés.")) T.delier(); };
+  }
+
   function bandeauInstaller() {
-    if (installee() || !acces || !document.body) return;
+    if (installee() || !acces || !document.body || T.arrete) return;
     if (Date.now() - Number(lireLocal(PLUS_TARD) || 0) < 3 * 86400 * 1000) return;
     let b = document.getElementById("tel-bandeau");
     if (!b) {
@@ -1768,10 +1800,11 @@
       T.erreur = err.message;
       if (!T.pret && window.route) route();
     }
+    bandeauArrete();
   }
 
   const T = window.TELEPHONE = {
-    api, attente: attenteVue, pret: false, erreur: "",
+    api, attente: attenteVue, pret: false, erreur: "", arrete: false,
     enAttente: async () => (await attente()).length,
     envoyer: () => envoyer(),
     acces: () => acces && { depot: acces.d },
