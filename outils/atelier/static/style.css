@@ -1366,3 +1366,42 @@ label.btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; 
 .telephone .sg-tete .segments:last-child { flex: none; }
 .telephone .sg-tete .segments button { white-space: nowrap; }
 @media (pointer: coarse) { .modale-fermer { width: 44px; height: 44px; padding: 0; } .modale-fermer .ico { width: 22px; height: 22px; } }
+/* ---------------------------------------------------------------- des pages à glisser (app.js › pagesGlissees) :
+   une à la fois, choisies par leurs onglets ou en glissant ; .cote-a-cote : côte à côte sur un grand écran du PC */
+.segments-pages { display: flex; width: 100%; margin: .2rem 0 .7rem; }
+.segments-pages button { flex: 1; min-width: 0; white-space: nowrap; }
+.segments-pages .seg-lib { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cmp-seulement { margin: .2rem 0 .35rem; }
+.glisse { display: flex; align-items: flex-start; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain; scrollbar-width: none; transition: height .2s ease; }
+.glisse::-webkit-scrollbar { display: none; }
+.glisse-page { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; }
+.glisse > .groupe { margin-top: 0; }
+.page-titre { display: none; }
+@media (min-width: 900px) {
+  html:not(.telephone) .cmp-seulement { display: none; }
+  html:not(.telephone) .glisse.cote-a-cote { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; overflow: visible; height: auto !important; }
+  html:not(.telephone) .segments-pages:has(+ .cote-a-cote) { display: none; }
+  html:not(.telephone) .cote-a-cote .page-titre { display: block; margin-top: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .glisse { transition: none; } }
+/* ---- Versions : une carte par version ; comparer deux versions */
+.versions { display: grid; gap: .6rem; }
+.version { background: var(--surface); border: 1px solid var(--bord); border-radius: var(--rayon); padding: .7rem .8rem; }
+.version-tete { display: flex; align-items: flex-start; gap: .5rem; }
+.version-nom { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.version-note { margin: .45rem 0 0; }
+.version-diff { margin: .45rem 0 0; }
+.version-diff summary { cursor: pointer; }
+.version-listes { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .4rem 1.5rem; margin-top: .45rem; }
+.version-listes ul { margin: .2rem 0 0; padding-left: 1.1rem; }
+.versions-auto { margin-top: 1rem; }
+.versions-auto > summary { cursor: pointer; }
+.versions-auto > .versions { margin-top: .6rem; }
+.cmp-choix { display: flex; flex-wrap: wrap; gap: .5rem; }
+.cmp-choix select { flex: 1 1 220px; min-width: 0; }
+.cmp-tuiles { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin-top: .9rem; }
+.cmp-tuile { min-width: 0; background: var(--surface-2); border-radius: 10px; padding: .6rem .7rem; }
+.cmp-tuile-nom { font-weight: 650; margin-bottom: .45rem; overflow-wrap: anywhere; }
+.cmp-communes { margin: .7rem 0; }
+.ligne.cmp-carte { grid-template-columns: minmax(0, 1fr) auto auto; }

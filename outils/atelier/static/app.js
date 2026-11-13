@@ -3664,20 +3664,22 @@ function optionsVersions(vs, choisi, avecActuelle = true, avecAucune = false) {
   return opts.join("");
 }
 
-function diffCourt(v) {
-  if (!v.plus.length && !v.moins.length) return `<span class="muet">identique</span>`;
-  return (v.plus.length ? `<div><span class="ok">+</span> ${v.plus.map((n) => nc(n)).join(", ")}</div>` : "") +
-    (v.moins.length ? `<div><span class="alerte-texte">−</span> ${v.moins.map((n) => nc(n)).join(", ")}</div>` : "");
+// « 6 Mountain, Sol Ring » : les noms d'une liste, les doubles comptés
+function nomsComptes(noms) {
+  const n = new Map();
+  noms.forEach((x) => n.set(x, (n.get(x) || 0) + 1));
+  return [...n].map(([x, k]) => `<li>${k > 1 ? `<span class="muet">${k}</span> ` : ""}${nc(x)}</li>`).join("");
 }
 
-function ligneVersion(v, i) {
+// une version : son nom, sa date, sa note ; ce qui la sépare de la liste actuelle, déplié à la demande ; Comparer, et le
+// reste dans « … »
+function carteVersion(v, i) {
   const [lib, cls] = TYPE_VERSION[v.type];
-  return `<tr>
-    <td><strong>${esc(v.nom)}</strong>${v.type === "ancienne" ? ` <span class="badge ${cls}">${lib}</span>` : ""}<br>
-      <span class="muet petit">${v.type === "auto" ? "" : esc(new Date(v.date * 1000).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })) + " · "}${v.total} cartes</span>
-      ${v.note ? `<div class="petit">${esc(v.note)}</div>` : ""}</td>
-    <td class="petit">${diffCourt(v)}</td>
-    <td class="num">
+  const date = v.type === "auto" ? "" : new Date(v.date * 1000).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) + " · ";
+  return `<article class="version">
+    <div class="version-tete">
+      <div class="version-nom"><strong>${esc(v.nom)}</strong>${v.type === "ancienne" ? ` <span class="badge ${cls}">${lib}</span>` : ""}
+        <div class="muet petit">${esc(date)}${v.total} cartes</div></div>
       <button class="btn btn-petit" data-act="comparer" data-i="${i}">${ico("comparer")}Comparer</button>
       <button type="button" class="btn-menu ecrit" data-act="menu" data-i="${i}" aria-label="Autres actions sur « ${esc(v.nom)} »">${ico("plus_de")}</button>
     </div>
@@ -3702,25 +3704,22 @@ async function ongletVersions(el, d) {
       <button class="btn btn-accent" id="btn-version">${ico("enregistrer")}Enregistrer une version…</button>
     </div>
 
-    <div class="panneau">
+    <div class="panneau cmp">
       <h3 style="margin-top:0">Comparer deux versions</h3>
-      <div class="form-ligne">
-        <select class="champ" style="flex:1;min-width:200px" id="cmp-a">${optionsVersions(vs, "")}</select>
-        <span class="muet">et</span>
-        <select class="champ" style="flex:1;min-width:200px" id="cmp-b">${optionsVersions(vs, defautB)}</select>
+      <div class="cmp-choix">
+        <select class="champ" id="cmp-a" aria-label="Première version">${optionsVersions(vs, "")}</select>
+        <select class="champ" id="cmp-b" aria-label="Seconde version">${optionsVersions(vs, defautB)}</select>
         <button class="btn" id="btn-cmp">${ico("comparer")}Comparer</button>
       </div>
       <div id="cmp-res"></div>
     </div>
 
     <h2>Versions</h2>
-    ${nommees.length ? `<table class="tableau"><thead><tr><th>Version</th><th>Différences</th><th></th></tr></thead>
-      <tbody>${nommees.map((v) => ligneVersion(v, vs.indexOf(v))).join("")}</tbody></table>`
+    ${nommees.length ? `<div class="versions">${nommees.map((v) => carteVersion(v, vs.indexOf(v))).join("")}</div>`
       : `<p class="muet">Aucune version.</p>`}
 
-    ${auto.length ? `<details ${nommees.length ? "" : "open"}><summary>Historique (${auto.length})</summary>
-      <table class="tableau" style="margin-top:.5rem"><thead><tr><th>Liste</th><th>Différences</th><th></th></tr></thead>
-        <tbody>${auto.map((v) => ligneVersion(v, vs.indexOf(v))).join("")}</tbody></table>
+    ${auto.length ? `<details class="versions-auto" ${nommees.length ? "" : "open"}><summary>Historique (${auto.length})</summary>
+      <div class="versions">${auto.map((v) => carteVersion(v, vs.indexOf(v))).join("")}</div>
     </details>` : ""}`;
 
   $("#btn-version").onclick = () => ouvrirModale(`
@@ -3740,64 +3739,106 @@ async function ongletVersions(el, d) {
 
   $("#btn-cmp").onclick = () => afficheComparaison($("#cmp-res", el), d, $("#cmp-a", el).value, $("#cmp-b", el).value);
 
-  $$("[data-act]", el).forEach((b) => b.addEventListener("click", async () => {
-    const v = vs[+b.dataset.i];
-    if (b.dataset.act === "comparer") {
+  const agir = async (act, v) => {
+    if (act === "comparer") {
       $("#cmp-a", el).value = "";
       $("#cmp-b", el).value = v.fichier;
-      afficheComparaison($("#cmp-res", el), d, "", v.fichier);
-      $("#cmp-res", el).scrollIntoView({ behavior: "smooth", block: "center" });
-    } else if (b.dataset.act === "simuler") {
+      await afficheComparaison($("#cmp-res", el), d, "", v.fichier);
+      $(".cmp", el).scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if (act === "simuler") {
       etat.simA = "";
       etat.simB = v.fichier;
       location.hash = `#/deck/${enc(d.id)}/simulation`;
-    } else if (b.dataset.act === "restaurer") {
+    } else if (act === "restaurer") {
       if (!confirm(`Restaurer « ${v.nom} » ?`)) return;
       try {
         await api(`/api/decks/${enc(d.id)}/restaurer`, { method: "POST", body: { fichier: v.fichier } });
         toast("Version restaurée.");
         location.hash = `#/deck/${enc(d.id)}/liste`;
       } catch (e) { erreur(e); }
-    } else if (b.dataset.act === "supprimer") {
+    } else if (act === "supprimer") {
       if (!confirm(`Supprimer la version « ${v.nom} » ?`)) return;
       try {
         await api(`/api/decks/${enc(d.id)}/versions/supprimer`, { method: "POST", body: { fichier: v.fichier } });
         ongletVersions(el, d);
       } catch (e) { erreur(e); }
     }
+  };
+  $$(".version [data-act]", el).forEach((b) => b.addEventListener("click", () => {
+    const v = vs[+b.dataset.i];
+    if (b.dataset.act !== "menu") return agir(b.dataset.act, v);
+    ouvrirMenu(b, [v.nom,
+      [TELEPHONE ? "Simuler…" : "Simuler", () => agir("simuler", v), "", "simulation"],
+      ["Restaurer cette version", () => agir("restaurer", v), "", "annuler"],
+      ...(v.type === "nommee" ? [null, ["Supprimer la version", () => agir("supprimer", v), "btn-danger", "corbeille"]] : [])]);
   }));
 }
 
+// deux versions côte à côte : leurs chiffres, puis ce que chacune a de plus (sur le téléphone, une liste à la fois, en
+// glissant de l'une à l'autre)
 async function afficheComparaison(zone, d, fa, fb) {
   zone.innerHTML = `<p class="chargement">Comparaison…</p>`;
   try {
     const c = await api(`/api/decks/${enc(d.id)}/comparer?a=${enc(fa)}&b=${enc(fb)}`);
-    const carte = (n) => {
+    const comptes = (l) => { const m = new Map(); l.forEach((n) => m.set(n, (m.get(n) || 0) + 1)); return [...m]; };
+    const carte = ([n, k]) => {
       const f = c.infos[n] || {};
-      return `<div class="ligne" style="grid-template-columns:minmax(0,1fr) auto 4.6rem">
-        <span class="nom" data-image="${esc(f.image)}"><span class="en">${esc(n)}</span>${f.fr && f.fr !== n ? `<span class="fr">${esc(f.fr)}</span>` : ""}
-          ${f.gc ? `<span class="badge badge-gc">Game Changer</span>` : ""}</span>
+      return `<div class="ligne cmp-carte">
+        <span class="nom" data-image="${esc(f.image)}"><span class="en">${k > 1 ? `<span class="muet">${k}</span> ` : ""}${esc(f.fr || n)}</span>${f.gc ? ` <span class="badge badge-gc">GC</span>` : ""}</span>
         ${mana(f.cout)}<span class="prix ${(f.prix || 0) > BUDGET ? "cher" : ""}">${euros(f.prix)}</span></div>`;
     };
-    const colonne = (v, cartes) => `<div>
-      <h3>Seulement dans « ${esc(v.nom)} » <span class="muet">(${cartes.length})</span></h3>
-      ${cartes.length ? cartes.map(carte).join("") : `<p class="muet">rien</p>`}</div>`;
+    const tuile = (v) => `<div class="cmp-tuile">
+      <div class="cmp-tuile-nom">${esc(v.nom)}</div>
+      <div class="chiffres"><span class="badge ${v.total === 100 ? "badge-ok" : "badge-alerte"}">${v.total} cartes</span><span class="badge">${euros(v.prix)}</span>
+        <span class="badge ${v.gc.length ? "badge-gc" : ""}" title="${esc(v.gc.join(", "))}">${v.gc.length} GC</span></div></div>`;
+    const memes = !c.seulement_a.length && !c.seulement_b.length;
     zone.innerHTML = `
-      <table class="tableau petit" style="margin-top:.8rem">
-        <thead><tr><th></th><th>${esc(c.a.nom)}</th><th>${esc(c.b.nom)}</th></tr></thead>
-        <tbody>
-          <tr><td>Cartes</td><td>${c.a.total}</td><td>${c.b.total}</td></tr>
-          <tr><td>Prix</td><td>${euros(c.a.prix)}</td><td>${euros(c.b.prix)}</td></tr>
-          <tr><td>Game Changers</td><td>${c.a.gc.map((n) => nc(n)).join(", ") || "aucun"}</td><td>${c.b.gc.map((n) => nc(n)).join(", ") || "aucun"}</td></tr>
-          <tr><td>Cartes en commun</td><td colspan="2">${c.communes}</td></tr>
-        </tbody>
-      </table>
-      ${!c.seulement_a.length && !c.seulement_b.length ? `<p class="muet">Mêmes cartes.</p>` :
-        `<div class="grille-2">${colonne(c.a, c.seulement_a)}${colonne(c.b, c.seulement_b)}</div>
-         <div class="boutons ecrit"><button class="btn btn-accent" id="cmp-sim">${ico("simulation")}Simuler « ${esc(c.a.nom)} » contre « ${esc(c.b.nom)} »</button></div>`}`;
+      <div class="cmp-tuiles">${tuile(c.a)}${tuile(c.b)}</div>
+      <p class="muet petit cmp-communes">${memes ? "Mêmes cartes." : `${c.communes} cartes en commun.`}</p>
+      ${memes ? "" : `
+        <p class="petit muet cmp-seulement">Ce que chacune a en plus :</p>
+        <div class="segments segments-pages" role="tablist">${[[c.a, c.seulement_a], [c.b, c.seulement_b]].map(([v, l]) =>
+          `<button type="button" role="tab"><span class="seg-lib">${esc(v.nom)}</span> <span class="sg-n">${l.length}</span></button>`).join("")}</div>
+        <div class="glisse cote-a-cote">
+          ${[[c.a, c.seulement_a], [c.b, c.seulement_b]].map(([v, l]) => `<div class="glisse-page">
+            <h3 class="page-titre">Seulement dans « ${esc(v.nom)} » <span class="muet">(${l.length})</span></h3>
+            ${l.length ? comptes(l).map(carte).join("") : `<p class="muet">Rien.</p>`}</div>`).join("")}
+        </div>
+        <div class="boutons ecrit"><button class="btn" id="cmp-sim">${ico("simulation")}Simuler les deux</button></div>`}`;
+    if (!memes) pagesGlissees($(".glisse", zone), $$(".segments-pages button", zone));
     const b = $("#cmp-sim", zone);
     if (b) b.onclick = () => { etat.simA = fa; etat.simB = fb; location.hash = `#/deck/${enc(d.id)}/simulation`; };
   } catch (e) { zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
+}
+
+// des pages côte à côte, une à la fois : on passe de l'une à l'autre en glissant (au doigt) ou par leurs onglets.
+// .cote-a-cote : sur un grand écran (hors téléphone), toutes visibles côte à côte, sans onglets.
+function pagesGlissees(cadre, onglets, depart = 0) {
+  const pages = [...cadre.children];
+  let n = Math.min(Math.max(0, depart), pages.length - 1);
+  const glisse = () => getComputedStyle(cadre).display === "flex";
+  const ajuster = () => { cadre.style.height = glisse() ? pages[n].offsetHeight + "px" : ""; };
+  const marquer = () => onglets.forEach((o, i) => { o.classList.toggle("actif", i === n); o.setAttribute("aria-selected", i === n); });
+  const aller = (i, doux = true) => {
+    n = i;
+    marquer();
+    ajuster();
+    if (glisse()) cadre.scrollTo({ left: i * cadre.clientWidth, behavior: doux ? "smooth" : "auto" });
+    cadre.dispatchEvent(new CustomEvent("page", { detail: n }));
+  };
+  onglets.forEach((o, i) => o.addEventListener("click", () => aller(i)));
+  let minuteur;
+  cadre.addEventListener("scroll", () => {
+    clearTimeout(minuteur);
+    minuteur = setTimeout(() => {
+      const i = Math.round(cadre.scrollLeft / cadre.clientWidth);
+      if (i !== n && pages[i]) aller(i, false);
+    }, 90);
+  }, { passive: true });
+  const ro = new ResizeObserver(() => { if (cadre.isConnected) ajuster(); else ro.disconnect(); });
+  pages.forEach((p) => ro.observe(p));
+  requestAnimationFrame(() => aller(n, false));
+  return { aller };
 }
 
 // ------------------------------------------------------------------ onglet Bracket
