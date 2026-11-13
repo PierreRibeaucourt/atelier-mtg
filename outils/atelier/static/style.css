@@ -862,7 +862,7 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .aller-liste { max-height: min(70vh, 560px); overflow: auto; }
 
 /* page partagée (lecture seule) : ni ce qui modifie, ni la recherche, ni la discussion */
-.partage :is(.ecrit, .aller, #btn-rafraichir, #etat-maj, .ligne-outil, #lien-options) { display: none !important; }
+.partage :is(.ecrit, .aller, #btn-rafraichir, #etat-maj, .ligne-outil, #lien-options, #lien-classeur) { display: none !important; }
 /* nouvelle version de l'Atelier à installer */
 /* une ligne fine, de la couleur de l'en-tête, avec une pastille orange ; les nouveautés sur une ligne (en entier au survol) */
 .bandeau-maj { position: relative; display: flex; align-items: center; justify-content: center; gap: .4rem 1rem; padding: .35rem 1rem;
@@ -1292,7 +1292,8 @@ label.btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; 
    Le « + » de l'écran flotte au-dessus. */
 #app-retour, #app-titre, #app-chercher, #app-menu, #app-fin-recherche, .app-onglets, .outils-plus { display: none; }
 .telephone .barre { gap: 0; min-height: 56px; box-sizing: border-box; padding: .3rem .35rem; }
-.telephone .barre :where(.aller, #lien-recherche, #lien-options, #btn-theme, #btn-chat, .espace) { display: none; }
+.telephone .barre :where(.aller, #lien-recherche, #lien-classeur, #lien-options, #btn-theme, #btn-chat, .espace) { display: none; }
+.telephone #opt-classeur .opt-titre h2 { display: none; }        /* le titre est dans la barre */
 .telephone .barre-droite { gap: 0; margin-left: auto; }
 .telephone .barre .logo { padding: 0 .6rem 0 .75rem; font-size: 0; }
 .telephone .barre .logo::before { width: 26px; height: 26px; }

@@ -233,7 +233,7 @@ function erreur(e) {
 // les trois écrans principaux. Le « + » de l'écran flotte au-dessus. Le thème passe dans les Options.
 ICONES.engrenage = '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>';
 ICONES.reglages = '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>';
-const ECRANS_APPLI = [["", "Decks", "cartes"], ["recherche", "Recherche", "chercher"], ["options", "Options", "engrenage"]];
+const ECRANS_APPLI = [["", "Decks", "cartes"], ["classeur", "Classeur", "livre"], ["recherche", "Recherche", "chercher"], ["options", "Options", "engrenage"]];
 if (TELEPHONE) {
   const barre = $(".barre"), champ = $("#aller");
   barre.insertAdjacentHTML("afterbegin", `<a id="app-retour" class="btn btn-discret btn-icone" aria-label="Retour" hidden>${ico("precedent")}</a>`);
@@ -268,6 +268,7 @@ function barreAppli(parts, qs) {
     titre = "Recherche";
     if (rd) retour = `#/deck/${enc(rd)}`;
   } else if (parts[0] === "options") titre = "Options";
+  else if (parts[0] === "classeur") titre = "Classeur";
   else if (parts[0]) retour = "#/";
   else etat.menuEcran = () => [["Importer des decks…", modaleImportDecks, "", "dossier"], ["Demander à Claude", () => surPC("claude"), "", "discussion"]];
   $("#app-titre").textContent = titre;
@@ -276,7 +277,7 @@ function barreAppli(parts, qs) {
   if (retour) r.href = retour;
   $(".barre .logo").hidden = !!retour;
   $("#app-menu").hidden = !etat.menuEcran;
-  const ecran = ["recherche", "options"].includes(parts[0]) && !rd ? parts[0] : "";
+  const ecran = ["recherche", "options", "classeur"].includes(parts[0]) && !rd ? parts[0] : "";
   $$(".app-onglets a").forEach((a) => a.classList.toggle("actif", a.dataset.ecran === ecran));
 }
 
@@ -777,8 +778,8 @@ function majTitre() {
   } else if (parts[0] === "recherche") {
     const p = new URLSearchParams(qs || "");
     t = ["Recherche", p.get("nom") && `« ${p.get("nom")} »`, (p.get("deck") || "").replace(/^Deck /, "")].filter(Boolean).join(" · ");
-  } else if (parts[0] === "options") {
-    t = "Options";
+  } else if (parts[0] === "options" || parts[0] === "classeur") {
+    t = parts[0] === "options" ? "Options" : "Classeur";
   } else if (parts[0] === "proxies") {
     t = "Proxies · " + (new URLSearchParams(qs || "").get("deck") || "").replace(/^Deck /, "");
   }
@@ -798,7 +799,8 @@ async function route() {
   if (ecran !== etat.ecran) { etat.ecran = ecran; scrollTo(0, 0); }
   $("#lien-recherche").classList.toggle("actif", parts[0] === "recherche" && !new URLSearchParams(qs || "").get("deck"));   // pour un deck : son bandeau
   $("#lien-options").classList.toggle("actif", parts[0] === "options");
-  vue.classList.toggle("vue-large", parts[0] === "recherche" || parts[0] === "options" || parts[0] === "proxies");
+  $("#lien-classeur").classList.toggle("actif", parts[0] === "classeur");
+  vue.classList.toggle("vue-large", ["recherche", "options", "classeur", "proxies"].includes(parts[0]));
   vue.classList.remove("vue-pleine");                       // la page « C'est quoi » la remet : son en-tête prend toute la largeur
   document.body.classList.toggle("impression", parts[0] === "proxies");   // à l'impression, rien d'autre que les feuilles
   try {
@@ -812,6 +814,7 @@ async function route() {
     else if (PARTAGE && parts[0] === "deck" && parts[1]) location.replace(lienDeck(decodeURIComponent(parts[1])));
     else if (parts[0] === "recherche") await vueRecherche(new URLSearchParams(qs || ""));
     else if (!PARTAGE && parts[0] === "options") await vueOptions();
+    else if (!PARTAGE && parts[0] === "classeur") await vueClasseur();
     else if (!PARTAGE && parts[0] === "proxies") await vueProxies(new URLSearchParams(qs || ""));
     else if (parts[0] === "deck" && parts[1]) await vueDeck(decodeURIComponent(parts[1]), parts[2] || "liste", parts[3] ? decodeURIComponent(parts[3]) : null);
     else await vueAccueil();
@@ -2066,14 +2069,19 @@ function renommerPrefs(ancien, nouveau) {
 try { for (const k of Object.keys(localStorage)) if (k.startsWith("pref-rch-derniere")) localStorage.removeItem(k); } catch (_) {}
 
 // ------------------------------------------------------------------ options : réglages de ce PC (reglages.json), démarrage, classeur
-// Options : trois blocs (les cartes, le partage, le programme), puis le classeur
+// Options : trois blocs (les cartes, le partage, le programme)
 async function vueOptions() {
   if (TELEPHONE) return optionsTelephone();
   vue.innerHTML = `<nav class="fil" aria-label="Fil d'Ariane"><a href="#/">Mes decks</a><span aria-hidden="true">›</span><span aria-current="page">Options</span></nav>
-    <div class="opt-grille" id="opt-general"><p class="chargement">Chargement…</p></div>
-    <section class="panneau options" id="opt-classeur"></section>`;
+    <div class="opt-grille" id="opt-general"><p class="chargement">Chargement…</p></div>`;
   optionsGenerales($("#opt-general"), await api("/api/options"));
-  classeurOptions($("#opt-classeur"));
+}
+
+// le classeur : un écran à lui (bouton du haut ; sur le téléphone, onglet du bas)
+function vueClasseur() {
+  vue.innerHTML = `<nav class="fil" aria-label="Fil d'Ariane"><a href="#/">Mes decks</a><span aria-hidden="true">›</span><span aria-current="page">Classeur</span></nav>
+    <section class="panneau options" id="opt-classeur"></section>`;
+  return classeurOptions($("#opt-classeur"));
 }
 
 // Options › Téléphone (sur le PC) : préparer les decks pour l'appli du téléphone, et la relier par un QR code
@@ -2153,8 +2161,7 @@ function optionsTelephone() {
       <div class="segments" role="group" aria-label="Thème" id="opt-theme">${[["", "Auto"], ["light", "Clair"], ["dark", "Sombre"]].map(([k, l]) => {
         const actif = (document.documentElement.dataset.theme || "") === k;
         return `<button type="button" data-theme="${k}" class="${actif ? "actif" : ""}" aria-pressed="${actif}">${l}</button>`;
-      }).join("")}</div></section>
-    <section class="panneau options" id="opt-classeur"></section>`;
+      }).join("")}</div></section>`;
   $$("#opt-theme button").forEach((b) => b.addEventListener("click", () => {        // le bouton du thème du PC, ici
     const t = b.dataset.theme;
     if (t) document.documentElement.dataset.theme = t;
@@ -2162,7 +2169,6 @@ function optionsTelephone() {
     try { if (t) localStorage.setItem("theme", t); else localStorage.removeItem("theme"); } catch (_) {}
     $$("#opt-theme button").forEach((x) => { x.classList.toggle("actif", x === b); x.setAttribute("aria-pressed", x === b); });
   }));
-  classeurOptions($("#opt-classeur"));
   // sans PC : où sont les decks, et à quoi sert GitHub tant qu'on n'est pas connecté
   const ouSont = (g, s) => {
     const p = $("#tel-ou");
