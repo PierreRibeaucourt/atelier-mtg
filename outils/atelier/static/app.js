@@ -4907,7 +4907,7 @@ const FAQ_ATELIER = [
   ["Vos cartes et vos données", [
     ["Comment entrent mes cartes ?",
       "On colle une liste copiée depuis Moxfield, Archidekt ou MTG Arena. La liste d'un deck préconstruit se trouve sur ces sites. Les cartes rangées hors des decks se collent de la même façon dans le classeur."],
-    ["Et sur mon téléphone ?",
+    ["Peut-on créer un deck Magic en ligne, depuis son téléphone ?",
       `<p>Oui : ouvrez <a href="${APPLI_TELEPHONE}">atelier-mtg.github.io</a> sur votre téléphone, puis ajoutez-la à l'écran d'accueil. Elle marche seule, sans PC ni compte, ou reliée à l'Atelier de votre PC par un QR code, et garde vos decks même sans réseau. La simulation, la table de jeu, les proxies et la discussion avec Claude restent sur PC.</p>
       <p>Pour montrer un deck à quelqu'un, « Partager » le publie sur une page <a href="${EXEMPLES_ATELIER}">comme celles-ci</a>, qui se lit sur téléphone et se met à jour toute seule. Il faut un compte GitHub, gratuit : c'est lui qui héberge votre page.</p>`],
     ["Et si mon PC tombe en panne ?",
@@ -4997,7 +4997,7 @@ function vueAPropos(installation = false) {
         </div>
         <div class="ap-tete-texte">
           <h1>L'Atelier <span>MTG</span></h1>
-          <p class="ap-accroche">Le deckbuilding Commander assisté,<br>100% local et sans compte.</p>
+          <p class="ap-accroche">Le deck builder Commander assisté,<br>100% local et sans compte.</p>
           <ul class="ap-puces">${["Suggestions", "Base de mana", "Combos", "Bracket", "Simulation", "Table de jeu", "Recherche avancée", "Claude"].map((x) => `<li>${x}</li>`).join("")}</ul>
           <p class="ap-cta">${SUR_TELEPHONE ? `<a class="btn btn-accent" href="${APPLI_TELEPHONE}" id="ap-appli">${ico("telephone")}Ouvrir l'Atelier MTG</a>`
             : `<a class="btn btn-accent" href="${INSTALLER}" id="ap-installer">${ico("telecharger")}Installer l'Atelier MTG</a>`}
@@ -5009,11 +5009,11 @@ function vueAPropos(installation = false) {
     <article class="a-propos">
       <div class="ap-bandeau">
         <p class="ap-promesse">Zéro pub, zéro compte, zéro cloud : l'Atelier tourne <em>uniquement sur vos appareils</em>, PC ou téléphone.</p>
-        <p>L'Atelier est une application locale, qui s'ouvre dans votre navigateur, pensée pour concevoir, tester et faire
-          évoluer des decks Magic: The Gathering en Commander.</p>
+        <p>L'Atelier est un deck builder en français, gratuit et local, qui s'ouvre dans votre navigateur : il est pensé pour
+          concevoir, tester et faire évoluer vos decks Magic: The Gathering en Commander.</p>
       </div>
 
-      <h2>Les bases : un outil complet</h2>
+      <h2>Les bases : un constructeur de deck Magic complet</h2>
       ${modules(MODULES_BASES)}
 
       <h2>Ce qui fait la différence</h2>
@@ -5038,7 +5038,8 @@ function vueAPropos(installation = false) {
       </ul>
 
       <h2 id="installation">Installation</h2>
-      <p>L'Atelier s'utilise sur votre ordinateur Windows ou sur votre téléphone. Gratuit, sans compte.</p>
+      <p>Ce logiciel de construction de deck Magic s'utilise sur votre ordinateur Windows ou sur votre téléphone. Gratuit,
+        sans compte.</p>
       <div class="ap-install-duo">${SUR_TELEPHONE ? installTel + installWindows : installWindows + installTel}</div>
       <p class="ap-autres-titre">Autres façons d'installer</p>
       <p class="ap-autres-texte">Sur Mac, sur Linux, ou pour tout contrôler vous-même.</p>

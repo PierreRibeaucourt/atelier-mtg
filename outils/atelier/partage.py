@@ -520,11 +520,10 @@ def _page_jouer(dossier):
 A_PROPOS = "a-propos"
 ACCUEIL_ATELIER = "https://atelier-mtg.com/"
 IMAGE_ATELIER = ACCUEIL_ATELIER + "a-propos/atelier.jpg"
-TITRE_ATELIER = "L'Atelier MTG : gestionnaire de decks Commander, gratuit et local"
-DESCRIPTION_ATELIER = ("Concevoir, tester et partager ses decks Commander : statistiques et base de mana, combos, "
-                       "bracket, table de jeu, recherche avancée et discussion avec Claude. Gratuit, open source, tout "
-                       "reste sur votre ordinateur.")
-ALT_ATELIER = "L'Atelier MTG : le deckbuilding Commander assisté, 100% local et sans compte"
+TITRE_ATELIER = "L'Atelier MTG : Deck Builder, Gratuit et Local (en Français)"
+DESCRIPTION_ATELIER = ("Deck builder Magic gratuit et en français : créez, testez et partagez vos decks Commander (combos, "
+                       "bracket, simulation). 100 % local, sans compte.")
+ALT_ATELIER = "L'Atelier MTG : le deck builder Commander assisté, 100% local et sans compte"
 
 
 def _a_propos():
