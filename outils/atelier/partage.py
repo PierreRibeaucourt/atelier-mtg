@@ -783,7 +783,8 @@ def renommer(ancien, nouveau):
             return
         reg[nouveau] = dict(reg.pop(ancien), a_refaire=True)       # construire() réécrit l'entrée, sans a_refaire
         _ecrire(REGISTRE, json.dumps(reg, ensure_ascii=False, indent=1))
-        if not github.compte():                                    # git : enregistré ici, envoyé avec la prochaine publication
+        # git : enregistré ici, envoyé avec la prochaine publication (sans .git ici, git remonterait au dépôt du dessus)
+        if not github.compte() and os.path.isdir(os.path.join(DOSSIER, ".git")):
             _git("add", "decks.json", ok=True)
             _git("commit", "-q", "-m", f"Renommage : {ancien.removeprefix('Deck ')} → {nouveau.removeprefix('Deck ')}", ok=True)
     _echecs.pop(ancien, None)
