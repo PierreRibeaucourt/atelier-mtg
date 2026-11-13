@@ -1801,8 +1801,13 @@
     connus = null;
     setTimeout(() => spellbookEnFond(touches ? [...touches] : ids), 1000);
   }
+  // sans PC, les decks ne vivent que dans ce navigateur : on lui demande de ne jamais les effacer pour faire de la place
+  function garderDonnees() {
+    try { navigator.storage && navigator.storage.persist && navigator.storage.persist().catch(() => {}); } catch (e) { /* navigateur ancien */ }
+  }
   // « Commencer ici » : un Atelier sur ce téléphone, sans PC ni compte
   async function commencerIci() {
+    garderDonnees();
     ecrireLocal(LOCAL, "1");
     local = true;
     if (!(await BD.lire("@depot").catch(() => null))) await BD.ecrire("@depot", { fichiers: {}, modifies: {} });
@@ -2076,6 +2081,7 @@
     history.replaceState(null, "", location.pathname + location.search);
     appairer(texte).then(demarrer, (err) => { T.erreur = err.message; demarrer(); });
   } else demarrer();
+  if (local) garderDonnees();
   document.addEventListener("visibilitychange", () => { if (!document.hidden && acces) demarrer(); });
   setInterval(() => { if (!document.hidden && acces) demarrer(); }, DISTANT);
   // sans PC : la sauvegarde sur GitHub regarde aussi s'il y a du nouveau
