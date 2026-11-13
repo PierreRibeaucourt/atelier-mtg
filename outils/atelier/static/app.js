@@ -35,17 +35,11 @@ const SUR_PC = {
   proxies: "L'impression des proxies se fait sur le PC.",
 };
 // l'appli seule, sans PC relié : ces fonctions sont dans l'Atelier à installer
-const SANS_PC = {
-  simulation: "La simulation joue des centaines de parties avec ton deck, sur ton PC.",
-  claude: "La discussion avec Claude passe par Claude Code, sur ton PC.",
-  synergies: "La recherche des synergies passe par Claude Code, sur ton PC.",
-  mtgpics: "La lecture des combos MTGPics se fait depuis ton PC.",
-  jouer: "La table de jeu s'ouvre depuis ton PC.",
-  proxies: "L'impression des proxies se fait depuis ton PC.",
-};
+const SANS_PC = { simulation: "la simulation", claude: "la discussion avec Claude", synergies: "la recherche des synergies",
+  mtgpics: "la lecture des combos MTGPics", jouer: "la table de jeu", proxies: "l'impression des proxies" };
 function surPC(quoi) {
   if (TELEPHONE && TELEPHONE.local) return ouvrirModale(`<h2>Dans l'Atelier installé</h2>
-    <p>${esc(SANS_PC[quoi] || "Ça se fait sur ton PC.")} L'Atelier s'y installe gratuitement ; tes decks d'ici le rejoignent par la sauvegarde en ligne.</p>
+    <p>Pour utiliser ${esc(SANS_PC[quoi] || "cette fonction")}, il faut installer l'Atelier sur ton PC. Tu pourras ensuite y réimporter tes decks gratuitement.</p>
     <div class="boutons"><a class="btn btn-accent" href="${INSTALLER}" target="_blank" rel="noopener">${ico("telecharger")}Installer l'Atelier</a></div>`);
   ouvrirModale(`<h2>Sur le PC</h2>
     <p>${esc(SUR_PC[quoi] || "Ça se fait sur le PC.")}</p>`);
