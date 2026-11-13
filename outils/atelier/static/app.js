@@ -481,7 +481,7 @@ const CITE = { cles: null, index: null, communs: null, deck: undefined, ctx: nul
 const APERCUS = new Map();                         // nom anglais -> promesse de { nom, fr, image, prix, foil }
 const minuscules = (s) => s.toLowerCase().replace(/[’‘]/g, "'");
 const LETTRE = /[\p{L}\p{N}]/u;
-const SANS_CITE = "script, style, textarea, input, select, option, code, pre, svg, h1, h2, .fil, .nc, [data-apercu], [data-image], "
+const SANS_CITE = "script, style, textarea, input, select, option, code, pre, svg, h1, h2, summary, .fil, .nc, [data-apercu], [data-image], "
   + "[data-survol], [data-survol-r], .fs-texte, .texte, .fc-tete, .fiche, .moteur, #apercu, #bulle, #fiche-survol, #toast, #menu, [contenteditable], "
   + ".px-carte";                                     // les proxies s'impriment : pas de liens soulignés
 
