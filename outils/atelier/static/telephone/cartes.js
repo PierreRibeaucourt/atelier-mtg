@@ -123,6 +123,7 @@ function preparer(b) {
   const parCle = new Map(), parFr = new Map();
   for (const x of cartes) {
     if (x.spe === "ME") continue;
+    if (x.spe === "TK" && parCle.has(cleCarte(x))) continue;     // un jeton du même nom (Spark Elemental) : la carte d'abord
     parCle.set(cleCarte(x), x);                       // même recto (cartes d'Alchemy…) : la dernière, comme le PC
     if (x._nf) for (const f of [x._nf, x._nf.split(" // ")[0]]) if (!parFr.has(f)) parFr.set(f, x);
   }
@@ -436,17 +437,51 @@ function apercu(nom) {
 }
 
 // ------------------------------------------------------------------ fiches des cartes d'un deck (infos_cartes._fiche)
-function fiche(x) {
-  const p = x.im !== null ? x.pr[x.im] : null, faces = x.n.split(" // "), types = x.t.split(" // ");
+// L'impression par défaut, comme le PC (infos_cartes._choisir) : la moins chère (prix normal, sinon foil ; prix fiables
+// seulement), d'abord parmi celles qui existent dans la langue choisie, hors Universes Beyond si demandé ; à prix égal,
+// la plus récente (pr va de la plus récente à la plus ancienne). loc : les impressions dans la langue choisie, lues sur
+// Scryfall par telephone.js (« set|num » → {i: image, l: langue, d: date, u: Universes Beyond, p: promo}).
+// Terrains de base (infos_cartes._bases_par_defaut) : la plus récente hors promo. Renvoie {p: impression de la base, vue}.
+function choisir(x, loc) {
+  const pr = x.pr || [], dr = (p) => p[8] || 0, vue = (p) => (p && loc && loc[p[0] + "|" + p[1]]) || null;
+  if (BASES_FR[x.n]) {
+    const ici = Object.values(loc || {}).filter((v) => !v.p && v.i).sort((a, b) => (a.d < b.d ? 1 : a.d > b.d ? -1 : 0));
+    const v = (REGLAGES.sansUb && ici.find((v) => !v.u)) || ici[0];
+    if (v) return { p: pr.find((p) => vue(p) === v) || null, vue: v };
+    const l = pr.filter((p) => !(dr(p) & 4) && p[5]);
+    return { p: (REGLAGES.sansUb && l.find((p) => !p[7])) || l[0] || pr[0] || null, vue: null };
+  }
+  if (!pr.some((p) => p.length > 8)) return { p: x.im !== null ? pr[x.im] : null, vue: null };   // base d'avant les drapeaux
+  const moinsChere = (l) => {
+    for (const foil of [0, 1]) {
+      let m = null;
+      for (const p of l) if (p[4] != null && !(dr(p) & 2) && (dr(p) & 1) === foil && (!m || p[4] < m[4])) m = p;
+      if (m) return m;
+    }
+    return null;
+  };
+  const ici = loc ? pr.filter((p) => vue(p)) : [];
+  for (const l of [...(REGLAGES.sansUb ? [ici.filter((p) => !vue(p).u), pr.filter((p) => !p[7])] : []), ici, pr]) {
+    const p = moinsChere(l);
+    if (p) return { p, vue: vue(p) };
+  }
+  return { p: x.im !== null ? pr[x.im] : null, vue: null };
+}
+function fiche(x, loc = null) {
+  const { p, vue } = choisir(x, loc), faces = x.n.split(" // "), types = x.t.split(" // ");
   const texteFr = (x.of || "").replace(/[^\p{L}\p{N}_]/gu, "").length > 3 ? x.of : "";
+  const img = (taille) => (vue ? vue.i.replace("/normal/", `/${taille}/`) : p ? image(p[5], taille) : "");
+  const ed = p ? B.editions[p[0]] || {} : {}, prixImp = p && p.length > 8 && p[4] != null && !(p[8] & 2) && !BASES_FR[x.n];
   return {
     nom: x.n, cout: x.c.split(" // ")[0], mv: x.mv, type: types[0], texte: x.o, couleurs: [...x.ci],
-    image: p ? image(p[5]) : "", petite: p ? image(p[5], "small") : "", art: p ? image(p[5], "art_crop") : "",
-    gc: x.gc, prix: x.eur, prix_lien: "", prix_date: null, prix_edition: "", fr: BASES_FR[x.n] || x.fr || "", fr_type: x.tf, fr_texte: texteFr,
+    image: img("normal"), petite: img("small"), art: img("art_crop"),
+    gc: x.gc, prix: prixImp ? p[4] : x.eur, prix_lien: "", prix_date: null,
+    prix_edition: prixImp ? (ed.n || p[0].toUpperCase()) + (p[8] & 1 ? " (foil)" : "") : "",
+    fr: BASES_FR[x.n] || x.fr || "", fr_type: x.tf, fr_texte: texteFr,
     legal: x.cl || (x.lg.includes("commander") ? "legal" : "not_legal"), produit: x.pm, pt: x.pt, gatherer: "",
     dos: x.imd ? { nom: faces[1] || "", type: types[1] || "", image: chemin(x.imd), petite: chemin(x.imd, "small") } : null,
     assemble: null, peut_commander: x.cm, partenaire: x.pa, lay: x.lay,
-    imp: p ? { set: p[0], num: p[1], lang: p[6] || "en" } : null,
+    imp: p ? { set: p[0], num: p[1], lang: vue ? vue.l : p[6] || "en" } : vue ? { set: vue.s, num: vue.n, lang: vue.l } : null,
   };
 }
 // une impression précise d'une carte (« (ima) 205 » dans la liste) : son image, son édition
@@ -459,12 +494,13 @@ function impression(nom, set, num) {
 }
 const gameChangers = () => B.cartes.filter((x) => x.gc && !x.dig).map((x) => x.n).sort();
 // des noms tapés ou collés (anglais, français, majuscules quelconques) : {nom tapé: fiche} ; absents si inconnus
-function fiches(liste) {
+// locs : les impressions dans la langue choisie, par nom de carte (choisir)
+function fiches(liste, locs = {}) {
   prete();
   const res = {};
   for (const n of liste) {
     const x = trouver(n) || B.parFr.get(norm(n).trim());
-    if (x) res[n] = fiche(x);
+    if (x) res[n] = fiche(x, locs[n] || (x.n !== n ? locs[x.n] : null) || null);
   }
   return res;
 }

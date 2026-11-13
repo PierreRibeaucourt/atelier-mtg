@@ -43,7 +43,7 @@ def alleger(b):
             if v is None or v == "" or v == [] or v is False or (k in ("mv", "im") and v == 0):
                 continue
             y[k] = _nombre(v)
-        y["pr"] = [[p[0], p[1], p[2], p[3], p[4], _image(p[5]), p[6], p[7]] for p in x["pr"]]
+        y["pr"] = [[p[0], p[1], p[2], p[3], p[4], _image(p[5]), p[6], p[7], *p[8:9]] for p in x["pr"]]
         if y["pr"] == []:
             del y["pr"]
         cartes.append(y)
@@ -67,9 +67,12 @@ def ecrire(b, dossier):
 if __name__ == "__main__":
     import recherche
     sys.stdout.reconfigure(encoding="utf-8")
-    avant = (recherche.base() or {}).get("date")
+    b0 = recherche.base() or {}
+    avant = b0.get("date")
+    # base d'avant les drapeaux des impressions (recherche.py, p[8]) : refaite tout de suite, sans attendre la semaine
+    sans_drapeaux = any(len(p) < 9 for x in (b0.get("cartes") or [])[:500] for p in x["pr"])
     try:
-        recherche.verifier()
+        recherche.construire() if sans_drapeaux else recherche.verifier()
     except Exception as e:                     # Scryfall injoignable : la base d'avant fera l'affaire
         recherche.etat["erreur"] = str(e)
     if recherche.etat["erreur"]:

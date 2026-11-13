@@ -26,7 +26,7 @@ from datetime import date, timedelta
 
 ICI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(ICI))
-from prix import EDITIONS_DOUTEUSES, ENTETES, get  # noqa: E402
+from prix import EDITIONS_DOUTEUSES, ENTETES, get, prix_fiable  # noqa: E402
 
 import decks  # noqa: E402
 import infos_cartes as ic  # noqa: E402
@@ -315,8 +315,11 @@ def _cartes_et_impressions():
         elif fiable and eur is None and foil is not None and (x["eur"] is None or (x["foil"] and foil < x["eur"])):
             x["eur"], x["foil"] = foil, True           # carte qui n'existe qu'en foil (ex. Greven, C19)
         d = c.get("released_at") or ""
+        # drapeaux, pour choisir l'impression par défaut comme infos_cartes._choisir (téléphone) : 1 = le prix est celui du
+        # foil, 2 = prix pas fiable (prix.prix_fiable), 4 = promo
+        drapeaux = (1 if eur is None and foil is not None else 0) | (0 if prix_fiable(c) else 2) | (4 if c.get("promo") else 0)
         x["pr"].append([c["set"], c["collector_number"], (c.get("rarity") or "?")[0], d, eur if eur is not None else foil,
-                        _chemin_image(c), c.get("lang", "en"), int(ic._ub(c))])      # 1 : impression Universes Beyond
+                        _chemin_image(c), c.get("lang", "en"), int(ic._ub(c)), drapeaux])      # 1 : impression Universes Beyond
         if d and not c.get("promo") and c.get("set_type") not in ("promo", "token") and (not x["d0"] or d < x["d0"]):
             x["d0"], x["s0"] = d, c["set"]             # première édition (pour « Nouvelles cartes uniquement »)
         r = _rang_impression(c)

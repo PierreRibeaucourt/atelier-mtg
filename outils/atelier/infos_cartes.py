@@ -182,12 +182,14 @@ def _papier(c):
 def _choisir(anglaises, locales, sans_ub):
     """L'impression par défaut d'une carte : (impression anglaise, impression à montrer, prix, foil ?) ou None.
     La moins chère (hors foil, sinon foil) ; d'abord parmi celles qui existent dans la langue choisie (locales) ; hors
-    Universes Beyond quand on l'a demandé et qu'il en reste."""
+    Universes Beyond quand on l'a demandé et qu'il en reste. À prix égal, la plus récente : le téléphone choisit de même
+    (static/telephone/cartes.js › choisir), sans dépendre de l'ordre des réponses de Scryfall."""
     def moins_chere(paires):
         for cle_prix, foil in (("prix", False), ("prix_foil", True)):
-            p = [(en[cle_prix], i) for i, (en, _) in enumerate(paires) if en.get(cle_prix) is not None]
+            p = [(en[cle_prix], en.get("date") or "", i) for i, (en, _) in enumerate(paires) if en.get(cle_prix) is not None]
             if p:
-                prix, i = min(p)
+                prix = min(x[0] for x in p)
+                i = max((x for x in p if x[0] == prix), key=lambda x: x[1])[2]
                 return paires[i][0], paires[i][1], prix, foil
         return None
     toutes = [(i, i) for i in anglaises.values()]
@@ -269,7 +271,8 @@ def rafraichir_prix(noms, force=False, suivi=True, langue=None):
         n = par_cle.get(_cle(c["name"]))
         if n and prix_fiable(c):
             anglaises[n][(c["set"], c["collector_number"])] = dict(
-                _impression(c), ub=_ub(c), lien=_lien((c.get("purchase_uris") or {}).get("cardmarket", "")))
+                _impression(c), ub=_ub(c), lien=_lien((c.get("purchase_uris") or {}).get("cardmarket", "")),
+                date=c.get("released_at") or "")
     if suivi:
         etat.update(tache="prix", fait=0, total=len(a_faire))
     for k in _recherche_groupee(a_faire, "", traite):
@@ -280,8 +283,10 @@ def rafraichir_prix(noms, force=False, suivi=True, langue=None):
     # viennent de la base de cartes, et la carte sera complétée quand elle entrera dans un deck ou le classeur
     if lang and avec_langue:
         def perime(f):
+            # rien trouvé : relu le lendemain (une lecture ratée de Scryfall ne prive pas la carte de sa langue une semaine)
             L = f.get("imp_lang") or {}
-            return L.get("lang") != lang or not L.get("date") or (date.fromisoformat(jour) - date.fromisoformat(L["date"])).days >= 7
+            return L.get("lang") != lang or not L.get("date") or \
+                (date.fromisoformat(jour) - date.fromisoformat(L["date"])).days >= (7 if L.get("eds") else 1)
         a_lire = [n for n in a_faire if perime(cache["cartes"][n])]
         lues = {n: {} for n in a_lire}
 

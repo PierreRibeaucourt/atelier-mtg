@@ -2044,14 +2044,14 @@ async function optionsCartes(el) {
   const budget = (b) => (b == null ? "" : String(b).replace(".", ","));
   el.innerHTML = `<h2>${ico("cartes")}Cartes</h2><div class="opt-lignes">
       <label class="opt-champ"><span>Budget par carte</span><span class="opt-euros"><input class="champ" name="budget" inputmode="decimal" value="${budget(o.budget)}" placeholder="5">€</span></label>
-      ${basculesUB(o)}</div>`;
+      ${champVisuel(o)}${basculesUB(o)}</div>`;
   el.onchange = async (ev) => {
     const c = ev.target;
     if (!c.name) return;
     try {
       Object.assign(o, await api("/api/options", { method: "POST", body: { [c.name]: c.type === "checkbox" ? c.checked : c.value } }));
       majBudget(o.budget);
-      toast("Enregistré.");
+      toast(c.name === "langue_cartes" ? "Enregistré : les images changent dans quelques instants." : "Enregistré.");
     } catch (e) { erreur(e); }
     if (c.type === "checkbox") c.checked = !!o[c.name];
     else c.value = budget(o.budget);

@@ -647,8 +647,12 @@
   const budget = () => Number((window.REGLAGES || {}).budget) || 0;
   // sans PC, les réglages des cartes se changent ici (app.py › api_options) : budget par carte (0 : pas d'alerte),
   // illustrations et suggestions sans Universes Beyond. Gardés sur ce téléphone ; toutes les pages sont refaites.
+  // langues des impressions (reglages.LANGUES) : « la moins chère en … » ; sans langue, la moins chère tout court
+  const LANGUES = { fr: "français", de: "allemand", it: "italien", es: "espagnol", pt: "portugais", ja: "japonais",
+    ko: "coréen", ru: "russe", zhs: "chinois simplifié", zht: "chinois traditionnel" };
+  const langueCartes = () => { const l = (window.REGLAGES || {}).langue_cartes; return l in LANGUES ? l : ""; };
   const options = () => { const r = window.REGLAGES || {};
-    return { budget: r.budget ?? 5, budget_defaut: 5, langues: {}, langue_cartes: "", sans_ub_illustrations: !!r.sans_ub_illustrations,
+    return { budget: r.budget ?? 5, budget_defaut: 5, langues: LANGUES, langue_cartes: langueCartes(), sans_ub_illustrations: !!r.sans_ub_illustrations,
       sans_ub_suggestions: !!r.sans_ub_suggestions }; };
   async function ecrireOptions(d) {
     const r = { budget: 5, ...(window.REGLAGES || {}) };
@@ -658,10 +662,15 @@
       r.budget = v;
     }
     for (const k of ["sans_ub_illustrations", "sans_ub_suggestions"]) if (k in d) r[k] = !!d[k];
+    if ("langue_cartes" in d) {
+      if (d.langue_cartes && !(d.langue_cartes in LANGUES)) throw new Error("Langue inconnue.");
+      r.langue_cartes = d.langue_cartes || null;
+    }
     window.REGLAGES = r;
     ecrireLocal(REGLAGES, JSON.stringify(r));
     if (etatBase.prete) await message("reglages", [{ sansUb: !!r.sans_ub_illustrations }]).catch(() => {});
-    await recalculer(null);
+    const refaire = recalculer(null);           // une autre langue : ses impressions à lire sur Scryfall, en fond
+    if ("langue_cartes" in d) refaire.catch(() => {}); else await refaire;
     return options();
   }
   async function ecrire(u, b) {
@@ -1158,6 +1167,31 @@
     })().finally(() => { envoi = null; }));
   }
 
+  // les impressions d'une carte dans la langue choisie (infos_cartes.rafraichir_prix, « imp_lang ») : lues sur Scryfall,
+  // gardées une semaine (@langues) ; pas sur les données mobiles tant qu'on ne les a pas (la moins chère en anglais en
+  // attendant). {nom: {« set|num »: {i: image, s, n, l: langue, d: date, u: Universes Beyond, p: promo}}}
+  async function impressionsLangue(noms, lang) {
+    const L = (await BD.lire("@langues").catch(() => null)) || {}, garde = L[lang] || (L[lang] = {}), semaine = Date.now() - 7 * 86400000;
+    const jour = Date.now() - 86400000;                // rien trouvé : relu le lendemain (infos_cartes › perime)
+    const manque = [...new Set(noms)].filter((n) => n && !(garde[n] && garde[n].t > (Object.keys(garde[n].eds).length ? semaine : jour)));
+    if (manque.length && !mobile()) {
+      const lus = Object.fromEntries(manque.map((n) => [n, {}])), parCle = new Map(manque.map((n) => [cle(n), n]));
+      try {
+        await rechercheGroupee(manque, `lang:${lang} game:paper`, { unique: "prints", include_extras: "false", order: "released", dir: "desc" }, (c) => {
+          const n = parCle.get(cle(c.name));
+          if (!n || c.digital || c.oversized || ["missing", "placeholder"].includes(c.image_status)
+            || ["memorabilia", "token", "minigame"].includes(c.set_type)) return;          // infos_cartes._papier
+          const img = (c.image_uris || (c.card_faces || [{}])[0].image_uris || {}).normal;
+          if (img) lus[n][`${c.set}|${c.collector_number}`] = { i: img, s: c.set, n: c.collector_number, l: c.lang || lang,
+            d: c.released_at || "", u: (c.promo_types || []).includes("universesbeyond") ? 1 : 0, p: c.promo ? 1 : 0 };
+        }, null, 15);
+        for (const n of manque) garde[n] = { t: Date.now(), eds: lus[n] };
+        await BD.ecrire("@langues", L);
+      } catch (_) { /* pas de réseau : la prochaine fois */ }
+    }
+    return Object.fromEntries(noms.filter((n) => garde[n]).map((n) => [n, garde[n].eds]));
+  }
+
   // ------------------------------------------------------------------ sans PC : les pages faites ici
   const depot = async () => (await BD.lire("@depot").catch(() => null)) || { fichiers: {}, modifies: {} };
   // ce dont pages.js a besoin : les fiches (base de cartes, sinon Scryfall), les fonctions, les impressions choisies
@@ -1165,7 +1199,8 @@
     const avecBase = (fn, defaut) => (...a) => (etatBase.prete ? message(fn, a).catch(() => defaut) : Promise.resolve(defaut));
     return {
       fiches: async (noms) => {
-        const res = etatBase.prete ? await message("fiches", [noms]).catch(() => ({})) : {};
+        const lang = langueCartes(), locs = lang && etatBase.prete ? await impressionsLangue(noms, lang).catch(() => ({})) : {};
+        const res = etatBase.prete ? await message("fiches", [noms, locs]).catch(() => ({})) : {};
         for (const n of noms) if (!res[n]) { const x = await ficheCarte(n).catch(() => null); if (x && x.image) res[n] = x; }
         return res;
       },
