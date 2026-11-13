@@ -20,6 +20,21 @@ const PC = !PARTAGE && !TELEPHONE;              // l'Atelier du PC : serveur Pyt
 const CET_APPAREIL = TELEPHONE ? "ce téléphone" : "ce PC", AUTRE_APPAREIL = "un autre appareil";      // PC ou téléphone
 // partager un deck (page sur GitHub Pages) : depuis le PC ou le téléphone (partage.js), relié au PC ou non
 const PARTAGEABLE = PC || !!TELEPHONE;
+// le PC et le téléphone ont les mêmes droits sur les decks ; ce qui demande la puissance du PC reste visible sur le
+// téléphone (data-pc="…") et dit où le faire
+const SUR_PC = {
+  simulation: "Les simulations tournent sur le PC : lance-les depuis l'Atelier de ton PC. Leurs résultats arrivent ensuite ici.",
+  claude: "La discussion avec Claude se fait sur le PC : elle passe par Claude Code, installé sur ton PC.",
+  synergies: "La recherche des synergies par Claude se lance sur le PC.",
+  mtgpics: "La lecture des combos MTGPics se lance sur le PC.",
+  jouer: "La table de jeu s'ouvre sur le PC : elle se joue à la souris.",
+  proxies: "L'impression des proxies se fait sur le PC.",
+};
+function surPC(quoi) {
+  ouvrirModale(`<div class="fc-tete"><h2>Sur le PC</h2>
+      <button class="btn btn-discret btn-icone" id="spc-fermer" aria-label="Fermer">${ico("fermer")}</button></div>
+    <p>${esc(SUR_PC[quoi] || "Ça se fait sur le PC.")}</p>`, (b) => { $("#spc-fermer", b).onclick = fermerModale; });
+}
 // page partagée : à qui sont ces decks (reglages.json « nom », sinon le compte GitHub qui publie)
 // titre_accueil : la page d'accueil de l'Atelier (site_atelier.py), qui n'est le site de decks de personne
 const MES_DECKS = PARTAGE && PARTAGE.titre_accueil || (PARTAGE && PARTAGE.auteur ? `Decks de ${PARTAGE.auteur}` : "Mes decks");
@@ -1103,7 +1118,7 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
           <div class="chiffres" style="margin-top:.5rem">${chiffresDeck(d)}</div>
         </div>
         <div class="actions">
-          <a class="btn pc-seulement" href="${PARTAGE ? "jouer/" : `/jouer?deck=${enc(id)}`}" target="_blank" rel="noopener">${ico("lancer")}Jouer</a>
+          <a class="btn" data-pc="jouer" href="${PARTAGE ? "jouer/" : `/jouer?deck=${enc(id)}`}" target="_blank" rel="noopener">${ico("lancer")}Jouer</a>
           <a class="btn ecrit" href="#/recherche?deck=${enc(id)}">${ico("chercher")}Chercher pour ce deck</a>
           <button class="btn btn-icone ouvre-menu" id="btn-deck-menu" aria-label="Autres actions sur le deck" title="Autres actions">${ico("plus_de")}</button>
         </div>
@@ -1121,7 +1136,7 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
   $$(".cmd-entete").forEach((x) => { x.onclick = () => ouvrirCarte(d.cartes[+x.dataset.carte]); });
   $("#btn-deck-menu").onclick = (ev) => ouvrirMenu(ev.currentTarget, [
     ...(PARTAGEABLE ? [["Partager le deck…", () => modalePartage(d), "", "partager"]] : []),
-    ...(!PC ? [] : [["Imprimer les proxies…", () => { location.hash = `#/proxies?deck=${enc(d.id)}`; }, "", "imprimer"]]),
+    ...(PARTAGE ? [] : [["Imprimer les proxies…", () => { if (TELEPHONE) surPC("proxies"); else location.hash = `#/proxies?deck=${enc(d.id)}`; }, "", "imprimer"]]),
     ...(PARTAGEABLE ? [null] : []),
     "Copier la liste pour",
     ...EXPORTS.map(([fmt, lib]) => [lib, () => copierListe(fmt, lib), "", "copier"]),
@@ -3792,7 +3807,11 @@ async function vueCombosDeck(zone, d) {
 
 // Combos MTGPics : lues carte par carte (une requête toutes les 1,5 s), gardées 30 jours
 function rendreMtgpics(zone, d, st, apres) {
-  if (!st) return;
+  if (!st) {                                         // téléphone sans PC : rien de lu ici
+    if (TELEPHONE) zone.innerHTML = `<button class="btn btn-petit" data-pc="mtgpics">Lire les combos MTGPics</button>`;
+    return;
+  }
+  if (st.actif && TELEPHONE) { zone.innerHTML = `<span class="pulse">●</span> MTGPics : lecture en cours sur le PC…`; return; }
   if (st.actif) {
     zone.innerHTML = `<span class="pulse">●</span> MTGPics : ${st.fait} / ${st.total}…`;
     setTimeout(async () => {
@@ -3808,7 +3827,7 @@ function rendreMtgpics(zone, d, st, apres) {
   const minutes = Math.max(1, Math.round((reste * 4 * 1.5) / 60));
   zone.innerHTML = reste
     ? `MTGPics : ${st.connues} / ${st.cartes} cartes lues
-       <button class="btn btn-petit" id="btn-mtgpics">Lire ${reste === st.cartes ? "tout" : `les ${reste} autres`} (≈ ${minutes} min)</button>`
+       <button class="btn btn-petit" id="btn-mtgpics" ${TELEPHONE ? 'data-pc="mtgpics"' : ""}>Lire ${reste === st.cartes ? "tout" : `les ${reste} autres`} (≈ ${minutes} min)</button>`
     : "";
   if (st.erreur) zone.insertAdjacentHTML("beforeend", ` <span class="erreur">${esc(st.erreur)}</span>`);
   const b = $("#btn-mtgpics", zone);
@@ -3819,6 +3838,8 @@ function rendreMtgpics(zone, d, st, apres) {
 }
 
 function rendreClaude(zone, d, st, apres) {
+  st = st || {};                                     // téléphone sans PC : jamais lancé ici
+  if (st.actif && TELEPHONE) { zone.innerHTML = `<span class="pulse">●</span> Claude cherche les synergies sur le PC…`; return; }
   if (st.actif) {
     const duree = (debut) => { const m = debut ? Math.floor((Date.now() / 1000 - debut) / 60) : 0; return m >= 1 ? ` · ${m} min` : ""; };
     zone.innerHTML = `<span class="pulse">●</span> Claude cherche les synergies…<span class="muet" data-duree>${duree(st.debut)}</span>`;
@@ -3839,7 +3860,7 @@ function rendreClaude(zone, d, st, apres) {
   const r = st.resultat;
   zone.innerHTML = `${st.erreur ? `<span class="erreur">${esc(st.erreur)}</span> ` : ""}
     ${r ? `Synergies Claude du ${new Date(r.date * 1000).toLocaleDateString("fr-FR")}${st.a_jour ? "" : " · la liste a changé"}` : ""}
-    <button class="btn btn-petit" id="btn-claude">${ico("discussion")}${r ? "Relancer" : "Chercher les synergies avec Claude"}</button>`;
+    <button class="btn btn-petit" id="btn-claude" ${TELEPHONE ? 'data-pc="synergies"' : ""}>${ico("discussion")}${r ? "Relancer" : "Chercher les synergies avec Claude"}</button>`;
   $("#btn-claude", zone).onclick = async () => {
     try { rendreClaude(zone, d, await api(`/api/decks/${enc(d.id)}/synergies`, { method: "POST", body: {} }), apres); }
     catch (e) { erreur(e); }
@@ -4057,8 +4078,8 @@ async function ongletSimulation(conteneur, d, rapportInitial = null) {
   el.innerHTML = `
     <div class="panneau sim-lancer ecrit">
       <div class="sim-boutons">
-        <button class="btn btn-accent" id="s-lancer">${ico("lancer")}Tester le deck</button>
-        <button class="btn" id="s-claude">${ico("discussion")}Affiner avec Claude</button>
+        <button class="btn btn-accent" id="s-lancer" data-pc="simulation">${ico("lancer")}Tester le deck</button>
+        <button class="btn" id="s-claude" data-pc="claude">${ico("discussion")}Affiner avec Claude</button>
       </div>
       ${nivCov ? `<div class="sim-couverture"><span>Cartes comprises</span>
         <span class="jauge"><span class="jauge-piste"><span class="jauge-barre jauge-${nivCov}" style="width:${Math.max(3, Math.round(partCov * 100))}%"></span></span>
@@ -5805,6 +5826,7 @@ async function basculeChat(ouvrir) {
 }
 
 async function ouvrirChat(texte) {
+  if (TELEPHONE) return surPC("claude");
   const ctx = deckDeLaPage();
   if (ctx !== null) await choisirDiscussion(ctx);      // « Expliquer avec Claude » : la discussion du deck affiché
   await basculeChat(true);
@@ -5851,6 +5873,14 @@ async function arreterChat() {
 }
 
 $("#btn-chat").addEventListener("click", () => basculeChat());
+// téléphone : un élément « à faire sur le PC » dit où le faire, au lieu d'agir
+if (TELEPHONE) document.addEventListener("click", (ev) => {
+  const el = ev.target.closest("[data-pc]");
+  if (!el) return;
+  ev.preventDefault();
+  ev.stopImmediatePropagation();
+  surPC(el.dataset.pc);
+}, true);
 if (PC) {
   chat.contexte = deckDeLaPage();
   chat.cle = chat.contexte ?? PREF.get("chat-discussion", "");

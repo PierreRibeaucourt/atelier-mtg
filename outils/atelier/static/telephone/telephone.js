@@ -144,7 +144,21 @@
     return decodeURIComponent(u.pathname) + (p.length ? "?" + p.map(([k, v]) => `${k}=${v}`).join("&") : "");
   };
   const copie = (x) => (x == null ? x : structuredClone(x));
-  const absente = () => Object.assign(new Error("Sur le PC seulement, pour l'instant."), { statut: 404 });
+  const absente = () => Object.assign(new Error("À faire depuis l'Atelier de ton PC."), { statut: 404 });
+  // les tests du simulateur faits sur le PC, venus par la sauvegarde : comme simulation.rapports
+  function rapportsSimulation(f, pre) {
+    return Object.keys(f).filter((k) => k.startsWith(pre) && k.endsWith(".json") && !k.slice(pre.length).includes("/")).sort().reverse()
+      .map((k) => {
+        let r;
+        try { r = JSON.parse(f[k]); } catch (_) { return null; }
+        if (!r || !r.tables || !r.resultats) return null;
+        const t0 = r.tables.includes("Mixte") ? "Mixte" : r.tables[0], l = r.resultats[t0] || {}, A = l.A || {}, B = l.B || {};
+        return { fichier: k.slice(pre.length), date: r.date, n: r.n, tables: r.tables, pilote: (r.reglages || {}).pilote || "vite",
+          versions: Object.fromEntries(Object.entries(r.versions || {}).map(([x, v]) => [x, v.nom])), table_resume: t0, affine: r.affine ?? true,
+          verdict: (A.regularite || {}).verdict, verdict_b: (B.regularite || {}).verdict, victoire_a: A.victoire,
+          victoire_b: B.victoire, ecart: l.ecart };
+      }).filter(Boolean);
+  }
 
   // les noms des cartes citées de tous les decks, pour l'aperçu au survol partout
   let fusion = null;
@@ -189,6 +203,19 @@
     const pm = p.match(/^\/api\/decks\/([^/]+)\/partage$/);
     if (pm) return lePartage().etat(decodeURIComponent(pm[1]));
     if (local && /^\/api\/(github|sauvegarde)(\/|$)/.test(p)) { const r = await routeGithub(p, "GET"); if (r !== undefined) return r; }
+    // sans PC : l'onglet Simulation montre les tests faits sur le PC ; en lancer un se fait sur le PC
+    const sim = p.match(/^\/api\/decks\/([^/]+)\/(simulation\/options|simulations)(?:\/([^/]+))?$/);
+    if (sim && local) {
+      const id = decodeURIComponent(sim[1]), f = (await depot()).fichiers, pre = `${id}/simulations/`;
+      if (sim[2] === "simulation/options") return { tables: [], reglages: {}, defaut: {}, coeurs: 1, couverture: null, affine: false, test_n: 1000,
+        versions: await api(`/api/decks/${encodeURIComponent(id)}/versions`).catch(() => []) };
+      if (sim[3]) {
+        const x = f[pre + decodeURIComponent(sim[3])];
+        if (x == null) throw Object.assign(new Error("Test introuvable."), { statut: 404 });
+        return JSON.parse(x);
+      }
+      return rapportsSimulation(f, pre);
+    }
     // Commander Spellbook, par le relais : les combos d'une carte ; sans PC, le bracket et les combos du deck à jour
     const sbm = p.match(/^\/api\/decks\/([^/]+)\/(bracket|combos|combos\/carte)$/);
     if (sbm && sbm[2] === "combos/carte") return combosCarte(decodeURIComponent(sbm[1]), u);
