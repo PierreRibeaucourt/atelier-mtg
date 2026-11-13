@@ -6062,7 +6062,7 @@ async function arreterChat() {
   try { await api("/api/discussion/arreter", { method: "POST", body: { deck: chat.cle } }); } catch (e) { erreur(e); }
 }
 
-$("#btn-chat").addEventListener("click", () => basculeChat());
+$("#btn-chat")?.addEventListener("click", () => basculeChat());       // page d'accueil : « Créer un deck » à sa place (site_atelier.py)
 // téléphone : un élément « à faire sur le PC » dit où le faire, au lieu d'agir
 if (TELEPHONE) document.addEventListener("click", (ev) => {
   const el = ev.target.closest("[data-pc]");

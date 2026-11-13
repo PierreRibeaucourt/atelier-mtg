@@ -109,13 +109,17 @@ def pre_rendre(dossier):
 
 
 def inserer(dossier, rendu):
+    """Le pré-rendu dans la page ; en haut à droite, « Créer un deck » (vers l'installation) à la place de « Demander à
+    Claude », dont le panneau n'est qu'une vitrine ici."""
     index = os.path.join(dossier, "index.html")
     with open(index, encoding="utf-8") as f:
         html = f.read()
     vide = '<main id="vue" class="vue"></main>'
-    if vide not in html:
+    chat = re.search(r'<button id="btn-chat".*?</button>', html)
+    if vide not in html or not chat:
         raise SystemExit("static/index.html a changé : pré-rendu impossible.")
-    partage._ecrire(index, html.replace(vide, f'<main id="vue" class="vue vue-pleine">{rendu}</main>'))
+    creer = '<a href="#installation" id="btn-creer" class="btn btn-accent" data-ico="plus">Créer un deck</a>'
+    partage._ecrire(index, html.replace(vide, f'<main id="vue" class="vue vue-pleine">{rendu}</main>').replace(chat.group(0), creer))
 
 
 def captures(dossier, rendu):
