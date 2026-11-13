@@ -682,6 +682,11 @@ function ouvrirModale(html, monte, { focus = true, large = false, fermer = null 
   m.innerHTML = `<div class="modale-boite ${large ? "large" : ""}" role="dialog" aria-modal="true" tabindex="-1">
     <button type="button" class="btn btn-discret btn-icone modale-fermer" aria-label="Fermer" title="Fermer">${ico("fermer")}</button>
     <div class="modale-corps">${html}</div></div>`;
+  // ce qu'on fait (.modale-pied, ou la dernière rangée de boutons) : en bas de la fenêtre, toujours visible, séparé de ce
+  // qu'on lit
+  const corps = $(".modale-corps", m), dernier = corps.lastElementChild;
+  const pied = $(":scope > .modale-pied", corps) || (dernier && dernier.matches(".boutons") ? dernier : null);
+  if (pied) { pied.classList.add("modale-pied"); $(".modale-boite", m).appendChild(pied); }
   m.hidden = false;
   const ferme = () => (fermer ? fermer() : fermerModale());
   $(".modale-fermer", m).onclick = ferme;
@@ -731,6 +736,23 @@ function fermerModale(parRetour) {
     if (dy > 110) { $(".modale-fermer", boite).click(); return; }
     boite.style.transition = "transform .15s ease-out";
     boite.style.transform = "";
+  });
+})();
+// fiche d'une carte, au doigt : glisser vers la gauche ou la droite passe à la carte suivante ou précédente
+(function glisserFiche() {
+  const m = $("#modale");
+  let x0 = null, y0 = 0;
+  m.addEventListener("touchstart", (ev) => {
+    x0 = ev.touches.length === 1 && $(".fiche-carte", m) && !ev.target.closest("input, textarea, select, .modale-pied") ? ev.touches[0].clientX : null;
+    y0 = ev.touches[0].clientY;
+  }, { passive: true });
+  m.addEventListener("touchend", (ev) => {
+    if (x0 == null) return;
+    const t = ev.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0;
+    x0 = null;
+    if (Math.abs(dx) < 70 || Math.abs(dy) > Math.abs(dx) / 2) return;
+    const b = $(`.fc-fleche[data-act="${dx < 0 ? "suiv" : "prec"}"]`, m);
+    if (b && !b.hidden) b.click();
   });
 })();
 addEventListener("popstate", () => {
@@ -2886,7 +2908,7 @@ function ouvrirCarte(c) {
   ouvrirModale(`
     <div class="fiche-carte">
       <div class="fc-image">${f.image ? `<img src="${esc(f.image)}" alt="${esc(c.nom)}" data-recto="${esc(f.image)}" data-verso="${esc((f.dos && f.dos.image) || "")}">` : `<div class="sans-image">${esc(c.nom)}</div>`}
-        ${boutonVerso(f.dos)}${lienVersion(c.version || c.image_ed, c.versions)}</div>
+        ${boutonVerso(f.dos)}${lienVersion(c.version || c.image_ed, c.versions)}${flechesFiche(pos, ordre.length)}</div>
       <div class="fc-infos">
         <div class="fc-tete">
           <div><h2>${esc(f.fr || c.nom)} ${mana(f.cout)}</h2>${f.fr && f.fr !== c.nom ? `<div class="muet">${esc(c.nom)}</div>` : ""}</div>
@@ -2911,28 +2933,19 @@ function ouvrirCarte(c) {
           ${c.n > 1 || plusieursExemplaires({ type: f.type, texte: f.texte }) ? `
           <div class="fc-ligne ecrit"><label class="petit muet" for="fc-n">Exemplaires</label>
             <input class="champ champ-petit" type="number" id="fc-n" min="1" max="99" value="${c.n}" style="width:4.5rem"></div>` : ""}`}
-        <div class="fc-bloc-actions ecrit" role="group" aria-label="Actions sur la carte">
-          <div class="fc-actions">
-            ${cmd ? "" : `<button class="btn btn-petit" data-act="maybe">${maybe ? ico("annuler") + "Remettre dans le deck" : ico("maybe") + "Passer en Maybeboard"}</button>`}
-            ${cmd ? `<button class="btn btn-petit" data-act="cmd">${ico("couronne")}Ne plus en faire le commandant</button>`
-              : !maybe && legendaire && (d.commandants || []).length < 2 && (!second || f.partenaire !== false) ? `<button class="btn btn-petit" data-act="cmd">${ico("couronne")}${second ? "Ajouter comme second commandant" : "Définir comme commandant"}</button>` : ""}
-            <button class="btn btn-petit btn-danger fc-retirer" data-act="retirer">${ico("corbeille")}Retirer du deck</button>
-          </div>
-        </div>
         <div class="fc-liens">
           ${PARTAGE ? `<a href="https://commanderspellbook.com/search/?q=${enc(`card:"${ic_cle(c.nom)}"`)}" target="_blank" rel="noopener">${ico("combos")}Combos avec cette carte ↗</a>`
             : `<a href="#/deck/${enc(d.id)}/combos/${enc(c.nom)}">${ico("combos")}Combos avec cette carte</a>`}
           <a href="${esc(f.prix_lien || lienCardmarket(c.nom))}" target="_blank" rel="noopener">${ico("panier")}Cardmarket ↗</a>
           <a href="${esc(f.gatherer || lienGatherer(c.nom))}" target="_blank" rel="noopener">${ico("livre")}Gatherer ↗</a>
         </div>
-        ${pos >= 0 && ordre.length > 1 ? `
-          <div class="fc-nav">
-            <button class="btn btn-petit" data-act="prec" ${pos === 0 ? "disabled" : ""}>${ico("precedent")}Précédente</button>
-            <span class="muet petit">${pos + 1} / ${ordre.length}</span>
-            <button class="btn btn-petit" data-act="suiv" ${pos === ordre.length - 1 ? "disabled" : ""}>Suivante${ico("suivant")}</button>
-          </div>` : ""}
       </div>
-    </div>`, (b) => {
+    </div>
+    ${piedFiche(`
+      ${cmd ? "" : `<button class="btn btn-petit" data-act="maybe">${maybe ? ico("annuler") + "Remettre dans le deck" : ico("maybe") + "Maybeboard"}</button>`}
+      ${cmd ? `<button class="btn btn-petit" data-act="cmd">${ico("couronne")}Plus commandant</button>`
+        : !maybe && legendaire && (d.commandants || []).length < 2 && (!second || f.partenaire !== false) ? `<button class="btn btn-petit" data-act="cmd">${ico("couronne")}${second ? "Second commandant" : "Commandant"}</button>` : ""}
+      <button class="btn btn-petit btn-danger" data-act="retirer">${ico("corbeille")}Retirer du deck</button>`)}`, (b) => {
     const retrouver = (nd) => nd && nd.cartes.find((x) => x.nom === c.nom);
     const achat = $('[data-act="achat"]', b);
     if (achat) possedeesDeck(d).then((poss) => boutonAchat(achat, d, c, poss)).catch(() => {});
@@ -5442,6 +5455,18 @@ const plusieursExemplaires = (x) => /\bBasic\b/.test(x.type || "") || PLUSIEURS_
 const lienGatherer = (nom) => `https://gatherer.wizards.com/search?searchTerm=${enc(ic_cle(nom))}`;
 
 // le bloc « Ajouter à … » de la fiche : où (deck ou Maybeboard), tags, et un seul bouton
+// le bas de la fiche d'une carte : ce qu'on peut en faire
+function piedFiche(actions) {
+  return actions.trim() && !PARTAGE ? `<div class="modale-pied fc-pied"><div class="fc-actions ecrit" role="group" aria-label="Actions sur la carte">${actions}</div></div>` : "";
+}
+// sur les côtés de l'image : les flèches vers la carte précédente et la suivante (au doigt, on peut aussi glisser)
+function flechesFiche(pos, n) {
+  if (pos < 0 || n < 2) return "";
+  const fleche = (sens, cache) => `<button type="button" class="fc-fleche fc-${sens}" data-act="${sens}" ${cache ? "hidden" : ""}
+      aria-label="${sens === "prec" ? "Carte précédente" : "Carte suivante"}" title="${pos + 1} / ${n}">${ico(sens === "prec" ? "precedent" : "suivant")}</button>`;
+  return fleche("prec", pos === 0) + fleche("suiv", pos === n - 1);
+}
+
 function blocAjoutRch(x, d) {
   const dans = x.dans === "deck" || x.dans === "commandant";
   const multi = plusieursExemplaires(x);
@@ -5453,18 +5478,13 @@ function blocAjoutRch(x, d) {
   const promotion = x.dans === "maybe";
   const dest = promotion ? "deck" : PREF.get("rf-dest", "deck");
   return `<div class="rf-ajout">
-    <div class="rf-ajout-tete">
-      <span>${promotion ? `Au Maybeboard de <strong>${esc(d.titre)}</strong>` : `Ajouter à <strong>${esc(d.titre)}</strong>`}</span>
-      ${promotion ? "" : `<div class="segments" role="group" aria-label="Où ajouter la carte">${[["deck", "Deck"], ["maybe", "Maybeboard"]].map(([k, l]) =>
-        `<button type="button" data-dest="${k}" class="${k === dest ? "actif" : ""}" aria-pressed="${k === dest}">${l}</button>`).join("")}</div>`}
-    </div>
-    <div class="rf-ajout-ligne">
-      ${promotion ? "" : `
-        <input class="champ champ-petit" id="rf-tags" list="rf-cats" placeholder="Tags" aria-label="Tags, séparés par des virgules">
-        <datalist id="rf-cats">${(d.categories || []).map((t) => `<option value="${esc(t)}">`).join("")}</datalist>`}
-      ${multi && !promotion ? `<label class="petit muet rf-n">Exemplaires <input class="champ champ-petit" type="number" id="rf-n" min="1" max="99" value="1"></label>` : ""}
-      <button class="btn btn-accent" data-act="ajouter">${libelleAjout(x, dest)}</button>
-    </div>
+    ${promotion ? `<span class="rf-promo">Au Maybeboard de <strong>${esc(d.titre)}</strong></span>` : `
+      <input class="champ" id="rf-tags" list="rf-cats" placeholder="Tags" aria-label="Tags, séparés par des virgules">
+      <datalist id="rf-cats">${(d.categories || []).map((t) => `<option value="${esc(t)}">`).join("")}</datalist>`}
+    ${multi && !promotion ? `<label class="petit muet rf-n">Exemplaires <input class="champ" type="number" id="rf-n" min="1" max="99" value="1"></label>` : ""}
+    ${promotion ? "" : `<div class="segments rf-dest" role="group" aria-label="Où ajouter la carte">${[["deck", d.titre], ["maybe", "Maybeboard"]].map(([k, l]) =>
+      `<button type="button" data-dest="${k}" class="${k === dest ? "actif" : ""}" aria-pressed="${k === dest}"><span class="seg-lib">${esc(l)}</span></button>`).join("")}</div>`}
+    <button class="btn btn-accent" data-act="ajouter">${libelleAjout(x, dest)}</button>
   </div>`;
 }
 
@@ -5490,7 +5510,7 @@ function ficheRecherche(i, ctx = null) {
         <div class="fc-version">
           ${v ? `<span class="petit muet">${esc(v.edition)}${v.annee ? " · " + esc(v.annee) : ""}${v.lang === "fr" ? " · en français" : ""}</span>` : x.edition ? `<span class="petit muet">${esc(x.edition.nom)} · ${esc(x.edition.annee)}</span>` : ""}
           <button type="button" class="lien-discret ecrit" data-act="version">${x.versions > 1 ? `${x.versions} versions` : "Changer la version"}</button>
-        </div></div>
+        </div>${flechesFiche(i, liste.length)}</div>
       <div class="fc-infos">
         <div class="fc-tete">
           <div><h2>${esc(x.fr || x.nom)} ${mana(x.cout)}</h2>${x.fr && x.fr !== x.nom ? `<div class="muet">${esc(x.nom)}</div>` : ""}</div>
@@ -5504,20 +5524,14 @@ function ficheRecherche(i, ctx = null) {
         <div id="rf-assemble"></div>
         ${x.texte_fr || x.texte ? `<div class="texte fs-texte">${texte(x.texte_fr || x.texte)}</div>` : ""}
         ${x.texte_fr && x.texte ? `<details class="petit"><summary>Texte anglais</summary><div class="fs-texte" style="margin-top:.4rem">${texte(x.texte)}</div></details>` : ""}
-        ${d && !PARTAGE ? blocAjoutRch(x, d) : ""}
         <div class="fc-liens">
           ${d && !PARTAGE ? `<a href="#/deck/${enc(d.id)}/combos/${enc(x.nom)}">${ico("combos")}Combos avec cette carte</a>` : ""}
           <a href="${esc(lienCardmarket(x.nom))}" id="rf-cardmarket" target="_blank" rel="noopener">${ico("panier")}Cardmarket ↗</a>
           <a href="${esc(lienGatherer(x.nom))}" id="rf-gatherer" target="_blank" rel="noopener">${ico("livre")}Gatherer ↗</a>
         </div>
-        ${liste.length > 1 ? `
-          <div class="fc-nav">
-            <button class="btn btn-petit" data-act="prec" ${i === 0 ? "disabled" : ""}>${ico("precedent")}Précédente</button>
-            <span class="muet petit">${i + 1} / ${liste.length}</span>
-            <button class="btn btn-petit" data-act="suiv" ${i === liste.length - 1 ? "disabled" : ""}>Suivante${ico("suivant")}</button>
-          </div>` : ""}
       </div>
-    </div>`, (b) => {
+    </div>
+    ${piedFiche(d && !PARTAGE ? blocAjoutRch(x, d) : "")}`, (b) => {
     let dest = x.dans === "maybe" ? "deck" : PREF.get("rf-dest", "deck");
     ouEst($(".ou-est", b), x.nom, d && d.id);
     b.addEventListener("click", async (ev) => {
