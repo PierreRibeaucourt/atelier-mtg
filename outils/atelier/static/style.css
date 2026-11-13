@@ -52,7 +52,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .barre { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 1rem; padding: .6rem 1rem;
   background: var(--surface); border-bottom: 1px solid var(--bord); }
 .logo { display: inline-flex; align-items: center; gap: .45rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
-.logo::before, .ap-tete h1::before { content: ""; width: 22px; height: 22px; flex: none; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='11.5' cy='7' r='2.8' fill='%23f97316'/%3E%3Ccircle cx='18.5' cy='3.6' r='2' fill='%23f97316'/%3E%3Ccircle cx='19.8' cy='9.6' r='1.6' fill='%23f97316'/%3E%3Cpath d='M8 27.5 6.6 30.6M24 27.5l1.4 3.1' stroke='%239a3412' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpath d='M5 15h22c1 1.9 1.5 3.7 1.5 5.7 0 4.6-5.4 7.8-12.5 7.8S3.5 25.3 3.5 20.7c0-2 .5-3.8 1.5-5.7z' fill='%23c2410c'/%3E%3Crect x='2' y='11.5' width='28' height='5.2' rx='2.6' fill='%239a3412'/%3E%3Cpath d='M8 19.5c1.5 3.5 4.2 5 8 5' stroke='%23fdba74' stroke-width='1.6' fill='none' stroke-linecap='round' opacity='.7'/%3E%3C/svg%3E") center / contain no-repeat; }      /* le chaudron du favicon */
+.logo::before, .ap-tete h1::before, .tel-accueil h1::before { content: ""; width: 22px; height: 22px; flex: none; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='11.5' cy='7' r='2.8' fill='%23f97316'/%3E%3Ccircle cx='18.5' cy='3.6' r='2' fill='%23f97316'/%3E%3Ccircle cx='19.8' cy='9.6' r='1.6' fill='%23f97316'/%3E%3Cpath d='M8 27.5 6.6 30.6M24 27.5l1.4 3.1' stroke='%239a3412' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpath d='M5 15h22c1 1.9 1.5 3.7 1.5 5.7 0 4.6-5.4 7.8-12.5 7.8S3.5 25.3 3.5 20.7c0-2 .5-3.8 1.5-5.7z' fill='%23c2410c'/%3E%3Crect x='2' y='11.5' width='28' height='5.2' rx='2.6' fill='%239a3412'/%3E%3Cpath d='M8 19.5c1.5 3.5 4.2 5 8 5' stroke='%23fdba74' stroke-width='1.6' fill='none' stroke-linecap='round' opacity='.7'/%3E%3C/svg%3E") center / contain no-repeat; }      /* le chaudron du favicon */
 .espace { flex: 1; }
 /* « Aller à un deck » : une recherche plutôt qu'une liste, pour tenir avec 100 decks */
 .aller { position: relative; flex: 0 1 380px; min-width: 0; }
@@ -1266,8 +1266,23 @@ label.btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; 
 .qr-telephone svg { display: block; width: 100%; height: auto; }
 /* dans l'appli du téléphone : ce qui ne tourne que sur le PC (pour l'instant) */
 .telephone :is(#btn-rafraichir, #etat-maj) { display: none !important; }
-.tel-accueil { display: grid; gap: 1rem; justify-items: center; max-width: 26rem; margin: 12vh auto 0; padding: 0 1rem; text-align: center; }
-.tel-accueil h1 { margin: 0; }
+.tel-accueil { display: grid; gap: .9rem; max-width: 26rem; margin: 9vh auto 2rem; padding: 0 1rem; }
+body:has(.tel-accueil) .barre { display: none; }        /* l'accueil a déjà son logo */
+.tel-accueil h1 { display: flex; align-items: center; justify-content: center; gap: .6rem; margin: 0; font-size: 1.9rem; }
+.tel-accueil h1::before { width: 44px; height: 44px; }
+.tel-marque { text-align: center; margin-bottom: .4rem; }
+.tel-accroche { margin: .5rem 0 .2rem; font-size: 1.1rem; }
+.tel-rassure { margin: 0; color: var(--texte-2); font-size: .9rem; }
+/* les deux chemins : nouveau, ou déjà sur PC */
+.tel-choix { display: grid; gap: .55rem; padding: 1rem; background: var(--surface); border: 1px solid var(--bord); border-radius: 14px; }
+.tel-choix h2 { margin: 0; font-size: 1.08rem; }
+.tel-choix p { margin: 0; color: var(--texte-2); }
+.tel-choix .btn { width: 100%; justify-content: center; }
+.tel-relier { display: grid; gap: .7rem; }
+.tel-etapes { margin: 0; padding-left: 1.3rem; display: grid; gap: .3rem; }
+.tel-accueil .erreur { text-align: center; }
+.tel-accueil .lien-discret, .tel-decouvrir { justify-self: center; }
+.tel-decouvrir { color: var(--texte-2); font-size: .9rem; margin-top: .3rem; }
 .tel-accueil video { width: 100%; border-radius: var(--rayon); background: #000; }
 .tel-coller { width: 100%; text-align: left; }
 .tel-coller summary { cursor: pointer; color: var(--texte-2); }

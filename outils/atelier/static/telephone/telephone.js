@@ -1978,25 +1978,56 @@
   }
 
   const e = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-  // l'écran d'attente : relier le téléphone, ou recevoir les decks la première fois
+  // l'écran d'attente : la première fois, deux chemins selon qu'on a déjà l'Atelier sur un PC ou non ; ensuite, la
+  // réception des decks. iPhone hors de l'appli installée : l'installer d'abord, car Safari et l'appli installée ne
+  // partagent pas leurs données (des decks commencés dans Safari n'y seraient pas).
   function attenteVue(el) {
     if (!acces) {
+      const dabord = iphone && !installee() && !el.dataset.safari;
       el.innerHTML = `<div class="tel-accueil">
-        <h1>Atelier MTG</h1>
-        <button class="btn btn-accent" id="tel-commencer">Commencer ici</button>
-        <button class="btn" id="tel-scanner">Scanner le QR code du PC</button>
-        <p class="muet petit">Sur le PC : Atelier › Options › Téléphone.</p>
-        <video id="tel-video" playsinline muted hidden></video>
-        <details class="tel-coller"><summary>Coller le lien</summary>
-          <div class="form-ligne"><input class="champ" id="tel-lien" placeholder="https://atelier-mtg.github.io/#appairer=…" autocomplete="off">
-          <button class="btn" id="tel-relier">Relier</button></div></details>
+        <div class="tel-marque"><h1>Atelier MTG</h1>
+          <p class="tel-accroche">Tes decks Commander, dans ta poche.</p>
+          <p class="tel-rassure">Gratuit · sans compte · sans pub</p></div>
+        ${dabord ? `<section class="tel-choix">
+          <h2>D'abord, installe l'appli</h2>
+          <ol class="tel-etapes"><li>Touche Partager <span class="tel-partager" aria-hidden="true">⬆</span> en bas de Safari.</li>
+            <li>Choisis «&nbsp;Sur l'écran d'accueil&nbsp;».</li><li>Ouvre l'Atelier depuis sa nouvelle icône.</li></ol>
+        </section>
+        <button class="lien-discret" id="tel-safari">Continuer dans Safari</button>` : `<section class="tel-choix">
+          <h2>Nouveau sur l'Atelier ?</h2>
+          <p>Tes decks restent sur ce téléphone.</p>
+          <button class="btn btn-accent" id="tel-commencer">Commencer</button>
+        </section>
+        <section class="tel-choix">
+          <h2>Déjà l'Atelier sur ton PC ?</h2>
+          <p>Retrouve ici les decks de ton PC.</p>
+          <button class="btn" id="tel-relier-pc" aria-expanded="false" aria-controls="tel-relier">Relier à mon PC</button>
+          <div id="tel-relier" class="tel-relier" hidden>
+            <ol class="tel-etapes"><li>Sur ton PC, ouvre l'Atelier, puis Options › Téléphone.</li><li>Scanne le QR code qui s'affiche.</li></ol>
+            <button class="btn btn-accent" id="tel-scanner">Scanner le QR code</button>
+            <video id="tel-video" playsinline muted hidden></video>
+            <details class="tel-coller"><summary>Pas d'appareil photo ?</summary>
+              <p>Sur le PC, touche «&nbsp;Copier le lien&nbsp;» sous le QR code, envoie-le sur ce téléphone et colle-le ici.</p>
+              <div class="form-ligne"><input class="champ" id="tel-lien" placeholder="https://atelier-mtg.github.io/#appairer=…" autocomplete="off" aria-label="Lien du PC">
+              <button class="btn" id="tel-relier-lien">Relier</button></div></details>
+          </div>
+        </section>`}
         <p class="erreur" id="tel-erreur" hidden></p>
-        ${installee() ? "" : `<p class="muet petit tel-installer">${iphone ? "Pour l'installer : Partager › Sur l'écran d'accueil. Ouvre-la ensuite depuis son icône, et scanne le QR code."
-          : `<button class="btn btn-discret" id="tel-installer">Installer l'appli</button>`}</p>`}
+        <a class="tel-decouvrir" href="https://atelier-mtg.com/">C'est quoi, l'Atelier MTG ?</a>
       </div>`;
       const erreur = (m) => { const x = el.querySelector("#tel-erreur"); x.textContent = m; x.hidden = !m; };
+      if (dabord) {
+        el.querySelector("#tel-safari").onclick = () => { el.dataset.safari = "1"; attenteVue(el); };
+        return;
+      }
       const relier = async (texte) => {
         try { await appairer(texte); demarrer(); } catch (err) { erreur(err.message); }
+      };
+      el.querySelector("#tel-relier-pc").onclick = (ev) => {
+        const b = ev.currentTarget, z = el.querySelector("#tel-relier");
+        z.hidden = !z.hidden;
+        b.setAttribute("aria-expanded", String(!z.hidden));
+        b.hidden = !z.hidden;
       };
       el.querySelector("#tel-scanner").onclick = async (ev) => {
         ev.currentTarget.disabled = true;
@@ -2004,10 +2035,8 @@
         try { await scanner(el.querySelector("#tel-video"), relier); }
         catch (err) { erreur(err.name === "NotAllowedError" ? "Autorise l'appareil photo, ou colle le lien." : err.message); ev.target.disabled = false; }
       };
-      el.querySelector("#tel-relier").onclick = () => relier(el.querySelector("#tel-lien").value);
+      el.querySelector("#tel-relier-lien").onclick = () => relier(el.querySelector("#tel-lien").value);
       el.querySelector("#tel-commencer").onclick = (ev) => { ev.currentTarget.disabled = true; commencerIci().catch((err) => erreur(err.message)); };
-      const inst = el.querySelector("#tel-installer");
-      if (inst) inst.onclick = () => (invite ? invite.prompt() : erreur("Menu du navigateur › Installer l'application."));
       return;
     }
     el.innerHTML = T.erreur ? `<div class="tel-accueil"><h1>Atelier MTG</h1><p class="erreur">${e(T.erreur)}</p>
