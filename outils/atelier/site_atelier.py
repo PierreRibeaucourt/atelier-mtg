@@ -177,9 +177,10 @@ def pre_rendre(dossier, marque='id="installation"'):
     return m.group(1)
 
 
-def inserer(dossier, rendu, classe="vue vue-pleine"):
+def inserer(dossier, rendu, installation="#installation", classe="vue vue-pleine"):
     """Le pré-rendu dans la page ; en haut, le champ « Rechercher une carte… » (app.js › BASE_WEB) et, à droite,
-    « Créer un deck » (l'appli, sans rien installer) à la place de « Demander à Claude », dont le panneau n'est qu'une vitrine ici."""
+    « Installer l'Atelier MTG » (sa section Installation) et « Créer un deck » (l'appli, sans rien installer) à la
+    place de « Demander à Claude », dont le panneau n'est qu'une vitrine ici."""
     index = os.path.join(dossier, "index.html")
     with open(index, encoding="utf-8") as f:
         html = f.read()
@@ -187,7 +188,9 @@ def inserer(dossier, rendu, classe="vue vue-pleine"):
     chat = re.search(r'<button id="btn-chat".*?</button>', html)
     if vide not in html or not chat:
         raise SystemExit("static/index.html a changé : pré-rendu impossible.")
-    creer = f'<a href="{APPLI}" id="btn-creer" class="btn btn-accent" data-ico="plus">Créer un deck</a>'
+    creer = (f'<a href="{installation}" id="btn-installer" class="btn btn-contour" data-ico="telecharger">'
+             f'<span>Installer<span class="long">&nbsp;l\'Atelier MTG</span></span></a>\n      '
+             f'<a href="{APPLI}" id="btn-creer" class="btn btn-accent" data-ico="plus">Créer un deck</a>')
     html = html.replace(vide, f'<main id="vue" class="{classe}">{rendu}</main>').replace(chat.group(0), creer)
     for a, b in (('class="partage"', 'class="partage site-atelier"'),                # le champ du haut : une carte
                  ('placeholder="Chercher une carte ou un deck…"', 'placeholder="Rechercher une carte…"'),
@@ -409,7 +412,7 @@ def page_recherche(dossier):
     entete = dict(titre=TITRE_RECHERCHE, description=DESCRIPTION_RECHERCHE, url=SITE + "recherche/",
                   image=partage.IMAGE_ATELIER, alt=partage.ALT_ATELIER, indexer=True, tete=[fil_recherche()])
     partage._page(d, donnees_recherche(), entete)
-    inserer(d, pre_rendre(d, 'id="moteur"'), classe="vue vue-large")
+    inserer(d, pre_rendre(d, 'id="moteur"'), installation="../#installation", classe="vue vue-large")
 
 
 def construire(dossier):

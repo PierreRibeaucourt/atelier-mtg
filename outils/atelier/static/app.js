@@ -5066,9 +5066,9 @@ function vueAPropos(installation = false) {
           <h1>L'Atelier <span>MTG</span></h1>
           <p class="ap-accroche">Le deck builder Commander assisté,<br>100% local et sans compte.</p>
           <ul class="ap-puces">${["Suggestions", "Base de mana", "Combos", "Bracket", "Simulation", "Table de jeu", "Recherche avancée", "Claude"].map((x) => `<li>${x}</li>`).join("")}</ul>
-          <p class="ap-cta">${SUR_TELEPHONE ? `<a class="btn btn-accent" href="${APPLI_TELEPHONE}" id="ap-appli">${ico("telephone")}Ouvrir l'Atelier MTG</a>`
-            : `<a class="btn btn-accent" href="${INSTALLER}" id="ap-installer">${ico("telecharger")}Installer l'Atelier MTG</a>`}
-            <a class="btn" href="${EXEMPLES_ATELIER}">${ico("partager")}Voir des decks partagés</a></p>
+          <p class="ap-cta"><a class="btn btn-accent" href="${PARTAGE ? APPLI_TELEPHONE : "#/"}" id="ap-creer">${ico("plus")}Créer un deck</a>
+            <a class="btn btn-contour" href="${INSTALLER}" id="ap-installer">${ico("telecharger")}Installer l'Atelier MTG</a>
+            <a class="ap-voir" href="${EXEMPLES_ATELIER}">Voir à quoi ça ressemble</a></p>
           <p class="ap-mention"><b>Gratuit</b> · open source · PC et téléphone${versionAtelier ? ` · version ${esc(versionAtelier)}` : ""}</p>
         </div>
       </div>

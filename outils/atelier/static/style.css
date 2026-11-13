@@ -83,6 +83,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .site-atelier #lien-recherche > span, .site-atelier #lien-recherche .long { display: inline; }
 }
 @media (max-width: 400px) { .site-atelier #lien-recherche .ico { display: none; } }
+/* « Installer », sans « l'Atelier MTG » ; plus étroit : le chaudron seul, puis les boutons sans icône (une seule ligne) */
+@media (max-width: 560px) { #btn-installer .long { display: none; } }
+@media (max-width: 440px) { .site-atelier .logo { font-size: 0; gap: 0; } }
+@media (max-width: 380px) { :is(#btn-installer, #btn-creer) .ico { display: none; } }
 .fil { display: flex; gap: .45rem; align-items: center; font-size: .85rem; color: var(--texte-2); margin: -.25rem 0 .6rem; }
 .fil a { color: var(--texte-2); }
 .fil a:hover { color: var(--accent); }
@@ -96,6 +100,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn-accent { background: var(--accent); color: var(--accent-texte); border-color: var(--accent); }
 .btn-accent:hover { background: var(--accent); filter: brightness(1.08); }
 .btn-discret { border-color: transparent; background: transparent; color: var(--texte-2); }
+/* l'autre choix, à côté d'un bouton orange : le contour seul (page d'accueil : Installer / Créer un deck) */
+.btn.btn-contour { border-color: var(--accent); background: transparent; color: var(--accent); }
+.btn.btn-contour:hover { background: var(--accent-doux); }
 .btn-danger { color: var(--alerte); }
 .btn-petit { padding: .2rem .55rem; font-size: .85rem; }
 
@@ -986,7 +993,9 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .ap-puces { list-style: none; padding: 0; margin: 0 0 1.5rem; display: flex; flex-wrap: wrap; gap: 7px; }
 .ap-puces li { font-size: .85rem; line-height: 1.5; padding: .15rem .7rem; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--bord);
   color: var(--texte-2); }
-.ap-cta { margin: 0 0 .8rem; display: flex; flex-wrap: wrap; gap: .6rem; }
+.ap-cta { margin: 0 0 .8rem; display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+.ap-voir { color: var(--texte-2); text-underline-offset: 3px; }
+.ap-voir:hover { color: var(--accent); }
 .ap-mention { margin: 0; font-size: .85rem; color: var(--texte-2); }
 .ap-mention b { color: var(--accent); font-weight: 600; }
 @media (max-width: 900px) {                        /* écran étroit : le texte seul */
