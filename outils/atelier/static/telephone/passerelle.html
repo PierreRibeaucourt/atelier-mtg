@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#161513">
+  <title>Atelier MTG</title>
+  <link rel="canonical" href="https://app.atelier-mtg.com/">
+  <style>
+    :root { color-scheme: dark; --fond: #161513; --surface: #1f1e1b; --bord: #383530; --texte: #ece9e3; --texte-2: #a39d93;
+      --accent: #f26b2c; --accent-texte: #1a0d05; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: var(--fond);
+      color: var(--texte); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { width: 100%; max-width: 30rem; display: flex; flex-direction: column; gap: .9rem; }
+    h1 { margin: 0; font-size: 1.5rem; line-height: 1.25; }
+    p { margin: 0; }
+    .petit { font-size: .9rem; color: var(--texte-2); }
+    .btn { font: inherit; font-weight: 600; padding: .8rem 1rem; border-radius: 10px; border: 1px solid var(--bord);
+      background: var(--surface); color: var(--texte); cursor: pointer; }
+    .btn.accent { background: var(--accent); border-color: var(--accent); color: var(--accent-texte); }
+    .btn:disabled { opacity: .6; cursor: default; }
+    a { color: var(--accent); }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main id="page" hidden>
+    <h1>L'Atelier MTG déménage</h1>
+    <p>L'appli s'ouvre maintenant à l'adresse <strong>app.atelier-mtg.com</strong>. Tes decks sont gardés ici, à
+      l'ancienne adresse : emporte-les.</p>
+    <button class="btn accent" id="transferer">Transférer mes decks</button>
+    <button class="btn" id="fichier">Enregistrer mes decks dans un fichier</button>
+    <p class="petit" id="aide" hidden></p>
+    <a class="petit" id="sans" href="https://app.atelier-mtg.com/">Ouvrir la nouvelle adresse sans rien emporter</a>
+  </main>
+  <script>
+  // L'ancienne adresse de l'appli du téléphone (atelier-mtg.github.io), publiée par telephone_site.py --passerelle.
+  // Les decks d'un téléphone sans PC sont gardés par le navigateur, sous cette adresse (IndexedDB « atelier-telephone »,
+  // et localStorage) : la passerelle les envoie à la nouvelle adresse, d'un onglet à l'autre (demenagement.html), sans
+  // passer par aucun serveur, ou dans un fichier (même format que « Enregistrer dans un fichier » de l'appli).
+  // Sans rien à emporter : on part aussitôt vers la nouvelle adresse, avec la fin de l'adresse (#appairer=… des QR codes
+  // des PC jusqu'à la version 2.0.0).
+  (() => {
+    const NOUVELLE = "https://app.atelier-mtg.com/", ORIGINE = "https://app.atelier-mtg.com", FAIT = "telephone-demenage";
+    const $ = (id) => document.getElementById(id);
+    const partir = () => location.replace(NOUVELLE + location.hash);
+    const aide = (t) => { $("aide").textContent = t; $("aide").hidden = !t; };
+
+    // plus rien à garder ici : le service worker et les fichiers de l'ancienne appli
+    try { navigator.serviceWorker.getRegistrations().then((l) => l.forEach((r) => r.unregister())).catch(() => {}); } catch (_) {}
+    try { caches.keys().then((l) => l.forEach((k) => caches.delete(k))).catch(() => {}); } catch (_) {}
+
+    // ce que l'appli gardait ici, sans la base de cartes (la nouvelle adresse la retélécharge) ; null : rien
+    const ouvrir = () => new Promise((ok) => {
+      let r;
+      try { r = indexedDB.open("atelier-telephone"); } catch (_) { return ok(null); }
+      r.onupgradeneeded = () => r.transaction.abort();          // pas de base ici : on n'en crée pas
+      r.onsuccess = () => ok(r.result.objectStoreNames.contains("fichiers") ? r.result : null);
+      r.onerror = () => ok(null);
+    });
+    async function tout() {
+      const db = await ouvrir(), fichiers = {};
+      if (db) await new Promise((ok, ko) => {
+        const t = db.transaction("fichiers", "readonly"), s = t.objectStore("fichiers"), c = s.openCursor();
+        c.onsuccess = () => {
+          const x = c.result;
+          if (!x) return;
+          if (x.key !== "@base") fichiers[x.key] = x.value;
+          x.continue();
+        };
+        t.oncomplete = ok;
+        t.onerror = () => ko(t.error);
+      });
+      const local = {};
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k !== FAIT) local[k] = localStorage.getItem(k);
+        }
+      } catch (_) {}
+      return { format: "atelier-mtg-appli", version: 1, date: new Date().toISOString(), fichiers, local };
+    }
+
+    let donnees = null, fenetre = null, minuteur = null;
+    addEventListener("message", (ev) => {
+      if (ev.origin !== ORIGINE || !fenetre || ev.source !== fenetre || !ev.data) return;
+      const m = ev.data.atelier;
+      if (m === "pret") fenetre.postMessage({ atelier: "donnees", ...donnees }, ORIGINE);
+      else if (m === "recu" || m === "refus") {
+        clearTimeout(minuteur);
+        try { localStorage.setItem(FAIT, new Date().toISOString()); } catch (_) {}
+        try { fenetre.close(); } catch (_) {}
+        partir();
+      } else if (m === "echec") {
+        clearTimeout(minuteur);
+        $("transferer").disabled = false;
+        aide(`Le transfert n'a pas marché (${ev.data.message || "?"}) : enregistre plutôt tes decks dans un fichier.`);
+      }
+    });
+
+    $("transferer").onclick = () => {
+      fenetre = window.open(NOUVELLE + "demenagement.html");
+      if (!fenetre) return aide("Ton navigateur a bloqué la nouvelle fenêtre : enregistre plutôt tes decks dans un fichier.");
+      $("transferer").disabled = true;
+      aide("Transfert en cours…");
+      minuteur = setTimeout(() => {
+        $("transferer").disabled = false;
+        aide("La nouvelle adresse ne répond pas : enregistre plutôt tes decks dans un fichier.");
+      }, 30000);
+    };
+    $("fichier").onclick = () => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(donnees)], { type: "application/json" }));
+      a.download = `atelier-mtg-${donnees.date.slice(0, 10)}.json`;
+      document.body.append(a);
+      a.click();
+      a.remove();
+      aide("Fichier enregistré. Ouvre app.atelier-mtg.com, puis « Restaurer un fichier » (à l'accueil, ou dans les Options).");
+    };
+
+    (async () => {
+      let fait = null;
+      try { fait = localStorage.getItem(FAIT); } catch (_) {}
+      if (fait) return partir();
+      donnees = await tout().catch(() => null);
+      if (!donnees || !Object.keys(donnees.fichiers).length) return partir();
+      // iPhone, appli de l'écran d'accueil : ses données restent à part de Safari, le fichier est plus sûr
+      if (navigator.standalone) {
+        $("fichier").classList.add("accent");
+        $("transferer").classList.remove("accent");
+        aide("Sur iPhone, l'appli de l'écran d'accueil garde ses données à part : enregistre-les dans un fichier, "
+          + "installe l'appli depuis app.atelier-mtg.com, puis « Restaurer un fichier ».");
+      }
+      $("page").hidden = false;
+    })();
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#161513">
+  <title>Atelier MTG</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px; box-sizing: border-box;
+      background: #161513; color: #ece9e3; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; text-align: center; }
+  </style>
+</head>
+<body>
+  <p id="etat">Transfert de tes decks…</p>
+  <script>
+  // L'appli déménage : la passerelle de l'ancienne adresse (passerelle.html), qui a ouvert cette page, lui envoie ce que
+  // l'appli gardait là-bas (le contenu d'un fichier de sauvegarde) ; on le range ici, dans la même base que telephone.js
+  // (IndexedDB « atelier-telephone », magasin « fichiers »), puis l'appli s'ouvre.
+  (() => {
+    const ANCIENNE = "https://atelier-mtg.github.io";
+    const etat = (t) => { document.getElementById("etat").textContent = t; };
+    if (!window.opener) { location.replace("./"); return; }
+    const ouvrir = () => new Promise((ok, ko) => {
+      const r = indexedDB.open("atelier-telephone", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("fichiers");
+      r.onsuccess = () => ok(r.result);
+      r.onerror = () => ko(r.error);
+    });
+    const tx = (db, mode, f) => new Promise((ok, ko) => {
+      const t = db.transaction("fichiers", mode), r = f(t.objectStore("fichiers"));
+      t.oncomplete = () => ok(r && r.result);
+      t.onerror = () => ko(t.error);
+    });
+    addEventListener("message", async (ev) => {
+      if (ev.origin !== ANCIENNE || !ev.data || ev.data.atelier !== "donnees") return;
+      const repondre = (m) => { try { ev.source.postMessage(m, ANCIENNE); } catch (_) {} };
+      try {
+        const d = ev.data, db = await ouvrir();
+        const deja = (await tx(db, "readonly", (s) => s.getAllKeys())).filter((k) => k !== "@base");
+        if (deja.length && !confirm("Des decks sont déjà gardés à la nouvelle adresse. Les remplacer par ceux de l'ancienne ?")) {
+          repondre({ atelier: "refus" });
+          location.replace("./");
+          return;
+        }
+        await tx(db, "readwrite", (s) => {
+          for (const k of deja) s.delete(k);
+          for (const [k, v] of Object.entries(d.fichiers || {})) s.put(v, k);
+        });
+        for (const [k, v] of Object.entries(d.local || {})) localStorage.setItem(k, v);
+        etat("C'est fait.");
+        repondre({ atelier: "recu" });
+        setTimeout(() => location.replace("./"), 1500);         // si la passerelle n'a pas pu fermer cet onglet
+      } catch (e) {
+        etat("Le transfert n'a pas marché.");
+        repondre({ atelier: "echec", message: String((e && e.message) || e) });
+      }
+    });
+    window.opener.postMessage({ atelier: "pret" }, ANCIENNE);
+  })();
+  </script>
+</body>
+</html>

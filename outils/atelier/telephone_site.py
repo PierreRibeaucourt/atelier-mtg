@@ -45,7 +45,7 @@ def construire(dossier):
     os.makedirs(dossier)
     for f in ("app.js", "style.css"):
         shutil.copyfile(os.path.join(STATIQUE, f), os.path.join(dossier, f))
-    for f in ("moteur.js", "pages.js", "cartes.js", "jsQR.js"):
+    for f in ("moteur.js", "pages.js", "cartes.js", "jsQR.js", "demenagement.html"):
         shutil.copyfile(os.path.join(STATIQUE, "telephone", f), os.path.join(dossier, f))
     # partager un deck sans PC (partage.js) : la version de l'Atelier, et les modèles de la page publiée (partage.py)
     sys.path.insert(0, ICI)
@@ -110,5 +110,25 @@ def construire(dossier):
     return dossier
 
 
+def passerelle(dossier):
+    """L'ancienne adresse de l'appli (atelier-mtg.github.io) : la passerelle vers la nouvelle (passerelle.html), qui
+    emporte ce que le navigateur gardait ici ; la même page pour toute adresse (404.html), et un service worker qui
+    efface les fichiers de l'ancienne appli puis s'en va."""
+    if os.path.isdir(dossier):
+        shutil.rmtree(dossier)
+    os.makedirs(dossier)
+    for f in ("index.html", "404.html"):
+        shutil.copyfile(os.path.join(STATIQUE, "telephone", "passerelle.html"), os.path.join(dossier, f))
+    with open(os.path.join(dossier, "sw.js"), "w", encoding="utf-8", newline="\n") as f:
+        f.write("// L'ancienne adresse de l'appli : plus rien à garder ici (passerelle.html).\n"
+                "self.addEventListener(\"install\", () => self.skipWaiting());\n"
+                "self.addEventListener(\"activate\", (ev) => ev.waitUntil(caches.keys()\n"
+                "  .then((l) => Promise.all(l.map((k) => caches.delete(k)))).then(() => self.registration.unregister())));\n")
+    open(os.path.join(dossier, ".nojekyll"), "w").close()
+    return dossier
+
+
 if __name__ == "__main__":
-    print(construire(os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(RACINE, "site-telephone"))))
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    sortie = os.path.abspath(args[0] if args else os.path.join(RACINE, "site-telephone"))
+    print(passerelle(sortie) if "--passerelle" in sys.argv else construire(sortie))

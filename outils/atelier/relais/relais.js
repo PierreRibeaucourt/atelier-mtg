@@ -1,7 +1,8 @@
 // Relais de l'Atelier MTG sur téléphone : GitHub (connexion par appareil) et Commander Spellbook refusent les pages web
-// (pas de CORS). Le relais transmet seulement ces cinq demandes, pour l'appli atelier-mtg.github.io. Aucun secret :
-// l'identifiant de l'application GitHub est public, et le jeton obtenu repart aussitôt vers le téléphone, sans être gardé.
-const ORIGINES = ["https://atelier-mtg.github.io", "http://127.0.0.1:5078"];
+// (pas de CORS). Le relais transmet seulement ces cinq demandes, pour l'appli app.atelier-mtg.com (et son ancienne
+// adresse, atelier-mtg.github.io, le temps du déménagement). Aucun secret : l'identifiant de l'application GitHub est
+// public, et le jeton obtenu repart aussitôt vers le téléphone, sans être gardé.
+const ORIGINES = ["https://app.atelier-mtg.com", "https://atelier-mtg.github.io", "http://127.0.0.1:5078"];
 const CLIENT_ID = "Ov23li9fE6JyGKnCmR3L";
 const PORTEE = "repo";
 const SPELLBOOK = "https://backend.commanderspellbook.com/";
