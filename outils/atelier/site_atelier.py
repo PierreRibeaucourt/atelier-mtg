@@ -49,7 +49,8 @@ FAN_CONTENT = "https://company.wizards.com/en/legal/fancontentpolicy"
 # l'onglet « Installeur » ouvert dans le HTML, comme pour la plupart des visiteurs
 # la recherche de cartes (recherche/) : le moteur de l'appli du téléphone (static/telephone/cartes.js, copié ici) et sa
 # base, publiée sur le site de l'appli (base_telephone.py) ; le navigateur du visiteur la télécharge de là
-BASE_CARTES = "https://app.atelier-mtg.com/base/"
+APPLI = "https://app.atelier-mtg.com/"                 # l'appli : des decks sans rien installer
+BASE_CARTES = APPLI + "base/"
 SOURCE_MOTEUR = os.path.join(partage.STATIQUE, "telephone", "cartes.js")
 MOTEUR = "cartes.js?v=" + partage._version(SOURCE_MOTEUR)                 # dans recherche/
 TITRE_RECHERCHE = "Recherche avancée de cartes Magic en français | Atelier MTG"
@@ -176,9 +177,9 @@ def pre_rendre(dossier, marque='id="installation"'):
     return m.group(1)
 
 
-def inserer(dossier, rendu, installation="#installation", classe="vue vue-pleine"):
+def inserer(dossier, rendu, classe="vue vue-pleine"):
     """Le pré-rendu dans la page ; en haut, le champ « Rechercher une carte… » (app.js › BASE_WEB) et, à droite,
-    « Créer un deck » (vers l'installation) à la place de « Demander à Claude », dont le panneau n'est qu'une vitrine ici."""
+    « Créer un deck » (l'appli, sans rien installer) à la place de « Demander à Claude », dont le panneau n'est qu'une vitrine ici."""
     index = os.path.join(dossier, "index.html")
     with open(index, encoding="utf-8") as f:
         html = f.read()
@@ -186,7 +187,7 @@ def inserer(dossier, rendu, installation="#installation", classe="vue vue-pleine
     chat = re.search(r'<button id="btn-chat".*?</button>', html)
     if vide not in html or not chat:
         raise SystemExit("static/index.html a changé : pré-rendu impossible.")
-    creer = f'<a href="{installation}" id="btn-creer" class="btn btn-accent" data-ico="plus">Créer un deck</a>'
+    creer = f'<a href="{APPLI}" id="btn-creer" class="btn btn-accent" data-ico="plus">Créer un deck</a>'
     html = html.replace(vide, f'<main id="vue" class="{classe}">{rendu}</main>').replace(chat.group(0), creer)
     for a, b in (('class="partage"', 'class="partage site-atelier"'),                # le champ du haut : une carte
                  ('placeholder="Chercher une carte ou un deck…"', 'placeholder="Rechercher une carte…"'),
@@ -408,7 +409,7 @@ def page_recherche(dossier):
     entete = dict(titre=TITRE_RECHERCHE, description=DESCRIPTION_RECHERCHE, url=SITE + "recherche/",
                   image=partage.IMAGE_ATELIER, alt=partage.ALT_ATELIER, indexer=True, tete=[fil_recherche()])
     partage._page(d, donnees_recherche(), entete)
-    inserer(d, pre_rendre(d, 'id="moteur"'), installation="../#installation", classe="vue vue-large")
+    inserer(d, pre_rendre(d, 'id="moteur"'), classe="vue vue-large")
 
 
 def construire(dossier):
