@@ -1049,10 +1049,10 @@ function chiffresDeck(d) {
   const complet = d.total === 100;
   const al = Object.entries(d.alertes || {});
   return `
-    <span class="badge ${complet ? "badge-ok" : "badge-alerte"}">${d.total} / 100 cartes</span>
+    <span class="badge ${complet ? "badge-ok" : "badge-alerte"}" title="${d.total} cartes sur 100"><span class="chf-l">${d.total} / 100 cartes</span><span class="chf-c">${d.total}/100</span></span>
     <span class="badge">${euros(d.prix_total)}</span>
     ${d.bracket ? `<span class="badge badge-bracket" title="${esc((d.bracket_raisons || []).join("\n"))}">${ico("bracket")}Bracket ${d.bracket}</span>` : ""}
-    <span class="badge ${d.gc.length ? "badge-gc" : ""}" title="${esc(d.gc.join(", "))}">${d.gc.length} Game Changer${d.gc.length > 1 ? "s" : ""}</span>
+    <span class="badge ${d.gc.length ? "badge-gc" : ""}" title="${d.gc.length} Game Changer${d.gc.length > 1 ? "s" : ""}${d.gc.length ? " : " + esc(d.gc.join(", ")) : ""}"><span class="chf-l">${d.gc.length} Game Changer${d.gc.length > 1 ? "s" : ""}</span><span class="chf-c">${d.gc.length} GC</span></span>
     ${!d.commandant ? `<span class="badge badge-alerte">pas de commandant</span>` : ""}
     ${al.length ? `<span class="badge badge-alerte" title="${esc(al.map(([n, a]) => `${n} : ${a.join(", ")}`).join("\n"))}">${al.length} carte${al.length > 1 ? "s" : ""} hors règles</span>` : ""}`;
 }

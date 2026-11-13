@@ -1313,13 +1313,24 @@ label.btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; 
 .telephone :is(.fil, .vue .titre-page > h1, .entete-deck h1, .entete-deck .actions) { display: none; }
 .telephone .vue { padding: .75rem .75rem 6rem; }
 .telephone .entete-deck .bandeau { height: 72px; }
-.telephone .entete-deck .cmds-entete { position: absolute; top: 26px; left: .75rem; margin: 0; --l: 64px; }
+.telephone .entete-deck .cmds-entete { position: absolute; top: 20px; left: .75rem; margin: 0; --l: 56px; }
 .telephone .entete-deck.duo .cmds-entete { left: 1rem; }
-.telephone .entete-deck.duo .cmd-entete + .cmd-entete { margin-left: -36px; }
-.telephone .entete-deck .infos { padding: .55rem .75rem .7rem; min-height: 0; }
-.telephone .entete-deck.avec-cmd .infos { padding-left: calc(64px + 1.5rem); min-height: 0; }
-.telephone .entete-deck.duo .infos { padding-left: calc(2 * 64px - 36px + 2rem); }
-.telephone .entete-deck .chiffres { margin-top: .4rem !important; }
+.telephone .entete-deck.duo .cmd-entete + .cmd-entete { margin-left: -32px; }
+.telephone .entete-deck .infos { display: block; padding: .5rem .75rem .65rem; min-height: 0; }
+.telephone .entete-deck .infos > div { min-width: 0; }
+.telephone .entete-deck.avec-cmd .infos { padding-left: calc(56px + 1.5rem); min-height: 0; }
+.telephone .entete-deck.duo .infos { padding-left: calc(2 * 56px - 32px + 2rem); }
+.telephone .entete-deck .infos .muet { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.telephone .entete-deck .chiffres { margin-top: .55rem !important; }
+.telephone .entete-deck.avec-cmd .chiffres { margin-left: calc(-56px - .75rem); }
+.telephone .entete-deck.duo .chiffres { margin-left: calc(-2 * 56px + 32px - 1.25rem); }
+.telephone .chiffres .badge { padding: .3rem .4rem; }
+/* les badges d'un deck en court (« 100/100 », « 1 GC ») : sur les cartes de l'accueil et l'en-tête du téléphone */
+.chf-c { display: none; }
+.carte-deck .chf-l, .telephone .entete-deck .chf-l { display: none; }
+.carte-deck .chf-c, .telephone .entete-deck .chf-c { display: inline; }
+/* la liste des decks en tableau : le deck, ses couleurs, ses cartes et son prix */
+.telephone .tableau-decks :is(th, td):nth-child(n+5) { display: none; }
 .telephone .onglets-deck { margin: .5rem -.75rem .25rem; padding: 0 .25rem; }
 .telephone .onglets a { padding: .55rem .75rem; }
 .telephone .onglets a .ico { display: none; }
