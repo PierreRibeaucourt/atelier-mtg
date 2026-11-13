@@ -4,7 +4,7 @@ Une interface locale pour gérer ses decks Magic: The Gathering au format Comman
 
 Tout tourne sur ton PC, à l'adresse http://127.0.0.1:5000. Rien n'est mis en ligne. Gratuit et libre, sous licence MIT.
 
-Présentation et téléchargement : https://pierreribeaucourt.github.io/atelier-mtg/
+Présentation et téléchargement : https://atelier-mtg.com/
 
 ## Ce qu'on peut faire
 

@@ -514,11 +514,12 @@ def _page_jouer(dossier):
 
 
 # « C'est quoi, l'Atelier MTG ? » : la page d'accueil de l'Atelier (site_atelier.py), la même pour tous les sites de
-# decks. Son image et ses captures sont sur le site de decks de l'auteur de l'Atelier, dans a-propos/. Ce dossier, où
-# chaque site avait sa copie de la page, ne garde qu'une redirection vers elle, pour les liens déjà partagés.
+# decks, sur son propre domaine. Son image et ses captures sont dans son a-propos/ (copiées à sa construction du site de
+# decks de l'auteur). Le dossier a-propos/ d'un site de decks, où chaque site avait sa copie de la page, ne garde qu'une
+# redirection vers elle, pour les liens déjà partagés.
 A_PROPOS = "a-propos"
-IMAGE_ATELIER = "https://pierreribeaucourt.github.io/decks/a-propos/atelier.jpg"
-ACCUEIL_ATELIER = "https://pierreribeaucourt.github.io/atelier-mtg/"
+ACCUEIL_ATELIER = "https://atelier-mtg.com/"
+IMAGE_ATELIER = ACCUEIL_ATELIER + "a-propos/atelier.jpg"
 TITRE_ATELIER = "L'Atelier MTG : gestionnaire de decks Commander, gratuit et local"
 DESCRIPTION_ATELIER = ("Concevoir, tester et partager ses decks Commander : statistiques et base de mana, combos, "
                        "bracket, table de jeu, recherche avancée et discussion avec Claude. Gratuit, open source, tout "
@@ -537,20 +538,26 @@ def _a_propos():
             os.remove(os.path.join(d, f))
         except OSError:
             pass
-    _ecrire(os.path.join(d, "index.html"), f"""<!doctype html>
+    _ecrire(os.path.join(d, "index.html"), redirection(ACCUEIL_ATELIER))
+
+
+def redirection(cible):
+    """Une page qui renvoie aussitôt vers cible, avec la fin de l'adresse (#installation) : GitHub Pages ne sait pas
+    rediriger vers un autre domaine ; la canonical et le refresh immédiat valent une redirection pour les moteurs."""
+    return f"""<!doctype html>
 <html lang="fr">
 <head>
   <meta charset="utf-8">
   <title>L'Atelier MTG</title>
-  <link rel="canonical" href="{ACCUEIL_ATELIER}">
-  <meta http-equiv="refresh" content="0; url={ACCUEIL_ATELIER}">
-  <script>location.replace({json.dumps(ACCUEIL_ATELIER)} + location.hash);</script>
+  <link rel="canonical" href="{cible}">
+  <meta http-equiv="refresh" content="0; url={cible}">
+  <script>location.replace({json.dumps(cible)} + location.hash);</script>
 </head>
 <body>
-  <p><a href="{ACCUEIL_ATELIER}">L'Atelier MTG</a></p>
+  <p><a href="{cible}">L'Atelier MTG</a></p>
 </body>
 </html>
-""")
+"""
 
 
 def _accueil(reg, site):

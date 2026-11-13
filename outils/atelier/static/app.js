@@ -176,7 +176,7 @@ $$("[data-ico]").forEach((el) => el.insertAdjacentHTML("afterbegin", ico(el.data
 // d'accueil de l'Atelier, dont l'en-tête a déjà son bouton « Installer ») ; en bas, la licence, le code source et
 // « C'est quoi, l'Atelier MTG ? » : la page d'accueil de l'Atelier, la même pour tous les sites de decks
 const TITRE_PARTAGE = document.title;
-const ACCUEIL_ATELIER = "https://pierreribeaucourt.github.io/atelier-mtg/";
+const ACCUEIL_ATELIER = "https://atelier-mtg.com/";
 const A_PROPOS = !PARTAGE ? "#/a-propos" : PARTAGE.page === "a-propos" ? "./" : ACCUEIL_ATELIER;
 // « Installer l'Atelier MTG » : la section Installation de cette page, pas GitHub (un débutant y attend un fichier à
 // télécharger, il y trouve du code)
@@ -187,12 +187,20 @@ if (PARTAGE) {
     <p>Page ${PARTAGE.auteur ? `de <strong>${esc(PARTAGE.auteur)}</strong>, ` : ""}partagée avec <a href="${A_PROPOS}">l'Atelier MTG</a>. Pour gérer, tester et partager vos propres decks Commander, l'Atelier est gratuit.</p>
     <a class="btn btn-accent btn-petit" href="${INSTALLER}">${ico("telecharger")}Installer l'Atelier MTG</a>
   </div>`);
-  $(".cadre").insertAdjacentHTML("afterend", `<footer class="pied-partage">
-    <nav>${PARTAGE.page === "a-propos" ? "" : `<a href="${A_PROPOS}">C'est quoi, l'Atelier MTG ?</a>`}${depot ? `<a href="${depot}" target="_blank" rel="noopener">Code source sur GitHub</a>
-      <a href="${depot}/blob/main/LICENSE" target="_blank" rel="noopener">Licence MIT</a>` : ""}</nav>
-    <p>Magic: The Gathering est une marque de Wizards of the Coast. L'Atelier MTG n'est ni affilié à Wizards of the Coast ni approuvé par elle.
-      Données des cartes : Scryfall.</p>
-  </footer>`);
+  $(".cadre").insertAdjacentHTML("afterend", piedPartage(PARTAGE.page === "a-propos" ? "" : A_PROPOS, depot, PARTAGE.page === "a-propos"));
+}
+
+// pied des pages partagées et de la page d'accueil de l'Atelier (site_atelier.py écrit le même sous ses pages légales) :
+// la mention exigée par la Fan Content Policy de Wizards, telle quelle ; mentions légales et confidentialité sur la page
+// d'accueil seulement (un site de decks est celui de son auteur)
+function piedPartage(aPropos, depot, legal, racine = "") {
+  return `<footer class="pied-partage">
+    <nav>${aPropos ? `<a href="${aPropos}">C'est quoi, l'Atelier MTG ?</a>` : ""}${depot ? `<a href="${depot}" target="_blank" rel="noopener">Code source sur GitHub</a>
+      <a href="${depot}/blob/main/LICENSE" target="_blank" rel="noopener">Licence MIT</a>` : ""}${legal ? `
+      <a href="${racine}mentions-legales/">Mentions légales</a><a href="${racine}confidentialite/">Confidentialité</a>` : ""}</nav>
+    <p lang="en">L'Atelier MTG is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC.</p>
+    <p>Données des cartes : Scryfall.</p>
+  </footer>`;
 }
 
 // hauteur de la barre du haut : les onglets d'un deck se collent juste dessous
@@ -4752,7 +4760,8 @@ function vueRechercheVitrine() {
 const AUTEUR_ATELIER = "PierreRibeaucourt";
 const DEPOT_ATELIER = "https://github.com/PierreRibeaucourt/atelier-mtg";
 // les captures de la page : sur le site de decks de l'auteur, pas dans le dépôt de code (on y voit des cartes et une discussion)
-const CAPTURES_ATELIER = "https://pierreribeaucourt.github.io/decks/a-propos/";
+// la page d'accueil a sa copie des captures (PARTAGE.captures) ; ailleurs, celle de la page d'accueil
+const CAPTURES_ATELIER = (PARTAGE && PARTAGE.captures) || ACCUEIL_ATELIER + "a-propos/";
 // les decks partagés de l'auteur : à quoi ressemble une page partagée, en vrai
 const EXEMPLES_ATELIER = "https://pierreribeaucourt.github.io/decks/";
 // l'Atelier sur téléphone (telephone.js), et son adresse en QR code pour qui visite la page depuis un ordinateur

@@ -1,6 +1,9 @@
-# Page d'accueil de l'Atelier, https://pierreribeaucourt.github.io/atelier-mtg/ : la page « C'est quoi, l'Atelier
-# MTG ? », pré-rendue pour les moteurs de recherche (outils/atelier/site_atelier.py), publiée sur GitHub Pages à chaque
-# changement de l'Atelier. Réglage du dépôt : Settings › Pages › Source : GitHub Actions.
+# Page d'accueil de l'Atelier, https://atelier-mtg.com/ : la page « C'est quoi, l'Atelier MTG ? », pré-rendue pour les
+# moteurs de recherche, avec ses mentions légales et sa confidentialité (outils/atelier/site_atelier.py), refaite à
+# chaque changement de l'Atelier. Elle est poussée sur la branche « accueil » de ce dépôt, que l'hébergement
+# (o2switch) récupère toutes les 15 minutes : aucun accès à l'hébergement n'est rangé ici.
+# L'ancienne adresse, https://pierreribeaucourt.github.io/atelier-mtg/ (GitHub Pages), ne garde qu'une redirection
+# vers le domaine, pour toujours. Réglage du dépôt : Settings › Pages › Source : GitHub Actions.
 name: Page d'accueil
 
 on:
@@ -12,7 +15,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -36,9 +39,23 @@ jobs:
       - name: Page pré-rendue (Chrome sans interface)
         run: python outils/atelier/site_atelier.py site
 
+      - name: Branche « accueil », pour l'hébergement
+        env:
+          JETON: ${{ github.token }}
+        run: |
+          cd site
+          git init -q -b accueil
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Page d'accueil (${GITHUB_SHA::7})"
+          git push -q -f "https://x-access-token:${JETON}@github.com/${GITHUB_REPOSITORY}.git" accueil
+
+      - name: Ancienne adresse, redirigée vers le domaine
+        run: python outils/atelier/site_atelier.py --redirection ancienne
+
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: ancienne
 
       - id: publication
         uses: actions/deploy-pages@v4

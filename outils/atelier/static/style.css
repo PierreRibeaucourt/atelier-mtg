@@ -902,6 +902,15 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .pied-partage nav { display: flex; flex-wrap: wrap; justify-content: center; gap: .3rem 1.4rem; margin-bottom: .5rem; }
 .pied-partage nav a { color: var(--texte); }
 .pied-partage p { margin: 0 auto; max-width: 720px; }
+.pied-partage p + p { margin-top: .3rem; }
+.pied-partage p a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+/* mentions légales et confidentialité de la page d'accueil (site_atelier.py) */
+.legal h1 { font-size: 2rem; font-weight: 800; letter-spacing: -.01em; line-height: 1.2; margin: 0 0 .3rem; }
+.legal .legal-date { color: var(--texte-2); font-size: .88rem; margin-top: 0; }
+.legal .legal-bref { font-size: 1.08rem; }
+.legal h2 { font-size: 1.3rem; margin-top: 2.2rem; }
+.legal ul { padding-left: 1.2rem; }
+.legal li { margin: .35rem 0; }
 /* « L'Atelier MTG » : la page qui présente l'outil (#/a-propos) */
 .a-propos { max-width: 760px; margin: 0 auto; line-height: 1.65; display: flow-root; }
 .a-propos h2 { font-size: 1.55rem; font-weight: 800; letter-spacing: -.01em; line-height: 1.25; margin: 2.8rem 0 .9rem; padding-top: 1.6rem;
