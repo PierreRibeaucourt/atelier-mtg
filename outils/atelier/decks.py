@@ -384,6 +384,75 @@ def nom_libre(nom):
     return nom
 
 
+FORMAT_APPLI = "atelier-mtg-appli"      # « Enregistrer dans un fichier » de l'appli (telephone.js › enregistrerFichier)
+
+
+def lire_appli(texte):
+    """Le fichier de sauvegarde de l'appli : {chemin: texte} de ce qu'elle gardait (« Deck …/archidekt.txt », ses
+    versions, son historique, « Classeur/… »), rangé comme ici ; None si ce n'en est pas un."""
+    if not texte.lstrip().startswith("{"):
+        return None
+    try:
+        d = json.loads(texte)
+    except ValueError:
+        return None
+    if not isinstance(d, dict) or d.get("format") != FORMAT_APPLI:
+        return None
+    depot = (d.get("fichiers") or {}).get("@depot")
+    f = depot.get("fichiers") if isinstance(depot, dict) else None
+    return {rel: t for rel, t in (f or {}).items() if isinstance(rel, str) and isinstance(t, str)}
+
+
+def importer_appli(fichiers):
+    """Les decks du fichier de l'appli, chacun avec ses versions et son historique. Rien n'est écrasé : un deck déjà là
+    avec la même liste est laissé, un autre du même nom prend un nom libre (« Kels 2 ») ; le classeur seulement s'il n'y
+    en a pas encore ici. Renvoie (dossiers créés, decks déjà là, échecs [{nom, erreur}])."""
+    par_dossier = {}
+    for rel, t in fichiers.items():
+        parts = rel.split("/")
+        if len(parts) < 2 or "\\" in rel or any(not p.strip() or p.startswith(".") for p in parts):
+            continue
+        par_dossier.setdefault(parts[0], {})["/".join(parts[1:])] = t
+    crees, deja, echecs = [], [], []
+    for dossier, contenu in sorted(par_dossier.items()):
+        nom = dossier.removeprefix("Deck ")
+        if dossier.startswith("Deck ") and FICHIER in contenu:
+            try:
+                dossier = _dossier(dossier)
+                if os.path.exists(os.path.join(RACINE, dossier)):
+                    ici = os.path.join(RACINE, dossier, FICHIER)
+                    if os.path.exists(ici):
+                        with open(ici, encoding="utf-8") as fh:
+                            if fh.read().strip() == contenu[FICHIER].strip():
+                                deja.append(dossier)
+                                continue
+                    dossier = _dossier(nom_libre(nom))
+                _ecrire_dossier(dossier, contenu)
+                crees.append(dossier)
+            except (ValueError, OSError) as e:
+                echecs.append(dict(nom=nom, erreur=str(e)))
+        elif dossier == "Classeur" and not os.path.exists(os.path.join(RACINE, dossier, "classeur.txt")):
+            try:
+                _ecrire_dossier(dossier, contenu)
+            except OSError as e:
+                echecs.append(dict(nom="Classeur", erreur=str(e)))
+    return crees, deja, echecs
+
+
+def _ecrire_dossier(dossier, contenu):
+    """Les fichiers {chemin dans le dossier: texte}, tels quels ; ceux que Windows refuse (nom interdit) sont sautés."""
+    for rel, t in contenu.items():
+        p = os.path.join(RACINE, dossier, *rel.split("/"))
+        try:
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            with open(p + ".tmp", "wb") as fh:
+                fh.write(t.encode("utf-8"))
+            os.replace(p + ".tmp", p)
+        except OSError:
+            if rel == FICHIER:
+                raise
+
+
 def tout_possede(deck):
     """Deck importé d'une autre appli, déjà monté : toutes ses cartes (hors Maybeboard) sont notées comme là (Achats)."""
     poss = Counter()

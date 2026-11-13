@@ -1277,11 +1277,13 @@ function modaleNouveauDeck() {
 
 // plusieurs decks d'un coup, exportés d'une autre appli (ManaBox, Moxfield, Archidekt…) : un fichier par deck, qui lui
 // donne son nom. Déjà montés (coché) : leurs cartes sont notées comme là, dans l'onglet Achats.
+// sur le PC, aussi le fichier « Enregistrer dans un fichier » de l'appli : tous ses decks d'un coup (decks.importer_appli)
+const CHOIX_IMPORT = `Choisir les fichiers (.txt ou .csv, un par deck${PC ? ", ou la sauvegarde de l'appli" : ""})`;
 function modaleImportDecks() {
   ouvrirModale(`
     <h2>Importer des decks</h2>
-    <label class="import-zone"><input type="file" class="fichier-cache" id="im-fichiers" multiple accept=".txt,.csv,text/plain,text/csv">
-      ${ico("dossier")}<span id="im-choix">Choisir les fichiers (.txt ou .csv, un par deck)</span></label>
+    <label class="import-zone"><input type="file" class="fichier-cache" id="im-fichiers" multiple accept=".txt,.csv,text/plain,text/csv${PC ? ",.json,application/json" : ""}">
+      ${ico("dossier")}<span id="im-choix">${CHOIX_IMPORT}</span></label>
     <label class="petit"><input type="checkbox" id="im-montes" checked> Decks déjà montés</label>
     <div id="im-res"></div>
     <div class="boutons"><button class="btn btn-accent" id="ok" disabled>Importer</button></div>`, (b) => {
@@ -1291,7 +1293,7 @@ function modaleImportDecks() {
       fichiers = await Promise.all([...ev.target.files].map(async (f) => ({ nom: f.name, texte: await f.text() })));
       $("#im-choix", b).textContent = fichiers.length
         ? `${fichiers.length} fichier${fichiers.length > 1 ? "s" : ""} : ${fichiers.map((f) => f.nom).join(", ")}`
-        : "Choisir les fichiers (.txt ou .csv, un par deck)";
+        : CHOIX_IMPORT;
       ok.disabled = !fichiers.length;
     };
     ok.onclick = async () => {
@@ -1306,11 +1308,12 @@ function modaleImportDecks() {
           else if (location.hash.replace(/^#\/?/, "")) location.hash = "#/";
           else route();
         };
+        const deja = (r.deja || []).length, la = deja ? ` ${deja > 1 ? `${deja} étaient` : "1 était"} déjà là.` : "";
         if (!r.echecs.length) {
           fini();
-          return toast(`${r.decks.length} deck${r.decks.length > 1 ? "s" : ""} importé${r.decks.length > 1 ? "s" : ""}.`);
+          return toast(`${r.decks.length} deck${r.decks.length > 1 ? "s" : ""} importé${r.decks.length > 1 ? "s" : ""}.${la}`);
         }
-        $("#im-res", b).innerHTML = `<p class="petit">${r.decks.length} deck${r.decks.length > 1 ? "s" : ""} importé${r.decks.length > 1 ? "s" : ""}. Pas importés :</p>
+        $("#im-res", b).innerHTML = `<p class="petit">${r.decks.length} deck${r.decks.length > 1 ? "s" : ""} importé${r.decks.length > 1 ? "s" : ""}.${la} Pas importés :</p>
           <ul class="petit">${r.echecs.map((x) => `<li>${esc(x.nom)} : ${esc(x.erreur)}</li>`).join("")}</ul>`;
         ok.disabled = false;
         ok.textContent = "OK";

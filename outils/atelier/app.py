@@ -600,13 +600,24 @@ def _nouveau_deck(nom, commandant, liste):
 def api_importer_decks():
     """Plusieurs decks d'un coup, exportés d'une autre appli (ManaBox, Moxfield, Archidekt…) : {fichiers: [{nom, texte}],
     montes}. Chaque fichier (liste ou CSV) devient un deck nommé comme lui ; montes : ses cartes sont notées comme déjà
-    là (onglet Achats). Renvoie {decks: [dossiers créés], echecs: [{nom, erreur}]}."""
+    là (onglet Achats). Le fichier de sauvegarde de l'appli (decks.lire_appli) apporte tous ses decks, tels qu'ils
+    étaient, versions comprises (decks.importer_appli). Renvoie {decks: [dossiers créés], deja: [decks déjà là],
+    echecs: [{nom, erreur}]}."""
     import classeur
     d = request.get_json() or {}
-    listes, echecs = [], []
+    listes, echecs, appli, deja = [], [], [], []
     for f in (d.get("fichiers") or [])[:200]:
         nom = os.path.splitext(os.path.basename(str(f.get("nom") or "")))[0]
         texte = str(f.get("texte") or "")
+        sauvegarde = decks.lire_appli(texte)
+        if sauvegarde is not None:
+            crees, la, rates = decks.importer_appli(sauvegarde)
+            appli += crees
+            deja += la
+            echecs += rates
+            if not crees and not la and not rates:
+                echecs.append(dict(nom=nom, erreur="aucun deck dans ce fichier"))
+            continue
         c = classeur.lire_csv(texte)
         if c is not None:
             texte = "\n".join(f"{n} {carte}" for carte, n in c.items())
@@ -626,9 +637,13 @@ def api_importer_decks():
             decks.tout_possede(deck)
         faits.append(deck)
         tous.update(noms)
+    for deck in appli:                                  # decks de l'appli : leurs fiches, comme ceux reçus d'un autre PC
+        tous.update(decks.noms(decks.lire(decks.chemin(deck))))
+    if appli:
+        ic.infos(sorted(tous))
     if tous:
         en_fond(lambda: (ic.noms_francais(sorted(tous)), ic.rafraichir_prix(sorted(tous))))
-    return jsonify(decks=faits, echecs=echecs)
+    return jsonify(decks=faits + appli, deja=deja, echecs=echecs)
 
 
 @app.post("/api/decks/<path:deck>/supprimer")
