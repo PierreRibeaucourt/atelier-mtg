@@ -2155,7 +2155,8 @@ function optionsTelephone() {
   const a = TELEPHONE.acces();
   vue.innerHTML = `<nav class="fil" aria-label="Fil d'Ariane"><a href="#/">Mes decks</a><span aria-hidden="true">›</span><span aria-current="page">Options</span></nav>
     <section class="panneau options"><div class="opt-titre"><h2>${ico("telephone")}Téléphone</h2></div>
-      <div class="opt-lignes">${a ? `
+      <div class="opt-lignes">${TELEPHONE.installee && !TELEPHONE.installee() ? `
+        <p><button class="btn btn-accent" id="tel-installer-app">${ico("telecharger")}Installer l'appli</button></p>` : ""}${a ? `
         <p>Relié à la sauvegarde <strong>${esc(a.depot)}</strong></p>
         <p class="muet petit" id="tel-attente" hidden></p>
         <div class="form-ligne"><button class="btn" id="tel-maj">${ico("rafraichir")}Synchroniser</button>
@@ -2186,6 +2187,7 @@ function optionsTelephone() {
         + "tu les retrouves si tu perds ton téléphone, ou sur ton PC, et tu peux les partager.";
   };
   optionsCartes($("#opt-cartes"));                 // les mêmes réglages sur tous les appareils
+  if ($("#tel-installer-app")) $("#tel-installer-app").onclick = () => TELEPHONE.installer();
   if (!a) return ligneGithub($("#opt-github"), {}, ouSont);
   const attente = async () => {
     const n = await TELEPHONE.enAttente();

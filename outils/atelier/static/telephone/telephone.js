@@ -1929,6 +1929,18 @@
   // ouverte dans le navigateur (par le QR code) : un bandeau en bas propose de l'installer, tant qu'elle ne l'est pas.
   // Android : le bouton ouvre la demande du navigateur ; iPhone : la marche à suivre (Safari n'a pas de bouton).
   const PLUS_TARD = "telephone-installer-plus-tard";
+  // la hauteur du bandeau du bas (--tel-bandeau) : ce qui est collé en bas de l'écran passe au-dessus
+  let suitBandeaux = false;
+  function majBandeau() {
+    if (!document.body) return;
+    if (!suitBandeaux) {
+      suitBandeaux = true;
+      new MutationObserver(majBandeau).observe(document.body, { childList: true });
+      addEventListener("resize", majBandeau);
+    }
+    const b = document.querySelector("body > .tel-bandeau");
+    document.documentElement.style.setProperty("--tel-bandeau", b ? b.offsetHeight + 12 + "px" : "0px");
+  }
   // relié au PC : le PC a arrêté l'appli du téléphone (Options › Téléphone › Arrêter). Ses decks restent lisibles ici,
   // sans modification possible ; relancée sur le PC, l'appli reprend toute seule
   function bandeauArrete() {
@@ -1945,11 +1957,12 @@
     }
     b.innerHTML = `<div class="tel-bandeau-texte"><strong>Ton PC n'envoie plus tes decks</strong></div>
       <div class="tel-bandeau-boutons"><button class="btn btn-danger btn-petit" id="tel-arrete-delier">Délier ce téléphone</button></div>`;
+    majBandeau();
     b.querySelector("#tel-arrete-delier").onclick = () => { if (confirm("Délier ce téléphone ? Ses decks en seront effacés.")) T.delier(); };
   }
 
   function bandeauInstaller() {
-    if (installee() || !acces || !document.body || T.arrete) return;
+    if (installee() || !(acces || local) || !document.body || T.arrete) return;
     if (Date.now() - Number(lireLocal(PLUS_TARD) || 0) < 3 * 86400 * 1000) return;
     let b = document.getElementById("tel-bandeau");
     if (!b) {
@@ -1962,7 +1975,8 @@
     }
     b.innerHTML = `<div class="tel-bandeau-texte"><strong>Installe l'appli</strong>
         <span>${invite ? "Elle s'ouvrira depuis son icône, même sans réseau."
-          : iphone ? "Touche Partager <span class=\"tel-partager\" aria-hidden=\"true\">⬆</span>, puis «&nbsp;Sur l'écran d'accueil&nbsp;». Ouvre-la ensuite depuis son icône et scanne à nouveau le QR code."
+          : iphone ? "Touche Partager <span class=\"tel-partager\" aria-hidden=\"true\">⬆</span>, puis «&nbsp;Sur l'écran d'accueil&nbsp;». Ouvre-la ensuite depuis son icône"
+            + (local ? " : les decks créés dans Safari restent dans Safari." : " et scanne à nouveau le QR code.")
           : "Menu du navigateur ⋮, puis «&nbsp;Installer l'application&nbsp;» ou «&nbsp;Ajouter à l'écran d'accueil&nbsp;»."}</span></div>
       <div class="tel-bandeau-boutons">
         ${invite ? `<button class="btn btn-accent btn-petit" id="tel-installer-oui">Installer</button>` : ""}
@@ -1975,6 +1989,7 @@
       if (r.outcome === "accepted") b.remove(); else bandeauInstaller();
     };
     b.querySelector("#tel-installer-non").onclick = () => { ecrireLocal(PLUS_TARD, String(Date.now())); b.remove(); };
+    majBandeau();
   }
 
   const e = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -2102,6 +2117,8 @@
     local,
     delier: () => { oublier(); route(); },
     synchroniser: () => demarrer(),
+    installee,
+    installer: () => { ecrireLocal(PLUS_TARD, "0"); bandeauInstaller(); },     // Options : le bandeau, même après « Plus tard »
   };
 
   // relié par l'adresse du QR code (appareil photo du téléphone) : on retire aussitôt la clé de l'adresse
