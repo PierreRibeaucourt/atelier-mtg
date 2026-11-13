@@ -34,7 +34,19 @@ const SUR_PC = {
   jouer: "La table de jeu s'ouvre sur le PC : elle se joue à la souris.",
   proxies: "L'impression des proxies se fait sur le PC.",
 };
+// l'appli seule, sans PC relié : ces fonctions sont dans l'Atelier à installer
+const SANS_PC = {
+  simulation: "La simulation joue des centaines de parties avec ton deck, sur ton PC.",
+  claude: "La discussion avec Claude passe par Claude Code, sur ton PC.",
+  synergies: "La recherche des synergies passe par Claude Code, sur ton PC.",
+  mtgpics: "La lecture des combos MTGPics se fait depuis ton PC.",
+  jouer: "La table de jeu s'ouvre depuis ton PC.",
+  proxies: "L'impression des proxies se fait depuis ton PC.",
+};
 function surPC(quoi) {
+  if (TELEPHONE && TELEPHONE.local) return ouvrirModale(`<h2>Dans l'Atelier installé</h2>
+    <p>${esc(SANS_PC[quoi] || "Ça se fait sur ton PC.")} L'Atelier s'y installe gratuitement ; tes decks d'ici le rejoignent par la sauvegarde en ligne.</p>
+    <div class="boutons"><a class="btn btn-accent" href="${INSTALLER}" target="_blank" rel="noopener">${ico("telecharger")}Installer l'Atelier</a></div>`);
   ouvrirModale(`<h2>Sur le PC</h2>
     <p>${esc(SUR_PC[quoi] || "Ça se fait sur le PC.")}</p>`);
 }
@@ -275,7 +287,7 @@ const A_PROPOS = !PARTAGE ? "#/a-propos" : PARTAGE.page === "a-propos" ? "./" : 
 const SITE_ATELIER = !!PARTAGE && ["a-propos", "recherche"].includes(PARTAGE.page);
 // « Installer l'Atelier MTG » : la section Installation de cette page, pas GitHub (un débutant y attend un fichier à
 // télécharger, il y trouve du code)
-const INSTALLER = !PARTAGE ? "#/a-propos/installation" : PARTAGE.page === "a-propos" ? "#installation" : A_PROPOS + "#installation";
+const INSTALLER = TELEPHONE ? ACCUEIL_ATELIER + "#installation" : !PARTAGE ? "#/a-propos/installation" : PARTAGE.page === "a-propos" ? "#installation" : A_PROPOS + "#installation";
 if (PARTAGE) {
   const depot = PARTAGE.atelier ? esc(PARTAGE.atelier) : "";
   if (PARTAGE.recherche) $("#lien-recherche").href = PARTAGE.recherche;
@@ -2157,6 +2169,7 @@ async function recupererDecks(zone, fin) {
 
 // accueil : où en est la sauvegarde (un mot discret), ou un bandeau tant que les decks ne sont que sur ce PC
 const PLUS_TARD_SAUVEGARDE = 7 * 86400 * 1000;
+const SAFARI = /^((?!chrome|chromium|crios|fxios|edgios|android).)*safari/i.test(navigator.userAgent);
 async function etatSauvegarde(petit, bandeau) {
   const s = await api("/api/sauvegarde").catch(() => null);
   if (!s || !petit.isConnected) return;
@@ -2169,11 +2182,18 @@ async function etatSauvegarde(petit, bandeau) {
   let tard = 0;
   try { tard = +localStorage.getItem("pref-sauvegarde-plus-tard") || 0; } catch (_) {}
   if ((s.connecte && s.prive && !s.voulue) || Date.now() - tard < PLUS_TARD_SAUVEGARDE) return;   // coupée exprès, ou « Plus tard »
-  bandeau.innerHTML = `<div class="bandeau-sauvegarde">${ico("nuage")}<p>Tes decks ne sont que ${SUR_CET_APPAREIL} : ${TELEPHONE && !ECRAN_TELEPHONE ? "s'il les efface, ou si tu changes d'ordinateur, ils sont perdus" : "si tu le changes ou s'il tombe en panne, ils sont perdus"}.</p>
+  // Safari (pas l'appli installée) efface ce qu'un site garde après 7 jours sans visite
+  const safari = TELEPHONE && SAFARI && !TELEPHONE.installee();
+  bandeau.innerHTML = `<div class="bandeau-sauvegarde ${safari ? "ferme" : ""}">${ico("nuage")}<p>${safari ? "Safari efface les decks gardés ici après 7 jours sans visite."
+      : `Tes decks ne sont que ${SUR_CET_APPAREIL} : ${TELEPHONE && !ECRAN_TELEPHONE ? "s'il les efface, ou si tu changes d'ordinateur, ils sont perdus" : "si tu le changes ou s'il tombe en panne, ils sont perdus"}.`}</p>
     <button class="btn btn-accent btn-petit" id="bs-oui">Les sauvegarder en ligne</button>
+    ${TELEPHONE ? `<button class="btn btn-petit" id="bs-fichier">${ico("telecharger")}Dans un fichier</button>` : ""}
     <button class="btn btn-discret btn-petit" id="bs-tard">Plus tard</button></div>`;
+  const plusTard = () => { PREF.set("sauvegarde-plus-tard", String(Date.now())); bandeau.innerHTML = ""; };
   $("#bs-oui", bandeau).onclick = () => modaleSauvegarde("sauvegarde", () => etatSauvegarde(petit, bandeau));
-  $("#bs-tard", bandeau).onclick = () => { PREF.set("sauvegarde-plus-tard", String(Date.now())); bandeau.innerHTML = ""; };
+  $("#bs-tard", bandeau).onclick = plusTard;
+  // un fichier enregistré : le bandeau revient dans 7 jours, pour un fichier à jour
+  if (TELEPHONE) $("#bs-fichier", bandeau).onclick = () => TELEPHONE.enregistrerFichier().then(plusTard, erreur);
 }
 
 function modaleRenommer(d) {

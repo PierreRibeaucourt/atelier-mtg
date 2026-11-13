@@ -1174,6 +1174,8 @@ button.badge:hover { box-shadow: inset 0 0 0 1px currentColor; }
   border: 1px solid var(--bord); border-radius: var(--rayon); background: var(--surface); }
 .bandeau-sauvegarde > .ico { width: 1.3rem; height: 1.3rem; color: var(--accent); flex: none; }
 .bandeau-sauvegarde p { flex: 1 1 18rem; margin: 0; }
+.bandeau-sauvegarde.ferme { border-color: var(--accent); }
+.bandeau-sauvegarde.ferme p { font-weight: 600; }
 .gh-attente { display: flex; align-items: center; gap: .5rem; margin: .8rem 0 0; color: var(--texte-2); }
 .gh-attente::before { content: ""; width: .9rem; height: .9rem; border-radius: 50%; border: 2px solid currentColor;
   border-right-color: transparent; animation: maj-roue .9s linear infinite; }
