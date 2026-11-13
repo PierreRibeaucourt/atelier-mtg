@@ -988,15 +988,6 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .ap-zoom { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; padding: 2vh 2vw;
   background: rgba(0,0,0,.86); cursor: zoom-out; }
 .ap-zoom img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
-/* installation : quatre façons, une par onglet ; la carte de l'onglet choisi dessous */
-.ap-onglets { display: inline-flex; gap: 4px; padding: 4px; margin-top: .4rem; background: var(--surface); border: 1px solid var(--bord);
-  border-radius: 10px; }
-.ap-onglets [role=tab] { display: inline-flex; align-items: center; gap: .5rem; padding: .5rem 1rem; border: 0; border-radius: 7px;
-  background: none; color: var(--texte-2); font: inherit; font-weight: 600; cursor: pointer; }
-.ap-onglets [role=tab]:hover { color: var(--texte); }
-.ap-onglets [role=tab][aria-selected=true] { background: var(--texte); color: var(--fond); }
-.ap-onglets .ico { width: 1.15em; height: 1.15em; }
-.ap-onglets .ap-logo { fill: currentColor; stroke: none; }
 .ap-install { margin-top: .7rem; background: var(--surface); border: 1px solid var(--bord); border-radius: var(--rayon); padding: 1.1rem 1.3rem 1.3rem; }
 .a-propos .ap-install-pour { margin: 0 0 .9rem; font-size: .85rem; color: var(--texte-2); }
 .ap-install ol { margin: 0; padding-left: 1.25rem; display: grid; gap: .65rem; }
@@ -1011,10 +1002,36 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
   cursor: pointer; }
 .ap-commande button:hover { filter: brightness(1.08); }
 .a-propos .ap-install-sous { margin-top: 1rem; font-size: .9rem; color: var(--texte-2); }
-@media (max-width: 600px) {                        /* téléphone : les quatre onglets sur deux lignes, toute la largeur */
-  .ap-onglets { display: grid; grid-template-columns: 1fr 1fr; }
-  .ap-onglets [role=tab] { justify-content: center; padding: .55rem .4rem; gap: .35rem; font-size: .88rem; }
-}
+/* installation : Windows et le téléphone côte à côte ; les autres façons en dessous, repliées */
+.ap-install-duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: .9rem; align-items: start; }
+.ap-install-duo .ap-install { margin-top: 0; display: grid; gap: .85rem; align-content: start; }
+.ap-install-tete { display: flex; align-items: center; gap: .6rem; }
+.a-propos .ap-install-tete h3 { margin: 0; font-size: 1.15rem; }
+.ap-install-tete .ico { width: 1.35em; height: 1.35em; flex: none; }
+.ap-install-tete .ap-logo { fill: currentColor; stroke: none; }
+.a-propos .ap-install-duo .ap-install-pour { margin: -.55rem 0 0; }
+.ap-install-duo .ap-install-action { display: flex; justify-content: center; padding: .7rem 1rem; font-weight: 600; }
+.ap-install-duo ol { font-size: .93rem; }
+.ap-qr-ligne { display: flex; align-items: center; gap: .9rem; }
+.ap-qr-ligne .ap-qr-cadre { margin: 0; flex: none; }
+.a-propos .ap-qr-ligne p { margin: 0; font-size: .93rem; }
+.ap-qr-ligne .ap-qr { width: 112px; height: 112px; }
+.a-propos .ap-autres-titre { margin: 1.7rem 0 .15rem; font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--texte-2); }
+.a-propos .ap-autres-texte { margin: 0 0 .7rem; font-size: .92rem; color: var(--texte-2); }
+.ap-autres { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; align-items: start; }
+.ap-autre { border: 1px solid var(--bord); border-radius: var(--rayon); padding: .75rem 1rem; }
+.ap-autre summary { list-style: none; display: flex; align-items: center; gap: .7rem; cursor: pointer; }
+.ap-autre summary::-webkit-details-marker { display: none; }
+.ap-autre summary .ico { flex: none; color: var(--texte-2); }
+.ap-autre summary > .ico:last-child { transition: transform .15s; }
+.ap-autre[open] summary > .ico:last-child { transform: rotate(45deg); }
+.ap-autre summary:hover b { color: var(--accent); }
+.ap-autre-nom { flex: 1; display: grid; line-height: 1.35; }
+.ap-autre-nom small { font-size: .85rem; color: var(--texte-2); }
+.ap-autre ol { margin: .85rem 0 .1rem; padding-left: 1.25rem; display: grid; gap: .55rem; font-size: .93rem; }
+.ap-autre li::marker { color: var(--accent); font-weight: 700; }
+@media (max-width: 700px) { .ap-install-duo, .ap-autres { grid-template-columns: minmax(0, 1fr); } }
 /* l'adresse de l'appli du téléphone en QR code, pour qui lit la page sur un ordinateur */
 .ap-qr-cadre { display: block; width: fit-content; margin-top: .6rem; padding: 6px; background: #fff; border-radius: 8px; border: 1px solid var(--bord); }
 .ap-qr { display: block; width: 136px; height: 136px; }

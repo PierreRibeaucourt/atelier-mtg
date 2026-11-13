@@ -4858,6 +4858,32 @@ function vueAPropos(installation = false) {
         <h3>${esc(titre)}</h3><p>${esc(texte)}</p>
         <figure>${capture(f, titre)} loading="lazy"></figure>
       </section>`).join("");
+  // installation : Windows et le téléphone côte à côte (le téléphone d'abord, lu sur un téléphone) ; l'assistant IA et
+  // l'installation à la main en dessous, repliés (l'assistant ouvert pour qui lit sur Mac ou Linux)
+  const plateforme = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "") + " " + navigator.userAgent;
+  const autreOuvert = !SUR_TELEPHONE && /Mac|Linux|X11|CrOS/i.test(plateforme) && !/Windows/i.test(plateforme);
+  const installWindows = `<section class="ap-install">
+          <div class="ap-install-tete"><svg class="ico ap-logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h8.4v8.4H3zM12.6 3H21v8.4h-8.4zM3 12.6h8.4V21H3zM12.6 12.6H21V21h-8.4z"/></svg><h3>Sur ordinateur</h3></div>
+          <p class="ap-install-pour">Windows 10 et 11 · rien d'autre à installer</p>
+          <a class="btn ${SUR_TELEPHONE ? "" : "btn-accent "}ap-install-action" href="${depot}/releases/latest/download/Atelier-MTG-Windows.exe">${ico("telecharger")}Télécharger pour Windows</a>
+          <ol>
+            <li>Double-cliquez sur le fichier, puis sur <b>Installer</b>. Si Windows affiche <b>Windows a protégé votre
+              ordinateur</b> : <b>Informations complémentaires</b>, puis <b>Exécuter quand même</b>.</li>
+            <li>L'Atelier s'ouvre dans votre navigateur. Pour le rouvrir : raccourci <b>Atelier MTG</b> sur le bureau.</li>
+          </ol>
+        </section>`;
+  const installTel = `<section class="ap-install">
+          <div class="ap-install-tete">${ico("telephone")}<h3>Sur téléphone</h3></div>
+          <p class="ap-install-pour">Android et iPhone · sans store, sans compte</p>
+          ${SUR_TELEPHONE ? `<a class="btn btn-accent ap-install-action" href="${APPLI_TELEPHONE}">${ico("telephone")}Ouvrir l'Atelier MTG</a>`
+            : `<div class="ap-qr-ligne"><span class="ap-qr-cadre">${QR_APPLI}</span>
+              <p>Scannez ce code avec votre téléphone, ou ouvrez <a href="${APPLI_TELEPHONE}">atelier-mtg.github.io</a>.</p></div>`}
+          <ol>
+            <li>Ajoutez l'appli à l'écran d'accueil. Android : <b>Installer l'application</b> ; iPhone : <b>Partager</b>, puis
+              <b>Sur l'écran d'accueil</b>.</li>
+            <li>Touchez <b>Commencer</b>. L'Atelier est déjà sur votre PC ? <b>Relier à mon PC</b>.</li>
+          </ol>
+        </section>`;
   vue.classList.add("vue-pleine");
   vue.innerHTML = `
     <header class="ap-tete">
@@ -4911,64 +4937,38 @@ function vueAPropos(installation = false) {
       </ul>
 
       <h2 id="installation">Installation</h2>
-      <p>Sur ordinateur, l'Atelier s'installe une fois, puis s'ouvre par un raccourci sur le bureau. Sur téléphone, il
-        s'ouvre dans le navigateur, sans rien télécharger. Au choix :</p>
-      <div class="ap-onglets" role="tablist" aria-label="Façon d'installer">
-        <button type="button" role="tab" id="ap-o-windows" aria-controls="ap-p-windows"><svg class="ico ap-logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h8.4v8.4H3zM12.6 3H21v8.4h-8.4zM3 12.6h8.4V21H3zM12.6 12.6H21V21h-8.4z"/></svg>Installeur</button>
-        <button type="button" role="tab" id="ap-o-ia" aria-controls="ap-p-ia">${ico("discussion")}Assistant IA</button>
-        <button type="button" role="tab" id="ap-o-main" aria-controls="ap-p-main">${ico("terminal")}À la main</button>
-        <button type="button" role="tab" id="ap-o-tel" aria-controls="ap-p-tel">${ico("telephone")}Téléphone</button>
-      </div>
-      <div class="ap-install" role="tabpanel" id="ap-p-windows" aria-labelledby="ap-o-windows">
-        <p class="ap-install-pour">Windows 10 et 11 · rien d'autre à installer</p>
-        <ol>
-          <li>Téléchargez l'installeur :
-            <a class="btn btn-accent ap-install-action" href="${depot}/releases/latest/download/Atelier-MTG-Windows.exe">${ico("telecharger")}Télécharger pour Windows</a></li>
-          <li>Double-cliquez sur le fichier, puis sur <b>Installer</b>. Si Windows affiche <b>Windows a protégé votre
-            ordinateur</b> : <b>Informations complémentaires</b>, puis <b>Exécuter quand même</b>.</li>
-          <li>L'Atelier s'ouvre dans votre navigateur. Pour le rouvrir : raccourci <b>Atelier MTG</b> sur le bureau.</li>
-        </ol>
-      </div>
-      <div class="ap-install" role="tabpanel" id="ap-p-ia" aria-labelledby="ap-o-ia" hidden>
-        <p class="ap-install-pour">Windows, macOS, Linux · il s'occupe de tout</p>
-        <ol>
-          <li>Ouvrez un assistant IA qui agit sur votre ordinateur : Claude Code, Cursor, Copilot… Sinon,
-            <a href="${CLAUDE_BUREAU}" target="_blank" rel="noopener">l'application Claude pour ordinateur</a>
-            (abonnement Pro ou plus), onglet <b>Code</b>.</li>
-          <li>Collez-lui cette consigne :
-            <div class="ap-commande"><code>${esc(consigne)}</code><button type="button" data-copier>Copier</button></div></li>
-          <li>Répondez à ses trois questions : il installe tout et crée le raccourci sur le bureau.</li>
-        </ol>
-      </div>
-      <div class="ap-install" role="tabpanel" id="ap-p-main" aria-labelledby="ap-o-main" hidden>
-        <p class="ap-install-pour">Windows, macOS, Linux · Python et git</p>
-        <ol>
-          <li>Installez <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Python</a> 3.10 ou plus
-            récent, et <a href="https://git-scm.com/downloads" target="_blank" rel="noopener">git</a>.</li>
-          <li>Dans un terminal :
-            <div class="ap-commande"><code>git clone ${depot}.git "Atelier MTG"
+      <p>L'Atelier s'utilise sur votre ordinateur Windows ou sur votre téléphone. Gratuit, sans compte.</p>
+      <div class="ap-install-duo">${SUR_TELEPHONE ? installTel + installWindows : installWindows + installTel}</div>
+      <p class="ap-autres-titre">Autres façons d'installer</p>
+      <p class="ap-autres-texte">Sur Mac, sur Linux, ou pour tout contrôler vous-même.</p>
+      <div class="ap-autres">
+        <details class="ap-autre"${autreOuvert ? " open" : ""}><summary>${ico("discussion")}<span class="ap-autre-nom"><b>Avec un assistant IA</b>
+          <small>Windows, macOS, Linux · il s'occupe de tout</small></span>${ico("plus")}</summary>
+          <ol>
+            <li>Ouvrez un assistant IA qui agit sur votre ordinateur : Claude Code, Cursor, Copilot… Sinon,
+              <a href="${CLAUDE_BUREAU}" target="_blank" rel="noopener">l'application Claude pour ordinateur</a>
+              (abonnement Pro ou plus), onglet <b>Code</b>.</li>
+            <li>Collez-lui cette consigne :
+              <div class="ap-commande"><code>${esc(consigne)}</code><button type="button" data-copier>Copier</button></div></li>
+            <li>Répondez à ses trois questions : il installe tout et crée le raccourci sur le bureau.</li>
+          </ol>
+        </details>
+        <details class="ap-autre"><summary>${ico("terminal")}<span class="ap-autre-nom"><b>À la main</b>
+          <small>Windows, macOS, Linux · Python et git</small></span>${ico("plus")}</summary>
+          <ol>
+            <li>Installez <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Python</a> 3.10 ou plus
+              récent, et <a href="https://git-scm.com/downloads" target="_blank" rel="noopener">git</a>.</li>
+            <li>Dans un terminal :
+              <div class="ap-commande"><code>git clone ${depot}.git "Atelier MTG"
 cd "Atelier MTG"
 python installer.py</code><button type="button" data-copier>Copier</button></div></li>
-          <li>Pour rouvrir l'Atelier : raccourci <b>Atelier MTG</b> sur le bureau, ou <code>./atelier.sh</code> sous macOS et
-            Linux.</li>
-        </ol>
+            <li>Pour rouvrir l'Atelier : raccourci <b>Atelier MTG</b> sur le bureau, ou <code>./atelier.sh</code> sous macOS et
+              Linux.</li>
+          </ol>
+        </details>
       </div>
-      <div class="ap-install" role="tabpanel" id="ap-p-tel" aria-labelledby="ap-o-tel" hidden>
-        <p class="ap-install-pour">Android et iPhone · sans store, sans compte</p>
-        <ol>
-          <li>${SUR_TELEPHONE ? `Ouvrez l'appli :
-            <a class="btn btn-accent ap-install-action" href="${APPLI_TELEPHONE}">${ico("telephone")}Ouvrir l'Atelier MTG</a>`
-            : `Sur votre téléphone, ouvrez <a href="${APPLI_TELEPHONE}">atelier-mtg.github.io</a>, ou scannez ce QR code :
-            <span class="ap-qr-cadre">${QR_APPLI}</span>`}</li>
-          <li>Ajoutez-la à l'écran d'accueil. Android : <b>Installer l'application</b> ; iPhone : <b>Partager</b>, puis
-            <b>Sur l'écran d'accueil</b>.</li>
-          <li>Touchez <b>Commencer ici</b>. Vous avez déjà l'Atelier sur PC ? Dans ses <b>Options</b>, <b>Téléphone</b>
-            affiche un QR code : <b>Scanner le QR code du PC</b> relie les deux.</li>
-        </ol>
-      </div>
-      <p class="ap-install-sous">Sur ordinateur, les trois façons donnent le même Atelier, gratuit et open source. Les nouvelles versions s'annoncent
-        dans l'Atelier et s'installent en un clic ; vos decks sont conservés. Code source :
-        <a class="ap-depot" href="${depot}" target="_blank" rel="noopener">${depot.replace("https://", "")}</a></p>
+      <p class="ap-install-sous">Les nouvelles versions s'annoncent dans l'Atelier et s'installent en un clic ; vos decks sont
+        conservés. Code source : <a class="ap-depot" href="${depot}" target="_blank" rel="noopener">${depot.replace("https://", "")}</a></p>
 
       <h2>Questions fréquentes</h2>
       ${FAQ_ATELIER.map(([groupe, questions]) => `<h3 class="ap-faq-groupe">${groupe}</h3>
@@ -4998,25 +4998,6 @@ python installer.py</code><button type="button" data-copier>Copier</button></div
     };
     if (img.closest(".ap-module")) img.onclick = () => zoomer(img);
   });
-  const onglets = $$(".ap-onglets [role=tab]", vue);
-  const choisir = (o, focus = false) => {
-    onglets.forEach((x) => {
-      const oui = x === o;
-      x.setAttribute("aria-selected", oui);
-      x.tabIndex = oui ? 0 : -1;
-      $("#" + x.getAttribute("aria-controls"), vue).hidden = !oui;
-    });
-    if (focus) o.focus();
-  };
-  onglets.forEach((o, i) => {
-    o.onclick = () => choisir(o);
-    o.onkeydown = (ev) => {
-      const d = { ArrowRight: 1, ArrowLeft: -1 }[ev.key];
-      if (d) { ev.preventDefault(); choisir(onglets[(i + d + onglets.length) % onglets.length], true); }
-    };
-  });
-  const plateforme = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "") + " " + navigator.userAgent;
-  choisir($(SUR_TELEPHONE ? "#ap-o-tel" : /Mac|Linux|X11|CrOS/i.test(plateforme) && !/Windows/i.test(plateforme) ? "#ap-o-ia" : "#ap-o-windows", vue));
   $$("[data-copier]", vue).forEach((b) => b.onclick = async () => {
     const code = b.previousElementSibling;
     try {
