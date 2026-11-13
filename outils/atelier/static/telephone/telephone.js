@@ -2015,6 +2015,7 @@
           <h2>Nouveau sur l'Atelier ?</h2>
           <p>Tes decks restent sur ce téléphone.</p>
           <button class="btn btn-accent" id="tel-commencer">Commencer</button>
+          <button class="lien-discret" id="tel-restaurer">Restaurer un fichier</button>
         </section>
         <section class="tel-choix">
           <h2>Déjà l'Atelier sur ton PC ?</h2>
@@ -2055,6 +2056,7 @@
       };
       el.querySelector("#tel-relier-lien").onclick = () => relier(el.querySelector("#tel-lien").value);
       el.querySelector("#tel-commencer").onclick = (ev) => { ev.currentTarget.disabled = true; commencerIci().catch((err) => erreur(err.message)); };
+      el.querySelector("#tel-restaurer").onclick = () => restaurerFichier().catch((err) => erreur(err.message));
       return;
     }
     el.innerHTML = T.erreur ? `<div class="tel-accueil"><h1>Atelier MTG</h1><p class="erreur">${e(T.erreur)}</p>
@@ -2112,6 +2114,40 @@
     if (!T.arrete) partageEnAttente().catch(() => {});        // un renommage ou une suppression à reporter sur le site
   }
 
+  // ------------------------------------------------------------------ fichier de sauvegarde
+  // Tout ce que l'appli garde dans ce navigateur (decks, réglages, connexion), sauf la base de cartes, retéléchargée.
+  // Même format que la passerelle de l'ancienne adresse (passerelle.html) : un fichier enregistré là-bas se restaure ici.
+  const FICHIER_SAUVEGARDE = "atelier-mtg-appli";
+  async function enregistrerFichier() {
+    const fichiers = {}, locaux = {};
+    for (const k of await BD.cles()) if (k !== "@base") fichiers[k] = await BD.lire(k);
+    try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); locaux[k] = localStorage.getItem(k); } } catch (_) {}
+    const d = { format: FICHIER_SAUVEGARDE, version: 1, date: new Date().toISOString(), fichiers, local: locaux };
+    const a = Object.assign(document.createElement("a"), {
+      href: URL.createObjectURL(new Blob([JSON.stringify(d)], { type: "application/json" })), download: `atelier-mtg-${d.date.slice(0, 10)}.json` });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  }
+  // remplace tout ce que l'appli garde ici par le fichier, puis repart de zéro
+  async function restaurerFichier() {
+    const f = await new Promise((ok) => {
+      const i = Object.assign(document.createElement("input"), { type: "file", accept: ".json,application/json" });
+      i.onchange = () => ok(i.files[0] || null);
+      i.click();
+    });
+    if (!f) return false;
+    let d = null;
+    try { d = JSON.parse(await f.text()); } catch (_) { /* pas du JSON */ }
+    if (!d || d.format !== FICHIER_SAUVEGARDE || !d.fichiers) throw new Error("Ce fichier n'est pas une sauvegarde de l'Atelier.");
+    for (const k of await BD.cles()) if (k !== "@base") await BD.effacer(k);
+    for (const [k, v] of Object.entries(d.fichiers)) await BD.ecrire(k, v);
+    try { localStorage.clear(); for (const [k, v] of Object.entries(d.local || {})) localStorage.setItem(k, v); } catch (_) {}
+    location.replace(location.pathname);
+    return true;
+  }
+
   const T = window.TELEPHONE = {
     api, attente: attenteVue, pret: false, erreur: "", arrete: false, appliGithub: APPLI_GITHUB,
     enAttente: async () => (await attente()).length,
@@ -2122,6 +2158,8 @@
     synchroniser: () => demarrer(),
     installee,
     installer: () => { ecrireLocal(PLUS_TARD, "0"); bandeauInstaller(); },     // Options : le bandeau, même après « Plus tard »
+    enregistrerFichier,
+    restaurerFichier,
   };
 
   // relié par l'adresse du QR code (appareil photo du téléphone) : on retire aussitôt la clé de l'adresse

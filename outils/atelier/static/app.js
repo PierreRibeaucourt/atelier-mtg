@@ -2260,7 +2260,9 @@ function optionsTelephone() {
           <button class="btn btn-danger" id="tel-delier">Délier ce téléphone</button>
           <button class="btn btn-discret" id="tel-retirer">${TOUS_APPAREILS}</button></div>` : `
         <p id="tel-ou">Tes decks sont gardés sur ce téléphone.</p>
-        <div id="opt-github"></div>`}
+        <div id="opt-github"></div>
+        <div class="form-ligne"><button class="btn" id="tel-fichier">${ico("telecharger")}Enregistrer dans un fichier</button>
+          <button class="btn btn-discret" id="tel-restaurer-fichier">Restaurer un fichier</button></div>`}
       </div></section>
     <section class="panneau options opt-bloc" id="opt-cartes"></section>
     <section class="panneau options"><div class="opt-titre"><h2>${ico("theme")}Thème</h2></div>
@@ -2285,7 +2287,13 @@ function optionsTelephone() {
   };
   optionsCartes($("#opt-cartes"));                 // les mêmes réglages sur tous les appareils
   if ($("#tel-installer-app")) $("#tel-installer-app").onclick = () => TELEPHONE.installer();
-  if (!a) return ligneGithub($("#opt-github"), {}, ouSont);
+  if (!a) {                                        // tout ce que l'appli garde ici, dans un fichier (telephone.js)
+    $("#tel-fichier").onclick = () => TELEPHONE.enregistrerFichier().catch(erreur);
+    $("#tel-restaurer-fichier").onclick = () => {
+      if (confirm("Remplacer tout ce que l'appli garde ici par le contenu du fichier ?")) TELEPHONE.restaurerFichier().catch(erreur);
+    };
+    return ligneGithub($("#opt-github"), {}, ouSont);
+  }
   const attente = async () => {
     const n = await TELEPHONE.enAttente();
     const el = $("#tel-attente");
