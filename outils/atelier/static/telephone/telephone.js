@@ -2031,7 +2031,7 @@
           </div>
         </section>`}
         <p class="erreur" id="tel-erreur" hidden></p>
-        <a class="tel-decouvrir" href="https://atelier-mtg.com/">C'est quoi, l'Atelier MTG ?</a>
+        <a class="tel-decouvrir" href="https://atelier-mtg.com/fr/">C'est quoi, l'Atelier MTG ?</a>
       </div>`;
       const erreur = (m) => { const x = el.querySelector("#tel-erreur"); x.textContent = m; x.hidden = !m; };
       if (dabord) {

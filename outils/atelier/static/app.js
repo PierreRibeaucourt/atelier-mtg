@@ -264,7 +264,8 @@ $$("[data-ico]").forEach((el) => el.insertAdjacentHTML("afterbegin", ico(el.data
 // d'accueil de l'Atelier, dont l'en-tête a déjà son bouton « Installer ») ; en bas, la licence, le code source et
 // « C'est quoi, l'Atelier MTG ? » : la page d'accueil de l'Atelier, la même pour tous les sites de decks
 const TITRE_PARTAGE = document.title;
-const ACCUEIL_ATELIER = "https://atelier-mtg.com/";
+const DOMAINE_ATELIER = "https://atelier-mtg.com/";                 // les images de la page d'accueil, à sa racine (a-propos/)
+const ACCUEIL_ATELIER = DOMAINE_ATELIER + "fr/";                    // la page d'accueil, en français
 const A_PROPOS = !PARTAGE ? "#/a-propos" : PARTAGE.page === "a-propos" ? "./" : PARTAGE.page === "recherche" ? "../" : ACCUEIL_ATELIER;
 // pages du site de l'Atelier (site_atelier.py) : la page d'accueil et sa recherche de cartes
 const SITE_ATELIER = !!PARTAGE && ["a-propos", "recherche"].includes(PARTAGE.page);
@@ -4861,7 +4862,7 @@ const AUTEUR_ATELIER = "PierreRibeaucourt";
 const DEPOT_ATELIER = "https://github.com/PierreRibeaucourt/atelier-mtg";
 // les captures de la page : sur le site de decks de l'auteur, pas dans le dépôt de code (on y voit des cartes et une discussion)
 // la page d'accueil a sa copie des captures (PARTAGE.captures) ; ailleurs, celle de la page d'accueil
-const CAPTURES_ATELIER = (PARTAGE && PARTAGE.captures) || ACCUEIL_ATELIER + "a-propos/";
+const CAPTURES_ATELIER = (PARTAGE && PARTAGE.captures) || DOMAINE_ATELIER + "a-propos/";
 // les decks partagés de l'auteur : à quoi ressemble une page partagée, en vrai
 const EXEMPLES_ATELIER = "https://pierreribeaucourt.github.io/decks/";
 // l'Atelier sur téléphone (telephone.js), et son adresse en QR code pour qui visite la page depuis un ordinateur

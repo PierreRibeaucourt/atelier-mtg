@@ -1,14 +1,18 @@
-"""La page d'accueil de l'Atelier MTG, https://atelier-mtg.com/ : la page « C'est quoi, l'Atelier MTG ? » des sites de
-decks, faite pour les moteurs de recherche, avec ses mentions légales et sa politique de confidentialité. Elle est
-indexable, son texte est déjà dans le HTML (pré-rendu par Chrome sans interface : pas besoin de JavaScript pour le
-lire), avec ses données structurées, son sitemap et son robots.txt.
+"""La page d'accueil de l'Atelier MTG, https://atelier-mtg.com/fr/ : la page « C'est quoi, l'Atelier MTG ? » des sites
+de decks, faite pour les moteurs de recherche, avec sa recherche de cartes, ses mentions légales et sa politique de
+confidentialité. Elle est indexable, son texte est déjà dans le HTML (pré-rendu par Chrome sans interface : pas besoin
+de JavaScript pour le lire), avec ses données structurées, son sitemap et son robots.txt.
+
+Le français est sous /fr/ ; la racine du domaine y renvoie (302) en attendant la version anglaise, et les anciennes
+adresses françaises sans /fr/ y renvoient pour toujours (301). Les images (a-propos/) restent à la racine, pour toutes
+les langues.
 
 Hébergée chez o2switch. GitHub Actions la construit à chaque changement de l'interface ou de la version
 (.github/workflows/site.yml) et la pousse sur la branche « accueil » du dépôt ; une tâche planifiée de l'hébergement
 la récupère toutes les 15 minutes. L'ancienne adresse, https://pierreribeaucourt.github.io/atelier-mtg/ (GitHub
 Pages), ne garde qu'une redirection, pour toujours : les Ateliers installés jusqu'à la 2.0.0 y renvoient.
 
-    python outils/atelier/site_atelier.py <dossier>                  la page d'accueil et recherche/ (Chrome nécessaire)
+    python outils/atelier/site_atelier.py <dossier>                  le domaine : fr/, a-propos/… (Chrome nécessaire)
     python outils/atelier/site_atelier.py --redirection <dossier>    l'ancienne adresse
 """
 import html as html_
@@ -31,10 +35,11 @@ import partage  # noqa: E402
 import recherche  # noqa: E402
 from version import __version__  # noqa: E402
 
-SITE = partage.ACCUEIL_ATELIER
-DOMAINE = urllib.parse.urlsplit(SITE).hostname
+RACINE = partage.DOMAINE_ATELIER                                         # https://atelier-mtg.com/
+SITE = partage.ACCUEIL_ATELIER                                           # https://atelier-mtg.com/fr/
+DOMAINE = urllib.parse.urlsplit(RACINE).hostname
 DEPOT = "https://github.com/PierreRibeaucourt/atelier-mtg"
-CAPTURES = SITE + "a-propos/"                                            # comme CAPTURES_ATELIER dans app.js
+CAPTURES = RACINE + "a-propos/"                                          # comme CAPTURES_ATELIER dans app.js
 # d'où viennent les captures : « Partage Atelier/a-propos/ » de l'auteur, publié avec son site de decks (pas dans le
 # dépôt) ; copiées sur le domaine à chaque construction
 SOURCE_CAPTURES = "https://pierreribeaucourt.github.io/decks/a-propos/"
@@ -67,7 +72,7 @@ def donnees(captures):
 def donnees_recherche():
     """window.PARTAGE de recherche/ : la recherche de cartes, sans deck."""
     return dict(page="recherche", accueil="../", titre_accueil="Atelier MTG", auteur=None, atelier=DEPOT,
-                captures="../a-propos/", base=BASE_CARTES, moteur=MOTEUR,
+                captures="../../a-propos/", base=BASE_CARTES, moteur=MOTEUR,
                 reglages={"budget": 0},
                 api={"/api/decks": [], "/api/corbeille": [], "/api/noms-cartes": dict(noms=[], communs=[]),
                      "/api/recherche/fonctions": recherche.fonctions()})
@@ -103,14 +108,14 @@ def faq(rendu):
 def donnees_structurees(rendu=""):
     """Le site (son nom dans les résultats de Google), la page, l'application et son auteur ; avec rendu (la page
     pré-rendue), ses questions fréquentes."""
-    auteur = {"@type": "Person", "@id": SITE + "#auteur", "name": "PierreRibeaucourt", "url": "https://github.com/PierreRibeaucourt"}
+    auteur = {"@type": "Person", "@id": RACINE + "#auteur", "name": "PierreRibeaucourt", "url": "https://github.com/PierreRibeaucourt"}
     graphe = [
-        {"@type": "WebSite", "@id": SITE + "#site", "name": "Atelier MTG", "alternateName": "L'Atelier MTG", "url": SITE,
+        {"@type": "WebSite", "@id": RACINE + "#site", "name": "Atelier MTG", "alternateName": "L'Atelier MTG", "url": RACINE,
          "inLanguage": "fr", "publisher": {"@id": auteur["@id"]}},
         {"@type": "WebPage", "@id": SITE + "#page", "url": SITE, "name": partage.TITRE_ATELIER,
-         "description": partage.DESCRIPTION_ATELIER, "inLanguage": "fr", "isPartOf": {"@id": SITE + "#site"},
-         "about": {"@id": SITE + "#application"}, "primaryImageOfPage": partage.IMAGE_ATELIER},
-        {"@type": "SoftwareApplication", "@id": SITE + "#application",
+         "description": partage.DESCRIPTION_ATELIER, "inLanguage": "fr", "isPartOf": {"@id": RACINE + "#site"},
+         "about": {"@id": RACINE + "#application"}, "primaryImageOfPage": partage.IMAGE_ATELIER},
+        {"@type": "SoftwareApplication", "@id": RACINE + "#application",
          "name": "Atelier MTG",
          "alternateName": "L'Atelier MTG",
          "description": partage.DESCRIPTION_ATELIER,
@@ -192,9 +197,9 @@ def inserer(dossier, rendu, installation="#installation", classe="vue vue-pleine
     partage._ecrire(index, html)
 
 
-def captures(dossier, rendu):
-    """Les images de la page (captures, image de partage) copiées dans son a-propos/, sur son propre domaine ; rendu,
-    pré-rendu avec les images de la source, les reprend de là."""
+def captures(dossier, rendu, chemin="../a-propos/"):
+    """Les images de la page (captures, image de partage) copiées dans dossier/a-propos/ (la racine du domaine) ; rendu,
+    pré-rendu avec les images de la source, les reprend de là (chemin : depuis la page)."""
     noms = set(re.findall(re.escape(SOURCE_CAPTURES) + r"([\w-]+\.(?:webp|jpg))", rendu))
     if len(noms) < 3:
         raise SystemExit(f"Captures introuvables dans la page pré-rendue ({SOURCE_CAPTURES}).")
@@ -205,7 +210,7 @@ def captures(dossier, rendu):
         req = urllib.request.Request(SOURCE_CAPTURES + nom, headers={"User-Agent": "atelier-mtg"})
         with urllib.request.urlopen(req, timeout=60) as r, open(os.path.join(d, nom), "wb") as f:
             f.write(r.read())
-    return rendu.replace(SOURCE_CAPTURES, "a-propos/")
+    return rendu.replace(SOURCE_CAPTURES, chemin)
 
 
 # ---------------------------------------------------------------------------------------------------- pages légales
@@ -364,11 +369,12 @@ def sitemap(dossier):
 
 
 def robots(dossier):
-    partage._ecrire(os.path.join(dossier, "robots.txt"), f"User-agent: *\nAllow: /\n\nSitemap: {SITE}sitemap.xml\n")
+    partage._ecrire(os.path.join(dossier, "robots.txt"), f"User-agent: *\nAllow: /\n\nSitemap: {RACINE}sitemap.xml\n")
 
 
 def htaccess(dossier):
-    """Apache d'o2switch : tout en https://atelier-mtg.com/ (sans www), sauf .well-known (le certificat s'y vérifie) ; pas de
+    """Apache d'o2switch : tout en https://atelier-mtg.com/ (sans www), sauf .well-known (le certificat s'y vérifie) ; la
+    racine vers /fr/ (302, provisoire : l'anglais y viendra), les anciennes adresses françaises vers /fr/ (301) ; pas de
     liste des fichiers ; app.js et style.css (adresses à ?v=) gardés longtemps, la page jamais."""
     hote = re.escape(DOMAINE)
     partage._ecrire(os.path.join(dossier, ".htaccess"), f"""# Page d'accueil de l'Atelier MTG, publiée par outils/atelier/site_atelier.py : ne pas modifier ici
@@ -378,6 +384,10 @@ RewriteCond %{{REQUEST_URI}} !^/\\.well-known/
 RewriteCond %{{HTTPS}} off [OR]
 RewriteCond %{{HTTP_HOST}} !^{hote}$ [NC]
 RewriteRule ^ https://{DOMAINE}%{{REQUEST_URI}} [L,R=301]
+# la page d'accueil est en français, sous /fr/ ; la racine y renvoie en attendant la version anglaise
+RewriteRule ^$ /fr/ [R=302,L]
+# les adresses françaises d'avant /fr/
+RewriteRule ^(recherche|mentions-legales|confidentialite)(?:/(.*))?$ /fr/$1/$2 [R=301,L]
 
 <IfModule mod_expires.c>
   ExpiresActive On
@@ -394,7 +404,7 @@ RewriteRule ^ https://{DOMAINE}%{{REQUEST_URI}} [L,R=301]
 def page_recherche(dossier):
     """recherche/ : la recherche de cartes, pré-rendue (le formulaire) ; les résultats viennent de la base de cartes,
     téléchargée par le navigateur du visiteur."""
-    d = os.path.join(dossier, "recherche")
+    d = os.path.join(dossier, "recherche")                            # dossier : fr/
     entete = dict(titre=TITRE_RECHERCHE, description=DESCRIPTION_RECHERCHE, url=SITE + "recherche/",
                   image=partage.IMAGE_ATELIER, alt=partage.ALT_ATELIER, indexer=True, tete=[fil_recherche()])
     partage._page(d, donnees_recherche(), entete)
@@ -402,18 +412,21 @@ def page_recherche(dossier):
 
 
 def construire(dossier):
-    os.makedirs(os.path.join(dossier, "recherche"), exist_ok=True)              # le moteur de la recherche, pour les deux pages
-    shutil.copyfile(SOURCE_MOTEUR, os.path.join(dossier, "recherche", "cartes.js"))
+    """dossier : la racine du domaine ; les pages françaises dans fr/, les images dans a-propos/."""
+    fr = os.path.join(dossier, "fr")
+    os.makedirs(os.path.join(fr, "recherche"), exist_ok=True)                   # le moteur de la recherche, pour les deux pages
+    shutil.copyfile(SOURCE_MOTEUR, os.path.join(fr, "recherche", "cartes.js"))
     entete = dict(titre=partage.TITRE_ATELIER, description=partage.DESCRIPTION_ATELIER, url=SITE,
                   image=partage.IMAGE_ATELIER, alt=partage.ALT_ATELIER, indexer=True, tete=[donnees_structurees()])
-    partage._page(dossier, donnees(SOURCE_CAPTURES), entete)        # pré-rendue avec les captures de la source…
-    rendu = captures(dossier, pre_rendre(dossier))
+    partage._page(fr, donnees(SOURCE_CAPTURES), entete)             # pré-rendue avec les captures de la source…
+    rendu = captures(dossier, pre_rendre(fr))
     entete["tete"] = [donnees_structurees(rendu)]                    # avec les questions fréquentes
-    partage._page(dossier, donnees("a-propos/"), entete)            # … publiée avec sa copie
-    inserer(dossier, rendu)
-    page_recherche(dossier)
-    mentions_legales(dossier)
-    confidentialite(dossier)
+    partage._page(fr, donnees("../a-propos/"), entete)              # … publiée avec sa copie
+    inserer(fr, rendu)
+    page_recherche(fr)
+    mentions_legales(fr)
+    confidentialite(fr)
+    partage._ecrire(os.path.join(dossier, "index.html"), partage.redirection(SITE))     # sans .htaccess : le navigateur
     sitemap(dossier)
     robots(dossier)
     htaccess(dossier)

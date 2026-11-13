@@ -9,7 +9,7 @@
 "use strict";
 const PARTAGE_TELEPHONE = (o) => {
   const NOM_DEPOT = "decks", DESCRIPTION = "Decks Commander partagés avec l'Atelier MTG", A_PROPOS = "a-propos";
-  const ACCUEIL_ATELIER = "https://atelier-mtg.com/";
+  const ACCUEIL_ATELIER = "https://atelier-mtg.com/fr/";
   const ATELIER = "https://github.com/PierreRibeaucourt/atelier-mtg";
   const VERSION = "__VERSION_ATELIER__";               // version.py, écrite par telephone_site.py
   const ETAT = "@partage";                             // {compte, depot, branche, site, reg} : le dernier registre lu

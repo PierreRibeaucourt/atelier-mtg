@@ -518,8 +518,9 @@ def _page_jouer(dossier):
 # decks de l'auteur). Le dossier a-propos/ d'un site de decks, où chaque site avait sa copie de la page, ne garde qu'une
 # redirection vers elle, pour les liens déjà partagés.
 A_PROPOS = "a-propos"
-ACCUEIL_ATELIER = "https://atelier-mtg.com/"
-IMAGE_ATELIER = ACCUEIL_ATELIER + "a-propos/atelier.jpg"
+DOMAINE_ATELIER = "https://atelier-mtg.com/"                # sa racine renvoie vers /fr/, en attendant l'anglais
+ACCUEIL_ATELIER = DOMAINE_ATELIER + "fr/"                   # la page d'accueil, en français
+IMAGE_ATELIER = DOMAINE_ATELIER + "a-propos/atelier.jpg"    # les images : à la racine, pour toutes les langues
 TITRE_ATELIER = "L'Atelier MTG : Deck Builder, Gratuit et Local (en Français)"
 DESCRIPTION_ATELIER = ("Deck builder Magic gratuit et en français : créez, testez et partagez vos decks Commander (combos, "
                        "bracket, simulation). 100 % local, sans compte.")

@@ -1,4 +1,4 @@
-# Page d'accueil de l'Atelier, https://atelier-mtg.com/ : la page « C'est quoi, l'Atelier MTG ? », pré-rendue pour les
+# Page d'accueil de l'Atelier, https://atelier-mtg.com/fr/ : la page « C'est quoi, l'Atelier MTG ? », pré-rendue pour les
 # moteurs de recherche, avec ses mentions légales et sa confidentialité (outils/atelier/site_atelier.py), refaite à
 # chaque changement de l'Atelier. Elle est poussée sur la branche « accueil » de ce dépôt, que l'hébergement
 # (o2switch) récupère toutes les 15 minutes : aucun accès à l'hébergement n'est rangé ici.
