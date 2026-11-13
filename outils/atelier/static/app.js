@@ -2001,13 +2001,21 @@ function optionsTelephone() {
         <div class="form-ligne"><button class="btn" id="tel-maj">${ico("rafraichir")}Synchroniser</button>
           <button class="btn btn-danger" id="tel-delier">Délier ce téléphone</button>
           <button class="btn btn-discret" id="tel-retirer">Retirer l'accès</button></div>` : `
-        <p>Tes decks sont gardés sur ce téléphone.</p>
+        <p id="tel-ou">Tes decks sont gardés sur ce téléphone.</p>
         <div id="opt-github"></div>`}
       </div></section>${a ? "" : `
     <section class="panneau options opt-bloc" id="opt-cartes"></section>`}
     <section class="panneau options" id="opt-classeur"></section>`;
   classeurOptions($("#opt-classeur"));
-  if (!a) { ligneGithub($("#opt-github"), {}); return optionsCartes($("#opt-cartes")); }
+  // sans PC : où sont les decks, et à quoi sert GitHub tant qu'on n'est pas connecté
+  const ouSont = (g, s) => {
+    const p = $("#tel-ou");
+    if (p) p.textContent = s.active ? "Tes decks sont sur ce téléphone et sauvegardés en ligne, sur ton compte GitHub."
+      : g.compte ? "Tes decks sont gardés seulement sur ce téléphone."
+      : "Tes decks sont gardés seulement sur ce téléphone. Avec un compte GitHub (gratuit), sauvegarde-les en ligne : "
+        + "tu les retrouves si tu perds ton téléphone, ou sur ton PC, et tu peux les partager.";
+  };
+  if (!a) { ligneGithub($("#opt-github"), {}, ouSont); return optionsCartes($("#opt-cartes")); }
   const attente = async () => {
     const n = await TELEPHONE.enAttente();
     const el = $("#tel-attente");
@@ -2125,11 +2133,11 @@ function optionsGenerales(el, o) {
 }
 
 // le compte GitHub (connecté par code, github.py ; ou celui du partage avec git, reglages.json) et la sauvegarde en ligne
-async function ligneGithub(el, o) {
+async function ligneGithub(el, o, apres = null) {
   const [g, s] = await Promise.all([api("/api/github").catch(() => ({})), api("/api/sauvegarde").catch(() => ({}))]);
   const nom = $('[name="nom"]');
   if (nom) nom.placeholder = g.compte || o.github || "";
-  const encore = () => ligneGithub(el, o);
+  const encore = () => ligneGithub(el, o, apres);
   const compte = g.git && !g.compte
     ? `<label class="opt-champ"><span>Compte GitHub des pages</span><input class="champ" name="github" maxlength="39" value="${esc(o.github)}" autocomplete="off" spellcheck="false"></label>`
     : `<div class="opt-champ"><span>Compte GitHub</span><span class="opt-github">${g.compte
@@ -2149,6 +2157,7 @@ async function ligneGithub(el, o) {
     : s.connecte ? `<div class="opt-champ"><span>Sauvegarde en ligne</span><span><button type="button" class="btn btn-petit" id="sv-activer">${ico("nuage")}Sauvegarder mes decks</button></span></div>`
     : "";
   el.innerHTML = compte + sauvegarde;
+  if (apres) apres(g, s);
   const deco = $("#gh-deconnecter", el), co = $("#gh-options", el);
   if (deco) deco.onclick = async () => {
     try { await api("/api/github/deconnexion", { method: "POST", body: {} }); encore(); } catch (e) { erreur(e); }
