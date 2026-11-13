@@ -1860,14 +1860,15 @@
   const fichier_ = (k) => fichier(k);
 
   // ------------------------------------------------------------------ relier le téléphone au PC
+  const PAS_LE_LIEN = ORDI ? "Ce n'est pas le lien de ton Atelier : copie-le à nouveau sur ton PC." : "Ce n'est pas le QR code de l'Atelier.";
   function appairer(texte) {
     const code = String(texte || "").split("#appairer=")[1];
-    if (!code) throw new Error("Ce n'est pas le QR code de l'Atelier.");
+    if (!code) throw new Error(PAS_LE_LIEN);
     let a;
     try {
       a = JSON.parse(decodeURIComponent(escape(atob(code.trim().replace(/-/g, "+").replace(/_/g, "/")))));
-    } catch (_) { throw new Error("Ce n'est pas le QR code de l'Atelier."); }
-    if (!a || typeof a.c !== "string" || !/^[\w.-]+\/[\w.-]+$/.test(a.d || "")) throw new Error("Ce n'est pas le QR code de l'Atelier.");
+    } catch (_) { throw new Error(PAS_LE_LIEN); }
+    if (!a || typeof a.c !== "string" || !/^[\w.-]+\/[\w.-]+$/.test(a.d || "")) throw new Error(PAS_LE_LIEN);
     acces = { d: a.d, c: a.c };
     ecrireLocal(ACCES, JSON.stringify(acces));
     ecrireLocal(COMMIT, null);
@@ -2027,14 +2028,17 @@
           <h2>Déjà l'Atelier sur ton PC ?</h2>
           <p>Retrouve ici les decks de ton PC.</p>
           <button class="btn" id="tel-relier-pc" aria-expanded="false" aria-controls="tel-relier">Relier à mon PC</button>
-          <div id="tel-relier" class="tel-relier" hidden>
+          <div id="tel-relier" class="tel-relier" hidden>${ORDI ? `
+            <ol class="tel-etapes"><li>Sur ton PC, ouvre l'Atelier, puis Options › Téléphone.</li><li>Sous le QR code, clique sur «&nbsp;Copier le lien&nbsp;», puis colle-le ici.</li></ol>
+            <div class="form-ligne"><input class="champ" id="tel-lien" placeholder="https://app.atelier-mtg.com/#appairer=…" autocomplete="off" aria-label="Lien du PC">
+            <button class="btn btn-accent" id="tel-relier-lien">Relier</button></div>` : `
             <ol class="tel-etapes"><li>Sur ton PC, ouvre l'Atelier, puis Options › Téléphone.</li><li>Scanne le QR code qui s'affiche.</li></ol>
             <button class="btn btn-accent" id="tel-scanner">Scanner le QR code</button>
             <video id="tel-video" playsinline muted hidden></video>
             <details class="tel-coller"><summary>Pas d'appareil photo ?</summary>
               <p>Sur le PC, touche «&nbsp;Copier le lien&nbsp;» sous le QR code, envoie-le sur ce téléphone et colle-le ici.</p>
               <div class="form-ligne"><input class="champ" id="tel-lien" placeholder="https://app.atelier-mtg.com/#appairer=…" autocomplete="off" aria-label="Lien du PC">
-              <button class="btn" id="tel-relier-lien">Relier</button></div></details>
+              <button class="btn" id="tel-relier-lien">Relier</button></div></details>`}
           </div>
         </section>`}
         <p class="erreur" id="tel-erreur" hidden></p>
@@ -2054,7 +2058,7 @@
         b.setAttribute("aria-expanded", String(!z.hidden));
         b.hidden = !z.hidden;
       };
-      el.querySelector("#tel-scanner").onclick = async (ev) => {
+      if (!ORDI) el.querySelector("#tel-scanner").onclick = async (ev) => {      // ordinateur : le lien collé, sans appareil photo
         ev.currentTarget.disabled = true;
         erreur("");
         try { await scanner(el.querySelector("#tel-video"), relier); }

@@ -1335,7 +1335,6 @@ label.btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; 
 /* dans l'appli du téléphone : ce qui ne tourne que sur le PC (pour l'instant) */
 :is(.telephone, .ordinateur) :is(#btn-rafraichir, #etat-maj) { display: none !important; }
 .ordinateur .tel-bandeau { left: auto; width: min(32rem, calc(100vw - 1.2rem)); box-sizing: border-box; }
-.ordinateur .tel-choix-pc { display: none; }        /* sur un ordinateur, l'Atelier installé s'ouvre directement */
 .tel-accueil { display: grid; gap: .9rem; max-width: 26rem; margin: 9vh auto 2rem; padding: 0 1rem; }
 body:has(.tel-accueil) .barre { display: none; }        /* l'accueil a déjà son logo */
 .tel-accueil h1 { display: flex; align-items: center; justify-content: center; gap: .6rem; margin: 0; font-size: 1.9rem; }
