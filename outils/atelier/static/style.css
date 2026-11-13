@@ -1029,7 +1029,7 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .chat .vitrine-invite { top: 40%; transform: translate(-50%, -50%); }
 
 /* ---- onglet Achats : à acheter | j'ai déjà, côte à côte sur un écran large */
-.achats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 0 2.2rem; align-items: start; }
+.achats { margin-top: .6rem; }
 .achats .groupe-titre { flex-wrap: wrap; align-items: center; min-height: 2.1rem; }
 .achats-cout { font-variant-numeric: tabular-nums; }
 .achats-outils { margin-left: auto; display: inline-flex; flex-wrap: wrap; align-items: center; gap: .3rem; font-weight: 400; }

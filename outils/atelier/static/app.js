@@ -1722,19 +1722,28 @@ async function ongletAchats(el, d, poss = null) {
     </div>`;
   };
   el.innerHTML = `<div class="achats">
-    <section class="groupe">
-      <div class="groupe-titre"><span class="nb-groupe">${nbAchats(acheter)}</span> À acheter <span class="achats-cout">${euros(coutAchats(acheter))}</span>
+    <div class="segments segments-pages" role="tablist">
+      <button type="button" role="tab">À acheter <span class="sg-n">${nbAchats(acheter)}</span></button>
+      <button type="button" role="tab">J'ai déjà <span class="sg-n">${nbAchats(ai)}</span></button></div>
+    <div class="glisse cote-a-cote">
+    <section class="groupe glisse-page">
+      <h3 class="page-titre">À acheter <span class="muet">(${nbAchats(acheter)})</span></h3>
+      <div class="groupe-titre"><span class="achats-cout">${euros(coutAchats(acheter))}</span>
         ${acheter.length ? `<span class="achats-outils">
           <button type="button" class="btn btn-petit" id="ach-copier">${ico("copier")}Copier pour Cardmarket</button>
           <a class="lien-discret" href="${WANTS_CARDMARKET}" target="_blank" rel="noopener">Wants ↗</a>
           <button type="button" class="btn-menu" id="ach-tout" aria-label="Je les ai toutes" title="Je les ai toutes">${ico("coche")}</button></span>` : ""}</div>
       ${acheter.length ? acheter.map((x) => ligne(x, true)).join("") : `<p class="muet petit">Rien à acheter.</p>`}
     </section>
-    <section class="groupe">
-      <div class="groupe-titre"><span class="nb-groupe">${nbAchats(ai)}</span> J'ai déjà <span class="muet petit">${euros(coutAchats(ai))}</span></div>
+    <section class="groupe glisse-page">
+      <h3 class="page-titre">J'ai déjà <span class="muet">(${nbAchats(ai)})</span></h3>
+      <div class="groupe-titre"><span class="muet">${euros(coutAchats(ai))}</span></div>
       ${ai.length ? ai.map((x) => ligne(x, false)).join("") : `<p class="muet petit">Aucune.</p>`}
-    </section>
+    </section></div>
   </div>`;
+  const pages = ongletAchats.pages || (ongletAchats.pages = {});          // la liste ouverte, gardée pour ce deck
+  pagesGlissees($(".glisse", el), $$(".segments-pages button", el), pages[d.id] ?? (acheter.length ? 0 : 1));
+  $(".glisse", el).addEventListener("page", (ev) => { pages[d.id] = ev.detail; });
   // à acheter, mais déjà là ailleurs : au classeur, ou dans un autre deck (où je l'ai)
   if (acheter.length) api("/api/ou-sont").then((idx) => {
     for (const s of $$("[data-ou]", el)) {
