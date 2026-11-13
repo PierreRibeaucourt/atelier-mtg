@@ -14,7 +14,10 @@
   const APPLI_GITHUB = "https://github.com/settings/connections/applications/Ov23li9fE6JyGKnCmR3L";
   const ACCES = "telephone-acces", COMMIT = "telephone-commit", REGLAGES = "telephone-reglages";
   const DISTANT = 5 * 60 * 1000;                      // coup d'œil au dépôt toutes les cinq minutes, appli ouverte
-  document.documentElement.classList.add("telephone");
+  // voir/ (lien instantané d'un deck) : ce script y fait la page du deck, puis charge app.js (VOIR : son adresse) en
+  // page partagée, sans démarrer l'appli. ICI : le dossier de l'appli, pour ses fichiers (worker, base), d'où que l'on soit
+  const VOIR = window.ATELIER_VOIR || "", ICI = new URL(".", document.currentScript.src).href;
+  if (!VOIR) document.documentElement.classList.add("telephone");
 
   const lireLocal = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
   const ecrireLocal = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (_) {} };
@@ -24,6 +27,7 @@
   // leurs pages sont faites ici (pages.js) au lieu d'arriver du PC
   const LOCAL = "telephone-local";
   let local = !acces && lireLocal(LOCAL) === "1";
+  if (VOIR) acces = local = null;                     // voir/ : rien à synchroniser
   // le budget par carte et les réglages de la page, connus avant app.js (qui les lit au chargement)
   try { window.REGLAGES = JSON.parse(lireLocal(REGLAGES) || "{}"); } catch (_) { window.REGLAGES = {}; }
 
@@ -306,7 +310,7 @@
   // Celle de la recherche du PC, allégée (base_telephone.py), publiée avec l'appli et refaite chaque semaine : téléchargée
   // une fois (≈ 10 Mo), gardée ici (@base), puis seulement quand elle change, hors données mobiles. Elle sert à la
   // recherche de cartes, au champ du haut, et aux fiches des cartes : sans réseau, et sans PC.
-  const CARTES = "__CARTES__";                        // cartes.js?v=… (telephone_site.py)
+  const CARTES = new URL("__CARTES__", ICI).href;     // cartes.js?v=… (telephone_site.py)
   const etatBase = { prete: false, date: null, date_fr: null, nb: 0, verifie: 0, nouveautes: [], prochaine: 0,
     construction: { actif: false, etape: "", fait: 0, total: 0, unite: "", erreur: "" } };
   let travailleur = null, baseEnCours = null, numMsg = 0;
@@ -329,9 +333,9 @@
     const c = etatBase.construction;
     Object.assign(c, { actif: true, etape: "Téléchargement de la base de cartes", fait: 0, total: 0, unite: "octets", erreur: "" });
     try {
-      idx = idx || await (await fetch("base/index.json", { cache: "no-store" })).json();
+      idx = idx || await (await fetch(new URL("base/index.json", ICI), { cache: "no-store" })).json();
       c.total = idx.taille;
-      const r = await fetch("base/" + idx.fichier);
+      const r = await fetch(new URL("base/" + idx.fichier, ICI));
       if (!r.ok) throw new Error(`La base de cartes ne répond pas (${r.status}).`);
       const lecteur = r.body.getReader(), morceaux = [];
       for (;;) {
@@ -365,7 +369,7 @@
   // une nouvelle base publiée : téléchargée (pas sur les données mobiles, sauf si on la demande), puis relue
   async function nouvelleBase(force = false) {
     etatBase.verifie = Date.now() / 1000;
-    const idx = await (await fetch("base/index.json", { cache: "no-store" })).json();
+    const idx = await (await fetch(new URL("base/index.json", ICI), { cache: "no-store" })).json();
     const g = await BD.lire("@base").catch(() => null);
     if (g && g.fichier === idx.fichier) return false;
     if (!force && mobile()) return false;
@@ -1925,9 +1929,9 @@
   const installee = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
   const iphone = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   let invite = null;                                   // Android : la demande d'installation du navigateur
-  addEventListener("beforeinstallprompt", (ev) => { ev.preventDefault(); invite = ev; bandeauInstaller(); });
+  if (!VOIR) addEventListener("beforeinstallprompt", (ev) => { ev.preventDefault(); invite = ev; bandeauInstaller(); });
   addEventListener("appinstalled", () => { const b = document.getElementById("tel-bandeau"); if (b) b.remove(); });
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+  if (!VOIR && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
   // ouverte dans le navigateur (par le QR code) : un bandeau en bas propose de l'installer, tant qu'elle ne l'est pas.
   // Android : le bouton ouvre la demande du navigateur ; iPhone : la marche à suivre (Safari n'a pas de bouton).
@@ -2146,6 +2150,59 @@
     try { localStorage.clear(); for (const [k, v] of Object.entries(d.local || {})) localStorage.setItem(k, v); } catch (_) {}
     location.replace(location.pathname);
     return true;
+  }
+
+  // ------------------------------------------------------------------ voir/ : le lien instantané d'un deck
+  // Le lien contient la liste du deck (app.js › lienInstantane : JSON compressé en deflate-raw, en base64url, après « # » :
+  // le navigateur ne l'envoie à aucun serveur). Sa page est faite ici comme celle d'un deck sans PC (pages.js), avec la
+  // base de cartes si ce navigateur l'a déjà, sinon Scryfall, et Commander Spellbook par le relais ; puis app.js la montre
+  // comme une page partagée (partage.js › capturer), en lecture seule.
+  async function lireLien(code) {
+    const b = code.replace(/-/g, "+").replace(/_/g, "/");
+    const octets = Uint8Array.from(atob(b + "=".repeat((4 - (b.length % 4)) % 4)), (c) => c.charCodeAt(0));
+    return JSON.parse(await new Response(new Blob([octets]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text());
+  }
+  // les Game Changers sans la base de cartes : la liste officielle, chez Scryfall (bracket.game_changers)
+  async function gameChangersScryfall() {
+    const noms = [];
+    for (let url = `${SCRYFALL}/cards/search?q=${encodeURIComponent("is:gamechanger")}&unique=cards`; url;) {
+      const r = await scryfall(url);
+      if (!r) break;
+      noms.push(...r.data.map((c) => c.name));
+      url = r.has_more ? r.next_page : null;
+    }
+    return noms;
+  }
+  async function voir() {
+    let d = null;
+    try { d = await lireLien(location.hash.slice(1)); } catch (_) { /* lien abîmé */ }
+    const texte = String((d && d.l) || ""), entrees = texte ? MOTEUR.lire(texte) : [];
+    if (!entrees.length) throw new Error("Ce lien ne contient pas de deck : il a peut-être été coupé en route.");
+    const titre = String(d.t || "").replace(/^Deck /, "").replace(/[\\/:*?"<>|]/g, " ").trim().slice(0, 80) || "partagé";
+    const id = "Deck " + titre, f = { [`${id}/archidekt.txt`]: texte };
+    document.title = `${titre} · Atelier MTG`;
+    window.REGLAGES = { ...(window.REGLAGES || {}), budget: Number(d.b) || 0 };     // le budget de celui qui partage
+    if (await BD.lire("@base").catch(() => null)) await laBase().catch(() => {});   // déjà gardée par l'appli : les fonctions des cartes
+    await analyserSpellbook("@voir", entrees).catch(() => {});                     // combos et bracket (retrouvés par la liste)
+    const o = outilsPages(f);
+    o.fiches = (noms) => fiches(noms);
+    if (!etatBase.prete) { const gc = await gameChangersScryfall().catch(() => []); o.gcListe = async () => gc; }
+    const p = await PAGES.deck(id, f, { ...o, modifie: 0 });
+    const pt = PARTAGE_TELEPHONE({ api, scryfall: (url, corps) => scryfall(url, corps), page: async () => p,
+      lire: (k) => BD.lire(k).catch(() => null), ecrire: (k, v) => BD.ecrire(k, v), compte: async () => null,
+      gh: async () => { throw new Error("Pas de compte ici."); }, reglages: () => ({ budget: budget(), sans_ub_illustrations: false }) });
+    window.PARTAGE = { reglages: { budget: budget(), sans_ub_illustrations: false }, atelier: "https://github.com/PierreRibeaucourt/atelier-mtg",
+      auteur: null, version: "", ...(await pt.capturer(id)), accueil: "../", titre_accueil: "Atelier MTG", instantane: true };
+    const s = document.createElement("script");
+    s.src = VOIR;
+    document.body.append(s);
+  }
+  if (VOIR) {
+    voir().catch((err) => {
+      document.getElementById("vue").innerHTML = `<div class="panneau"><p class="erreur">${e(err.message)}</p>
+        <p><a href="../">Ouvrir l'Atelier MTG</a></p></div>`;
+    });
+    return;
   }
 
   const T = window.TELEPHONE = {

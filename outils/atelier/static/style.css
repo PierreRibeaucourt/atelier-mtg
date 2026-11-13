@@ -917,6 +917,9 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .bandeau-partage { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .45rem 1rem; padding: .5rem 1rem;
   background: var(--accent-doux); border-bottom: 1px solid var(--bord); font-size: .9rem; text-align: center; }
 .bandeau-partage p { margin: 0; }
+/* fenêtre « Partager » : le lien instantané, puis la page permanente */
+.pt-bloc h3 { margin: 0 0 .5rem; font-size: 1rem; }
+.pt-bloc + .pt-bloc { margin-top: 1rem; padding-top: .9rem; border-top: 1px solid var(--bord); }
 .bandeau-partage p a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .pied-partage { border-top: 1px solid var(--bord); padding: 1.2rem 1rem 1.6rem; text-align: center; font-size: .82rem; color: var(--texte-2); }
 .pied-partage nav { display: flex; flex-wrap: wrap; justify-content: center; gap: .3rem 1.4rem; margin-bottom: .5rem; }

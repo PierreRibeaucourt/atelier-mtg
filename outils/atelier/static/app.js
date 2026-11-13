@@ -275,7 +275,12 @@ const INSTALLER = !PARTAGE ? "#/a-propos/installation" : PARTAGE.page === "a-pro
 if (PARTAGE) {
   const depot = PARTAGE.atelier ? esc(PARTAGE.atelier) : "";
   if (PARTAGE.recherche) $("#lien-recherche").href = PARTAGE.recherche;
-  if (!SITE_ATELIER) $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-partage">
+  // lien instantané (voir/ de l'appli) : la liste au moment du partage ; on crée ses decks dans l'appli, sans rien installer
+  if (PARTAGE.instantane) $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-partage">
+    <p>Deck partagé avec <a href="${A_PROPOS}">l'Atelier MTG</a>, tel qu'il était au moment du partage. Pour gérer, tester et partager vos propres decks Commander, l'Atelier est gratuit et sans compte.</p>
+    <a class="btn btn-accent btn-petit" href="${esc(PARTAGE.accueil)}">${ico("plus")}Créer mes decks</a>
+  </div>`);
+  else if (!SITE_ATELIER) $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-partage">
     <p>Page ${PARTAGE.auteur ? `de <strong>${esc(PARTAGE.auteur)}</strong>, ` : ""}partagée avec <a href="${A_PROPOS}">l'Atelier MTG</a>. Pour gérer, tester et partager vos propres decks Commander, l'Atelier est gratuit.</p>
     <a class="btn btn-accent btn-petit" href="${INSTALLER}">${ico("telecharger")}Installer l'Atelier MTG</a>
   </div>`);
@@ -1337,7 +1342,7 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
           <div class="chiffres" style="margin-top:.5rem">${chiffresDeck(d)}</div>
         </div>
         <div class="actions">
-          <a class="btn" data-pc="jouer" href="${PARTAGE ? "jouer/" : `/jouer?deck=${enc(id)}`}" target="_blank" rel="noopener">${ico("lancer")}Jouer</a>
+          ${PARTAGE && PARTAGE.instantane ? "" : `<a class="btn" data-pc="jouer" href="${PARTAGE ? "jouer/" : `/jouer?deck=${enc(id)}`}" target="_blank" rel="noopener">${ico("lancer")}Jouer</a>`}
           <a class="btn ecrit" href="#/recherche?deck=${enc(id)}">${ico("chercher")}Chercher pour ce deck</a>
           <button class="btn btn-icone ouvre-menu" id="btn-deck-menu" aria-label="Autres actions sur le deck" title="Autres actions">${ico("plus_de")}</button>
         </div>
@@ -1881,9 +1886,43 @@ async function ongletAchats(el, d, poss = null) {
 // page du deck publiée sur GitHub Pages (partage.py) : lien, mise à jour, retrait ; au doigt, « Partager » ouvre le
 // partage du téléphone (messagerie, e-mail…)
 const PARTAGE_NATIF = !!navigator.share && matchMedia("(pointer: coarse)").matches;
+// le lien instantané d'un deck : sa liste (format Archidekt), son titre et le budget, en JSON compressé après « # » ;
+// voir/ de l'appli en refait la page (telephone.js › voir). Rien n'est publié, mais le deck y est figé.
+async function lienInstantane(d) {
+  const texte = await api(`/api/decks/${enc(d.id)}/export?format=archidekt`);
+  const json = JSON.stringify({ v: 1, t: d.titre, b: BUDGET === Infinity ? 0 : BUDGET, l: texte });
+  const octets = new Uint8Array(await new Response(new Blob([json]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer());
+  let bin = "";
+  for (const x of octets) bin += String.fromCharCode(x);
+  return APPLI_TELEPHONE + "voir/#" + btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+// partager un deck : d'abord le lien instantané (sans compte, figé), puis la page permanente sur GitHub (à jour toute
+// seule, image d'aperçu, table de jeu)
 function modalePartage(d) {
   ouvrirModale(`<h2>Partager ${esc(d.titre)}</h2>
-    <div id="pt-zone"><p class="chargement">Chargement…</p></div>`, async (b) => {
+    <section class="pt-bloc"><h3>Lien instantané</h3>
+      <div id="pt-lien"><p class="chargement">Préparation du lien…</p></div>
+      <p class="muet petit">Sans compte, rien n'est publié : le lien contient la liste. C'est une photo du deck à cet instant :
+        s'il change, repartage-le.${TELEPHONE ? ` La simulation, Claude et la table de jeu sont dans <a href="${INSTALLER}">l'Atelier à installer</a>.` : ""}</p>
+    </section>
+    <section class="pt-bloc"><h3>Page permanente</h3>
+      <div id="pt-zone"><p class="chargement">Chargement…</p></div>
+    </section>`, async (b) => {
+    const lien = $("#pt-lien", b);
+    lienInstantane(d).then((url) => {
+      lien.innerHTML = `<div class="form-ligne">
+          <input class="champ" id="pt-lien-url" readonly value="${esc(url)}" style="flex:1;min-width:200px" aria-label="Lien instantané">
+          ${PARTAGE_NATIF ? `<button class="btn btn-accent" id="pt-lien-envoyer">${ico("partager")}Partager</button>` : ""}
+          <button class="btn ${PARTAGE_NATIF ? "" : "btn-accent"}" id="pt-lien-copier">${ico("copier")}Copier le lien</button>
+          <a class="btn" href="${esc(url)}" target="_blank" rel="noopener">${ico("ouvrir")}Ouvrir</a>
+        </div>`;
+      $("#pt-lien-url", lien).onclick = (ev) => ev.target.select();
+      if (PARTAGE_NATIF) $("#pt-lien-envoyer", lien).onclick = () => navigator.share({ title: d.titre, url }).catch(() => {});
+      $("#pt-lien-copier", lien).onclick = async () => {
+        try { await navigator.clipboard.writeText(url); toast("Lien copié."); } catch (e) { erreur(e); }
+      };
+    }, (e) => { lien.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; });
     const zone = $("#pt-zone", b);
     const rendre = (s) => {
       zone.innerHTML = `
@@ -1922,10 +1961,11 @@ function modalePartage(d) {
     };
     // premier partage : ce qui sera visible de tous, et ce qui ne l'est pas, avant de publier
     const avant = () => {
-      zone.innerHTML = `<p>La page de <strong>${esc(d.titre)}</strong> sera publique : toute personne qui a le lien y voit
-          la liste, les statistiques, les combos et les tests du deck.</p>
-        <p class="muet petit">Pas ton classeur, ni tes achats, ni tes discussions avec Claude. La page se met à jour toute seule quand le deck change.</p>
-        <div class="boutons"><button class="btn btn-accent" id="pt-publier">${ico("partager")}Publier la page</button></div>`;
+      zone.innerHTML = `<p>Une page publique qui se met à jour toute seule quand le deck change, avec son image d'aperçu et
+          une table de jeu. Elle est publiée sur ton compte GitHub (gratuit).</p>
+        <p class="muet petit">Toute personne qui a le lien y voit la liste, les statistiques, les combos et les tests du deck ;
+          pas ton classeur, ni tes achats, ni tes discussions avec Claude.</p>
+        <div class="boutons"><button class="btn" id="pt-publier">${ico("partager")}Publier la page</button></div>`;
       $("#pt-publier", zone).onclick = publier;
     };
     const s = await api(`/api/decks/${enc(d.id)}/partage`).catch(() => ({}));

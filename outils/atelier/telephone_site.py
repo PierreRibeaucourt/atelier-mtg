@@ -98,6 +98,7 @@ def construire(dossier):
         html = html.replace(a, b)
     with open(os.path.join(dossier, "index.html"), "w", encoding="utf-8", newline="\n") as f:
         f.write(html)
+    voir(dossier, v)
     fichiers = ["./", f"app.js?v={v['app.js']}", f"style.css?v={v['style.css']}", f"moteur.js?v={v['moteur.js']}",
                 f"pages.js?v={v['pages.js']}", f"partage.js?v={v['partage.js']}", f"telephone.js?v={v['telephone.js']}", f"cartes.js?v={v['cartes.js']}",
                 "jsQR.js", "manifest.webmanifest", *ICONES]
@@ -108,6 +109,41 @@ def construire(dossier):
         f.write(sw)
     open(os.path.join(dossier, ".nojekyll"), "w").close()          # GitHub Pages : les fichiers tels quels
     return dossier
+
+
+def voir(dossier, v):
+    """voir/ : le lien instantané d'un deck (app.js › lienInstantane), montré comme une page partagée. telephone.js y
+    fait la page du deck à partir de la liste du lien (ATELIER_VOIR : il ne démarre pas l'appli), puis charge app.js."""
+    with open(os.path.join(STATIQUE, "index.html"), encoding="utf-8") as f:
+        html = f.read()
+    tete = "\n  ".join(['<meta name="robots" content="noindex">',
+                        f'<meta name="theme-color" content="{FOND}">',
+                        '<meta property="og:type" content="website">',
+                        '<meta property="og:site_name" content="Atelier MTG">',
+                        '<meta property="og:locale" content="fr_FR">',
+                        '<meta property="og:title" content="Un deck Commander partagé avec l\'Atelier MTG">',
+                        '<meta property="og:description" content="Sa liste, en visuel, avec ses statistiques, ses combos et son bracket.">',
+                        '<meta property="og:image" content="https://atelier-mtg.com/a-propos/atelier.jpg">',
+                        '<meta name="twitter:card" content="summary_large_image">',
+                        '<link rel="apple-touch-icon" href="../icone-180.png">'])
+    remplacements = [
+        ('<html lang="fr">', '<html lang="fr" class="partage">'),
+        ("<title>Atelier MTG</title>", "<title>Deck partagé · Atelier MTG</title>\n  " + tete),
+        ('href="/static/style.css"', f'href="../style.css?v={v["style.css"]}"'),
+        ('  <script src="/reglages.js"></script>\n', ""),
+        ('<main id="vue" class="vue"></main>', '<main id="vue" class="vue"><p class="chargement">Chargement du deck…</p></main>'),
+        ('<script src="/static/app.js"></script>',
+         f'<script>window.ATELIER_VOIR = "../app.js?v={v["app.js"]}";</script>\n'
+         f'  <script src="../moteur.js?v={v["moteur.js"]}"></script>\n  <script src="../pages.js?v={v["pages.js"]}"></script>\n'
+         f'  <script src="../partage.js?v={v["partage.js"]}"></script>\n  <script src="../telephone.js?v={v["telephone.js"]}"></script>'),
+    ]
+    for a, b in remplacements:
+        if a not in html:
+            raise SystemExit(f"index.html a changé : « {a} » introuvable")
+        html = html.replace(a, b)
+    os.makedirs(os.path.join(dossier, "voir"), exist_ok=True)
+    with open(os.path.join(dossier, "voir", "index.html"), "w", encoding="utf-8", newline="\n") as f:
+        f.write(html)
 
 
 def passerelle(dossier):

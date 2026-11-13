@@ -514,5 +514,5 @@ const PARTAGE_TELEPHONE = (o) => {
     return g && e && e.compte === g.compte ? e.reg || {} : {};
   }
   const compteConnu = async () => !!(await o.compte().catch(() => null));
-  return { etat, partager, retirer, renommer, partages, compteConnu };
+  return { etat, partager, retirer, renommer, partages, compteConnu, capturer };      // capturer : aussi pour voir/ (lien instantané)
 };
