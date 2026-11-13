@@ -2462,7 +2462,7 @@ const TITRE_ALERTE = {
   "interdite": "Carte bannie en Commander",
   "non légale": "Carte non légale en Commander (carte Un-, Alchimie…)",
 };
-const AFFICHAGE = PARTAGE ? "visuel" : "liste";          // affichage par défaut d'un deck : les images sur une page partagée
+const AFFICHAGE = "visuel";                              // affichage par défaut d'un deck : les images d'abord, partout
 const ORDRE_TYPES = ["Créatures", "Planeswalkers", "Batailles", "Éphémères", "Rituels", "Artefacts", "Enchantements", "Terrains", "Autres"];
 // fonctions (Scryfall Tagger, familles calculées par recherche.fonctions_cartes) : une carte est rangée sous la première des siennes
 const ORDRE_FONCTIONS = ["Ramp", "Pioche", "Tuteurs", "Removal", "Balayages", "Contresorts", "Recursion", "Protection", "Autres", "Terrains"];
@@ -2531,7 +2531,7 @@ function ongletListe(el, d) {
   el.innerHTML = `
     ${!d.cartes.length ? `<div class="panneau vide"><p>Ce deck est vide.</p><button class="btn btn-accent ecrit" id="vide-ajouter">${ico("plus")}Ajouter des cartes</button></div>` : `
     <div class="barre-outils">
-      ${segments("affichage", [["liste", "Liste", "liste"], ["visuel", "Visuel", "cartes"]], AFFICHAGE)}
+      ${segments("affichage", [["visuel", "Visuel", "cartes"], ["liste", "Liste", "liste"]], AFFICHAGE)}
       <label class="outil petit muet" id="outil-taille" ${PREF.get("affichage", AFFICHAGE) === "visuel" ? "" : "hidden"}>Taille
         <input type="range" id="taille" min="80" max="220" step="5" value="${tailleCartes()}" aria-label="Taille des cartes"></label>
       <label class="outil petit muet">Ranger par
