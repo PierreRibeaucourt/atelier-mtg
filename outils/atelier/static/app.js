@@ -1753,12 +1753,14 @@ async function connexionGithub(zone, suite) {
 // retirer l'accès de tous les appareils : « Revoke access » sur la page GitHub de l'appli « Atelier MTG » retire toutes
 // ses clés (PC, téléphones, appareil perdu ou volé). La fenêtre suit GitHub : une fois la clé d'ici refusée, elle propose
 // de reconnecter cet appareil ; un téléphone relié au PC, lui, est délié (sa clé était celle du PC)
+const TOUS_APPAREILS = "Déconnecter tous mes appareils";
 function modaleRetirerAcces(appli, intro = "", fin = () => {}) {
-  ouvrirModale(`<div class="fc-tete"><h2>Retirer l'accès</h2>
+  ouvrirModale(`<div class="fc-tete"><h2>${TOUS_APPAREILS}</h2>
       <button class="btn btn-discret btn-icone" id="ra-fermer" aria-label="Fermer">${ico("fermer")}</button></div>
     <div id="ra-zone">${intro ? `<p>${esc(intro)}</p>` : ""}
-      <p>Sur GitHub, clique sur «&nbsp;Revoke access&nbsp;» : tous tes appareils perdent leur clé, ${CET_APPAREIL} compris,
-        même un appareil perdu ou volé. Tu reconnecteras ensuite ceux que tu gardes.</p>
+      <p><strong>${TELEPHONE ? "Ce téléphone, ton PC" : "Ce PC, ton téléphone"}</strong> et tout appareil perdu ou volé
+        perdront l'accès à ta sauvegarde.</p>
+      <p>Sur GitHub, clique sur «&nbsp;Revoke access&nbsp;», puis reconnecte les appareils que tu gardes.</p>
       <div class="gh-action"><a class="btn btn-accent" id="ra-ouvrir" href="${esc(appli)}" target="_blank" rel="noopener">Ouvrir GitHub</a></div>
       <p class="gh-attente" role="status" hidden>En attente de GitHub…</p></div>`, (b) => {
     const zone = $("#ra-zone", b), fini = () => { fermerModale(); fin(); };
@@ -1774,7 +1776,7 @@ function modaleRetirerAcces(appli, intro = "", fin = () => {}) {
         try { v = await api("/api/github/valide"); } catch (_) { continue; }
         if (!zone.isConnected || v.valide) continue;
         const relie = TELEPHONE && !TELEPHONE.local;
-        zone.innerHTML = `<p>C'est fait : tes appareils n'ont plus accès.${relie ? " Ce téléphone est délié." : ""}</p>
+        zone.innerHTML = `<p>C'est fait : plus aucun appareil n'a accès à ta sauvegarde, ${CET_APPAREIL} compris.${relie ? " Il est délié." : ""}</p>
           <div class="gh-action"><button class="btn btn-accent" id="ra-suite">${relie ? "OK" : `Reconnecter ${CET_APPAREIL}`}</button></div>`;
         const delie = () => { fermerModale(); location.hash = "#/"; TELEPHONE.delier(); };
         $("#ra-suite", zone).onclick = relie ? delie : () => connexionGithub(zone, fini);
@@ -2000,7 +2002,7 @@ function optionsTelephone() {
         <p class="muet petit" id="tel-attente" hidden></p>
         <div class="form-ligne"><button class="btn" id="tel-maj">${ico("rafraichir")}Synchroniser</button>
           <button class="btn btn-danger" id="tel-delier">Délier ce téléphone</button>
-          <button class="btn btn-discret" id="tel-retirer">Retirer l'accès</button></div>` : `
+          <button class="btn btn-discret" id="tel-retirer">${TOUS_APPAREILS}</button></div>` : `
         <p id="tel-ou">Tes decks sont gardés sur ce téléphone.</p>
         <div id="opt-github"></div>`}
       </div></section>${a ? "" : `
@@ -2142,7 +2144,7 @@ async function ligneGithub(el, o, apres = null) {
     ? `<label class="opt-champ"><span>Compte GitHub des pages</span><input class="champ" name="github" maxlength="39" value="${esc(o.github)}" autocomplete="off" spellcheck="false"></label>`
     : `<div class="opt-champ"><span>Compte GitHub</span><span class="opt-github">${g.compte
       ? `<strong>${esc(g.compte)}</strong><button type="button" class="btn btn-petit btn-discret" id="gh-deconnecter">Se déconnecter</button>
-        <button type="button" class="btn btn-petit btn-discret" id="gh-retirer">Retirer l'accès</button>`
+        <button type="button" class="btn btn-petit btn-discret" id="gh-retirer">${TOUS_APPAREILS}</button>`
       : `<button type="button" class="btn btn-accent btn-petit" id="gh-options">Se connecter à GitHub</button>`}</span></div>`;
   // la sauvegarde : son interrupteur et où elle en est ; sans connexion (ou d'avant la sauvegarde), le bouton qui la met en place
   const etatTexte = s.erreur ? `<span class="erreur">${esc(s.erreur)}</span>`
