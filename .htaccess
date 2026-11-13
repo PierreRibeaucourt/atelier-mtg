@@ -1,0 +1,21 @@
+# Page d'accueil de l'Atelier MTG, publiée par outils/atelier/site_atelier.py : ne pas modifier ici
+Options -Indexes
+RewriteEngine On
+RewriteCond %{REQUEST_URI} !^/\.well-known/
+RewriteCond %{HTTPS} off [OR]
+RewriteCond %{HTTP_HOST} !^atelier\-mtg\.com$ [NC]
+RewriteRule ^ https://atelier-mtg.com%{REQUEST_URI} [L,R=301]
+# la page d'accueil est en français, sous /fr/ ; la racine y renvoie en attendant la version anglaise
+RewriteRule ^$ /fr/ [R=302,L]
+# les adresses françaises d'avant /fr/
+RewriteRule ^(recherche|mentions-legales|confidentialite)(?:/(.*))?$ /fr/$1/$2 [R=301,L]
+
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/html "access plus 0 seconds"
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+  ExpiresByType text/javascript "access plus 1 year"
+  ExpiresByType image/webp "access plus 1 month"
+  ExpiresByType image/jpeg "access plus 1 month"
+</IfModule>

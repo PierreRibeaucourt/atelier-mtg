@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="fr" class="partage site-atelier">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>L'Atelier MTG : Deck Builder, Gratuit et Local (en Français)</title>
+  <meta name="description" content="Deck builder Magic gratuit et en français : créez, testez et partagez vos decks Commander (combos, bracket, simulation). 100 % local, sans compte.">
+  <link rel="canonical" href="https://atelier-mtg.com/fr/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Atelier MTG">
+  <meta property="og:locale" content="fr_FR">
+  <meta property="og:url" content="https://atelier-mtg.com/fr/">
+  <meta property="og:title" content="L'Atelier MTG : Deck Builder, Gratuit et Local (en Français)">
+  <meta property="og:description" content="Deck builder Magic gratuit et en français : créez, testez et partagez vos decks Commander (combos, bracket, simulation). 100 % local, sans compte.">
+  <meta property="og:image" content="https://atelier-mtg.com/a-propos/atelier.jpg">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="L'Atelier MTG : le deck builder Commander assisté, 100% local et sans compte">
+  <meta name="twitter:card" content="summary_large_image">
+  <script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://atelier-mtg.com/#site",
+      "name": "Atelier MTG",
+      "alternateName": "L'Atelier MTG",
+      "url": "https://atelier-mtg.com/",
+      "inLanguage": "fr",
+      "publisher": {
+        "@id": "https://atelier-mtg.com/#auteur"
+      }
+    },
+    {
+      "@type": "WebPage",
+      "@id": "https://atelier-mtg.com/fr/#page",
+      "url": "https://atelier-mtg.com/fr/",
+      "name": "L'Atelier MTG : Deck Builder, Gratuit et Local (en Français)",
+      "description": "Deck builder Magic gratuit et en français : créez, testez et partagez vos decks Commander (combos, bracket, simulation). 100 % local, sans compte.",
+      "inLanguage": "fr",
+      "isPartOf": {
+        "@id": "https://atelier-mtg.com/#site"
+      },
+      "about": {
+        "@id": "https://atelier-mtg.com/#application"
+      },
+      "primaryImageOfPage": "https://atelier-mtg.com/a-propos/atelier.jpg"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://atelier-mtg.com/#application",
+      "name": "Atelier MTG",
+      "alternateName": "L'Atelier MTG",
+      "description": "Deck builder Magic gratuit et en français : créez, testez et partagez vos decks Commander (combos, bracket, simulation). 100 % local, sans compte.",
+      "url": "https://atelier-mtg.com/fr/",
+      "inLanguage": "fr",
+      "applicationCategory": "UtilitiesApplication",
+      "applicationSubCategory": "Deck builder Magic: The Gathering (Commander)",
+      "about": {
+        "@type": "Thing",
+        "name": "Magic: The Gathering",
+        "sameAs": [
+          "https://fr.wikipedia.org/wiki/Magic_:_L%27Assembl%C3%A9e",
+          "https://en.wikipedia.org/wiki/Magic:_The_Gathering"
+        ]
+      },
+      "operatingSystem": "Windows 10, Windows 11, Android, iOS, macOS, Linux",
+      "softwareVersion": "2.1.0",
+      "downloadUrl": "https://github.com/PierreRibeaucourt/atelier-mtg/releases/latest/download/Atelier-MTG-Windows.exe",
+      "isAccessibleForFree": true,
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "EUR"
+      },
+      "license": "https://github.com/PierreRibeaucourt/atelier-mtg/blob/main/LICENSE",
+      "image": "https://atelier-mtg.com/a-propos/atelier.jpg",
+      "screenshot": [
+        "https://atelier-mtg.com/a-propos/decks.webp",
+        "https://atelier-mtg.com/a-propos/suggestions.webp",
+        "https://atelier-mtg.com/a-propos/statistiques.webp"
+      ],
+      "featureList": [
+        "Création et import de decks Commander (Moxfield, Archidekt, MTG Arena)",
+        "Statistiques et base de mana",
+        "Combos (Commander Spellbook, MTGPics)",
+        "Bracket estimé selon les règles officielles, Game Changers",
+        "Simulateur de parties à quatre joueurs",
+        "Table de jeu en solo",
+        "Recherche avancée de cartes en français",
+        "Prix Cardmarket et budget",
+        "Suggestions de cartes",
+        "Versions et historique des decks",
+        "Partage des decks en ligne",
+        "Discussion avec Claude (optionnelle)"
+      ],
+      "author": {
+        "@id": "https://atelier-mtg.com/#auteur"
+      },
+      "sameAs": [
+        "https://github.com/PierreRibeaucourt/atelier-mtg"
+      ]
+    },
+    {
+      "@type": "Person",
+      "@id": "https://atelier-mtg.com/#auteur",
+      "name": "PierreRibeaucourt",
+      "url": "https://github.com/PierreRibeaucourt"
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://atelier-mtg.com/fr/#faq",
+      "isPartOf": {
+        "@id": "https://atelier-mtg.com/fr/#page"
+      },
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Je ne suis pas informaticien : c'est compliqué à installer ?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Non. Sous Windows, téléchargez l'installeur et lancez-le, comme n'importe quel programme : il contient tout ce qu'il faut et crée un raccourci sur le bureau. Ensuite, les mises à jour s'installent en un clic. Sous macOS et Linux, confiez l'installation à un assistant IA qui agit sur votre ordinateur, comme Claude Code : collez-lui la consigne ci-dessus."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Ça marche sur Mac et Linux ?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "En principe oui : c'est le même programme, lancé par atelier.sh. Mais pour l'instant, seul Windows est testé."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Est-ce sûr ?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "L'Atelier ne s'ouvre que sur votre PC : il n'est pas accessible depuis le réseau. Son installeur n'est pas signé (une signature coûte plusieurs centaines d'euros par an), d'où l'avertissement de Windows au premier lancement ; mais tout son code est public : vous, ou votre assistant IA, pouvez le lire avant de l'installer."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Faut-il payer pour Claude ?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Claude est facultatif : sans lui, tout le reste fonctionne. Pour s'en servir, il faut un abonnement Claude payant (Pro ou plus), car le compte gratuit ne donne pas accès à Claude Code."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Va-t-il épuiser mon abonnement ?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Il ne travaille que quand vous lui écrivez, ou quand vous cliquez sur un bouton qui l'appelle, comme l'analyse des synergies d'un deck ou « Affiner avec Claude » : rien ne tourne en arrière-plan. Les suggestions, les combos, le bracket, les statistiques, les fonctions des cartes et le test du simulateur ne passent pas par lui. « Compacter » résume une longue discussion pour qu'elle consomme moins."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Comment entrent mes cartes ?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "On colle une liste copiée depuis Moxfield, Archidekt ou MTG Arena. La liste d'un deck préconstruit se trouve sur ces sites. Les cartes rangées hors des decks se collent de la même façon dans le classeur."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Peut-on créer un deck Magic en ligne, depuis son téléphone ?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Oui : ouvrez app.atelier-mtg.com sur votre téléphone, puis ajoutez-la à l'écran d'accueil. Elle marche seule, sans PC ni compte, ou reliée à l'Atelier de votre PC par un QR code, et garde vos decks même sans réseau. La simulation, la table de jeu, les proxies et la discussion avec Claude restent sur PC. Pour montrer un deck à quelqu'un, « Partager » le publie sur une page comme celles-ci, qui se lit sur téléphone et se met à jour toute seule. Il faut un compte GitHub, gratuit : c'est lui qui héberge votre page."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Et si mon PC tombe en panne ?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Activez la sauvegarde en ligne, facultative : l'Atelier range une copie de vos decks, de leurs versions et de votre classeur sur votre propre compte GitHub, gratuit, dans un espace privé que vous seul voyez. Chaque modification s'y ajoute toute seule. Sur un autre PC, « Récupérer mes decks » les ramène."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Puis-je partir avec mes decks ?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Oui. Chaque deck est un dossier sur votre disque, avec sa liste en texte (format Archidekt, tags compris), son historique et ses versions. Le menu « … » copie la liste pour Archidekt, Moxfield, MTG Arena ou MTGO."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Peut-on jouer en ligne contre d'autres joueurs ?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Non, ce n'est pas un jeu vidéo. La table de jeu se joue seul, à la main, pour tester les mains de départ et les premiers tours."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Comment simuler des parties à quatre ?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "En simplifiant. Les trois adversaires sont des archétypes (aggro, contrôle, jetons, combo…). Selon des probabilités, ils posent des créatures, retirent vos menaces, rasent la table ou gagnent sur une combo, mais sans politique. Seul, le simulateur juge la régularité du deck : le mana, les cartes jouées, le board, le commandant. Il comprend une partie des cartes en lisant leur texte, et joue les autres sans leur effet, ou avec une partie seulement : c'est Claude qui lui apprend celles-là. Les taux de victoire ne s'affichent qu'ensuite, quand ils ont un sens."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Je débute, est-ce pour moi ?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Oui. Les statistiques comparent votre deck à un modèle type, et Claude peut expliquer une règle, une carte ou proposer des ajouts dans votre budget. Les mots de cette page : Ramp : les cartes qui donnent du mana en plus, pour jouer plus gros plus tôt. Removal : les cartes qui détruisent ou exilent une menace adverse. Tuteur : une carte qui va chercher une carte précise dans votre bibliothèque. Combo : des cartes qui, ensemble, gagnent la partie ou créent un effet infini. Cut : les cartes à retirer pour revenir à 100. Bracket : le niveau de puissance officiel d'un deck Commander, de 1 à 5, pour jouer à armes égales. Game Changers : une liste officielle de cartes très puissantes, qui font monter le bracket."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "La recherche comprend-elle la syntaxe Scryfall ?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Non. Elle reprend le formulaire de Magic-Ville, où les mêmes critères se cochent : identité de couleur, texte, coût… Elle ajoute le prix et la fonction des cartes."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Les règles et les combos sont-ils à jour ?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "La liste des Game Changers est relue chaque jour, et les nouvelles cartes arrivent toutes seules à chaque extension. Les combos viennent de Commander Spellbook et de MTGPics, entretenues par leurs communautés. Si les règles des brackets changent, une mise à jour de l'Atelier les suit."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Les prix tiennent-ils compte de l'état, de la langue, du port ?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Non : c'est le prix indicatif de Cardmarket, pour l'édition la moins chère. On n'achète pas dans l'Atelier. En revanche, l'onglet Achats copie les cartes qui vous manquent au format des listes de souhaits de Cardmarket, et c'est Cardmarket qui calcule ensuite le panier."
+          }
+        }
+      ]
+    }
+  ]
+}
+  </script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='11.5' cy='7' r='2.8' fill='%23f97316'/%3E%3Ccircle cx='18.5' cy='3.6' r='2' fill='%23f97316'/%3E%3Ccircle cx='19.8' cy='9.6' r='1.6' fill='%23f97316'/%3E%3Cpath d='M8 27.5 6.6 30.6M24 27.5l1.4 3.1' stroke='%239a3412' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpath d='M5 15h22c1 1.9 1.5 3.7 1.5 5.7 0 4.6-5.4 7.8-12.5 7.8S3.5 25.3 3.5 20.7c0-2 .5-3.8 1.5-5.7z' fill='%23c2410c'/%3E%3Crect x='2' y='11.5' width='28' height='5.2' rx='2.6' fill='%239a3412'/%3E%3Cpath d='M8 19.5c1.5 3.5 4.2 5 8 5' stroke='%23fdba74' stroke-width='1.6' fill='none' stroke-linecap='round' opacity='.7'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css?v=09b783d090">
+</head>
+<body>
+  <header class="barre">
+    <a href="#/" class="logo">Atelier MTG</a>
+    <div class="aller">
+      <input id="aller" class="champ" type="search" placeholder="Rechercher une carte…" autocomplete="off"
+        aria-label="Rechercher une carte" aria-controls="aller-liste" aria-autocomplete="list">
+      <div id="aller-liste" class="aller-liste" role="listbox" hidden></div>
+    </div>
+    <a href="#/recherche" id="lien-recherche" class="btn btn-discret lien-recherche" data-ico="chercher"><span>Recherche<span class="long">&nbsp;avancée</span></span></a>
+    <a href="#/classeur" id="lien-classeur" class="btn btn-discret lien-recherche" data-ico="livre"><span>Classeur</span></a>
+    <div class="espace"></div>
+    <div class="barre-droite">
+      <span id="etat-maj" class="etat-maj"></span>
+      <button id="btn-rafraichir" class="btn btn-discret" data-ico="rafraichir" title="Rafraîchir les prix du jour et la liste officielle des Game Changers">Rafraîchir</button>
+      <a href="#/options" id="lien-options" class="btn btn-discret" data-ico="options" title="Options" aria-label="Options"></a>
+      <button id="btn-theme" class="btn btn-discret" data-ico="theme" title="Thème clair ou sombre" aria-label="Thème clair ou sombre"></button>
+      <a href="#installation" id="btn-installer" class="btn btn-contour" data-ico="telecharger"><span>Installer<span class="long">&nbsp;l'Atelier MTG</span></span></a>
+      <a href="https://app.atelier-mtg.com/" id="btn-creer" class="btn btn-accent" data-ico="plus">Créer un deck</a>
+    </div>
+  </header>
+  <div class="cadre">
+    <main id="vue" class="vue vue-pleine">
+    <header class="ap-tete">
+      <div class="ap-tete-dedans">
+        <div class="ap-scene" aria-hidden="true">
+          <figure class="ap-ecran e1"><img class="cap-sombre" src="../a-propos/discussion.webp" data-f="discussion" alt="" loading="lazy"><img class="cap-clair" src="../a-propos/discussion-clair.webp" data-f="discussion-clair" alt="" loading="lazy"></figure>
+          <figure class="ap-ecran e2"><img class="cap-sombre" src="../a-propos/statistiques.webp" data-f="statistiques" alt="" loading="lazy"><img class="cap-clair" src="../a-propos/statistiques-clair.webp" data-f="statistiques-clair" alt="" loading="lazy"></figure>
+          <figure class="ap-ecran e3"><img class="cap-sombre" src="../a-propos/decks.webp" data-f="decks" alt="" loading="lazy"><img class="cap-clair" src="../a-propos/decks-clair.webp" data-f="decks-clair" alt="" loading="lazy"></figure>
+        </div>
+        <div class="ap-tete-texte">
+          <h1>L'Atelier <span>MTG</span></h1>
+          <p class="ap-accroche">Le deck builder Commander assisté,<br>100% local et sans compte.</p>
+          <ul class="ap-puces"><li>Suggestions</li><li>Base de mana</li><li>Combos</li><li>Bracket</li><li>Simulation</li><li>Table de jeu</li><li>Recherche avancée</li><li>Claude</li></ul>
+          <p class="ap-cta"><a class="btn btn-accent" href="https://app.atelier-mtg.com/" id="ap-creer"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Créer un deck</a>
+            <a class="btn btn-contour" href="#installation" id="ap-installer"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"></path><path d="m7 10 5 5 5-5"></path><path d="M5 20h14"></path></svg>Installer l'Atelier MTG</a>
+            <a class="ap-voir" href="https://pierreribeaucourt.github.io/decks/">Voir à quoi ça ressemble</a></p>
+          <p class="ap-mention"><b>Gratuit</b> · open source · PC et téléphone · version 2.1.0</p>
+        </div>
+      </div>
+    </header>
+    <article class="a-propos">
+      <div class="ap-bandeau">
+        <p class="ap-promesse">Zéro pub, zéro compte, zéro cloud : l'Atelier tourne <em>uniquement sur vos appareils</em>, PC ou téléphone.</p>
+        <p>L'Atelier est un deck builder en français, gratuit et local, qui s'ouvre dans votre navigateur : il est pensé pour
+          concevoir, tester et faire évoluer vos decks Magic: The Gathering en Commander.</p>
+      </div>
+
+      <h2>Les bases : un constructeur de deck Magic complet</h2>
+      <section class="ap-module">
+        <h3>Vos decks, sans compte ni prise de tête</h3><p>Création, import, affichage en liste ou visuel, taille des cartes réglable, tri par type, tag ou fonction : organisez vos cartes exactement comme vous l'entendez. Utilisez l'outil sur ordinateur, sur mobile, ou synchronisez les deux selon vos besoins.</p>
+        
+        <div class="ap-appareils">
+          <figure class="ap-ecran-pc"><span class="ap-fenetre" aria-hidden="true"><i></i><i></i><i></i></span><img class="cap-sombre" src="../a-propos/appareils-pc.webp" data-f="appareils-pc" alt="Un deck dans l'Atelier, sur ordinateur" loading="lazy"><img class="cap-clair" src="../a-propos/appareils-pc-clair.webp" data-f="appareils-pc-clair" alt="Un deck dans l'Atelier, sur ordinateur" loading="lazy"></figure>
+          <figure class="ap-ecran-tel"><img class="cap-sombre" src="../a-propos/appareils-tel.webp" data-f="appareils-tel" alt="Le même deck dans l'Atelier, sur téléphone" loading="lazy"><img class="cap-clair" src="../a-propos/appareils-tel-clair.webp" data-f="appareils-tel-clair" alt="Le même deck dans l'Atelier, sur téléphone" loading="lazy"></figure>
+        </div>
+      </section><section class="ap-module">
+        <h3>Recherche avancée</h3><p>Une recherche multicritère comme celle de Magic-Ville, avec en plus un filtre de prix Cardmarket et une catégorisation automatique des cartes : ramp, pioche, tuteur, removal…</p>
+        <p><a class="btn" href="recherche/"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>Essayer la recherche</a></p>
+        <figure><img class="cap-sombre" src="../a-propos/recherche.webp" data-f="recherche" alt="Recherche avancée" loading="lazy"><img class="cap-clair" src="../a-propos/recherche-clair.webp" data-f="recherche-clair" alt="Recherche avancée" loading="lazy"></figure>
+      </section><section class="ap-module">
+        <h3>Table de jeu</h3><p>Jouez vos decks en solo pour tester les mains de départ et les premiers tours : pioche, mulligan, jetons, marqueurs, planeswalkers, tout au clic ou au glisser.</p>
+        
+        <figure><img class="cap-sombre" src="../a-propos/jouer.webp" data-f="jouer" alt="Table de jeu" loading="lazy"><img class="cap-clair" src="../a-propos/jouer-clair.webp" data-f="jouer-clair" alt="Table de jeu" loading="lazy"></figure>
+      </section><section class="ap-module">
+        <h3>Versions et historique</h3><p>Chaque modification est gardée. Enregistrez des versions, comparez deux listes, revenez en arrière.</p>
+        
+        <figure><img class="cap-sombre" src="../a-propos/versions.webp" data-f="versions" alt="Versions et historique" loading="lazy"><img class="cap-clair" src="../a-propos/versions-clair.webp" data-f="versions-clair" alt="Versions et historique" loading="lazy"></figure>
+      </section>
+
+      <h2>Ce qui fait la différence</h2>
+      <section class="ap-module">
+        <h3>Simulateur de parties</h3><p>En un clic, simulez 1 000 parties à quatre joueurs pour tester la régularité de votre deck (mana, présence sur table, gestion, sortie du commandant). Comparez deux versions d'une même liste pour mesurer vos changements. Avec Claude, le simulateur apprend les cartes complexes, rejoue et vous détaille ses résultats.</p>
+        
+        <figure><img class="cap-sombre" src="../a-propos/simulateur.webp" data-f="simulateur" alt="Simulateur de parties" loading="lazy"><img class="cap-clair" src="../a-propos/simulateur-clair.webp" data-f="simulateur-clair" alt="Simulateur de parties" loading="lazy"></figure>
+      </section><section class="ap-module">
+        <h3>Bracket</h3><p>Le bracket est estimé automatiquement selon les règles officielles : Game Changers, combos infinies à deux cartes, tuteurs… et comparé à l'estimation de Commander Spellbook.</p>
+        
+        <figure><img class="cap-sombre" src="../a-propos/bracket.webp" data-f="bracket" alt="Bracket" loading="lazy"><img class="cap-clair" src="../a-propos/bracket-clair.webp" data-f="bracket-clair" alt="Bracket" loading="lazy"></figure>
+      </section><section class="ap-module">
+        <h3>Statistiques et base de mana</h3><p>Courbe de mana, types, fonctions des cartes et surtout la répartition des sources de couleur : elle compte les terrains et les cartes de ramp, et dit si chaque couleur est confortable.</p>
+        
+        <figure><img class="cap-sombre" src="../a-propos/statistiques.webp" data-f="statistiques" alt="Statistiques et base de mana" loading="lazy"><img class="cap-clair" src="../a-propos/statistiques-clair.webp" data-f="statistiques-clair" alt="Statistiques et base de mana" loading="lazy"></figure>
+      </section><section class="ap-module">
+        <h3>Suggestions de cartes</h3><p>Des recommandations ciblées selon votre commandant, vos combos et votre classeur. Triées par pertinence, adaptées à vos couleurs et à votre budget, avec filtres par type, coût et prix.</p>
+        
+        <figure><img class="cap-sombre" src="../a-propos/suggestions.webp" data-f="suggestions" alt="Suggestions de cartes" loading="lazy"><img class="cap-clair" src="../a-propos/suggestions-clair.webp" data-f="suggestions-clair" alt="Suggestions de cartes" loading="lazy"></figure>
+      </section><section class="ap-module">
+        <h3>Prix Cardmarket et budget</h3><p>Les prix Cardmarket pour vos cartes et vos decks, avec alerte en cas de dépassement de budget. Exportez les cartes manquantes au format liste de souhaits Cardmarket en un clic pour calculer directement votre panier.</p>
+        
+        <figure><img class="cap-sombre" src="../a-propos/budget.webp" data-f="budget" alt="Prix Cardmarket et budget" loading="lazy"><img class="cap-clair" src="../a-propos/budget-clair.webp" data-f="budget-clair" alt="Prix Cardmarket et budget" loading="lazy"></figure>
+      </section><section class="ap-module">
+        <h3>Combos</h3><p>Les combos du deck sont repérées automatiquement, en croisant plusieurs sources : MTGPics (la base de Magic-Ville) et Commander Spellbook.</p>
+        
+        <figure><img class="cap-sombre" src="../a-propos/combos.webp" data-f="combos" alt="Combos" loading="lazy"><img class="cap-clair" src="../a-propos/combos-clair.webp" data-f="combos-clair" alt="Combos" loading="lazy"></figure>
+      </section><section class="ap-module">
+        <h3>Discussion avec Claude (optionnel)</h3><p>Un copilote optionnel qui a accès à tout votre Atelier (decks, stats, combos, classeur). Il vous aide à faire vos cuts, explorer des synergies ou vérifier des règles complexes. Aucune clé d'API à configurer : il utilise directement votre abonnement Claude payant (Pro ou supérieur).</p>
+        
+        <figure><img class="cap-sombre" src="../a-propos/discussion.webp" data-f="discussion" alt="Discussion avec Claude (optionnel)" loading="lazy"><img class="cap-clair" src="../a-propos/discussion-clair.webp" data-f="discussion-clair" alt="Discussion avec Claude (optionnel)" loading="lazy"></figure>
+      </section>
+
+      <h2>Et aussi</h2>
+      <div class="ap-grille">
+        <div class="ap-carte"><h3>Import en un collage</h3><p>Une liste copiée depuis Moxfield, Archidekt ou MTG Arena devient un deck, rangé par catégories.</p></div>
+        <div class="ap-carte"><h3>Partage simplifié</h3><p>Chaque deck a sa page en ligne, tenue à jour toute seule, à envoyer à votre groupe de jeu : liste, visuel, statistiques, et une table pour le tester. <a href="https://pierreribeaucourt.github.io/decks/">Voir des exemples</a></p></div>
+      </div>
+
+      <h2>Philosophie : local, ouvert et transparent</h2>
+      <ul class="ap-principes">
+        <li><strong>Open source et gratuit.</strong> Le code est publié sous <a href="https://github.com/PierreRibeaucourt/atelier-mtg/blob/main/LICENSE" target="_blank" rel="noopener">licence MIT</a> :
+          accessible, vérifiable et modifiable par tous sur GitHub.</li>
+        <li><strong>Vos decks sont stockés sur vos appareils.</strong> Rien n'est collecté. Seules sortent les
+          requêtes nécessaires : données, images et prix des cartes (Scryfall), combos et bracket (Commander Spellbook, MTGPics),
+          la discussion avec Claude si vous l'utilisez, la sauvegarde en ligne si vous l'activez, et les pages que vous
+          choisissez de partager.</li>
+        <li><strong>L'IA est optionnelle.</strong> Tri, statistiques, suggestions, test du simulateur et jeu en solo
+          fonctionnent sans aucune configuration IA.</li>
+      </ul>
+
+      <h2 id="installation">Installation</h2>
+      <p>Ce logiciel de construction de deck Magic s'utilise sur votre ordinateur Windows ou sur votre téléphone. Gratuit,
+        sans compte.</p>
+      <div class="ap-install-duo"><section class="ap-install">
+          <div class="ap-install-tete"><svg class="ico ap-logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h8.4v8.4H3zM12.6 3H21v8.4h-8.4zM3 12.6h8.4V21H3zM12.6 12.6H21V21h-8.4z"></path></svg><h3>Sur ordinateur</h3></div>
+          <p class="ap-install-pour">Windows 10 et 11 · rien d'autre à installer</p>
+          <a class="btn btn-accent ap-install-action" href="https://github.com/PierreRibeaucourt/atelier-mtg/releases/latest/download/Atelier-MTG-Windows.exe"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"></path><path d="m7 10 5 5 5-5"></path><path d="M5 20h14"></path></svg>Télécharger pour Windows</a>
+          <ol>
+            <li>Double-cliquez sur le fichier, puis sur <b>Installer</b>. Si Windows affiche <b>Windows a protégé votre
+              ordinateur</b> : <b>Informations complémentaires</b>, puis <b>Exécuter quand même</b>.</li>
+            <li>L'Atelier s'ouvre dans votre navigateur. Pour le rouvrir : raccourci <b>Atelier MTG</b> sur le bureau.</li>
+          </ol>
+        </section><section class="ap-install">
+          <div class="ap-install-tete"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2"></rect><path d="M12 18h.01"></path></svg><h3>Sur téléphone</h3></div>
+          <p class="ap-install-pour">Android et iPhone · sans store, sans compte</p>
+          <div class="ap-qr-ligne"><span class="ap-qr-cadre"><svg class="ap-qr" viewBox="0 0 33 33" role="img" aria-label="QR code de app.atelier-mtg.com"><rect width="33" height="33" fill="#fff"></rect><path fill="#000" d="M2 2h7v1h-7zM10 2h2v1h-2zM14 2h4v1h-4zM20 2h3v1h-3zM24 2h7v1h-7zM2 3h1v1h-1zM8 3h1v1h-1zM10 3h4v1h-4zM15 3h1v1h-1zM18 3h1v1h-1zM20 3h1v1h-1zM22 3h1v1h-1zM24 3h1v1h-1zM30 3h1v1h-1zM2 4h1v1h-1zM4 4h3v1h-3zM8 4h1v1h-1zM11 4h1v1h-1zM13 4h2v1h-2zM18 4h1v1h-1zM20 4h3v1h-3zM24 4h1v1h-1zM26 4h3v1h-3zM30 4h1v1h-1zM2 5h1v1h-1zM4 5h3v1h-3zM8 5h1v1h-1zM10 5h4v1h-4zM16 5h2v1h-2zM19 5h2v1h-2zM22 5h1v1h-1zM24 5h1v1h-1zM26 5h3v1h-3zM30 5h1v1h-1zM2 6h1v1h-1zM4 6h3v1h-3zM8 6h1v1h-1zM11 6h1v1h-1zM13 6h1v1h-1zM16 6h1v1h-1zM18 6h1v1h-1zM21 6h1v1h-1zM24 6h1v1h-1zM26 6h3v1h-3zM30 6h1v1h-1zM2 7h1v1h-1zM8 7h1v1h-1zM15 7h1v1h-1zM17 7h6v1h-6zM24 7h1v1h-1zM30 7h1v1h-1zM2 8h7v1h-7zM10 8h1v1h-1zM12 8h1v1h-1zM14 8h1v1h-1zM16 8h1v1h-1zM18 8h1v1h-1zM20 8h1v1h-1zM22 8h1v1h-1zM24 8h7v1h-7zM10 9h1v1h-1zM12 9h2v1h-2zM17 9h3v1h-3zM2 10h1v1h-1zM4 10h2v1h-2zM7 10h3v1h-3zM11 10h1v1h-1zM15 10h1v1h-1zM17 10h1v1h-1zM19 10h2v1h-2zM24 10h1v1h-1zM27 10h1v1h-1zM29 10h2v1h-2zM4 11h1v1h-1zM6 11h2v1h-2zM9 11h5v1h-5zM15 11h3v1h-3zM20 11h7v1h-7zM30 11h1v1h-1zM4 12h1v1h-1zM6 12h3v1h-3zM15 12h1v1h-1zM18 12h1v1h-1zM25 12h2v1h-2zM28 12h2v1h-2zM2 13h1v1h-1zM5 13h1v1h-1zM7 13h1v1h-1zM9 13h1v1h-1zM12 13h1v1h-1zM18 13h1v1h-1zM20 13h7v1h-7zM30 13h1v1h-1zM3 14h3v1h-3zM8 14h1v1h-1zM12 14h1v1h-1zM16 14h2v1h-2zM19 14h1v1h-1zM21 14h1v1h-1zM27 14h2v1h-2zM6 15h2v1h-2zM10 15h3v1h-3zM16 15h1v1h-1zM18 15h1v1h-1zM21 15h5v1h-5zM28 15h3v1h-3zM4 16h2v1h-2zM8 16h1v1h-1zM10 16h2v1h-2zM13 16h1v1h-1zM15 16h1v1h-1zM17 16h5v1h-5zM23 16h2v1h-2zM28 16h3v1h-3zM6 17h2v1h-2zM10 17h2v1h-2zM13 17h1v1h-1zM16 17h1v1h-1zM18 17h1v1h-1zM21 17h1v1h-1zM23 17h1v1h-1zM26 17h1v1h-1zM29 17h1v1h-1zM4 18h2v1h-2zM7 18h2v1h-2zM10 18h2v1h-2zM13 18h1v1h-1zM16 18h3v1h-3zM20 18h1v1h-1zM23 18h1v1h-1zM26 18h2v1h-2zM29 18h1v1h-1zM4 19h1v1h-1zM6 19h2v1h-2zM12 19h1v1h-1zM16 19h1v1h-1zM18 19h2v1h-2zM22 19h1v1h-1zM25 19h1v1h-1zM27 19h3v1h-3zM2 20h1v1h-1zM5 20h2v1h-2zM8 20h1v1h-1zM10 20h2v1h-2zM15 20h4v1h-4zM22 20h1v1h-1zM26 20h1v1h-1zM28 20h1v1h-1zM7 21h1v1h-1zM9 21h2v1h-2zM12 21h1v1h-1zM15 21h2v1h-2zM19 21h2v1h-2zM23 21h1v1h-1zM25 21h1v1h-1zM28 21h1v1h-1zM3 22h1v1h-1zM5 22h2v1h-2zM8 22h3v1h-3zM12 22h5v1h-5zM18 22h2v1h-2zM21 22h8v1h-8zM10 23h1v1h-1zM12 23h3v1h-3zM17 23h4v1h-4zM22 23h1v1h-1zM26 23h5v1h-5zM2 24h7v1h-7zM10 24h1v1h-1zM13 24h1v1h-1zM16 24h2v1h-2zM20 24h3v1h-3zM24 24h1v1h-1zM26 24h2v1h-2zM29 24h1v1h-1zM2 25h1v1h-1zM8 25h1v1h-1zM10 25h2v1h-2zM15 25h3v1h-3zM20 25h1v1h-1zM22 25h1v1h-1zM26 25h2v1h-2zM30 25h1v1h-1zM2 26h1v1h-1zM4 26h3v1h-3zM8 26h1v1h-1zM11 26h1v1h-1zM13 26h1v1h-1zM18 26h1v1h-1zM20 26h1v1h-1zM22 26h5v1h-5zM28 26h1v1h-1zM30 26h1v1h-1zM2 27h1v1h-1zM4 27h3v1h-3zM8 27h1v1h-1zM10 27h2v1h-2zM13 27h2v1h-2zM21 27h3v1h-3zM26 27h2v1h-2zM29 27h1v1h-1zM2 28h1v1h-1zM4 28h3v1h-3zM8 28h1v1h-1zM10 28h1v1h-1zM14 28h1v1h-1zM16 28h1v1h-1zM19 28h4v1h-4zM25 28h1v1h-1zM28 28h1v1h-1zM30 28h1v1h-1zM2 29h1v1h-1zM8 29h1v1h-1zM12 29h2v1h-2zM17 29h1v1h-1zM19 29h2v1h-2zM22 29h1v1h-1zM24 29h4v1h-4zM29 29h1v1h-1zM2 30h7v1h-7zM10 30h1v1h-1zM13 30h2v1h-2zM16 30h1v1h-1zM19 30h4v1h-4zM25 30h1v1h-1zM29 30h1v1h-1z"></path></svg></span>
+              <p>Scannez ce code avec votre téléphone, ou ouvrez <a href="https://app.atelier-mtg.com/">app.atelier-mtg.com</a>.</p></div>
+          <ol>
+            <li>Ajoutez l'appli à l'écran d'accueil. Android : <b>Installer l'application</b> ; iPhone : <b>Partager</b>, puis
+              <b>Sur l'écran d'accueil</b>.</li>
+            <li>Touchez <b>Commencer</b>. L'Atelier est déjà sur votre PC ? <b>Relier à mon PC</b>.</li>
+          </ol>
+        </section></div>
+      <p class="ap-autres-titre">Autres façons d'installer</p>
+      <p class="ap-autres-texte">Sur Mac, sur Linux, ou pour tout contrôler vous-même.</p>
+      <div class="ap-autres">
+        <details class="ap-autre"><summary><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"></path></svg><span class="ap-autre-nom"><b>Avec un assistant IA</b>
+          <small>Windows, macOS, Linux · il s'occupe de tout</small></span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></summary>
+          <ol>
+            <li>Ouvrez un assistant IA qui agit sur votre ordinateur : Claude Code, Cursor, Copilot… Sinon,
+              <a href="https://code.claude.com/docs/fr/desktop-quickstart" target="_blank" rel="noopener">l'application Claude pour ordinateur</a>
+              (abonnement Pro ou plus), onglet <b>Code</b>.</li>
+            <li>Collez-lui cette consigne :
+              <div class="ap-commande"><code>Installe et lance l'Atelier MTG depuis github.com/PierreRibeaucourt/atelier-mtg</code><button type="button" data-copier="">Copier</button></div></li>
+            <li>Répondez à ses trois questions : il installe tout et crée le raccourci sur le bureau.</li>
+          </ol>
+        </details>
+        <details class="ap-autre"><summary><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="m7.5 9.5 3 2.5-3 2.5M13 15h4"></path></svg><span class="ap-autre-nom"><b>À la main</b>
+          <small>Windows, macOS, Linux · Python et git</small></span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></summary>
+          <ol>
+            <li>Installez <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Python</a> 3.10 ou plus
+              récent, et <a href="https://git-scm.com/downloads" target="_blank" rel="noopener">git</a>.</li>
+            <li>Dans un terminal :
+              <div class="ap-commande"><code>git clone https://github.com/PierreRibeaucourt/atelier-mtg.git "Atelier MTG"
+cd "Atelier MTG"
+python installer.py</code><button type="button" data-copier="">Copier</button></div></li>
+            <li>Pour rouvrir l'Atelier : raccourci <b>Atelier MTG</b> sur le bureau, ou <code>./atelier.sh</code> sous macOS et
+              Linux.</li>
+          </ol>
+        </details>
+      </div>
+      <p class="ap-install-sous">Les nouvelles versions s'annoncent dans l'Atelier et s'installent en un clic ; vos decks sont
+        conservés. Code source : <a class="ap-depot" href="https://github.com/PierreRibeaucourt/atelier-mtg" target="_blank" rel="noopener">github.com/PierreRibeaucourt/atelier-mtg</a></p>
+
+      <h2>Questions fréquentes</h2>
+      <h3 class="ap-faq-groupe">Installation et sécurité</h3>
+        <details class="ap-faq"><summary>Je ne suis pas informaticien&nbsp;: c'est compliqué à installer&nbsp;?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></summary>
+          <div class="ap-faq-rep"><p>Non. Sous Windows, téléchargez l'installeur et lancez-le, comme n'importe quel programme&nbsp;: il contient tout ce qu'il faut et crée un raccourci sur le bureau. Ensuite, les mises à jour s'installent en un clic. Sous macOS et Linux, confiez l'installation à un assistant IA qui agit sur votre ordinateur, comme Claude Code&nbsp;: collez-lui la consigne ci-dessus.</p></div></details><details class="ap-faq"><summary>Ça marche sur Mac et Linux&nbsp;?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></summary>
+          <div class="ap-faq-rep"><p>En principe oui&nbsp;: c'est le même programme, lancé par <code>atelier.sh</code>. Mais pour l'instant, seul Windows est testé.</p></div></details><details class="ap-faq"><summary>Est-ce sûr&nbsp;?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></summary>
+          <div class="ap-faq-rep"><p>L'Atelier ne s'ouvre que sur votre PC&nbsp;: il n'est pas accessible depuis le réseau. Son installeur n'est pas signé (une signature coûte plusieurs centaines d'euros par an), d'où l'avertissement de Windows au premier lancement&nbsp;; mais tout son code est public&nbsp;: vous, ou votre assistant IA, pouvez le lire avant de l'installer.</p></div></details><h3 class="ap-faq-groupe">Claude</h3>
+        <details class="ap-faq"><summary>Faut-il payer pour Claude&nbsp;?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></summary>
+          <div class="ap-faq-rep"><p>Claude est facultatif&nbsp;: sans lui, tout le reste fonctionne. Pour s'en servir, il faut un abonnement Claude payant (Pro ou plus), car le compte gratuit ne donne pas accès à Claude Code.</p></div></details><details class="ap-faq"><summary>Va-t-il épuiser mon abonnement&nbsp;?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></summary>
+          <div class="ap-faq-rep"><p>Il ne travaille que quand vous lui écrivez, ou quand vous cliquez sur un bouton qui l'appelle, comme l'analyse des synergies d'un deck ou «&nbsp;Affiner avec Claude&nbsp;»&nbsp;: rien ne tourne en arrière-plan. Les suggestions, les combos, le bracket, les statistiques, les fonctions des cartes et le test du simulateur ne passent pas par lui. «&nbsp;Compacter&nbsp;» résume une longue discussion pour qu'elle consomme moins.</p></div></details><h3 class="ap-faq-groupe">Vos cartes et vos données</h3>
+        <details class="ap-faq"><summary>Comment entrent mes cartes&nbsp;?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></summary>
+          <div class="ap-faq-rep"><p>On colle une liste copiée depuis Moxfield, Archidekt ou MTG Arena. La liste d'un deck préconstruit se trouve sur ces sites. Les cartes rangées hors des decks se collent de la même façon dans le classeur.</p></div></details><details class="ap-faq"><summary>Peut-on créer un deck Magic en ligne, depuis son téléphone&nbsp;?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></summary>
+          <div class="ap-faq-rep"><p>Oui&nbsp;: ouvrez <a href="https://app.atelier-mtg.com/">app.atelier-mtg.com</a> sur votre téléphone, puis ajoutez-la à l'écran d'accueil. Elle marche seule, sans PC ni compte, ou reliée à l'Atelier de votre PC par un QR code, et garde vos decks même sans réseau. La simulation, la table de jeu, les proxies et la discussion avec Claude restent sur PC.</p>
+      <p>Pour montrer un deck à quelqu'un, «&nbsp;Partager&nbsp;» le publie sur une page <a href="https://pierreribeaucourt.github.io/decks/">comme celles-ci</a>, qui se lit sur téléphone et se met à jour toute seule. Il faut un compte GitHub, gratuit&nbsp;: c'est lui qui héberge votre page.</p></div></details><details class="ap-faq"><summary>Et si mon PC tombe en panne&nbsp;?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></summary>
+          <div class="ap-faq-rep"><p>Activez la sauvegarde en ligne, facultative&nbsp;: l'Atelier range une copie de vos decks, de leurs versions et de votre classeur sur votre propre compte GitHub, gratuit, dans un espace privé que vous seul voyez. Chaque modification s'y ajoute toute seule. Sur un autre PC, «&nbsp;Récupérer mes decks&nbsp;» les ramène.</p></div></details><details class="ap-faq"><summary>Puis-je partir avec mes decks&nbsp;?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></summary>
+          <div class="ap-faq-rep"><p>Oui. Chaque deck est un dossier sur votre disque, avec sa liste en texte (format Archidekt, tags compris), son historique et ses versions. Le menu «&nbsp;…&nbsp;» copie la liste pour Archidekt, Moxfield, MTG Arena ou MTGO.</p></div></details><h3 class="ap-faq-groupe">Magic</h3>
+        <details class="ap-faq"><summary>Peut-on jouer en ligne contre d'autres joueurs&nbsp;?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></summary>
+          <div class="ap-faq-rep"><p>Non, ce n'est pas un jeu vidéo. La table de jeu se joue seul, à la main, pour tester les mains de départ et les premiers tours.</p></div></details><details class="ap-faq"><summary>Comment simuler des parties à quatre&nbsp;?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></summary>
+          <div class="ap-faq-rep"><p>En simplifiant. Les trois adversaires sont des archétypes (aggro, contrôle, jetons, combo…). Selon des probabilités, ils posent des créatures, retirent vos menaces, rasent la table ou gagnent sur une combo, mais sans politique. Seul, le simulateur juge la régularité du deck&nbsp;: le mana, les cartes jouées, le board, le commandant. Il comprend une partie des cartes en lisant leur texte, et joue les autres sans leur effet, ou avec une partie seulement&nbsp;: c'est Claude qui lui apprend celles-là. Les taux de victoire ne s'affichent qu'ensuite, quand ils ont un sens.</p></div></details><details class="ap-faq"><summary>Je débute, est-ce pour moi&nbsp;?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></summary>
+          <div class="ap-faq-rep"><p>Oui. Les statistiques comparent votre deck à un modèle type, et Claude peut expliquer une règle, une carte ou proposer des ajouts dans votre budget. Les mots de cette page&nbsp;:</p>
+      <ul class="ap-lexique">
+        <li><dfn>Ramp</dfn>&nbsp;: les cartes qui donnent du mana en plus, pour jouer plus gros plus tôt.</li>
+        <li><dfn>Removal</dfn>&nbsp;: les cartes qui détruisent ou exilent une menace adverse.</li>
+        <li><dfn>Tuteur</dfn>&nbsp;: une carte qui va chercher une carte précise dans votre bibliothèque.</li>
+        <li><dfn>Combo</dfn>&nbsp;: des cartes qui, ensemble, gagnent la partie ou créent un effet infini.</li>
+        <li><dfn>Cut</dfn>&nbsp;: les cartes à retirer pour revenir à 100.</li>
+        <li><dfn>Bracket</dfn>&nbsp;: le niveau de puissance officiel d'un deck Commander, de 1 à 5, pour jouer à armes égales.</li>
+        <li><dfn>Game Changers</dfn>&nbsp;: une liste officielle de cartes très puissantes, qui font monter le bracket.</li>
+      </ul></div></details><details class="ap-faq"><summary>La recherche comprend-elle la syntaxe Scryfall&nbsp;?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></summary>
+          <div class="ap-faq-rep"><p>Non. Elle reprend le formulaire de Magic-Ville, où les mêmes critères se cochent&nbsp;: identité de couleur, texte, coût… Elle ajoute le prix et la fonction des cartes.</p></div></details><details class="ap-faq"><summary>Les règles et les combos sont-ils à jour&nbsp;?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></summary>
+          <div class="ap-faq-rep"><p>La liste des Game Changers est relue chaque jour, et les nouvelles cartes arrivent toutes seules à chaque extension. Les combos viennent de Commander Spellbook et de MTGPics, entretenues par leurs communautés. Si les règles des brackets changent, une mise à jour de l'Atelier les suit.</p></div></details><details class="ap-faq"><summary>Les prix tiennent-ils compte de l'état, de la langue, du port&nbsp;?<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></summary>
+          <div class="ap-faq-rep"><p>Non&nbsp;: c'est le prix indicatif de Cardmarket, pour l'édition la moins chère. On n'achète pas dans l'Atelier. En revanche, l'onglet Achats copie les cartes qui vous manquent au format des listes de souhaits de Cardmarket, et c'est Cardmarket qui calcule ensuite le panier.</p></div></details>
+
+      <h2>Genèse du projet</h2>
+      <p class="ap-signature">Par PierreRibeaucourt, créateur de l'Atelier</p>
+      <figure class="ap-portrait"><img src="../a-propos/auteur.webp" data-f="auteur" alt="PierreRibeaucourt, en partie de Magic" loading="lazy"></figure>
+      <p>À l'origine, mes listes tenaient sur de simples fichiers texte que j'analysais en ligne de commande avec un LLM et
+        quelques ressources théoriques (ratios de mana, moteurs de pioche, conditions de victoire).</p>
+      <p>Manipuler du code brut a vite montré ses limites. Pour ajuster un <em>cut</em> ou évaluer instantanément l'impact d'une
+        modification, il me fallait une vraie interface graphique qui réunisse les points forts des outils de référence :</p>
+      <ul class="ap-sources">
+        <li><strong>Archidekt</strong> pour la table d'essai et les tests en solitaire ;</li>
+        <li><strong>Magic-Ville et Commander Spellbook</strong> pour la recherche multicritère et les combos ;</li>
+        <li><strong>Cardmarket</strong> pour les cotations du jour ;</li>
+        <li><strong>les règles officielles</strong> pour le contrôle direct des cartes interdites, des brackets et des Game Changers.</li>
+      </ul>
+      <p>J'ai donc créé l'Atelier pour réunir tout ça : une vraie interface sur PC pour construire vos decks, avec la
+        possibilité d'appeler l'IA en renfort si besoin.</p>
+    </article></main>
+    <aside id="chat" class="chat" hidden></aside>
+  </div>
+  <div id="modale" class="modale" hidden></div>
+  <div id="menu" class="menu" hidden></div>
+  <div id="apercu" class="apercu" hidden><img alt=""><div class="legende" hidden></div></div>
+  <div id="bulle" class="bulle" role="tooltip" hidden></div>
+  <div id="fiche-survol" class="fiche-survol" role="tooltip" hidden></div>
+  <div id="toast" class="toast" hidden></div>
+  <script src="donnees.js?v=3dd30c53a3"></script>
+  <script src="app.js?v=828536386c"></script>
+</body>
+</html>

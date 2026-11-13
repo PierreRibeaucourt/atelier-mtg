@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="fr" class="partage site-atelier">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Recherche avancée de cartes Magic en français | Atelier MTG</title>
+  <meta name="description" content="Cherchez parmi toutes les cartes Magic, en français : couleur, type, fonction (ramp, pioche, removal…), édition et prix Cardmarket. Gratuit, sans compte.">
+  <link rel="canonical" href="https://atelier-mtg.com/fr/recherche/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Atelier MTG">
+  <meta property="og:locale" content="fr_FR">
+  <meta property="og:url" content="https://atelier-mtg.com/fr/recherche/">
+  <meta property="og:title" content="Recherche avancée de cartes Magic en français | Atelier MTG">
+  <meta property="og:description" content="Cherchez parmi toutes les cartes Magic, en français : couleur, type, fonction (ramp, pioche, removal…), édition et prix Cardmarket. Gratuit, sans compte.">
+  <meta property="og:image" content="https://atelier-mtg.com/a-propos/atelier.jpg">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="L'Atelier MTG : le deck builder Commander assisté, 100% local et sans compte">
+  <meta name="twitter:card" content="summary_large_image">
+  <script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Atelier MTG",
+      "item": "https://atelier-mtg.com/fr/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Recherche avancée",
+      "item": "https://atelier-mtg.com/fr/recherche/"
+    }
+  ]
+}
+  </script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='11.5' cy='7' r='2.8' fill='%23f97316'/%3E%3Ccircle cx='18.5' cy='3.6' r='2' fill='%23f97316'/%3E%3Ccircle cx='19.8' cy='9.6' r='1.6' fill='%23f97316'/%3E%3Cpath d='M8 27.5 6.6 30.6M24 27.5l1.4 3.1' stroke='%239a3412' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpath d='M5 15h22c1 1.9 1.5 3.7 1.5 5.7 0 4.6-5.4 7.8-12.5 7.8S3.5 25.3 3.5 20.7c0-2 .5-3.8 1.5-5.7z' fill='%23c2410c'/%3E%3Crect x='2' y='11.5' width='28' height='5.2' rx='2.6' fill='%239a3412'/%3E%3Cpath d='M8 19.5c1.5 3.5 4.2 5 8 5' stroke='%23fdba74' stroke-width='1.6' fill='none' stroke-linecap='round' opacity='.7'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css?v=09b783d090">
+</head>
+<body>
+  <header class="barre">
+    <a href="#/" class="logo">Atelier MTG</a>
+    <div class="aller">
+      <input id="aller" class="champ" type="search" placeholder="Rechercher une carte…" autocomplete="off"
+        aria-label="Rechercher une carte" aria-controls="aller-liste" aria-autocomplete="list">
+      <div id="aller-liste" class="aller-liste" role="listbox" hidden></div>
+    </div>
+    <a href="#/recherche" id="lien-recherche" class="btn btn-discret lien-recherche" data-ico="chercher"><span>Recherche<span class="long">&nbsp;avancée</span></span></a>
+    <a href="#/classeur" id="lien-classeur" class="btn btn-discret lien-recherche" data-ico="livre"><span>Classeur</span></a>
+    <div class="espace"></div>
+    <div class="barre-droite">
+      <span id="etat-maj" class="etat-maj"></span>
+      <button id="btn-rafraichir" class="btn btn-discret" data-ico="rafraichir" title="Rafraîchir les prix du jour et la liste officielle des Game Changers">Rafraîchir</button>
+      <a href="#/options" id="lien-options" class="btn btn-discret" data-ico="options" title="Options" aria-label="Options"></a>
+      <button id="btn-theme" class="btn btn-discret" data-ico="theme" title="Thème clair ou sombre" aria-label="Thème clair ou sombre"></button>
+      <a href="../#installation" id="btn-installer" class="btn btn-contour" data-ico="telecharger"><span>Installer<span class="long">&nbsp;l'Atelier MTG</span></span></a>
+      <a href="https://app.atelier-mtg.com/" id="btn-creer" class="btn btn-accent" data-ico="plus">Créer un deck</a>
+    </div>
+  </header>
+  <div class="cadre">
+    <main id="vue" class="vue vue-large">
+    <div class="rch-tete">
+      <nav class="fil" aria-label="Fil d'Ariane"><a href="../">Atelier MTG</a><span aria-hidden="true">›</span><span aria-current="page">Recherche avancée</span></nav>
+      
+    </div>
+    <h1 class="rch-h1">Recherche avancée de cartes Magic</h1>
+    
+    <div id="rch-form"><form id="moteur" class="moteur" autocomplete="off">
+    <div class="mt-rang mt-haut">
+      <section class="fen fen-couleurs"><h3 class="fen-titre">Couleurs</h3>
+        <div class="rch-symboles" data-groupe="coul" role="group"><button type="button" class="rch-sym " data-k="W" data-etat="" aria-pressed="false" title="blanc"><img class="sym" src="https://svgs.scryfall.io/card-symbols/W.svg" alt="{W}" title="{W}"></button><button type="button" class="rch-sym " data-k="U" data-etat="" aria-pressed="false" title="bleu"><img class="sym" src="https://svgs.scryfall.io/card-symbols/U.svg" alt="{U}" title="{U}"></button><button type="button" class="rch-sym " data-k="B" data-etat="" aria-pressed="false" title="noir"><img class="sym" src="https://svgs.scryfall.io/card-symbols/B.svg" alt="{B}" title="{B}"></button><button type="button" class="rch-sym " data-k="R" data-etat="" aria-pressed="false" title="rouge"><img class="sym" src="https://svgs.scryfall.io/card-symbols/R.svg" alt="{R}" title="{R}"></button><button type="button" class="rch-sym " data-k="G" data-etat="" aria-pressed="false" title="vert"><img class="sym" src="https://svgs.scryfall.io/card-symbols/G.svg" alt="{G}" title="{G}"></button><button type="button" class="rch-sym " data-k="C" data-etat="" aria-pressed="false" title="incolore"><img class="sym" src="https://svgs.scryfall.io/card-symbols/C.svg" alt="{C}" title="{C}"></button></div>
+        <div class="rch-cases rch-centre"><label class="rch-case"><input type="checkbox" name="id"> Identité de couleur</label></div>
+        <select class="champ champ-petit" name="spe"><option value="" selected="">Cartes spéciales</option><option value="colorless">Symbole de mana incolore</option><option value="split">Cartes doubles</option><option value="flip">Cartes à inversion</option><option value="dfc">Cartes recto-verso</option><option value="adv">Cartes aventures</option><option value="hyb">Coût de mana hybride</option><option value="phy">Coût de mana phyrexian</option><option value="time">Cartes décalées dans le temps</option><option value="historic">Cartes « historiques »</option><option value="X">Cartes avec X dans le coût de mana</option></select>
+      </section>
+      <section class="fen fen-types"><h3 class="fen-titre">Types</h3>
+        <div class="rch-types"><label class="rch-case"><input type="checkbox" name="types" value="AR"> Artefact</label><label class="rch-case"><input type="checkbox" name="types" value="CR"> Créature</label><label class="rch-case"><input type="checkbox" name="types" value="EN"> Enchantement</label><label class="rch-case"><input type="checkbox" name="types" value="IN"> Éphémère</label><label class="rch-case"><input type="checkbox" name="types" value="SO"> Rituel</label><label class="rch-case"><input type="checkbox" name="types" value="BAT"> Bataille</label><label class="rch-case"><input type="checkbox" name="types" value="PL"> Planeswalker</label><label class="rch-case"><input type="checkbox" name="types" value="LA"> Terrain</label></div>
+        <div class="rch-cases rch-ligne-types"><label class="rch-case"><input type="radio" name="tm" value="1" checked=""> Au moins un</label><label class="rch-case"><input type="radio" name="tm" value="2"> Tous</label><select class="champ champ-petit" name="spt"><option value="" selected="">Types spéciaux</option><option value="TR">Clan (tribal)</option><option value="TK">Jeton</option><option value="DUN">Donjon</option><option value="PN">Plan</option><option value="SC">Machination</option><option value="CH">Personnage (Vanguard)</option><option value="HE">Héros</option><option value="CO">Conspiration</option></select></div>
+      </section>
+      <section class="fen fen-texte"><h3 class="fen-titre">Recherche texte</h3>
+        <div class="rch-cases rch-centre"><label class="rch-case"><input type="checkbox" name="fr" checked=""> français</label><label class="rch-case"><input type="checkbox" name="en" checked=""> anglais</label></div>
+        <label class="rch-ligne">Titre <input class="champ champ-petit" name="nom" type="search" value=""></label>
+        <label class="rch-ligne">Type <input class="champ champ-petit" name="type" value="" placeholder="gobelin, légendaire, equipment…"></label>
+        <div class="rch-bloc rch-bloc-texte"><span class="rch-texte-tete"><span>Texte <button type="button" class="aide-q" data-act="aide-texte" aria-label="Pense-bête de la recherche texte">?</button></span> <label class="rch-case"><input type="checkbox" name="vanilla"> sans texte</label></span>
+          <textarea class="champ" name="texte" rows="2" placeholder="défaussez, &quot;chaque adversaire&quot;, !additio…"></textarea></div>
+      </section>
+    </div>
+    <div class="mt-rang mt-milieu">
+      <section class="fen fen-nombres"><h3 class="fen-titre">Valeur de mana</h3>
+    <div class="rch-nb">
+      <label>Égal à <input class="champ champ-petit" name="mv" value="" inputmode="decimal" size="3"></label>
+      <label>Max <input class="champ champ-petit" name="mvmax" value="" inputmode="decimal" size="3"></label>
+      <label>Min <input class="champ champ-petit" name="mvmin" value="" inputmode="decimal" size="3"></label>
+    </div>
+    <div class="rch-cases rch-centre"><label class="rch-case"><input type="checkbox" name="mvx" checked=""> X inclus</label><label class="rch-case"><input type="checkbox" name="pair"> pair</label><label class="rch-case"><input type="checkbox" name="impair"> impair</label></div>
+  </section>
+      <section class="fen fen-nombres"><h3 class="fen-titre">Force</h3>
+    <div class="rch-nb">
+      <label>Égal à <input class="champ champ-petit" name="f" value="" inputmode="decimal" size="3"></label>
+      <label>Max <input class="champ champ-petit" name="fmax" value="" inputmode="decimal" size="3"></label>
+      <label>Min <input class="champ champ-petit" name="fmin" value="" inputmode="decimal" size="3"></label>
+    </div>
+    <div class="rch-cases rch-centre"><label class="rch-case"><input type="checkbox" name="fx" checked=""> * inclus</label></div>
+  </section>
+      <section class="fen fen-nombres"><h3 class="fen-titre">Endurance</h3>
+    <div class="rch-nb">
+      <label>Égal à <input class="champ champ-petit" name="e" value="" inputmode="decimal" size="3"></label>
+      <label>Max <input class="champ champ-petit" name="emax" value="" inputmode="decimal" size="3"></label>
+      <label>Min <input class="champ champ-petit" name="emin" value="" inputmode="decimal" size="3"></label>
+    </div>
+    <div class="rch-cases rch-centre"><label class="rch-case"><input type="checkbox" name="ex" checked=""> * inclus</label></div>
+  </section>
+      <div class="mt-go">
+        <button class="rch-go" type="submit"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>Rechercher</button>
+        <button class="lien-discret" type="button" data-act="raz"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 20H9L4 15a2 2 0 0 1 0-2.8L13.2 3a2 2 0 0 1 2.8 0l4 4a2 2 0 0 1 0 2.8L11 19"></path><path d="m8 9 7 7"></path></svg>Tout effacer</button>
+      </div>
+      <section class="fen fen-format"><h3 class="fen-titre">Format</h3><div class="rch-bascules rch-formats" data-groupe="format" data-unique="1" role="group"><div class="rch-formats-rang"><button type="button" class="rch-bascule rch-format " data-k="modern" aria-pressed="false" title="Modern">Mod</button><button type="button" class="rch-bascule rch-format " data-k="pioneer" aria-pressed="false" title="Pioneer">Pio</button><button type="button" class="rch-bascule rch-format " data-k="standard" aria-pressed="false" title="Standard">Std</button></div><div class="rch-formats-rang"><button type="button" class="rch-bascule rch-format " data-k="vintage" aria-pressed="false" title="Vintage">Vin</button><button type="button" class="rch-bascule rch-format " data-k="legacy" aria-pressed="false" title="Legacy">Leg</button><button type="button" class="rch-bascule rch-format " data-k="premodern" aria-pressed="false" title="Premodern">Prem</button><button type="button" class="rch-bascule rch-format " data-k="pauper" aria-pressed="false" title="Pauper">Pau</button></div><div class="rch-formats-rang"><button type="button" class="rch-bascule rch-format actif" data-k="commander" aria-pressed="true" title="Commander multi">Multi</button><button type="button" class="rch-bascule rch-format " data-k="duel" aria-pressed="false" title="Commander 1 contre 1">1vs1</button><button type="button" class="rch-bascule rch-format " data-k="historic" aria-pressed="false" title="Historic">His</button><button type="button" class="rch-bascule rch-format " data-k="alchemy" aria-pressed="false" title="Alchemy">Alch</button></div></div></section>
+      <section class="fen fen-rarete"><h3 class="fen-titre">Rareté</h3><div class="rch-bascules rch-raretes" data-groupe="rar" role="group"><button type="button" class="rch-bascule rch-rar " data-k="C" aria-pressed="false" title="Commune" aria-label="Commune"><svg viewBox="0 0 24 32" width="30" height="40" aria-hidden="true"><defs><linearGradient id="rar-C" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#7a7a7a"></stop><stop offset=".55" stop-color="#2e2e2e"></stop><stop offset="1" stop-color="#0b0b0b"></stop></linearGradient></defs>
+    <rect x="1.5" y="1.5" width="21" height="29" rx="3" fill="url(#rar-C)" stroke="rgba(0,0,0,.55)"></rect>
+    <rect x="4.5" y="4.5" width="15" height="23" rx="1.5" fill="none" stroke="rgba(255,255,255,.45)"></rect></svg></button><button type="button" class="rch-bascule rch-rar " data-k="U" aria-pressed="false" title="Inhabituelle" aria-label="Inhabituelle"><svg viewBox="0 0 24 32" width="30" height="40" aria-hidden="true"><defs><linearGradient id="rar-U" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#f1f5f8"></stop><stop offset=".55" stop-color="#a9bac4"></stop><stop offset="1" stop-color="#56666f"></stop></linearGradient></defs>
+    <rect x="1.5" y="1.5" width="21" height="29" rx="3" fill="url(#rar-U)" stroke="rgba(0,0,0,.55)"></rect>
+    <rect x="4.5" y="4.5" width="15" height="23" rx="1.5" fill="none" stroke="rgba(255,255,255,.45)"></rect></svg></button><button type="button" class="rch-bascule rch-rar " data-k="R" aria-pressed="false" title="Rare" aria-label="Rare"><svg viewBox="0 0 24 32" width="30" height="40" aria-hidden="true"><defs><linearGradient id="rar-R" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#f8e4a0"></stop><stop offset=".55" stop-color="#cfa63a"></stop><stop offset="1" stop-color="#7a5a0c"></stop></linearGradient></defs>
+    <rect x="1.5" y="1.5" width="21" height="29" rx="3" fill="url(#rar-R)" stroke="rgba(0,0,0,.55)"></rect>
+    <rect x="4.5" y="4.5" width="15" height="23" rx="1.5" fill="none" stroke="rgba(255,255,255,.45)"></rect></svg></button><button type="button" class="rch-bascule rch-rar " data-k="M" aria-pressed="false" title="Mythique" aria-label="Mythique"><svg viewBox="0 0 24 32" width="30" height="40" aria-hidden="true"><defs><linearGradient id="rar-M" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#ffc38a"></stop><stop offset=".55" stop-color="#e8641f"></stop><stop offset="1" stop-color="#912707"></stop></linearGradient></defs>
+    <rect x="1.5" y="1.5" width="21" height="29" rx="3" fill="url(#rar-M)" stroke="rgba(0,0,0,.55)"></rect>
+    <rect x="4.5" y="4.5" width="15" height="23" rx="1.5" fill="none" stroke="rgba(255,255,255,.45)"></rect></svg></button></div></section>
+    </div>
+    <div class="mt-rang mt-plus">
+      <section class="fen fen-atelier"><h3 class="fen-titre">Prix et Commander</h3>
+        <div class="rch-nombres">
+          <label>Prix max <input class="champ champ-petit" name="prixmax" value="" inputmode="decimal" size="4"> €</label>
+          <label>Prix min <input class="champ champ-petit" name="prixmin" value="" inputmode="decimal" size="4"> €</label>
+          
+        </div>
+        <select class="champ champ-petit" name="gc"><option value="" selected="">Game Changers : indifférent</option><option value="sans">Sans Game Changer</option><option value="seul">Game Changers seulement</option></select>
+        <select class="champ champ-petit" name="cmd"><option value="" selected="">Commandant : indifférent</option><option value="peut">Peut être commandant</option><option value="duo">Partenaires et Historiques (deux commandants)</option></select>
+        
+      </section>
+      <section class="fen fen-fonctions"><h3 class="fen-titre">Fonctions</h3>
+        <div id="fn-choisies" class="puces"></div>
+        <div class="fn-champ">
+          <input class="champ champ-petit" id="fn-q" type="search" autocomplete="off" placeholder="Chercher une fonction…" aria-label="Chercher une fonction" role="combobox" aria-expanded="false" aria-controls="fn-liste" aria-autocomplete="list">
+          <div id="fn-liste" class="fn-liste" role="listbox" hidden=""></div>
+        </div>
+        <div class="rch-bascules fn-rapides"><button type="button" class="rch-bascule" data-fn="ramp" aria-pressed="false">Ramp</button><button type="button" class="rch-bascule" data-fn="pioche" aria-pressed="false">Pioche</button><button type="button" class="rch-bascule" data-fn="tuteur" aria-pressed="false">Tuteur</button><button type="button" class="rch-bascule" data-fn="spot" aria-pressed="false">Removal ciblé</button><button type="button" class="rch-bascule" data-fn="balayage" aria-pressed="false">Balayage</button><button type="button" class="rch-bascule" data-fn="contresort" aria-pressed="false">Contresort</button><button type="button" class="rch-bascule" data-fn="recursion" aria-pressed="false">Recursion</button><button type="button" class="rch-bascule" data-fn="reanimation" aria-pressed="false">Réanimation</button><button type="button" class="rch-bascule" data-fn="sacrifice" aria-pressed="false">Sacrifice outlet</button><button type="button" class="rch-bascule" data-fn="mort" aria-pressed="false">Déclencheur de mort</button><button type="button" class="rch-bascule" data-fn="jetons" aria-pressed="false">Jetons</button><button type="button" class="rch-bascule" data-fn="celerite" aria-pressed="false">Donne la célérité</button><button type="button" class="rch-bascule" data-fn="burn" aria-pressed="false">Burn</button><button type="button" class="rch-bascule" data-fn="defausse" aria-pressed="false">Défausse</button><button type="button" class="rch-bascule" data-fn="wheel" aria-pressed="false">Wheel</button><button type="button" class="rch-bascule" data-fn="protection" aria-pressed="false">Protection</button><button type="button" class="rch-bascule" data-fn="blink" aria-pressed="false">Blink</button></div>
+      </section>
+    </div>
+    <section class="fen fen-editions"><h3 class="fen-titre">Éditions</h3>
+      <div class="eds-tete">
+        <input class="champ champ-petit" type="search" id="eds-filtre" placeholder="Chercher une édition…" aria-label="Chercher une édition">
+        <label class="rch-case"><input type="checkbox" name="neuves"> Nouvelles cartes uniquement</label>
+      </div>
+      <div id="eds-choisies" class="puces"></div>
+      <div id="eds-groupes" class="eds-groupes"><p class="erreur petit">La base de cartes n'est pas encore prête.</p></div>
+    </section>
+    <div class="mt-pied"><button class="lien-discret" type="button" data-act="raz"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 20H9L4 15a2 2 0 0 1 0-2.8L13.2 3a2 2 0 0 1 2.8 0l4 4a2 2 0 0 1 0 2.8L11 19"></path><path d="m8 9 7 7"></path></svg>Tout effacer</button>
+      <button class="btn btn-accent" type="submit"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>Rechercher</button></div>
+  </form></div>
+    <div id="rch-resultats"></div></main>
+    <aside id="chat" class="chat" hidden></aside>
+  </div>
+  <div id="modale" class="modale" hidden></div>
+  <div id="menu" class="menu" hidden></div>
+  <div id="apercu" class="apercu" hidden><img alt=""><div class="legende" hidden></div></div>
+  <div id="bulle" class="bulle" role="tooltip" hidden></div>
+  <div id="fiche-survol" class="fiche-survol" role="tooltip" hidden></div>
+  <div id="toast" class="toast" hidden></div>
+  <script src="donnees.js?v=9be4a13641"></script>
+  <script src="app.js?v=828536386c"></script>
+</body>
+</html>
