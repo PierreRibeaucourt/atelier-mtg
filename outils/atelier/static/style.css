@@ -883,6 +883,7 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 /* page partagée (lecture seule) : ni ce qui modifie, ni la recherche, ni la discussion */
 .partage:not(.site-atelier) .aller { display: none !important; }      /* site de l'Atelier : le champ du haut cherche une carte */
 .partage :is(.ecrit, #btn-rafraichir, #etat-maj, .ligne-outil, #lien-options, #lien-classeur) { display: none !important; }
+.voir-attente .barre > :not(.logo) { visibility: hidden; }     /* lien instantané (voir/) : rien d'inerte avant app.js */
 /* nouvelle version de l'Atelier à installer */
 /* une ligne fine, de la couleur de l'en-tête, avec une pastille orange ; les nouveautés sur une ligne (en entier au survol) */
 .bandeau-maj { position: relative; display: flex; align-items: center; justify-content: center; gap: .4rem 1rem; padding: .35rem 1rem;

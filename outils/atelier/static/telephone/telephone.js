@@ -2195,6 +2195,7 @@
       auteur: null, version: "", ...(await pt.capturer(id)), accueil: "../", titre_accueil: "Atelier MTG", instantane: true };
     const s = document.createElement("script");
     s.src = VOIR;
+    s.onload = () => document.documentElement.classList.remove("voir-attente");
     document.body.append(s);
   }
   if (VOIR) {

@@ -126,9 +126,13 @@ def voir(dossier, v):
                         '<meta property="og:image" content="https://atelier-mtg.com/a-propos/atelier.jpg">',
                         '<meta name="twitter:card" content="summary_large_image">',
                         '<link rel="apple-touch-icon" href="../icone-180.png">'])
+    # sans liste après « # » : l'appli, avant tout affichage ; voir-attente : l'en-tête n'a que le logo tant qu'app.js
+    # n'est pas là (ses boutons et leurs icônes arrivent avec la page du deck, ou pas du tout si le lien est abîmé)
     remplacements = [
-        ('<html lang="fr">', '<html lang="fr" class="partage">'),
-        ("<title>Atelier MTG</title>", "<title>Deck partagé · Atelier MTG</title>\n  " + tete),
+        ('<html lang="fr">', '<html lang="fr" class="partage voir-attente">'),
+        ("<title>Atelier MTG</title>", "<title>Deck partagé · Atelier MTG</title>\n  "
+         '<script>if (!location.hash.slice(1)) location.replace("../");</script>\n  ' + tete),
+        ('<a href="#/" class="logo">', '<a href="../" class="logo">'),
         ('href="/static/style.css"', f'href="../style.css?v={v["style.css"]}"'),
         ('  <script src="/reglages.js"></script>\n', ""),
         ('<main id="vue" class="vue"></main>', '<main id="vue" class="vue"><p class="chargement">Chargement du deck…</p></main>'),
