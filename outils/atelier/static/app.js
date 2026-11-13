@@ -4611,7 +4611,8 @@ function formulaireRecherche(c) {
       <div id="eds-choisies" class="puces"></div>
       <div id="eds-groupes" class="eds-groupes"><p class="muet petit">Éditions…</p></div>
     </section>
-    <div class="mt-pied"><button class="btn btn-accent" type="submit">${ico("chercher")}Rechercher</button></div>
+    <div class="mt-pied"><button class="lien-discret" type="button" data-act="raz">${ico("effacer")}Tout effacer</button>
+      <button class="btn btn-accent" type="submit">${ico("chercher")}Rechercher</button></div>
   </form>`;
 }
 
@@ -5075,6 +5076,9 @@ function rendreFormulaire() {
   }
   z.innerHTML = formulaireRecherche(c);
   const form = $("#moteur", z);
+  const go = $(".mt-go .rch-go", form), pied = $(".mt-pied", form);
+  if (rch.voitGo) rch.voitGo.disconnect();
+  if (go && window.IntersectionObserver) (rch.voitGo = new IntersectionObserver(([x]) => pied.classList.toggle("doublon", x.isIntersecting))).observe(go);
   form.addEventListener("submit", (ev) => { ev.preventDefault(); soumettre(form); });
   form.addEventListener("keydown", (ev) => {
     if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey) && ev.target.name === "texte") { ev.preventDefault(); soumettre(form); }

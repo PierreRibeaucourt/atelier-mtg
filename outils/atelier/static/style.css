@@ -604,7 +604,12 @@ a.btn-accent { color: var(--accent-texte); }      /* un lien en bouton orange : 
 .rch-deck { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; }
 .rch-deck .identite { margin-left: 0; }
 .rch-deck a { color: var(--accent); }
-.mt-pied { display: flex; justify-content: flex-end; margin-top: .8rem; }
+/* « Rechercher » collé en bas de l'écran, sauf quand le gros bouton du milieu se voit déjà */
+.mt-pied { position: sticky; bottom: 0; z-index: 4; display: flex; justify-content: flex-end; align-items: center; gap: .4rem 1.2rem;
+  margin-top: .4rem; padding: .6rem 0 calc(.6rem + env(safe-area-inset-bottom)); background: var(--fond); border-top: 1px solid var(--bord);
+  transition: opacity .15s; }
+.mt-pied.doublon { opacity: 0; pointer-events: none; }
+.telephone.appli-prete .mt-pied { bottom: calc(56px + env(safe-area-inset-bottom) + var(--tel-bandeau, 0px)); padding-bottom: .6rem; }
 .vue.vue-large { max-width: 1500px; }
 .rch-tete { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .4rem 1rem; margin-bottom: .6rem; }
 .rch-tete .fil { margin: 0; }
@@ -667,6 +672,8 @@ a.btn-accent { color: var(--accent-texte); }      /* un lien en bouton orange : 
   .mt-plus { grid-template-columns: minmax(0, 1fr); }
 }
 @container moteur (max-width: 600px) {
+  .mt-go { display: none; }                         /* étroit : « Rechercher » seulement en bas */
+  .mt-pied .btn { flex: 1; }
   .mt-haut { grid-template-columns: minmax(0, 1fr); }
   .rch-nb label { grid-template-columns: minmax(0, 1fr); gap: .1rem; }
   .mt-go, .mt-milieu .fen-format, .mt-milieu .fen-rarete { grid-column: 1 / -1; }
