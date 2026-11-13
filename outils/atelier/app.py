@@ -345,11 +345,24 @@ def api_options_ecrire():
 
 @app.get("/api/github")
 def api_github():
-    """Le compte GitHub connecté (partage sans git), et le compte du partage avec git (reglages.json), s'il y en a un."""
+    """Le compte GitHub connecté (partage sans git), et le compte du partage avec git (reglages.json), s'il y en a un ;
+    appli : la page GitHub de l'appli « Atelier MTG », où retirer l'accès de tous les appareils (« Revoke access »)."""
     import github
     import reglages
     return jsonify(compte=github.compte(), git=reglages.github(), disponible=bool(github.CLIENT_ID),
-                   prive=bool(github.compte()) and github.prive())
+                   prive=bool(github.compte()) and github.prive(),
+                   appli=f"https://github.com/settings/connections/applications/{github.CLIENT_ID}")
+
+
+@app.get("/api/github/valide")
+def api_github_valide():
+    """La clé GitHub de ce PC marche-t-elle encore ? Retirée sur GitHub, elle est oubliée ici (github._appel)."""
+    import github
+    try:
+        github.appel("GET", "/user")
+    except github.NonConnecte:
+        return jsonify(valide=False)
+    return jsonify(valide=True)
 
 
 @app.post("/api/github/connexion")

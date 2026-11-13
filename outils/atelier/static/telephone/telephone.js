@@ -9,6 +9,8 @@
   const FORMAT = 1;                                   // telephone.py › FORMAT
   const GH = "https://api.github.com";
   const BRANCHE = "telephone";
+  // la page GitHub de l'appli « Atelier MTG » (relais.js › CLIENT_ID) : « Revoke access » y retire toutes ses clés
+  const APPLI_GITHUB = "https://github.com/settings/connections/applications/Ov23li9fE6JyGKnCmR3L";
   const ACCES = "telephone-acces", COMMIT = "telephone-commit", REGLAGES = "telephone-reglages";
   const DISTANT = 5 * 60 * 1000;                      // coup d'œil au dépôt toutes les cinq minutes, appli ouverte
   document.documentElement.classList.add("telephone");
@@ -67,6 +69,23 @@
     if (r.status === 404) throw Object.assign(new Error("Tes decks ne sont pas encore prêts : ouvre l'Atelier sur ton PC, Options › Téléphone."), { statut: 404 });
     if (!r.ok) throw Object.assign(new Error(`GitHub ne répond pas (${r.status}).`), { statut: r.status });
     return brut ? r : r.json();
+  }
+
+  // la clé GitHub d'ici marche-t-elle encore ? (« Retirer l'accès », app.js) Refusée, elle est oubliée : relié au PC, le
+  // téléphone est délié (gh) ; sans PC, ses decks restent, il n'y a qu'à le reconnecter (ghCompte)
+  async function cleValide() {
+    try {
+      if (local) {
+        const g = await leCompte();
+        if (!g) return { valide: false };
+        await ghCompte(g.jeton, "GET", "/user");
+      } else if (acces) await gh("/user");
+      else return { valide: false };
+      return { valide: true };
+    } catch (e) {
+      if (e.statut === 401) return { valide: false };
+      throw e;
+    }
   }
 
   // reçoit ce qui a changé depuis la dernière fois ; true s'il y avait du nouveau
@@ -166,6 +185,7 @@
     if (p === "/api/recherche/tags") return demander("suggestions", u.searchParams.get("q") || "");
     if (p === "/api/recherche/noms") { pret(); return message("noms", [u.searchParams.get("q") || "", await dansDeck(u.searchParams.get("deck")), 8]); }
     if (p === "/api/recherche-cartes") return decksAvecCarte(u.searchParams.get("q") || "");
+    if (p === "/api/github/valide") return cleValide();
     if (local && /^\/api\/(github|sauvegarde)(\/|$)/.test(p)) { const r = await routeGithub(p, "GET"); if (r !== undefined) return r; }
     // Commander Spellbook, par le relais : les combos d'une carte ; sans PC, le bracket et les combos du deck à jour
     const sbm = p.match(/^\/api\/decks\/([^/]+)\/(bracket|combos|combos\/carte)$/);
@@ -1804,7 +1824,7 @@
   }
 
   const T = window.TELEPHONE = {
-    api, attente: attenteVue, pret: false, erreur: "", arrete: false,
+    api, attente: attenteVue, pret: false, erreur: "", arrete: false, appliGithub: APPLI_GITHUB,
     enAttente: async () => (await attente()).length,
     envoyer: () => envoyer(),
     acces: () => acces && { depot: acces.d },

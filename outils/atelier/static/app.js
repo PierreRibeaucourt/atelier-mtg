@@ -1750,6 +1750,41 @@ async function connexionGithub(zone, suite) {
   }
 }
 
+// retirer l'accès de tous les appareils : « Revoke access » sur la page GitHub de l'appli « Atelier MTG » retire toutes
+// ses clés (PC, téléphones, appareil perdu ou volé). La fenêtre suit GitHub : une fois la clé d'ici refusée, elle propose
+// de reconnecter cet appareil ; un téléphone relié au PC, lui, est délié (sa clé était celle du PC)
+function modaleRetirerAcces(appli, intro = "", fin = () => {}) {
+  ouvrirModale(`<div class="fc-tete"><h2>Retirer l'accès</h2>
+      <button class="btn btn-discret btn-icone" id="ra-fermer" aria-label="Fermer">${ico("fermer")}</button></div>
+    <div id="ra-zone">${intro ? `<p>${esc(intro)}</p>` : ""}
+      <p>Sur GitHub, clique sur «&nbsp;Revoke access&nbsp;» : tous tes appareils perdent leur clé, ${CET_APPAREIL} compris,
+        même un appareil perdu ou volé. Tu reconnecteras ensuite ceux que tu gardes.</p>
+      <div class="gh-action"><a class="btn btn-accent" id="ra-ouvrir" href="${esc(appli)}" target="_blank" rel="noopener">Ouvrir GitHub</a></div>
+      <p class="gh-attente" role="status" hidden>En attente de GitHub…</p></div>`, (b) => {
+    const zone = $("#ra-zone", b), fini = () => { fermerModale(); fin(); };
+    $("#ra-fermer", b).onclick = fini;
+    let suivi = false;
+    $("#ra-ouvrir", b).onclick = async () => {
+      $(".gh-attente", zone).hidden = false;
+      if (suivi) return;
+      suivi = true;
+      for (const debut = Date.now(); zone.isConnected && Date.now() - debut < 15 * 60000;) {
+        await attendre(3000);
+        let v;
+        try { v = await api("/api/github/valide"); } catch (_) { continue; }
+        if (!zone.isConnected || v.valide) continue;
+        const relie = TELEPHONE && !TELEPHONE.local;
+        zone.innerHTML = `<p>C'est fait : tes appareils n'ont plus accès.${relie ? " Ce téléphone est délié." : ""}</p>
+          <div class="gh-action"><button class="btn btn-accent" id="ra-suite">${relie ? "OK" : `Reconnecter ${CET_APPAREIL}`}</button></div>`;
+        const delie = () => { fermerModale(); location.hash = "#/"; TELEPHONE.delier(); };
+        $("#ra-suite", zone).onclick = relie ? delie : () => connexionGithub(zone, fini);
+        if (relie) $("#ra-fermer", b).onclick = delie;
+        return;
+      }
+    };
+  }, { focus: false });
+}
+
 // ------------------------------------------------------------------ sauvegarde en ligne (synchro.py)
 // une fenêtre, trois portes : sauvegarder (bandeau de l'accueil, Options), récupérer (accueil vide d'un nouveau PC).
 // Chacune mène, si besoin, à la présentation de GitHub puis à la connexion ; fin() est appelé une fois tout fini
@@ -1916,7 +1951,13 @@ async function ligneTelephone(el) {
         ${t.lien ? `<button type="button" class="btn btn-petit" id="tel-qr">${ico("telephone")}Relier un téléphone</button>` : ""}
         <button type="button" class="btn btn-petit btn-discret" id="tel-couper">Arrêter</button></div>`;
     if ($("#tel-qr", el)) $("#tel-qr", el).onclick = () => modaleQrTelephone(t.lien);
-    $("#tel-couper", el).onclick = () => { if (confirm("Arrêter l'appli du téléphone ? Elle ne recevra plus tes decks.")) action("couper"); };
+    // le téléphone garde la clé GitHub de ce PC : retirer l'accès est proposé aussitôt
+    $("#tel-couper", el).onclick = async () => {
+      if (!confirm("Arrêter l'appli du téléphone ? Elle ne recevra plus tes decks.")) return;
+      await action("couper");
+      const g = await api("/api/github").catch(() => ({}));
+      if (g.compte && g.appli) modaleRetirerAcces(g.appli, "Le téléphone garde sa clé de ta sauvegarde.", () => route());
+    };
     if (t.en_cours || (!t.derniere && !t.erreur)) setTimeout(async () => {
       if (!el.isConnected) return;
       try { t = await api("/api/telephone"); rendre(); } catch (_) {}
@@ -1958,7 +1999,8 @@ function optionsTelephone() {
         <p>Relié à la sauvegarde <strong>${esc(a.depot)}</strong></p>
         <p class="muet petit" id="tel-attente" hidden></p>
         <div class="form-ligne"><button class="btn" id="tel-maj">${ico("rafraichir")}Synchroniser</button>
-          <button class="btn btn-danger" id="tel-delier">Délier ce téléphone</button></div>` : `
+          <button class="btn btn-danger" id="tel-delier">Délier ce téléphone</button>
+          <button class="btn btn-discret" id="tel-retirer">Retirer l'accès</button></div>` : `
         <p>Tes decks sont gardés sur ce téléphone.</p>
         <div id="opt-github"></div>`}
       </div></section>${a ? "" : `
@@ -1983,6 +2025,7 @@ function optionsTelephone() {
     b.disabled = false;
   };
   $("#tel-delier").onclick = () => { if (confirm("Délier ce téléphone ? Ses decks en seront effacés (ils restent sur ton PC).")) TELEPHONE.delier(); };
+  $("#tel-retirer").onclick = () => modaleRetirerAcces(TELEPHONE.appliGithub);
 }
 
 // sans PC : les réglages des cartes, gardés sur ce téléphone (le bloc « Cartes » des Options du PC, sans la langue)
@@ -2090,7 +2133,8 @@ async function ligneGithub(el, o) {
   const compte = g.git && !g.compte
     ? `<label class="opt-champ"><span>Compte GitHub des pages</span><input class="champ" name="github" maxlength="39" value="${esc(o.github)}" autocomplete="off" spellcheck="false"></label>`
     : `<div class="opt-champ"><span>Compte GitHub</span><span class="opt-github">${g.compte
-      ? `<strong>${esc(g.compte)}</strong><button type="button" class="btn btn-petit btn-discret" id="gh-deconnecter">Se déconnecter</button>`
+      ? `<strong>${esc(g.compte)}</strong><button type="button" class="btn btn-petit btn-discret" id="gh-deconnecter">Se déconnecter</button>
+        <button type="button" class="btn btn-petit btn-discret" id="gh-retirer">Retirer l'accès</button>`
       : `<button type="button" class="btn btn-accent btn-petit" id="gh-options">Se connecter à GitHub</button>`}</span></div>`;
   // la sauvegarde : son interrupteur et où elle en est ; sans connexion (ou d'avant la sauvegarde), le bouton qui la met en place
   const etatTexte = s.erreur ? `<span class="erreur">${esc(s.erreur)}</span>`
@@ -2110,6 +2154,8 @@ async function ligneGithub(el, o) {
     try { await api("/api/github/deconnexion", { method: "POST", body: {} }); encore(); } catch (e) { erreur(e); }
   };
   if (co) co.onclick = () => modaleSauvegarde("sauvegarde", encore);
+  const retirer = $("#gh-retirer", el);
+  if (retirer) retirer.onclick = () => modaleRetirerAcces(TELEPHONE ? TELEPHONE.appliGithub : g.appli, "", encore);
   const activer = $("#sv-activer", el);
   if (activer) activer.onclick = () => modaleSauvegarde("sauvegarde", encore);
   const b = $("#sv-bascule", el);
