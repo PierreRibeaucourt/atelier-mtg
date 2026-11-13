@@ -18,8 +18,8 @@ if (PARTAGE) document.documentElement.classList.add("partage");
 const TELEPHONE = window.TELEPHONE || null;
 const PC = !PARTAGE && !TELEPHONE;              // l'Atelier du PC : serveur Python, tâches en fond, mises à jour
 const CET_APPAREIL = TELEPHONE ? "ce téléphone" : "ce PC", AUTRE_APPAREIL = "un autre appareil";      // PC ou téléphone
-// partager un deck (page sur GitHub Pages) : depuis le PC, ou un téléphone sans PC (partage.js) ; relié, le PC s'en charge
-const PARTAGEABLE = PC || !!(TELEPHONE && TELEPHONE.local);
+// partager un deck (page sur GitHub Pages) : depuis le PC ou le téléphone (partage.js), relié au PC ou non
+const PARTAGEABLE = PC || !!TELEPHONE;
 // page partagée : à qui sont ces decks (reglages.json « nom », sinon le compte GitHub qui publie)
 // titre_accueil : la page d'accueil de l'Atelier (site_atelier.py), qui n'est le site de decks de personne
 const MES_DECKS = PARTAGE && PARTAGE.titre_accueil || (PARTAGE && PARTAGE.auteur ? `Decks de ${PARTAGE.auteur}` : "Mes decks");

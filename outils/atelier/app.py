@@ -632,7 +632,12 @@ def api_importer_decks():
 
 @app.post("/api/decks/<path:deck>/supprimer")
 def api_supprimer(deck):
-    return jsonify(corbeille=decks.supprimer(deck))
+    """Le deck part dans la corbeille ; sa page partagée est retirée du site (en fond : il faut le réseau)."""
+    import partage
+    r = decks.supprimer(deck)
+    if deck in partage._registre():
+        en_fond(partage.retirer, deck)
+    return jsonify(corbeille=r)
 
 
 @app.post("/api/decks/<path:deck>/renommer")

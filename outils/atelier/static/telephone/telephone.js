@@ -187,7 +187,7 @@
     if (p === "/api/recherche-cartes") return decksAvecCarte(u.searchParams.get("q") || "");
     if (p === "/api/github/valide") return cleValide();
     const pm = p.match(/^\/api\/decks\/([^/]+)\/partage$/);
-    if (pm && local) return lePartage().etat(decodeURIComponent(pm[1]));
+    if (pm) return lePartage().etat(decodeURIComponent(pm[1]));
     if (local && /^\/api\/(github|sauvegarde)(\/|$)/.test(p)) { const r = await routeGithub(p, "GET"); if (r !== undefined) return r; }
     // Commander Spellbook, par le relais : les combos d'une carte ; sans PC, le bracket et les combos du deck à jour
     const sbm = p.match(/^\/api\/decks\/([^/]+)\/(bracket|combos|combos\/carte)$/);
@@ -689,13 +689,21 @@
     if (!(await fichier("index.json.gz"))) throw Object.assign(new Error("Tes decks ne sont pas encore arrivés."), { statut: 503 });
     if (!local && T.arrete) throw Object.assign(new Error("Ton PC n'envoie plus tes decks."), { statut: 409 });
     const pt = p.match(/^\/api\/decks\/([^/]+)\/partage(\/retirer)?$/);
-    if (pt && local) return pt[2] ? lePartage().retirer(decodeURIComponent(pt[1])) : lePartage().partager([decodeURIComponent(pt[1])]);
+    if (pt) return pt[2] ? lePartage().retirer(decodeURIComponent(pt[1])) : lePartage().partager([decodeURIComponent(pt[1])]);
     if (p === "/api/decks") return creerDeck(b);
     if (p === "/api/decks/importer") return importerDecks(b);
     if (p === "/api/classeur/importer") return importerClasseur(b);
     const r = p.match(/^\/api\/decks\/([^/]+)\/(renommer|supprimer)$/);
-    if (r && r[2] === "renommer") return renommerDeck(decodeURIComponent(r[1]), b.nom);
-    if (r) return supprimerDeck(decodeURIComponent(r[1]));
+    if (r && r[2] === "renommer") {
+      const ancien = decodeURIComponent(r[1]), res = await renommerDeck(ancien, b.nom);
+      if (res.id !== ancien) suivrePartage({ op: "renommer", ancien, nouveau: res.id });
+      return res;
+    }
+    if (r) {
+      const res = await supprimerDeck(decodeURIComponent(r[1]));
+      suivrePartage({ op: "retirer", deck: decodeURIComponent(r[1]) });
+      return res;
+    }
     const v = p.match(/^\/api\/decks\/([^/]+)\/(versions|versions\/supprimer|restaurer)$/);
     if (v && v[2] === "versions") return sauverVersion(decodeURIComponent(v[1]), b);
     if (v && v[2] === "restaurer") return restaurer(decodeURIComponent(v[1]), b.fichier);
@@ -1199,10 +1207,28 @@
   // ------------------------------------------------------------------ partager un deck sans PC (partage.js)
   // La même page que celle du PC, dans le même site GitHub du compte. Un deck partagé qui change est republié deux
   // minutes après la dernière modification (partage.CALME), comme sur le PC.
+  // Relié au PC, le téléphone partage avec la clé GitHub du PC (celle du QR code) et la page préparée par le PC
+  // (simulations comprises), avec ce qui a été modifié ici depuis (@surcharges) ; le PC la tient ensuite à jour.
   let partageTel = null, minuteriePartage = null;
+  async function compteRelie() {
+    if (!acces) return null;
+    let login = lireLocal("telephone-compte-pc");
+    if (!login) { login = (await gh("/user")).login; ecrireLocal("telephone-compte-pc", login); }
+    return { jeton: acces.c, compte: login };
+  }
+  async function pageRelie(id) {
+    const index = await fichier("index.json.gz"), f = index && index.decks && index.decks[id], d = f ? await fichier(f) : null;
+    if (!d) return null;
+    const api = { ...d.api };
+    const R = `/api/decks/${id}`;
+    for (const [k, x] of Object.entries(await lesSurcharges())) if (k === R || k.startsWith(R + "/") || k.startsWith(R + "?")) api[k] = x.v;
+    return { ...d, api };
+  }
+  const ghRelie = (methode, url, corps) => (methode === "GET" ? gh(url) : ghEcrire(methode, url, corps));
   const lePartage = () => partageTel || (partageTel = PARTAGE_TELEPHONE({
-    api, compte: leCompte, gh: ghCompte, scryfall: (url, corps) => scryfall(url, corps),
-    page: async (id) => { await calculs; return fichier("decks/" + id); },
+    api, compte: async () => (local ? leCompte() : compteRelie()), gh: (jeton, m, url, corps) => (local ? ghCompte(jeton, m, url, corps) : ghRelie(m, url, corps)),
+    scryfall: (url, corps) => scryfall(url, corps),
+    page: async (id) => { if (!local) return pageRelie(id); await calculs; return fichier("decks/" + id); },
     lire: (k) => BD.lire(k).catch(() => null), ecrire: (k, v) => BD.ecrire(k, v),
     reglages: () => ({ budget: budget(), sans_ub_illustrations: !!(window.REGLAGES || {}).sans_ub_illustrations }),
   }));
@@ -1211,10 +1237,34 @@
     minuteriePartage = setTimeout(() => republier().catch(() => {}), ms);
   }
   async function republier() {
-    if (!local || !(await leCompte())) return;
+    await partageEnAttente().catch(() => {});
+    if (!local || !(await leCompte())) return;                 // relié : le PC republie
     const reg = await lePartage().partages(), d = await depot();
-    const ids = Object.keys(reg).filter((id) => `${id}/archidekt.txt` in d.fichiers && ((d.modifies || {})[id] || 0) > (reg[id].date || 0));
+    const ids = Object.keys(reg).filter((id) => `${id}/archidekt.txt` in d.fichiers
+      && (reg[id].a_refaire || ((d.modifies || {})[id] || 0) > (reg[id].date || 0)));
     if (ids.length) await lePartage().partager(ids);
+  }
+  // un deck renommé ou supprimé ici : sa page partagée suit (même adresse, nouveau titre ; ou retirée), comme sur le PC.
+  // Sans réseau ou sans compte, c'est refait au prochain lancement (@partage-attente).
+  async function suivrePartage(o) {
+    const l = (await BD.lire("@partage-attente").catch(() => null)) || [];
+    l.push(o);
+    await BD.ecrire("@partage-attente", l);
+    partageEnAttente().then(() => { if (local) planifierPartage(); }).catch(() => {});
+  }
+  let attentePartage = null;
+  function partageEnAttente() {
+    return attentePartage || (attentePartage = (async () => {
+      let l = (await BD.lire("@partage-attente").catch(() => null)) || [];
+      if (!l.length || !(await lePartage().compteConnu())) return;
+      while (l.length) {
+        const o = l[0];
+        if (o.op === "renommer") await lePartage().renommer(o.ancien, o.nouveau);
+        else await lePartage().retirer(o.deck);
+        l = l.slice(1);
+        await BD.ecrire("@partage-attente", l);
+      }
+    })().finally(() => { attentePartage = null; }));
   }
 
   // ------------------------------------------------------------------ sans PC : les pages faites ici
@@ -1882,6 +1932,7 @@
       if (!T.pret && window.route) route();
     }
     bandeauArrete();
+    if (!T.arrete) partageEnAttente().catch(() => {});        // un renommage ou une suppression à reporter sur le site
   }
 
   const T = window.TELEPHONE = {

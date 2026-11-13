@@ -398,13 +398,14 @@ const PARTAGE_TELEPHONE = (o) => {
     const sg = api[`${R}/suggestions`];
     if (sg) api[`${R}/suggestions`] = { ecartees: [], cartes: sg.cartes.filter((x) => x.groupes.some((g) => g !== "classeur"))
       .map((x) => ({ ...x, groupes: x.groupes.filter((g) => g !== "classeur"), classeur: 0 })) };
-    // pas de simulation sur le téléphone : l'onglet dit « Aucun test » ; ses versions servent à comparer
-    api[`${R}/simulation/options`] = { tables: [], reglages: {}, defaut: {}, versions: api[`${R}/versions`] || [], coeurs: 1,
-      couverture: null, affine: false, test_n: 1000 };
-    api[`${R}/simulations`] = [];
-    const d = api[R];
-    api[`/api/jouer/jetons?deck=${deck}`] = { jetons: await jetons(d.cartes.filter((c) => c.cat !== "Maybeboard").map((c) => c.nom)).catch(() => []) };
-    const f = await o.api("/api/recherche/fonctions").catch(() => null);
+    // relié au PC, la page préparée par le PC a déjà ses simulations, ses jetons, ses aperçus : gardés tels quels.
+    // Sans PC, pas de simulation : l'onglet dit « Aucun test » ; ses versions servent à comparer
+    if (!api[`${R}/simulation/options`]) api[`${R}/simulation/options`] = { tables: [], reglages: {}, defaut: {},
+      versions: api[`${R}/versions`] || [], coeurs: 1, couverture: null, affine: false, test_n: 1000 };
+    if (!api[`${R}/simulations`]) api[`${R}/simulations`] = [];
+    const d = api[R], cleJetons = `/api/jouer/jetons?deck=${deck}`;
+    if (!api[cleJetons]) api[cleJetons] = { jetons: await jetons(d.cartes.filter((c) => c.cat !== "Maybeboard").map((c) => c.nom)).catch(() => []) };
+    const f = api["/api/recherche/fonctions"] || await o.api("/api/recherche/fonctions").catch(() => null);
     if (f) api["/api/recherche/fonctions"] = f;
     // cartes citées : aperçu au survol des noms qu'on peut croiser dans la page
     const fr = new Map(), dans = new Set(d.cartes.map((c) => c.nom));
@@ -413,8 +414,9 @@ const PARTAGE_TELEPHONE = (o) => {
     for (const x of ((api[`${R}/suggestions`] || {}).cartes || [])) if (!fr.has(x.nom)) fr.set(x.nom, x.fr || "");
     const cites = new Set([...fr.keys(), ...((api[`${R}/combos`] || {}).combos || []).flatMap((c) => c.cartes),
       ...((api[`${R}/bracket`] || {}).gc_liste || []), ...((api[`${R}/suggestions`] || {}).cartes || []).flatMap((x) => (x.combos || []).flatMap((c) => c.cartes))]);
-    api["/api/noms-cartes"] = { noms: [...cites].sort().map((n) => (fr.get(n) && fr.get(n) !== n ? [n, fr.get(n)] : [n])), communs: [] };
-    for (const n of [...cites].filter((x) => !dans.has(x)).sort()) {
+    const avant = api["/api/noms-cartes"] || {};
+    api["/api/noms-cartes"] = { noms: [...cites].sort().map((n) => (fr.get(n) && fr.get(n) !== n ? [n, fr.get(n)] : [n])), communs: avant.communs || [] };
+    for (const n of [...cites].filter((x) => !dans.has(x) && !api[`/api/apercu-carte?nom=${x}`]).sort()) {
       const a = await o.api(`/api/apercu-carte?nom=${encodeURIComponent(n)}`).catch(() => null);
       if (a) api[`/api/apercu-carte?nom=${n}`] = a;
     }
@@ -477,7 +479,8 @@ const PARTAGE_TELEPHONE = (o) => {
     return decks.length === 1 ? etatDe(await o.lire(ETAT), decks[0]) : {};
   }
   async function retirer(deck) {
-    const { g, q } = await connexion(), s = await leSite(g, q);
+    const { g, q } = await connexion(), s = await leSite(g, q, false);
+    if (!s) return {};
     await envoyer(s, q, async (l) => {
       const reg = l.reg, fichiers = new Map(), effacer = [];
       const p = reg[deck];
@@ -489,10 +492,27 @@ const PARTAGE_TELEPHONE = (o) => {
     });
     return {};
   }
+  // le deck a changé de nom : sa page garde son adresse (le lien déjà envoyé marche toujours) et sera republiée avec le
+  // nouveau titre (a_refaire), par le PC ou par un téléphone sans PC (partage.renommer)
+  async function renommer(ancien, nouveau) {
+    const { g, q } = await connexion(), s = await leSite(g, q, false);
+    if (!s) return {};
+    await envoyer(s, q, async (l) => {
+      const reg = l.reg, fichiers = new Map();
+      if (reg[ancien] && !reg[nouveau]) {
+        reg[nouveau] = { ...reg[ancien], a_refaire: true };
+        delete reg[ancien];
+        fichiers.set("decks.json", JSON.stringify(reg, null, 1));
+      }
+      return { fichiers, effacer: [], reg, message: `Renommage : ${ancien.replace(/^Deck /, "")} → ${nouveau.replace(/^Deck /, "")}` };
+    });
+    return {};
+  }
   // les decks partagés de ce compte, d'après le dernier registre lu (pour les republier quand ils changent)
   async function partages() {
     const g = await o.compte(), e = await o.lire(ETAT);
     return g && e && e.compte === g.compte ? e.reg || {} : {};
   }
-  return { etat, partager, retirer, partages };
+  const compteConnu = async () => !!(await o.compte().catch(() => null));
+  return { etat, partager, retirer, renommer, partages, compteConnu };
 };

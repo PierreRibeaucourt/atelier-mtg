@@ -176,10 +176,11 @@ def _a_l_atelier(r):
         return False
 
 
-def _site_atelier(login):
+def _site_atelier(login, creer=True):
     """Le dépôt des pages : un site de l'Atelier qui existe déjà, sinon le site personnel <compte>.github.io, créé
     ici : GitHub le publie tout seul. S'il sert déjà à autre chose, on n'y touche pas : les pages vont dans un dépôt
-    « decks », dont il faut activer GitHub Pages à la main si besoin (la connexion n'en a pas le droit)."""
+    « decks », dont il faut activer GitHub Pages à la main si besoin (la connexion n'en a pas le droit).
+    creer=False : None s'il n'y a pas encore de site de l'Atelier (on ne crée rien pour regarder)."""
     perso = f"{login.lower()}.github.io"
     sites, existants = {perso: f"https://{perso}/", NOM_DEPOT: f"https://{perso}/{NOM_DEPOT}/"}, {}
     for nom in sites:
@@ -189,6 +190,8 @@ def _site_atelier(login):
             if e.statut != 404:
                 raise
     nom = next((n for n, r in existants.items() if _a_l_atelier(r)), None)
+    if not nom and not creer:
+        return None
     if not nom:
         nom = perso if perso not in existants else NOM_DEPOT if NOM_DEPOT not in existants else None
         if not nom:
@@ -225,6 +228,7 @@ def _preparer_connecte():
     os.makedirs(DOSSIER, exist_ok=True)
     if tete != p.get("commit"):
         local = github.fichiers_locaux(DOSSIER)
+        avant = _registre()                                # ce que ce PC n'a pas encore publié (renommage) reste
         for rel, sha in distant.items():
             chemin = os.path.join(DOSSIER, *rel.split("/"))
             if rel in local:
@@ -234,6 +238,8 @@ def _preparer_connecte():
             os.makedirs(os.path.dirname(chemin), exist_ok=True)
             with open(chemin, "wb") as f:
                 f.write(github.telecharger(p["depot"], sha))
+            if rel == "decks.json":
+                _fusionner(avant)
         for rel in set(p.get("fichiers", ())) - set(distant):       # retirés sur GitHub depuis : retirés ici aussi
             try:
                 os.remove(os.path.join(DOSSIER, *rel.split("/")))
@@ -242,6 +248,38 @@ def _preparer_connecte():
         p.update(commit=tete, fichiers=sorted(distant))
     _ecrire(PUBLICATION, json.dumps(p, ensure_ascii=False, indent=1))
     return p["site"]
+
+
+def _fusionner(avant):
+    """Le registre venu de GitHub (decks.json) garde les renommages faits ici et pas encore publiés (a_refaire) : le
+    deck sous son nouveau nom, à la même adresse."""
+    reg, change = _registre(), False
+    for deck, v in avant.items():
+        if v.get("a_refaire") and deck not in reg:
+            for ancien in [k for k, x in reg.items() if x.get("slug") == v.get("slug")]:
+                del reg[ancien]
+            reg[deck], change = v, True
+    if change:
+        _ecrire(REGISTRE, json.dumps(reg, ensure_ascii=False, indent=1))
+
+
+_suivi = {"t": 0}
+
+
+def suivre(intervalle=300):
+    """Ce qu'un autre appareil a fait du site (un téléphone a partagé, renommé ou retiré un deck) : son registre et ses
+    pages ramenés ici, toutes les cinq minutes, connecté à GitHub seulement. Ne crée jamais le site."""
+    if not github.compte() or time.time() - _suivi["t"] < intervalle:
+        return
+    _suivi["t"] = time.time()
+    with _verrou:
+        p = _publication()
+        if not p.get("depot"):
+            s = _site_atelier(github.compte(), creer=False)
+            if not s:
+                return
+            _ecrire(PUBLICATION, json.dumps(dict(compte=github.compte(), **s), ensure_ascii=False, indent=1))
+        _preparer_connecte()
 
 
 # ---------------------------------------------------------------- registre des decks partagés
@@ -714,6 +752,10 @@ def surveiller(get, pause=30):
     pages. Avant de publier, les prix et les Game Changers sont mis à jour (rien n'est refait s'ils sont du jour)."""
     while True:
         time.sleep(pause)
+        try:
+            suivre()
+        except Exception:
+            pass
         try:
             liste = a_republier()
             if not liste:
