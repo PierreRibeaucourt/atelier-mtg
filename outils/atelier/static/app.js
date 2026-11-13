@@ -4779,7 +4779,7 @@ async function vueRecherche(params) {
   c.deck = c.deck || "";                           // pas de deck dans l'adresse : recherche sans deck
   etat.deck = null;
   let [ds, fonctions] = await Promise.all([listeDecks(), rch.fonctions ? rch.fonctions : api("/api/recherche/fonctions").catch(() => [])]);
-  rch.fonctions = fonctions;
+  rch.fonctions = fonctions.length ? fonctions : null;            // vide (base pas prête) : redemandée la prochaine fois
   if (c.deck && !ds.some((d) => d.id === c.deck)) {        // deck créé dans un autre onglet : on relit la liste
     etat.decks = [];
     ds = await listeDecks();

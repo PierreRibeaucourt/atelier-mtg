@@ -196,7 +196,7 @@
     if (p === "/api/recherche/base") { if (!etatBase.prete && !baseEnCours) laBase().catch(() => {}); return copie(etatBase); }
     if (p === "/api/recherche") return rechercheAvancee(u);
     if (p === "/api/recherche/editions") return demander("editions");
-    if (p === "/api/recherche/fonctions") return demander("fonctions");
+    if (p === "/api/recherche/fonctions") return message("fonctions");      // une liste fixe : sans attendre la base
     if (p === "/api/recherche/tags") return demander("suggestions", u.searchParams.get("q") || "");
     if (p === "/api/recherche/noms") { pret(); return message("noms", [u.searchParams.get("q") || "", await dansDeck(u.searchParams.get("deck")), 8]); }
     if (p === "/api/recherche-cartes") return decksAvecCarte(u.searchParams.get("q") || "");
