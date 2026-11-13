@@ -3,6 +3,8 @@ Deck */
 Corbeille Atelier/
 # le classeur : les cartes qu'on a en dehors des decks (page Options)
 Classeur/
+# les réglages des cartes, partagés entre appareils par la sauvegarde en ligne (outils/reglages.py)
+Réglages Atelier/
 # pages partagées : leur propre dépôt (decks), publié sur GitHub Pages
 Partage Atelier/
 outils/atelier/discussion.json

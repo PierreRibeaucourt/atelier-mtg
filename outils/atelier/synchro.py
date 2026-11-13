@@ -30,6 +30,7 @@ NOM_DEPOT = "atelier-mtg-sauvegarde"
 DESCRIPTION = "Sauvegarde privée de l'Atelier MTG : decks et classeur (ne pas modifier à la main)"
 ETAT = os.path.join(ICI, "sauvegarde_github.json")     # dépôt, dernier commit et fichiers de la dernière synchronisation
 CLASSEUR = "Classeur"
+CARTES = f"{reglages.DOSSIER_CARTES}/cartes.json"       # les réglages des cartes, les mêmes sur tous les appareils
 LISEZMOI = "README.md"                                  # la page du dépôt sur GitHub : ce qu'il contient
 SANS = (".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif", ".gif", ".bmp", ".tif", ".tiff", ".mp4", ".mov", ".tmp")
 CALME = 20             # secondes sans modification avant d'envoyer : une série d'ajouts ne part qu'une fois
@@ -95,7 +96,7 @@ def etat():
 def _locaux():
     """{chemin dans le dépôt: chemin sur ce PC} : les dossiers des decks et le classeur, sans les photos."""
     res = {}
-    dossiers = decks.dossiers() + ([CLASSEUR] if os.path.isdir(os.path.join(decks.RACINE, CLASSEUR)) else [])
+    dossiers = decks.dossiers() + [d for d in (CLASSEUR, reglages.DOSSIER_CARTES) if os.path.isdir(os.path.join(decks.RACINE, d))]
     for d in dossiers:
         for rel, chemin in github.fichiers_locaux(os.path.join(decks.RACINE, d)).items():
             if not rel.lower().endswith(SANS) and not any(p.startswith(".") for p in rel.split("/")):
@@ -214,6 +215,9 @@ def synchroniser(creer=True):
         suivi["en_cours"] = True
         try:
             r = _synchroniser(creer)
+            if r.get("reglages"):
+                import infos_cartes as ic
+                ic.BUDGET = reglages.budget()
             suivi.update(erreur="", echec=0, empreinte=empreinte_locale(), coup_d_oeil=time.time())
             if r.get("recus") and quand_recu:
                 quand_recu()
@@ -239,6 +243,8 @@ def _synchroniser(creer):
         if e.get("commit") and tete != e["commit"] and not _connu(d, e["commit"]):
             e.update(commit=None, fichiers={})
         avant = e["fichiers"] if e.get("commit") else {}
+        if CARTES not in distant and not os.path.exists(reglages.FICHIER_CARTES):
+            reglages.ecrire_cartes()                    # premier appareil à partager ses réglages des cartes
         locaux = _locaux()
         contenus = {}
         for rel, chemin in locaux.items():
@@ -247,7 +253,7 @@ def _synchroniser(creer):
         ici = {rel: github.sha_blob(x) for rel, x in contenus.items()}
         # un dossier de deck (ou le classeur) disparu sans passer par l'Atelier (désinstallation, Explorateur) n'est pas
         # effacé de la sauvegarde : il revient. Seuls la corbeille de l'Atelier et un renommage valent suppression.
-        presents = set(decks.dossiers()) | ({CLASSEUR} if os.path.isdir(os.path.join(decks.RACINE, CLASSEUR)) else set())
+        presents = set(decks.dossiers()) | {d for d in (CLASSEUR, reglages.DOSSIER_CARTES) if os.path.isdir(os.path.join(decks.RACINE, d))}
         jetes = {x["nom"] for x in decks.corbeille()} | set(e.get("renommes") or {})
 
         envois, retraits, recus, effaces, conflits = [], [], [], [], []
@@ -325,8 +331,10 @@ def _synchroniser(creer):
         e.update(commit=nouveau, fichiers=fichiers, derniere=time.time(), decks=nb)
         e.pop("renommes", None)
         _ecrire_etat(e)
+        # les réglages des cartes changés sur un autre appareil : appliqués ici (prix et images refaits par quand_recu)
+        nouveaux_reglages = CARTES in recus and reglages.appliquer_cartes()
         return dict(envoyes=len(envois) + len(retraits), recus=len(recus), conflits=sorted(set(conflits_decks)), decks=nb,
-                    decks_recus=sorted(set(decks.dossiers()) - decks_avant))
+                    decks_recus=sorted(set(decks.dossiers()) - decks_avant), reglages=nouveaux_reglages)
     raise github.Erreur("La sauvegarde n'a pas pu s'enregistrer : réessaie.")
 
 

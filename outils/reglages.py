@@ -16,6 +16,9 @@
 - telephone : true = les decks sont préparés pour l'appli du téléphone, dans la sauvegarde en ligne (atelier/telephone.py).
 - sauvegarde : false = sauvegarde en ligne coupée (Options) ; sinon elle marche dès qu'on est connecté à GitHub
   (voir atelier/synchro.py).
+
+Les réglages des cartes (CARTES : budget, image des cartes, Universes Beyond) sont les mêmes sur tous les appareils (PC,
+téléphone) : recopiés dans « Réglages Atelier/cartes.json », que la sauvegarde en ligne partage (atelier/synchro.py).
 """
 import json
 import os
@@ -46,6 +49,52 @@ def ecrire(**valeurs):
         json.dump(r, f, ensure_ascii=False, indent=2)
         f.write("\n")
     return r
+
+
+# ---------------------------------------------------------------- les réglages des cartes, partagés entre appareils
+CARTES = ("budget", "langue_cartes", "sans_ub_illustrations", "sans_ub_suggestions")
+DOSSIER_CARTES = "Réglages Atelier"
+FICHIER_CARTES = os.path.join(RACINE, DOSSIER_CARTES, "cartes.json")
+
+
+def cartes():
+    """{budget, langue_cartes, sans_ub_illustrations, sans_ub_suggestions} ; None : la valeur par défaut."""
+    r = lire()
+    return {k: r.get(k) for k in CARTES}
+
+
+def ecrire_cartes():
+    """Recopie les réglages des cartes dans le fichier que la sauvegarde partage (seulement s'il change)."""
+    texte = json.dumps(cartes(), ensure_ascii=False, indent=1) + "\n"
+    try:
+        with open(FICHIER_CARTES, encoding="utf-8") as f:
+            if f.read() == texte:
+                return
+    except OSError:
+        pass
+    os.makedirs(os.path.dirname(FICHIER_CARTES), exist_ok=True)
+    with open(FICHIER_CARTES, "w", encoding="utf-8", newline="\n") as f:
+        f.write(texte)
+
+
+def appliquer_cartes():
+    """Les réglages des cartes reçus d'un autre appareil (cartes.json), vérifiés ; True s'ils changent ceux d'ici."""
+    try:
+        with open(FICHIER_CARTES, encoding="utf-8") as f:
+            d = json.load(f)
+    except (OSError, ValueError):
+        return False
+    if not isinstance(d, dict):
+        return False
+    b = d.get("budget")
+    v = dict(budget=b if isinstance(b, (int, float)) and not isinstance(b, bool) and 0 <= b <= 100000 else None,
+             langue_cartes=d.get("langue_cartes") if d.get("langue_cartes") in LANGUES else None,
+             sans_ub_illustrations=True if d.get("sans_ub_illustrations") else None,
+             sans_ub_suggestions=True if d.get("sans_ub_suggestions") else None)
+    if v == cartes():
+        return False
+    ecrire(**v)
+    return True
 
 
 def budget():

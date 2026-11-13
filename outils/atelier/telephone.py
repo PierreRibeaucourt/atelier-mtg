@@ -88,7 +88,7 @@ def _empreinte(deck):
     entrent dans les suggestions et les achats."""
     h = hashlib.sha1()
     base = os.path.join(decks.RACINE, deck)
-    fichiers = [os.path.join(decks.RACINE, "Classeur", "classeur.txt")]
+    fichiers = [os.path.join(decks.RACINE, "Classeur", "classeur.txt"), reglages.FICHIER_CARTES]     # budget, images
     for racine, sous, noms in os.walk(base):
         sous[:] = sorted(s for s in sous if s not in (decks.HISTO, ".git"))
         fichiers += [os.path.join(racine, n) for n in sorted(noms) if not n.endswith(".tmp") and n != "discussion.json"]

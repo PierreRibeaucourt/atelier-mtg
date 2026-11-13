@@ -335,6 +335,7 @@ def api_options_ecrire():
         ch["budget"] = None if v is None else int(v) if v == int(v) else v
     if ch:
         reglages.ecrire(**ch)
+        reglages.ecrire_cartes()                            # les mêmes sur tous les appareils (sauvegarde en ligne)
         ic.BUDGET = reglages.budget()                       # tout de suite, sans relancer l'Atelier
     if reglages.impression() != impression_avant:           # autre impression par défaut : images et prix refaits
         en_fond(ic.mise_a_jour, tous_les_noms())

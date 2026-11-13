@@ -674,7 +674,7 @@
       versions: etatBase.prete ? ((await message("impressionImage", [nom, null]).catch(() => null)) || {}).versions || 0 : 0 };
   }
 
-  const budget = () => Number((window.REGLAGES || {}).budget) || 0;
+  const budget = () => { const b = (window.REGLAGES || {}).budget; return b == null ? 5 : Number(b) || 0; };   // vide : 5 €
   // sans PC, les réglages des cartes se changent ici (app.py › api_options) : budget par carte (0 : pas d'alerte),
   // illustrations et suggestions sans Universes Beyond. Gardés sur ce téléphone ; toutes les pages sont refaites.
   // langues des impressions (reglages.LANGUES) : « la moins chère en … » ; sans langue, la moins chère tout court
@@ -682,22 +682,54 @@
     ko: "coréen", ru: "russe", zhs: "chinois simplifié", zht: "chinois traditionnel" };
   const langueCartes = () => { const l = (window.REGLAGES || {}).langue_cartes; return l in LANGUES ? l : ""; };
   const options = () => { const r = window.REGLAGES || {};
-    return { budget: r.budget ?? 5, budget_defaut: 5, langues: LANGUES, langue_cartes: langueCartes(), sans_ub_illustrations: !!r.sans_ub_illustrations,
+    return { budget: r.budget ?? null, budget_defaut: 5, langues: LANGUES, langue_cartes: langueCartes(), sans_ub_illustrations: !!r.sans_ub_illustrations,
       sans_ub_suggestions: !!r.sans_ub_suggestions }; };
-  async function ecrireOptions(d) {
-    const r = { budget: 5, ...(window.REGLAGES || {}) };
+  // Les réglages des cartes sont les mêmes sur tous les appareils (reglages.CARTES) : « Réglages Atelier/cartes.json »
+  // dans la sauvegarde. Sans PC, gardés aussi ici (window.REGLAGES) ; relié, le PC les applique et refait les pages.
+  const REG_CARTES = "Réglages Atelier/cartes.json";
+  function changerReglages(d) {                       // les changements demandés, vérifiés (null : la valeur par défaut)
+    const ch = {};
     if ("budget" in d) {
-      const b = String(d.budget).replace("€", "").replace(",", ".").trim(), v = b ? Number(b) : 5;
-      if (!Number.isFinite(v) || v < 0 || v > 100000) throw new Error("Le budget est un nombre d'euros.");
-      r.budget = v;
+      const b = String(d.budget ?? "").replace("€", "").replace(",", ".").trim(), v = b ? Number(b) : null;
+      if (v !== null && (!Number.isFinite(v) || v < 0 || v > 100000)) throw new Error("Le budget est un nombre d'euros.");
+      ch.budget = v;
     }
-    for (const k of ["sans_ub_illustrations", "sans_ub_suggestions"]) if (k in d) r[k] = !!d[k];
+    for (const k of ["sans_ub_illustrations", "sans_ub_suggestions"]) if (k in d) ch[k] = d[k] ? true : null;
     if ("langue_cartes" in d) {
       if (d.langue_cartes && !(d.langue_cartes in LANGUES)) throw new Error("Langue inconnue.");
-      r.langue_cartes = d.langue_cartes || null;
+      ch.langue_cartes = d.langue_cartes || null;
     }
+    return ch;
+  }
+  const texteCartes = (r) => JSON.stringify({ budget: r.budget ?? null, langue_cartes: r.langue_cartes || null,
+    sans_ub_illustrations: r.sans_ub_illustrations ? true : null, sans_ub_suggestions: r.sans_ub_suggestions ? true : null }, null, 1) + "\n";
+  // reçus d'un autre appareil par la sauvegarde : appliqués ici, toutes les pages refaites
+  async function appliquerReglages(t) {
+    let x;
+    try { x = JSON.parse(t || "{}") || {}; } catch (_) { return; }
+    const r = { ...(window.REGLAGES || {}), budget: typeof x.budget === "number" && x.budget >= 0 ? x.budget : null,
+      langue_cartes: x.langue_cartes in LANGUES ? x.langue_cartes : null, sans_ub_illustrations: !!x.sans_ub_illustrations,
+      sans_ub_suggestions: !!x.sans_ub_suggestions };
     window.REGLAGES = r;
     ecrireLocal(REGLAGES, JSON.stringify(r));
+    if (etatBase.prete) await message("reglages", [{ sansUb: r.sans_ub_illustrations }]).catch(() => {});
+    recalculer(null).catch(() => {});
+  }
+  // relié au PC : le changement part par la sauvegarde ; les Options le montrent tout de suite
+  async function ecrireOptionsRelie(d) {
+    const ch = changerReglages(d), o = { ...(await api("/api/options")), ...ch };
+    await surcharger({ "/api/options": o });
+    if (Object.keys(ch).length) await enAttente({ f: "reglages", d: ch });
+    return o;
+  }
+  async function ecrireOptions(d) {
+    const ch = changerReglages(d), r = { ...(window.REGLAGES || {}), ...ch };
+    window.REGLAGES = r;
+    ecrireLocal(REGLAGES, JSON.stringify(r));
+    if (Object.keys(ch).length) {                     // pour les autres appareils, par la sauvegarde
+      await avecVerrou(async () => { const dp = await depot(); dp.fichiers[REG_CARTES] = texteCartes(r); await BD.ecrire("@depot", dp); });
+      planifierSauvegarde();
+    }
     if (etatBase.prete) await message("reglages", [{ sansUb: !!r.sans_ub_illustrations }]).catch(() => {});
     const refaire = recalculer(null);           // une autre langue : ses impressions à lire sur Scryfall, en fond
     if ("langue_cartes" in d) refaire.catch(() => {}); else await refaire;
@@ -706,7 +738,7 @@
   async function ecrire(u, b) {
     const p = u.pathname, m = p.match(/^\/api\/decks\/([^/]+)\/(modifier|achats|suggestions\/ecarter)$/);
     if (local && /^\/api\/(github|sauvegarde)(\/|$)/.test(p)) { const r = await routeGithub(p, "POST", b); if (r !== undefined) return r; }
-    if (local && p === "/api/options") return ecrireOptions(b);
+    if (p === "/api/options") return local ? ecrireOptions(b) : ecrireOptionsRelie(b);
     if (p === "/api/prix") return prixEtNoms(b.noms || []);
     if (p === "/api/recherche/base") {                    // « Mettre à jour » : une nouvelle base, même sur les données mobiles
       const c = etatBase.construction;
@@ -1058,6 +1090,12 @@
         deplacer(o.deck, o.vers);
         if (o.vers) origine.set(o.vers, src);
         nouveaux.push(o.vers ? `${titre(o.deck)} renommé ${titre(o.vers)}` : `${titre(o.deck)} supprimé`);
+      } else if (o.f === "reglages") {                // les réglages des cartes, pour tous les appareils
+        let x = {};
+        try { x = JSON.parse((await lire(REG_CARTES)) || "{}") || {}; } catch (_) {}
+        fichiers.set(REG_CARTES, JSON.stringify({ budget: null, langue_cartes: null, sans_ub_illustrations: null,
+          sans_ub_suggestions: null, ...x, ...o.d }, null, 1) + "\n");
+        nouveaux.push("réglages des cartes");
       } else if (o.f === "classeur") {
         const c = MOTEUR.lireClasseur((await lire("Classeur/classeur.txt")) || "");
         if (o.d.remplacer) c.cartes = new Map(Object.entries(o.d.remplacer).filter(([, n]) => n > 0));   // classeur.remplacer
@@ -1687,6 +1725,7 @@
       Object.assign(e, { commit: nouveau, fichiers, derniere: Date.now() / 1000, decks: nb, ignores: [...ignores] });
       await BD.ecrire(SAUVEGARDE, e);
       if (touches.size) await recalculer(null, touches);
+      if (recus.includes(REG_CARTES)) await appliquerReglages(dep.fichiers[REG_CARTES]);     // changés sur un autre appareil
       if (conflits.length) setTimeout(() => planifierSauvegarde(1000));   // la liste d'en face, gardée dans l'historique, part aussi
       return { envoyes: envois.length + retraits.length, recus: recus.length, decks: nb,
         conflits: [...new Set(conflits.filter((rel) => rel.endsWith("/archidekt.txt")).map((rel) => rel.split("/")[0]))].sort(),

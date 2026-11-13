@@ -2023,8 +2023,8 @@ function optionsTelephone() {
           <button class="btn btn-discret" id="tel-retirer">${TOUS_APPAREILS}</button></div>` : `
         <p id="tel-ou">Tes decks sont gardés sur ce téléphone.</p>
         <div id="opt-github"></div>`}
-      </div></section>${a ? "" : `
-    <section class="panneau options opt-bloc" id="opt-cartes"></section>`}
+      </div></section>
+    <section class="panneau options opt-bloc" id="opt-cartes"></section>
     <section class="panneau options" id="opt-classeur"></section>`;
   classeurOptions($("#opt-classeur"));
   // sans PC : où sont les decks, et à quoi sert GitHub tant qu'on n'est pas connecté
@@ -2035,7 +2035,8 @@ function optionsTelephone() {
       : "Tes decks sont gardés seulement sur ce téléphone. Avec un compte GitHub (gratuit), sauvegarde-les en ligne : "
         + "tu les retrouves si tu perds ton téléphone, ou sur ton PC, et tu peux les partager.";
   };
-  if (!a) { ligneGithub($("#opt-github"), {}, ouSont); return optionsCartes($("#opt-cartes")); }
+  optionsCartes($("#opt-cartes"));                 // les mêmes réglages sur tous les appareils
+  if (!a) return ligneGithub($("#opt-github"), {}, ouSont);
   const attente = async () => {
     const n = await TELEPHONE.enAttente();
     const el = $("#tel-attente");
@@ -2069,7 +2070,8 @@ async function optionsCartes(el) {
     try {
       Object.assign(o, await api("/api/options", { method: "POST", body: { [c.name]: c.type === "checkbox" ? c.checked : c.value } }));
       majBudget(o.budget);
-      toast(c.name === "langue_cartes" ? "Enregistré : les images changent dans quelques instants." : "Enregistré.");
+      toast(TELEPHONE && !TELEPHONE.local ? "Enregistré : ton PC l'appliquera à tes decks dans quelques minutes."
+        : c.name === "langue_cartes" ? "Enregistré : les images changent dans quelques instants." : "Enregistré.");
     } catch (e) { erreur(e); }
     if (c.type === "checkbox") c.checked = !!o[c.name];
     else c.value = budget(o.budget);
