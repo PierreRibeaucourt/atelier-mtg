@@ -362,7 +362,7 @@ function barreAppli(parts, qs) {
     retour = "#/";
     if (etat.deck) etat.menuEcran = () => menuDeck(etat.deck);
   } else if (parts[0] === "recherche") {
-    titre = "Recherche";
+    titre = "Recherche avancée";
     if (rd) retour = `#/deck/${enc(rd)}`;
   } else if (parts[0] === "options") titre = "Options";
   else if (parts[0] === "classeur") titre = "Classeur";
@@ -874,7 +874,7 @@ function majTitre() {
     t = decodeURIComponent(parts[1]).replace(/^Deck /, "") + (o ? " · " + o[1] : "");
   } else if (parts[0] === "recherche") {
     const p = new URLSearchParams(qs || "");
-    t = ["Recherche", p.get("nom") && `« ${p.get("nom")} »`, (p.get("deck") || "").replace(/^Deck /, "")].filter(Boolean).join(" · ");
+    t = ["Recherche avancée", p.get("nom") && `« ${p.get("nom")} »`, (p.get("deck") || "").replace(/^Deck /, "")].filter(Boolean).join(" · ");
   } else if (parts[0] === "options" || parts[0] === "classeur") {
     t = parts[0] === "options" ? "Options" : "Classeur";
   } else if (parts[0] === "proxies") {
@@ -4789,7 +4789,7 @@ async function vueRecherche(params) {
   rch.ouvrir = false;
   vue.innerHTML = `
     <div class="rch-tete">
-      <nav class="fil" aria-label="Fil d'Ariane"><a href="${PARTAGE ? esc(PARTAGE.accueil) : "#/"}">${esc(MES_DECKS)}</a><span aria-hidden="true">›</span>${rch.deck ? `<a href="#/deck/${enc(rch.deck.id)}">${esc(rch.deck.titre)}</a><span aria-hidden="true">›</span>` : ""}<span aria-current="page">Recherche de cartes</span></nav>
+      <nav class="fil" aria-label="Fil d'Ariane"><a href="${PARTAGE ? esc(PARTAGE.accueil) : "#/"}">${esc(MES_DECKS)}</a><span aria-hidden="true">›</span>${rch.deck ? `<a href="#/deck/${enc(rch.deck.id)}">${esc(rch.deck.titre)}</a><span aria-hidden="true">›</span>` : ""}<span aria-current="page">Recherche avancée</span></nav>
       ${rch.deck || PARTAGE ? "" : `<div class="rch-deck">
         <label class="petit muet" for="rch-deck">Pour le deck</label>
         <select class="champ champ-petit" id="rch-deck">
@@ -4842,11 +4842,11 @@ function vueRechercheVitrine() {
   rch.fns = [];
   vue.innerHTML = `
     <div class="rch-tete">
-      <nav class="fil" aria-label="Fil d'Ariane"><a href="${esc(PARTAGE.accueil === true ? "#/" : PARTAGE.accueil)}">${esc(MES_DECKS)}</a><span aria-hidden="true">›</span>${PARTAGE.deck ? `<a href="#/">${esc(PARTAGE.deck.replace(/^Deck /, ""))}</a><span aria-hidden="true">›</span>` : ""}<span aria-current="page">Recherche de cartes</span></nav>
+      <nav class="fil" aria-label="Fil d'Ariane"><a href="${esc(PARTAGE.accueil === true ? "#/" : PARTAGE.accueil)}">${esc(MES_DECKS)}</a><span aria-hidden="true">›</span>${PARTAGE.deck ? `<a href="#/">${esc(PARTAGE.deck.replace(/^Deck /, ""))}</a><span aria-hidden="true">›</span>` : ""}<span aria-current="page">Recherche avancée</span></nav>
     </div>
     <div class="vitrine">
       <div class="vitrine-fond" inert aria-hidden="true">${formulaireRecherche(rch.crit)}</div>
-      ${invitation("Recherche de cartes", "Disponible dans l'Atelier MTG, à installer gratuitement sur son ordinateur.")}
+      ${invitation("Recherche avancée", "Disponible dans l'Atelier MTG, à installer gratuitement sur son ordinateur.")}
     </div>`;
 }
 
