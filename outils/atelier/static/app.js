@@ -312,7 +312,7 @@ function routeDepuisAdresse() {
   if (!SITE_APPLI || location.pathname.startsWith(CHEMIN_APPLI)) return h;
   const m = location.pathname.match(/^\/decks\/[^/]+\/(?:([^/]+)\/)?$/);
   if (!m || ECRANS_APPLI_ROUTE.has(r.split(/[/?]/)[0])) return h;
-  if (!m[1]) return "#/";
+  if (!m[1] || h === "#/") return "#/";              // « #/ » : un lien vers Mes decks (l'adresse d'un deck n'en a pas)
   const id = TELEPHONE.deckDeSlug(m[1]);
   return id ? `#/deck/${enc(id)}${r ? "/" + r : ""}` : `#/slug/${m[1]}${r ? "/" + r : ""}`;
 }
