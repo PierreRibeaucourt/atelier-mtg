@@ -1,311 +1,93 @@
-"""Partager un deck : une copie de sa page, à consulter seulement, publiée sur GitHub Pages.
+"""Partager un deck : une copie de sa page, à consulter seulement, publiée sur https://atelier-mtg.com/decks/.
 
-La page reprend l'interface de l'Atelier (static/) avec les réponses de l'API figées dans donnees.js :
-liste, visuel, fiches des cartes, statistiques, suggestions (thème et combos), combos du deck, versions, bracket et
-rapports de simulation. Rien d'autre ne part : ni les discussions, ni les autres decks, ni le classeur.
+La page reprend l'interface de l'Atelier (static/) avec les réponses de l'API figées (capturer) : liste, visuel, fiches
+des cartes, statistiques, suggestions (thème et combos), combos du deck, versions, bracket et rapports de simulation.
+Rien d'autre ne part : ni les discussions, ni les autres decks, ni le classeur, ni les achats.
 
-Les pages sont rangées dans « Partage Atelier/ », puis publiées de l'une des deux façons :
-- connecté (github.py, sans git) : l'Atelier recopie le dossier dans le site de l'Atelier du compte (le dépôt
-  <compte>.github.io, créé au premier partage et publié tout seul par GitHub, ou un dépôt « decks » déjà publié) ;
-  adresse d'un deck : https://<compte>.github.io/<deck>/ ;
-- avec git (reglages.json › github) : « Partage Atelier/ » est un dépôt git à part, poussé vers le dépôt « decks » du
-  même compte que l'Atelier, avec la même identité git ; adresse : https://<compte>.github.io/decks/<deck>/.
-La racine du site liste les decks partagés.
+L'Atelier envoie ces données et l'image d'aperçu (image_partage.py) au serveur des comptes (compte.py ; côté serveur,
+outils/serveur/pages.py), qui écrit la page à https://atelier-mtg.com/decks/<pseudo>/<deck>/. Il faut être connecté à
+son compte ; au premier partage, on choisit son pseudo. L'appli publie les mêmes pages (static/telephone/partage.js).
 
-Seuls les decks qu'on partage (bouton « Partager ») sont publiés : se connecter à GitHub pour la sauvegarde en ligne
-(synchro.py) ne publie rien. Une fois partagé, un deck est tenu à jour sans qu'on y pense (surveiller) : deux minutes
-après sa dernière modification, et chaque page une fois par jour, avec les prix du jour. Un deck qu'on retire du
-partage n'est plus publié, jusqu'à ce qu'on le repartage.
+Seuls les decks qu'on partage (bouton « Partager ») sont publiés. Une fois partagé, un deck modifié sur ce PC voit sa
+page refaite deux minutes après la dernière modification (surveiller) ; un deck qu'on retire du partage n'est plus
+publié, jusqu'à ce qu'on le repartage. Jusqu'à la 2.1.0, les pages allaient sur GitHub Pages : elles y restent, figées.
 """
+import base64
 import hashlib
 import json
 import os
-import re
 import shutil
-import subprocess
+import tempfile
 import threading
 import time
-import unicodedata
 import urllib.parse
 from collections import Counter
 
 import decks
-import github
 import infos_cartes as ic
 from version import __version__
 
 ICI = os.path.dirname(os.path.abspath(__file__))
 STATIQUE = os.path.join(ICI, "static")
-DOSSIER = os.path.join(decks.RACINE, "Partage Atelier")
-REGISTRE = os.path.join(DOSSIER, "decks.json")
-NOM_DEPOT = "decks"
-PUBLICATION = os.path.join(ICI, "publication_github.json")      # connecté : dépôt, branche, site, dernier commit envoyé
-DESCRIPTION = "Decks Commander partagés avec l'Atelier MTG"           # celle du dépôt que crée l'Atelier connecté
+DOSSIER = os.path.join(decks.RACINE, "Partage Atelier")         # les captures de la page d'accueil (a-propos/)
+ETAT = os.path.join(ICI, "partages_compte.json")               # {email, pseudo, lu, decks: {deck: {url, date}}}
+DEPOT = "https://github.com/PierreRibeaucourt/atelier-mtg"
 FORMATS = ("archidekt", "moxfield", "arena", "mtgo", "simple", "fr")
 _verrou = threading.Lock()
 
 
-# ---------------------------------------------------------------- git
-def _git(*args, dossier=None, ok=False):
+class PseudoRequis(RuntimeError):
+    """Premier partage : le compte n'a pas encore de pseudo (il sera dans l'adresse des pages)."""
+    code = 409
+
+
+# ---------------------------------------------------------------- les pages du compte, d'après le dernier passage
+def _etat():
+    import compte
     try:
-        r = subprocess.run(["git", "-C", dossier or DOSSIER, *args], capture_output=True, text=True, encoding="utf-8",
-                           errors="replace", timeout=120, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
-                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    except FileNotFoundError:                                   # git n'est pas installé (installeur Windows)
-        if ok:
-            return subprocess.CompletedProcess(args, 1, "", "git introuvable")
-        raise github.NonConnecte("Pour partager tes decks, connecte l'Atelier à GitHub (compte gratuit).") from None
-    if r.returncode and not ok:
-        msg = (r.stderr or r.stdout).strip().splitlines()
-        raise RuntimeError(f"Git ({args[0]}) : {msg[-1] if msg else 'échec'}")
-    return r
-
-
-def compte():
-    """Le compte GitHub des pages : celui de reglages.json (clé github), sinon celui du dépôt de l'Atelier (remote
-    origin). Renvoie (dépôt des pages, adresse du site). Même compte que l'Atelier : même accès (SSH ou HTTPS).
-    Connecté (github.py) : (None, adresse du site), connue dès le premier partage."""
-    import reglages
-    if github.compte():
-        p = _publication()
-        if not p.get("site"):
-            raise RuntimeError("Aucun deck partagé pour l'instant")
-        return None, p["site"]
-    proprio = reglages.github()
-    if not proprio:            # pas de valeur par défaut : un dépôt cloné pointe vers le compte de son auteur, pas le tien
-        raise github.NonConnecte("Pour partager tes decks, connecte l'Atelier à GitHub (compte gratuit).")
-    url = _git("remote", "get-url", "origin", dossier=decks.RACINE, ok=True).stdout.strip()
-    m = re.match(r"(?:git@([^:]+):|https://([^/]+)/)([^/]+)/[^/]+?(?:\.git)?$", url)
-    if m and m.group(3).lower() == proprio.lower():          # le compte de l'Atelier : même accès (SSH ou HTTPS)
-        hote, proprio = m.group(1) or m.group(2), m.group(3)
-        depot = f"git@{hote}:{proprio}/{NOM_DEPOT}.git" if m.group(1) else f"https://{hote}/{proprio}/{NOM_DEPOT}.git"
-    else:
-        depot = f"https://github.com/{proprio}/{NOM_DEPOT}.git"
-    return depot, f"https://{proprio.lower()}.github.io/{NOM_DEPOT}/"
-
-
-def depot_atelier():
-    """Adresse web du dépôt de l'Atelier (remote origin), pour « Télécharger l'Atelier MTG » sur les pages partagées.
-    git@github-perso:Compte/atelier-mtg.git (alias SSH) → https://github.com/Compte/atelier-mtg ; None si introuvable."""
-    url = _git("remote", "get-url", "origin", dossier=decks.RACINE, ok=True).stdout.strip()
-    m = re.match(r"(?:git@([^:]+):|https://([^/]+)/)([^/]+)/([^/]+?)(?:\.git)?$", url)
-    if not m:
-        import mise_a_jour                                       # installeur Windows, sans git : le dépôt qu'il suit
-        d = mise_a_jour.installation().get("depot")
-        return f"https://github.com/{d}" if d else None
-    hote = m.group(1) or m.group(2)
-    return f"https://{'github.com' if 'github' in hote else hote}/{m.group(3)}/{m.group(4)}"
-
-
-def _preparer():
-    """Le dépôt local des pages, à jour avec GitHub. Renvoie l'adresse du site."""
-    if github.compte():
-        return _preparer_connecte()
-    depot, site = compte()
-    os.makedirs(DOSSIER, exist_ok=True)
-    if not os.path.isdir(os.path.join(DOSSIER, ".git")):
-        _git("init", "-q", "-b", "main")
-        for k in ("user.name", "user.email"):                 # la même identité que l'Atelier
-            v = _git("config", k, dossier=decks.RACINE, ok=True).stdout.strip()
-            if not v:
-                raise RuntimeError(f"Identité git manquante : git config --global {k} \"…\"")
-            _git("config", k, v)
-        _git("remote", "add", "origin", depot)
-    else:
-        actuel = _git("remote", "get-url", "origin", ok=True).stdout.strip()
-        if actuel and actuel != depot:                        # autre compte : ces pages-là ne partent pas chez lui
-            raise RuntimeError(f"Le dossier « Partage Atelier » publie vers {actuel}, pas vers {depot} : "
-                               "renomme-le pour repartir de zéro")
-    r = _git("fetch", "-q", "origin", ok=True)
-    if r.returncode:
-        if re.search(r"not found|could not read", r.stderr or "", re.I):
-            raise RuntimeError(f"Le dépôt GitHub « {NOM_DEPOT} » n'existe pas encore : crée-le sur github.com "
-                               f"(public, avec un README), puis active GitHub Pages (Settings › Pages › branche main)")
-        raise RuntimeError("GitHub ne répond pas : " + ((r.stderr or "").strip().splitlines() or ["?"])[-1])
-    distant = _git("rev-parse", "-q", "--verify", "origin/main", ok=True).returncode == 0
-    local = _git("rev-parse", "-q", "--verify", "HEAD", ok=True).returncode == 0
-    if distant and not local:                                 # dépôt créé sur GitHub avec un README : on part de lui
-        _git("reset", "-q", "origin/main")
-        _git("checkout", "-q", "--", ".")
-    elif distant:
-        # --autostash : une modification restée en attente (publication interrompue…) ne bloque pas les suivantes
-        if _git("rebase", "-q", "--autostash", "origin/main", ok=True).returncode:
-            _git("rebase", "--abort", ok=True)
-            raise RuntimeError("Le dépôt des pages a changé sur GitHub et ne se fusionne pas : à régler à la main")
-    return site
-
-
-def _publier(message):
-    if github.compte():
-        p = _publication()
-        p.update(commit=github.envoyer(p["depot"], p["branche"], DOSSIER, message),
-                 fichiers=sorted(github.fichiers_locaux(DOSSIER)))
-        _ecrire(PUBLICATION, json.dumps(p, ensure_ascii=False, indent=1))
-        return
-    _git("add", "-A")
-    if _git("diff", "--cached", "--quiet", ok=True).returncode:
-        _git("commit", "-q", "-m", message)
-    if _git("rev-parse", "-q", "--verify", "HEAD", ok=True).returncode == 0:
-        r = _git("push", "-q", "-u", "origin", "main", ok=True)
-        if r.returncode:
-            msg = ((r.stderr or "").strip().splitlines() or ["?"])[-1]
-            raise RuntimeError(f"GitHub refuse l'envoi ({msg}) : vérifie le compte de reglages.json et ta connexion "
-                               "à GitHub (gh auth login, puis gh auth setup-git)")
-
-
-# ---------------------------------------------------------------- connecté à GitHub (github.py), sans git
-def _publication():
-    try:
-        with open(PUBLICATION, encoding="utf-8") as f:
-            p = json.load(f)
-        return p if p.get("compte") == github.compte() else {}
+        with open(ETAT, encoding="utf-8") as f:
+            e = json.load(f)
     except (OSError, ValueError):
         return {}
+    return e if e.get("email") and e.get("email") == compte._connexion().get("email") else {}
 
 
-def _a_l_atelier(r):
-    """Ce dépôt est-il un site de l'Atelier ? Sa description, ou decks.json à sa racine."""
-    if r.get("description") == DESCRIPTION:
-        return True
-    try:
-        github.appel("GET", f"/repos/{r['full_name']}/contents/decks.json?ref={r['default_branch']}")
-        return True
-    except github.Erreur as e:
-        if e.statut != 404:
-            raise
-        return False
+def _ecrire_etat(e):
+    import compte
+    e["email"] = compte._connexion().get("email")
+    _ecrire(ETAT, json.dumps(e, ensure_ascii=False, indent=1))
 
 
-def _site_atelier(login, creer=True):
-    """Le dépôt des pages : un site de l'Atelier qui existe déjà, sinon le site personnel <compte>.github.io, créé
-    ici : GitHub le publie tout seul. S'il sert déjà à autre chose, on n'y touche pas : les pages vont dans un dépôt
-    « decks », dont il faut activer GitHub Pages à la main si besoin (la connexion n'en a pas le droit).
-    creer=False : None s'il n'y a pas encore de site de l'Atelier (on ne crée rien pour regarder)."""
-    perso = f"{login.lower()}.github.io"
-    sites, existants = {perso: f"https://{perso}/", NOM_DEPOT: f"https://{perso}/{NOM_DEPOT}/"}, {}
-    for nom in sites:
-        try:
-            existants[nom] = github.appel("GET", f"/repos/{login}/{nom}")
-        except github.Erreur as e:
-            if e.statut != 404:
-                raise
-    nom = next((n for n, r in existants.items() if _a_l_atelier(r)), None)
-    if not nom and not creer:
-        return None
-    if not nom:
-        nom = perso if perso not in existants else NOM_DEPOT if NOM_DEPOT not in existants else None
-        if not nom:
-            raise RuntimeError(f"Tes dépôts {perso} et « {NOM_DEPOT} » servent déjà à autre chose : l'Atelier n'y touche pas")
-        existants[nom] = github.appel("POST", "/user/repos", dict(name=nom, description=DESCRIPTION, auto_init=True,
-                                                                  has_issues=False, has_projects=False, has_wiki=False))
-    r = existants[nom]
-    if nom == NOM_DEPOT and not r.get("has_pages"):
-        try:
-            github.appel("POST", f"/repos/{r['full_name']}/pages", dict(source=dict(branch=r["default_branch"], path="/")),
-                         ok=(201, 409))
-        except github.Erreur:
-            raise RuntimeError(f"Sur github.com, active les pages de ton dépôt « {NOM_DEPOT} » (Settings › Pages › Deploy "
-                               f"from a branch › {r['default_branch']}), puis repartage : ton site {perso} sert déjà à "
-                               "autre chose") from None
-    return dict(depot=r["full_name"], branche=r["default_branch"], site=sites[nom])
-
-
-def _preparer_connecte():
-    """Comme _preparer, sans git : trouve (ou crée) le site, puis ramène ici ce qui a changé sur GitHub depuis la
-    dernière publication de ce PC (un autre PC, ou le premier partage). Renvoie l'adresse du site."""
-    login = github.compte()
-    p = _publication() or dict(compte=login)
-    if not p.get("depot"):
-        p.update(_site_atelier(login))
-    for essai in range(6):                                  # un dépôt tout juste créé met un instant à être prêt
-        try:
-            tete, _, distant = github.arbre(p["depot"], p["branche"])
-            break
-        except github.Erreur as e:
-            if e.statut not in (404, 409) or essai == 5:
-                raise
-            time.sleep(2)
-    os.makedirs(DOSSIER, exist_ok=True)
-    if tete != p.get("commit"):
-        local = github.fichiers_locaux(DOSSIER)
-        avant = _registre()                                # ce que ce PC n'a pas encore publié (renommage) reste
-        for rel, sha in distant.items():
-            chemin = os.path.join(DOSSIER, *rel.split("/"))
-            if rel in local:
-                with open(chemin, "rb") as f:
-                    if github.sha_blob(f.read()) == sha:
-                        continue
-            os.makedirs(os.path.dirname(chemin), exist_ok=True)
-            with open(chemin, "wb") as f:
-                f.write(github.telecharger(p["depot"], sha))
-            if rel == "decks.json":
-                _fusionner(avant)
-        for rel in set(p.get("fichiers", ())) - set(distant):       # retirés sur GitHub depuis : retirés ici aussi
-            try:
-                os.remove(os.path.join(DOSSIER, *rel.split("/")))
-            except OSError:
-                pass
-        p.update(commit=tete, fichiers=sorted(distant))
-    _ecrire(PUBLICATION, json.dumps(p, ensure_ascii=False, indent=1))
-    return p["site"]
-
-
-def _fusionner(avant):
-    """Le registre venu de GitHub (decks.json) garde les renommages faits ici et pas encore publiés (a_refaire) : le
-    deck sous son nouveau nom, à la même adresse."""
-    reg, change = _registre(), False
-    for deck, v in avant.items():
-        if v.get("a_refaire") and deck not in reg:
-            for ancien in [k for k, x in reg.items() if x.get("slug") == v.get("slug")]:
-                del reg[ancien]
-            reg[deck], change = v, True
-    if change:
-        _ecrire(REGISTRE, json.dumps(reg, ensure_ascii=False, indent=1))
-
-
-_suivi = {"t": 0}
+def _registre():
+    """{deck: {url, date}} : les decks partagés du compte connecté."""
+    return _etat().get("decks") or {}
 
 
 def suivre(intervalle=300):
-    """Ce qu'un autre appareil a fait du site (un téléphone a partagé, renommé ou retiré un deck) : son registre et ses
-    pages ramenés ici, toutes les cinq minutes, connecté à GitHub seulement. Ne crée jamais le site."""
-    if not github.compte() or time.time() - _suivi["t"] < intervalle:
+    """Relit les pages du compte sur le serveur (l'appli a pu en publier ou en retirer), au plus toutes les cinq minutes."""
+    import compte
+    e = _etat()
+    if not compte._connexion().get("jeton") or time.time() - e.get("lu", 0) < intervalle:
         return
-    _suivi["t"] = time.time()
-    with _verrou:
-        p = _publication()
-        if not p.get("depot"):
-            s = _site_atelier(github.compte(), creer=False)
-            if not s:
-                return
-            _ecrire(PUBLICATION, json.dumps(dict(compte=github.compte(), **s), ensure_ascii=False, indent=1))
-        _preparer_connecte()
+    r = compte._appel("GET", "/partages")
+    avant = e.get("decks") or {}
+    e.update(lu=time.time(), pseudo=r.get("pseudo"),
+             decks={p["deck"]: dict(url=p["url"], date=p["date"], **({"a_refaire": True} if (avant.get(p["deck"]) or {}).get("a_refaire") else {}))
+                    for p in r.get("partages") or []})
+    _ecrire_etat(e)
 
 
-# ---------------------------------------------------------------- registre des decks partagés
-def _registre():
-    try:
-        with open(REGISTRE, encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, ValueError):
-        return {}
+def actif():
+    """Connecté au compte : les decks partagés se republient tout seuls quand ils changent ici."""
+    import compte
+    return bool(compte._connexion().get("jeton"))
 
 
 def _ecrire(chemin, texte):
     os.makedirs(os.path.dirname(chemin), exist_ok=True)
-    with open(chemin, "w", encoding="utf-8", newline="\n") as f:
+    with open(chemin + ".tmp", "w", encoding="utf-8", newline="\n") as f:
         f.write(texte)
-
-
-def _slug(deck, reg):
-    if deck in reg:
-        return reg[deck]["slug"]
-    s = unicodedata.normalize("NFD", deck.removeprefix("Deck ")).encode("ascii", "ignore").decode().lower()
-    s = base = re.sub(r"[^a-z0-9]+", "-", s).strip("-") or "deck"
-    pris, i = {v["slug"] for v in reg.values()} | {A_PROPOS}, 2
-    while s in pris:
-        s, i = f"{base}-{i}", i + 1
-    return s
+    os.replace(chemin + ".tmp", chemin)
 
 
 def etat(deck):
@@ -313,14 +95,11 @@ def etat(deck):
     p = _registre().get(deck)
     if not p:
         return {}
-    try:
-        site = compte()[1]
-    except Exception:
-        return {}
     e = _echecs.get(deck)
-    return dict(url=site + p["slug"] + "/", date=p["date"], **({"erreur": e[1]} if e else {}))
+    return dict(url=p["url"], date=p["date"], **({"erreur": e[1]} if e else {}))
 
 
+# ---------------------------------------------------------------- données de la page
 # ---------------------------------------------------------------- données de la page
 def _cle(chemin, params=None):
     """Même clé que app.js en page partagée : chemin décodé, paramètres triés."""
@@ -400,13 +179,14 @@ def capturer(deck, get):
 
 
 def _verifier(texte):
-    """Aucun chemin de ce PC ne doit partir sur GitHub."""
+    """Aucun chemin de ce PC ne doit partir en ligne."""
     for p in {os.path.expanduser("~"), decks.RACINE}:
         for forme in (p, p.replace("\\", "/"), json.dumps(p)[1:-1]):
             if forme and forme in texte:
                 raise RuntimeError("Un chemin de ton PC est dans les données de la page : partage annulé")
 
 
+# ---------------------------------------------------------------- pages
 # ---------------------------------------------------------------- pages
 def _version(chemin):
     with open(chemin, "rb") as f:
@@ -431,14 +211,15 @@ def _liste(mots):
     return mots[0] if len(mots) == 1 else ", ".join(mots[:-1]) + " et " + mots[-1] if mots else ""
 
 
-def _image_partage(dossier, dessiner):
-    """partage.jpg (1200 × 630) ; None si Pillow manque ou si le dessin échoue (la page se passe d'image)."""
+def _image(dessiner):
+    """L'image d'aperçu (1200 × 630, JPEG) ; None si Pillow manque ou si le dessin échoue (la page s'en passe)."""
     try:
         import image_partage
-        chemin = os.path.join(dossier, "partage.jpg")
-        os.makedirs(dossier, exist_ok=True)
-        dessiner(image_partage, chemin)
-        return "partage.jpg?v=" + _version(chemin)
+        with tempfile.TemporaryDirectory() as d:
+            chemin = os.path.join(d, "partage.jpg")
+            dessiner(image_partage, chemin)
+            with open(chemin, "rb") as f:
+                return f.read()
     except Exception:
         return None
 
@@ -452,7 +233,7 @@ def _page(dossier, donnees, entete):
     for f in ("app.js", "style.css"):
         shutil.copyfile(os.path.join(STATIQUE, f), os.path.join(dossier, f))
     donnees = {"reglages": reglages.pour_la_page(),          # budget par carte : les cartes chères restent signalées
-               "atelier": depot_atelier(),                    # recherche et discussion en vitrine : où télécharger l'Atelier
+               "atelier": DEPOT,                              # recherche et discussion en vitrine : où télécharger l'Atelier
                "auteur": _auteur(),                           # « Decks de … » à la place de « Mes decks »
                "version": __version__,                        # la version de l'Atelier qui a publié la page
                **donnees}                                     # sauf avis contraire (page d'accueil de l'Atelier : sans auteur)
@@ -496,51 +277,14 @@ def _page(dossier, donnees, entete):
     _ecrire(os.path.join(dossier, "index.html"), html)
 
 
-def _page_jouer(dossier):
-    """jouer/ : le module « Jouer tout seul » de la page du deck, qui lit les mêmes données (../donnees.js)."""
-    d = os.path.join(dossier, "jouer")
-    os.makedirs(d, exist_ok=True)
-    for f in ("jouer.js", "jouer.css"):
-        shutil.copyfile(os.path.join(STATIQUE, f), os.path.join(d, f))
-    v = {f: _version(os.path.join(d, f)) for f in ("jouer.js", "jouer.css")}
-    with open(os.path.join(STATIQUE, "jouer.html"), encoding="utf-8") as f:
-        html = f.read()
-    html = (html.replace("</title>", '</title>\n  <meta name="robots" content="noindex">', 1)
-            .replace('href="/static/jouer.css"', f'href="jouer.css?v={v["jouer.css"]}"')
-            .replace('<script src="/static/jouer.js"></script>',
-                     f'<script src="../donnees.js?v={_version(os.path.join(dossier, "donnees.js"))}"></script>\n'
-                     f'  <script src="jouer.js?v={v["jouer.js"]}"></script>'))
-    if "/static/" in html:                                   # jouer.html a changé : mieux vaut ne rien publier de cassé
-        raise RuntimeError("La page « Jouer » n'a pas pu être préparée : partage annulé")
-    _ecrire(os.path.join(d, "index.html"), html)
-
-
-# « C'est quoi, l'Atelier MTG ? » : la page d'accueil de l'Atelier (site_atelier.py), la même pour tous les sites de
-# decks, sur son propre domaine. Son image et ses captures sont dans son a-propos/ (copiées à sa construction du site de
-# decks de l'auteur). Le dossier a-propos/ d'un site de decks, où chaque site avait sa copie de la page, ne garde qu'une
-# redirection vers elle, pour les liens déjà partagés.
 A_PROPOS = "a-propos"
 DOMAINE_ATELIER = "https://atelier-mtg.com/"                # sa racine renvoie vers /fr/, en attendant l'anglais
 ACCUEIL_ATELIER = DOMAINE_ATELIER + "fr/"                   # la page d'accueil, en français
 IMAGE_ATELIER = DOMAINE_ATELIER + "a-propos/atelier.jpg"    # les images : à la racine, pour toutes les langues
-TITRE_ATELIER = "L'Atelier MTG : Deck Builder, Gratuit et Local (en Français)"
+TITRE_ATELIER = "L'Atelier MTG : Deck Builder Commander Gratuit (en Français)"
 DESCRIPTION_ATELIER = ("Deck builder Magic gratuit et en français : créez, testez et partagez vos decks Commander (combos, "
-                       "bracket, simulation). 100 % local, sans compte.")
-ALT_ATELIER = "L'Atelier MTG : le deck builder Commander assisté, 100% local et sans compte"
-
-
-def _a_propos():
-    """a-propos/ d'un site qui l'a déjà : la redirection vers la page d'accueil de l'Atelier (avec #installation), sans
-    les fichiers de l'ancienne copie ; les captures de l'auteur restent."""
-    d = os.path.join(DOSSIER, A_PROPOS)
-    if not os.path.isdir(d):
-        return
-    for f in ("app.js", "style.css", "donnees.js"):
-        try:
-            os.remove(os.path.join(d, f))
-        except OSError:
-            pass
-    _ecrire(os.path.join(d, "index.html"), redirection(ACCUEIL_ATELIER))
+                       "bracket, simulation), en ligne ou sur votre PC.")
+ALT_ATELIER = "L'Atelier MTG : le deck builder Commander assisté, en ligne et sur votre PC"
 
 
 def redirection(cible):
@@ -562,121 +306,62 @@ def redirection(cible):
 """
 
 
-def _accueil(reg, site):
-    """La racine du site : les decks partagés, chacun vers sa page."""
-    import recherche
-    resumes = sorted((dict(r["resume"]) for r in reg.values()), key=lambda r: r["titre"])
-    donnees = dict(accueil=True, date=time.time(), liens={k: v["slug"] + "/" for k, v in reg.items()},
-                   cartes={k: v.get("cartes", []) for k, v in reg.items()},           # dans quel deck est Sol Ring ?
-                   api={"/api/decks": resumes, "/api/corbeille": [], "/api/noms-cartes": dict(noms=[], communs=[]),
-                        "/api/recherche/fonctions": recherche.fonctions()})
-    titres = _liste([r["titre"] for r in resumes])
-    n = len(resumes)
-    auteur = _auteur()
-    titre = f"Decks Commander de {auteur}" if auteur else "Mes decks Commander"
-    image = _image_partage(DOSSIER, lambda ip, chemin: ip.image_accueil(
-        chemin, titre, f"{n} deck{'s' if n > 1 else ''} : {titres}" if n else "Aucun deck partagé",
-        [r.get("image_cmd") for r in resumes], [r.get("art") for r in resumes]))
-    _page(DOSSIER, donnees, dict(
-        titre=titre,
-        description=(f"{n} deck{'s' if n > 1 else ''} Commander : {titres}. Listes, visuels, statistiques, combos "
-                     "et table de jeu pour tester chaque deck." if n else "Decks Commander."),
-        url=site, image=image and site + image, alt=f"Les commandants des decks {titres}" if n else ""))
-    _a_propos()
-    _ecrire(os.path.join(DOSSIER, ".nojekyll"), "")
-
-
 def _auteur():
-    """À qui sont ces decks : « Decks de … » sur les pages partagées (reglages.json : nom, sinon le compte GitHub)."""
-    import reglages
-    return reglages.nom() or github.compte()
+    """Le nom sur l'image d'aperçu : le pseudo du compte."""
+    return _etat().get("pseudo") or ""
 
 
 def _euros(x):
     return f"{x:.2f}".replace(".", ",") + " €"
 
 
-def construire(deck, get):
-    """Écrit la page du deck et la racine du site, sans rien publier. Renvoie le titre du deck."""
-    site = compte()[1]
-    reg = _registre()
-    slug = _slug(deck, reg)
-    donnees = capturer(deck, get)
-    d = donnees["api"][f"/api/decks/{deck}"]
-    b = donnees["api"].get(f"/api/decks/{deck}/bracket") or {}
-    cmds = d.get("commandants") or []
-    couleurs = nom_couleurs(d.get("identite"))
-    genre = f"deck Commander {couleurs}".strip()
-    nb_gc = len(d.get("gc") or [])
-    chiffres = [f"{d['total']} cartes · {_euros(d['prix_total'])}",
-                " · ".join(x for x in (f"Bracket {b['estime']}" if b.get("estime") else "",
-                                       f"{nb_gc} Game Changer{'s' if nb_gc > 1 else ''}") if x)]
-    dossier = os.path.join(DOSSIER, slug)
-    images = [c["info"].get("image") for c in d["cartes"] if c["cat"] == "Commander" and c["info"].get("image")]
-    auteur = _auteur()
-    image = _image_partage(dossier, lambda ip, chemin: ip.image_deck(
-        chemin, d["titre"], "Deck Commander" + (f" · {couleurs}" if couleurs else ""), cmds, images, d.get("art"),
-        d.get("identite"), chiffres, auteur))
-    description = (f"{genre[0].upper() + genre[1:]} de {d['total']} cartes"
-                   + (f" autour de {_liste(cmds)}" if cmds else "") + f", pour {_euros(d['prix_total'])}"
-                   + (f", bracket {b['estime']}" if b.get("estime") else "")
-                   + " : liste, visuel, statistiques, combos et table de jeu pour le tester."
-                   + (f" Partagé par {auteur}." if auteur else ""))
-    url = f"{site}{slug}/"
-    _page(dossier, dict(donnees, accueil="../"), dict(
-        titre=f"{d['titre']} : {genre}" + (f", par {auteur}" if auteur else ""), description=description, url=url,
-        image=image and url + image, alt=f"{d['titre']} : carte de {_liste(cmds) or 'son commandant'}, couleurs et chiffres du deck"))
-    _page_jouer(dossier)
-    reg[deck] = dict(slug=slug, date=donnees["date"], version=__version__,       # version : voir a_republier()
-                     resume={k: v for k, v in d.items() if k not in ("cartes", "categories")},
-                     cartes=[[c["nom"], c["info"].get("fr") or ""] for c in d["cartes"]])
-    _ecrire(REGISTRE, json.dumps(reg, ensure_ascii=False, indent=1))
-    _accueil(reg, site)
-    return d["titre"]
-
-
-def partager(deck, get):
-    """Publie (ou met à jour) la page du deck. Renvoie {url, date}."""
+def partager(deck, get, pseudo=None):
+    """Publie (ou met à jour) la page du deck. pseudo : au premier partage. Renvoie {url, date}."""
+    import compte
+    import reglages
     with _verrou:
-        _preparer()
-        _publier("Partage : " + construire(deck, get))
+        donnees = capturer(deck, get)
+        donnees["version"] = __version__
+        _verifier(json.dumps(donnees, ensure_ascii=False))
+        d = donnees["api"][f"/api/decks/{deck}"]
+        b = donnees["api"].get(f"/api/decks/{deck}/bracket") or {}
+        cmds = d.get("commandants") or []
+        couleurs = nom_couleurs(d.get("identite"))
+        nb_gc = len(d.get("gc") or [])
+        chiffres = [f"{d['total']} cartes · {_euros(d['prix_total'])}",
+                    " · ".join(x for x in (f"Bracket {b['estime']}" if b.get("estime") else "",
+                                           f"{nb_gc} Game Changer{'s' if nb_gc > 1 else ''}") if x)]
+        images = [c["info"].get("image") for c in d["cartes"] if c["cat"] == "Commander" and c["info"].get("image")]
+        auteur = pseudo or _auteur()
+        image = _image(lambda ip, chemin: ip.image_deck(
+            chemin, d["titre"], "Deck Commander" + (f" · {couleurs}" if couleurs else ""), cmds, images, d.get("art"),
+            d.get("identite"), chiffres, auteur))
+        try:
+            r = compte._appel("POST", "/partages", dict(
+                deck=deck, donnees=donnees, image=base64.b64encode(image).decode() if image else None,
+                budget=reglages.pour_la_page().get("budget"), pseudo=(pseudo or "").strip().lower() or None))
+        except compte.NonConnecte:
+            raise
+        except compte.Erreur as ex:
+            if ex.statut == 409:
+                raise PseudoRequis(str(ex)) from None
+            raise
+        e = _etat()
+        e.setdefault("decks", {})[deck] = dict(url=r["url"], date=r["date"])
+        e["pseudo"] = r.get("pseudo") or e.get("pseudo")
+        _ecrire_etat(e)
     _echecs.pop(deck, None)
     _retirer_a_la_main(deck, False)
     return etat(deck)
 
 
 def publier(liste, get):
-    """Publie (ou met à jour) les pages de ces decks en un seul envoi, pour la mise à jour automatique. Un deck qui ne
-    se construit pas est noté dans _echecs et les autres partent ; si l'envoi échoue, ils sont tous à refaire."""
-    faits, titres = [], []
-    with _verrou:
+    """Republie les pages de ces decks ; un deck qui échoue est noté dans _echecs, les autres partent."""
+    for deck in liste:
         try:
-            _preparer()
-            for deck in liste:
-                try:
-                    titres.append(construire(deck, get))
-                    faits.append(deck)
-                except Exception as ex:
-                    _echecs[deck] = (time.time(), str(ex))
-            if titres:
-                _publier("Partage : " + ", ".join(titres))
+            partager(deck, get)
         except Exception as ex:
-            reg = _registre()
-            for deck in faits:                     # déjà notés comme publiés par construire() : à refaire
-                reg[deck]["a_refaire"] = True
-            if faits:
-                _ecrire(REGISTRE, json.dumps(reg, ensure_ascii=False, indent=1))
-            for deck in liste:
-                _echecs[deck] = (time.time(), str(ex))
-            return
-    for deck in faits:
-        _echecs.pop(deck, None)
-
-
-def actif():
-    """Le partage est en place (connecté à GitHub, ou avec git) : les decks partagés se republient tout seuls."""
-    import reglages
-    return bool(github.compte() or reglages.github())
+            _echecs[deck] = (time.time(), str(ex))
 
 
 def _retires():
@@ -718,47 +403,27 @@ def derniere_modif(deck):
 
 
 def a_republier(maintenant=None):
-    """Les decks à republier, sans échec trop récent, quand le partage est en place (seulement ceux qu'on a partagés :
-    se connecter à GitHub pour la sauvegarde ne publie rien) :
-    - modifiés depuis leur publication, au calme depuis CALME secondes ;
-    - publiés par une autre version de l'Atelier (ou avant qu'elle soit notée), pour que leur page ait l'interface et
-      les liens de celle-ci, ou avant aujourd'hui : prix du jour, suggestions, Game Changers (toutes les pages partent
-      alors ensemble, au premier passage de la journée). Ce cas attend que la base de cartes soit chargée."""
-    import recherche
+    """Les decks partagés modifiés sur ce PC depuis la publication de leur page (ou renommés), au calme depuis CALME
+    secondes, sans échec trop récent. Pas de republication quotidienne : la synchro du PC est manuelle, et une page
+    publiée depuis l'appli, plus récente, serait écrasée par une liste qui n'a pas encore été récupérée ici."""
     if not actif():
         return []
     maintenant = maintenant or time.time()
-    reg, base = _registre(), []
-    jour = time.strftime("%Y-%m-%d", time.localtime(maintenant))
-
-    def base_prete():
-        if not base:
-            base.append(recherche.etat_base()["prete"])
-        return base[0]
-
-    r = []
+    reg, r = _registre(), []
     for deck in decks.dossiers():
         p, e = reg.get(deck), _echecs.get(deck)
-        if e and maintenant - e[0] < REESSAI:
+        if not p or (e and maintenant - e[0] < REESSAI):
             continue
         t = derniere_modif(deck)
-        if p and (t > p["date"] or p.get("a_refaire")):
-            pret = maintenant - t >= CALME
-        elif p:
-            vieille = p.get("version") != __version__ or time.strftime("%Y-%m-%d", time.localtime(p["date"])) != jour
-            pret = vieille and base_prete()
-        else:
-            pret = False
-        if pret:
+        if (t > p["date"] or p.get("a_refaire")) and maintenant - t >= CALME:
             r.append(deck)
     return r
 
 
 def surveiller(get, pause=30):
-    """En fond tant que l'Atelier est ouvert : republie la page d'un deck partagé quand on a
-    fini de modifier son deck, depuis l'Atelier, le Claude de l'Atelier ou un éditeur, ou quand elle date de la veille.
-    Au lancement, rattrape ce qui a changé Atelier fermé, et après une mise à jour de l'Atelier, republie toutes les
-    pages. Avant de publier, les prix et les Game Changers sont mis à jour (rien n'est refait s'ils sont du jour)."""
+    """En fond tant que l'Atelier est ouvert : relit les pages du compte, et republie celle d'un deck partagé quand on a
+    fini de le modifier ici (depuis l'Atelier, le Claude de l'Atelier ou un éditeur). Les prix et les Game Changers
+    sont mis à jour avant (rien n'est refait s'ils sont du jour)."""
     while True:
         time.sleep(pause)
         try:
@@ -778,32 +443,30 @@ def surveiller(get, pause=30):
 def renommer(ancien, nouveau):
     """Le deck a changé de nom : sa page garde son adresse (le lien déjà envoyé marche toujours) et sera republiée
     avec le nouveau titre par surveiller()."""
+    import compte
     with _verrou:
         if ancien in _retires():
             _retirer_a_la_main(ancien, True, nouveau)
-        reg = _registre()
+        e = _etat()
+        reg = e.get("decks") or {}
         if ancien not in reg:
             return
-        reg[nouveau] = dict(reg.pop(ancien), a_refaire=True)       # construire() réécrit l'entrée, sans a_refaire
-        _ecrire(REGISTRE, json.dumps(reg, ensure_ascii=False, indent=1))
-        # git : enregistré ici, envoyé avec la prochaine publication (sans .git ici, git remonterait au dépôt du dessus)
-        if not github.compte() and os.path.isdir(os.path.join(DOSSIER, ".git")):
-            _git("add", "decks.json", ok=True)
-            _git("commit", "-q", "-m", f"Renommage : {ancien.removeprefix('Deck ')} → {nouveau.removeprefix('Deck ')}", ok=True)
+        try:
+            compte._appel("POST", "/partages/renommer", dict(ancien=ancien, nouveau=nouveau))
+        except compte.Erreur:
+            return
+        reg[nouveau] = dict(reg.pop(ancien), a_refaire=True)
+        _ecrire_etat(e)
     _echecs.pop(ancien, None)
 
 
 def retirer(deck):
-    """Retire la page du deck du site (elle reste dans l'historique du dépôt)."""
+    """La page du deck n'est plus en ligne."""
+    import compte
     with _verrou:
-        _preparer()
-        reg = _registre()
-        p = reg.pop(deck, None)
-        if not p:
-            return {}
-        shutil.rmtree(os.path.join(DOSSIER, p["slug"]), ignore_errors=True)
-        _ecrire(REGISTRE, json.dumps(reg, ensure_ascii=False, indent=1))
-        _accueil(reg, compte()[1])
-        _publier(f"Retrait : {deck.removeprefix('Deck ')}")
+        compte._appel("POST", "/partages/retirer", dict(deck=deck))
+        e = _etat()
+        (e.get("decks") or {}).pop(deck, None)
+        _ecrire_etat(e)
     _retirer_a_la_main(deck, True)
     return {}

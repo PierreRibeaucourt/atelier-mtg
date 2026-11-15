@@ -2,7 +2,6 @@
 
   python installer.py                       installe
   python installer.py --budget 10           budget par carte, en euros (0 = pas d'alerte ; 5 par défaut)
-  python installer.py --github MonCompte    compte GitHub où publier les decks partagés
   python installer.py --sans-raccourci      sans raccourci sur le bureau
 
 Étapes, toutes dans ce dossier sauf le raccourci :
@@ -69,15 +68,13 @@ def environnement():
 
 
 # ---------------------------------------------------------------- 3. réglages
-def regler(budget, github):
+def regler(budget):
     import reglages
     etape("Réglages (reglages.json)")
-    if budget is not None or github is not None:
-        reglages.ecrire(**({"budget": budget} if budget is not None else {}),
-                        **({"github": github.strip().lstrip("@") or None} if github is not None else {}))
+    if budget is not None:
+        reglages.ecrire(budget=budget)
     b = reglages.budget_texte()
     print(f"  Budget par carte : {b or 'aucun (pas d’alerte)'}")
-    print(f"  Compte GitHub du partage : {reglages.github() or 'aucun (partage désactivé)'}")
 
 
 # ---------------------------------------------------------------- 4. vérification
@@ -173,26 +170,20 @@ def facultatif():
         print("    " + ("irm https://claude.ai/install.ps1 | iex      (PowerShell)" if WINDOWS
                         else "curl -fsSL https://claude.ai/install.sh | bash"))
         print("    puis « claude » une fois dans un terminal pour se connecter. Le reste de l'Atelier marche sans.")
-    if not shutil.which("git"):
-        print("  Partage des decks : git introuvable (git-scm.com). Le reste de l'Atelier marche sans.")
-    elif not reglages.github():
-        print("  Partage des decks : désactivé. Pour l'activer, voir AGENTS.md (« Partager des decks »).")
-    else:
-        print(f"  Partage des decks : compte {reglages.github()}. Le dépôt GitHub « decks » doit exister, avec GitHub Pages "
-              "activé (voir AGENTS.md).")
+    print("  Compte (retrouver ses decks ailleurs, publier leurs pages) : Options › Compte, une fois l'Atelier lancé.")
 
 
 def main():
     p = argparse.ArgumentParser(description="Installe l'Atelier MTG sur ce PC.")
     p.add_argument("--budget", type=float, help="budget par carte en euros (0 = pas d'alerte)")
-    p.add_argument("--github", help="compte GitHub pour partager des decks (vide pour retirer)")
+    p.add_argument("--github", help=argparse.SUPPRESS)                 # le partage par GitHub (jusqu'à 2.1.0) : ignoré
     p.add_argument("--sans-raccourci", action="store_true", help="ne pas créer de raccourci sur le bureau")
     p.add_argument("--bureau", help=argparse.SUPPRESS)                 # autre dossier pour le raccourci (essais)
     a = p.parse_args()
     try:
         verifier_python()
         environnement()
-        regler(a.budget, a.github)
+        regler(a.budget)
         verifier()
         if not a.sans_raccourci:
             raccourci(a.bureau)

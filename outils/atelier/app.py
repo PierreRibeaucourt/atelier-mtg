@@ -335,7 +335,7 @@ def api_options_ecrire():
         ch["budget"] = None if v is None else int(v) if v == int(v) else v
     if ch:
         reglages.ecrire(**ch)
-        reglages.ecrire_cartes()                            # les mêmes sur tous les appareils (sauvegarde en ligne)
+        reglages.ecrire_cartes()                            # les mêmes sur tous les appareils (compte.py)
         ic.BUDGET = reglages.budget()                       # tout de suite, sans relancer l'Atelier
     if reglages.impression() != impression_avant:           # autre impression par défaut : images et prix refaits
         en_fond(ic.mise_a_jour, tous_les_noms())
@@ -344,116 +344,86 @@ def api_options_ecrire():
     return api_options()
 
 
-@app.get("/api/github")
-def api_github():
-    """Le compte GitHub connecté (partage sans git), et le compte du partage avec git (reglages.json), s'il y en a un ;
-    appli : la page GitHub de l'appli « Atelier MTG », où retirer l'accès de tous les appareils (« Revoke access »)."""
-    import github
-    import reglages
-    return jsonify(compte=github.compte(), git=reglages.github(), disponible=bool(github.CLIENT_ID),
-                   prive=bool(github.compte()) and github.prive(),
-                   appli=f"https://github.com/settings/connections/applications/{github.CLIENT_ID}")
+# ---------------------------------------------------------------- le compte (compte.py) : Envoyer, Récupérer
+@app.get("/api/compte")
+def api_compte():
+    import compte
+    return jsonify(compte.etat())
 
 
-@app.get("/api/github/valide")
-def api_github_valide():
-    """La clé GitHub de ce PC marche-t-elle encore ? Retirée sur GitHub, elle est oubliée ici (github._appel)."""
-    import github
-    try:
-        github.appel("GET", "/user")
-    except github.NonConnecte:
-        return jsonify(valide=False)
-    return jsonify(valide=True)
+@app.post("/api/compte/code")
+def api_compte_code():
+    """{email} : le serveur du compte envoie un code à cette adresse."""
+    import compte
+    return jsonify(compte.demander_code((request.get_json() or {}).get("email")))
 
 
-@app.post("/api/github/connexion")
-def api_github_connecter():
-    """Demande un code à GitHub : {etat, code, url}. La page le montre et suit GET /api/github/connexion."""
-    import github
-    return jsonify(github.connecter())
+@app.post("/api/compte/connexion")
+def api_compte_connexion():
+    """{email, code} : le code reçu ouvre le compte sur ce PC."""
+    import compte
+    d = request.get_json() or {}
+    return jsonify(compte.se_connecter(d.get("email"), d.get("code")))
 
 
-@app.get("/api/github/connexion")
-def api_github_connexion():
-    import github
-    return jsonify(github.etat_connexion())
+@app.post("/api/compte/envoyer")
+def api_compte_envoyer():
+    """Les decks de ce PC partent sur le compte (ajoutés ou remplacés ; un deck renommé ou supprimé ici en est retiré)."""
+    import compte
+    return jsonify(resume=compte.envoyer(), etat=compte.etat())
 
 
-@app.post("/api/github/deconnexion")
-def api_github_deconnecter():
-    import github
-    github.deconnecter()
-    return api_github()
+@app.post("/api/compte/recuperer")
+def api_compte_recuperer():
+    """Les decks du compte arrivent sur ce PC (ajoutés ou remplacés ; un deck renommé ou supprimé ailleurs va dans la
+    corbeille)."""
+    import compte
+    r = compte.recuperer()
+    if r["supprimes"]:                                      # renommés ou supprimés ailleurs : leur page partagée aussi
+        import partage
+        for deck in r["supprimes"]:
+            if deck in partage._registre():
+                en_fond(partage.retirer, deck)
+    if r.get("reglages"):
+        import reglages
+        ic.BUDGET = reglages.budget()
+    return jsonify(resume=r, etat=compte.etat())
 
 
-# ---------------------------------------------------------------- sauvegarde en ligne (synchro.py)
-@app.get("/api/sauvegarde")
-def api_sauvegarde():
-    import synchro
-    return jsonify(synchro.etat())
+@app.get("/api/compte/appareils")
+def api_compte_appareils():
+    import compte
+    return jsonify(compte.appareils())
 
 
-@app.post("/api/sauvegarde")
-def api_sauvegarder():
-    """action : « maintenant » (synchroniser tout de suite), « activer », « couper ». Renvoie l'état, et le résumé de
-    la synchronisation faite ({envoyes, recus, decks_recus, conflits, decks}). 409 : GitHub doit autoriser une fois de
-    plus (connexion d'avant la sauvegarde)."""
-    import reglages
-    import synchro
-    action = (request.get_json(silent=True) or {}).get("action", "maintenant")
-    if action == "couper":
-        reglages.ecrire(sauvegarde=False)
-        return jsonify(etat=synchro.etat())
-    if action == "activer":
-        reglages.ecrire(sauvegarde=None)
-    return jsonify(resume=synchro.synchroniser(), etat=synchro.etat())
+@app.post("/api/compte/appareils/oublier")
+def api_compte_oublier():
+    import compte
+    compte.oublier_appareil((request.get_json() or {}).get("id"))
+    return jsonify(ok=True)
 
 
-# ---------------------------------------------------------------- l'Atelier sur téléphone (telephone.py)
-@app.get("/api/telephone")
-def api_telephone():
-    """{voulu, possible, actif, en_cours, derniere, decks, erreur, adresse}, et le lien à mettre dans le QR code."""
-    import telephone
-    e = telephone.etat()
-    if e["actif"]:
-        try:
-            e["lien"] = telephone.lien()
-        except Exception as err:
-            e["erreur"] = str(err)
-    return jsonify(e)
+@app.get("/api/compte/export")
+def api_compte_export():
+    """Tout ce que garde le compte, dans le fichier que l'appli et l'Atelier savent importer (decks.lire_appli)."""
+    import json
+    import compte
+    from datetime import date
+    return Response(json.dumps(compte.exporter(), ensure_ascii=False), mimetype="application/json", headers={
+        "Content-Disposition": f'attachment; filename="atelier-mtg-compte-{date.today().isoformat()}.json"'})
 
 
-@app.post("/api/telephone")
-def api_telephone_action():
-    """action : « activer » (préparer les decks pour le téléphone, tout de suite puis à chaque modification),
-    « maintenant », « couper » (et retirer du dépôt ce qui était prêt)."""
-    import reglages
-    import telephone
-    action = (request.get_json(silent=True) or {}).get("action", "maintenant")
-    if action == "couper":
-        telephone.couper()
-    else:
-        if action == "activer":
-            reglages.ecrire(telephone=True)
-        if telephone.actif() and not telephone.suivi["en_cours"]:
-            en_fond(telephone.preparer, app.test_client().get)
-    return api_telephone()
+@app.post("/api/compte/deconnexion")
+def api_compte_deconnexion():
+    import compte
+    return jsonify(compte.deconnecter())
 
 
-@app.get("/api/sauvegarde/distante")
-def api_sauvegarde_distante():
-    """Avant « Récupérer mes decks » : la sauvegarde du compte connecté ({existe, decks, date}), sans rien télécharger."""
-    import synchro
-    return jsonify(synchro.distante())
-
-
-@app.post("/api/sauvegarde/recuperer")
-def api_sauvegarde_recuperer():
-    """Ramène les decks de la sauvegarde sur ce PC (sans créer de dépôt s'il n'y en a pas)."""
-    import reglages
-    import synchro
-    reglages.ecrire(sauvegarde=None)
-    return jsonify(resume=synchro.synchroniser(creer=False), etat=synchro.etat())
+@app.post("/api/compte/supprimer")
+def api_compte_supprimer():
+    """{email} : pour confirmer. Le compte et ce qu'il garde sont effacés ; les decks de ce PC restent."""
+    import compte
+    return jsonify(compte.supprimer((request.get_json() or {}).get("email")))
 
 
 @app.post("/api/ouvrir-dossier")
@@ -671,9 +641,7 @@ def api_renommer(deck):
     nouveau = decks.renommer(deck, (request.get_json() or {}).get("nom", ""))
     if nouveau != deck:
         import partage
-        import synchro
         partage.renommer(deck, nouveau)
-        synchro.renomme(deck, nouveau)
     return jsonify(id=nouveau)
 
 
@@ -772,16 +740,17 @@ def api_suggestions_ecarter(deck):
 
 @app.get("/api/decks/<path:deck>/partage")
 def api_partage(deck):
-    """Page partagée du deck sur GitHub Pages : {url, date}, ou {} s'il n'est pas partagé."""
+    """Page publique du deck (atelier-mtg.com/decks/…) : {url, date}, ou {} s'il n'est pas partagé."""
     import partage
     return jsonify(partage.etat(deck))
 
 
 @app.post("/api/decks/<path:deck>/partage")
 def api_partager(deck):
-    """Publie ou met à jour la page partagée : les réponses de l'API sont figées par le client de test de Flask."""
+    """{pseudo} au premier partage : publie ou met à jour la page publique ; les réponses de l'API sont figées par le
+    client de test de Flask. 401 : pas connecté au compte ; 409 : il faut un pseudo."""
     import partage
-    return jsonify(partage.partager(deck, app.test_client().get))
+    return jsonify(partage.partager(deck, app.test_client().get, (request.get_json(silent=True) or {}).get("pseudo")))
 
 
 @app.post("/api/decks/<path:deck>/partage/retirer")
@@ -1426,16 +1395,14 @@ if __name__ == "__main__":
     en_fond(ic.mise_a_jour, tous_les_noms())
     import recherche
     en_fond(recherche.demarrer)                    # base de la recherche de cartes : chargée, puis surveillée (nouvelles cartes, prix)
+    import compte
     import synchro
-    synchro.quand_recu = lambda: en_fond(ic.mise_a_jour, tous_les_noms())     # decks venus d'un autre PC : fiches, prix
+    compte.quand_recu = synchro.quand_recu = lambda: en_fond(ic.mise_a_jour, tous_les_noms())   # decks reçus : fiches, prix
     if "--essai" not in sys.argv:                  # un Atelier d'essai lancé à côté ne publie rien et ne se met pas à jour
         import mise_a_jour
         import partage
         en_fond(partage.surveiller, app.test_client().get)     # pages partagées remises à jour quand un deck change
-        import synchro
-        en_fond(synchro.surveiller)                            # sauvegarde en ligne : decks envoyés et reçus
-        import telephone
-        en_fond(telephone.surveiller, app.test_client().get)   # decks préparés pour le téléphone, dans la sauvegarde
+        en_fond(compte.finir_github)                           # la sauvegarde GitHub (jusqu'à 2.1.0) : une dernière fois
         en_fond(mise_a_jour.surveiller)                        # nouvelle version de l'Atelier : lue une fois par jour
         enregistrer_lien()
     en_fond(surveiller_fermeture)                  # réglage « Arrêter l'Atelier » quand on ferme la page

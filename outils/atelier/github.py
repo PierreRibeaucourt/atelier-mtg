@@ -3,9 +3,9 @@
 Flux « par appareil » d'une application OAuth : l'Atelier demande un code à GitHub, la personne le colle sur
 github.com/login/device (où elle peut aussi créer son compte) et accepte ; l'Atelier reçoit alors un jeton, gardé sur ce
 PC seulement (chiffré par Windows pour cette session). Aucun mot de passe ni jeton ne passe par la page. Le jeton ouvre
-les dépôts publics et privés (repo) : la sauvegarde va dans un dépôt privé (synchro.py), les pages partagées dans un
-dépôt public (partage.py). Les connexions d'avant la sauvegarde n'ont que les dépôts publics (public_repo) : la
-sauvegarde demande alors de se reconnecter une fois.
+les dépôts publics et privés (repo) : les pages partagées vont dans un dépôt public (partage.py). Jusqu'à la 2.1.0, la
+sauvegarde en ligne allait aussi dans un dépôt privé (synchro.py) : elle est remplacée par le compte (compte.py), après
+une dernière synchronisation (compte.finir_github).
 
 Publier, c'est recopier un dossier local dans un dépôt GitHub par l'API Git (blobs, arbre, commit) : seuls les fichiers
 changés partent. Voir partage.py, qui s'en sert quand l'Atelier est connecté.
@@ -44,26 +44,7 @@ class NonConnecte(Erreur):
 
 
 # ---------------------------------------------------------------- le jeton, chiffré pour la session Windows
-def _dpapi(donnees, chiffrer):
-    import ctypes
-    from ctypes import wintypes
-
-    class BLOB(ctypes.Structure):
-        _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.c_void_p)]
-    tampon = ctypes.create_string_buffer(donnees, len(donnees))
-    entree, sortie = BLOB(len(donnees), ctypes.cast(tampon, ctypes.c_void_p)), BLOB()
-    crypt32, kernel32 = ctypes.windll.crypt32, ctypes.windll.kernel32
-    f = crypt32.CryptProtectData if chiffrer else crypt32.CryptUnprotectData
-    f.argtypes = [ctypes.POINTER(BLOB), ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
-                  wintypes.DWORD, ctypes.POINTER(BLOB)]
-    f.restype = wintypes.BOOL
-    if not f(ctypes.byref(entree), None, None, None, None, 1, ctypes.byref(sortie)):      # 1 : sans fenêtre
-        raise OSError("chiffrement Windows impossible")
-    try:
-        return ctypes.string_at(sortie.pbData, sortie.cbData)
-    finally:
-        kernel32.LocalFree.argtypes = [ctypes.c_void_p]
-        kernel32.LocalFree(sortie.pbData)
+from compte import _dpapi  # noqa: E402
 
 
 def _lire():
