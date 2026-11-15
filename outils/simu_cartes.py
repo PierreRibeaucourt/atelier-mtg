@@ -160,6 +160,24 @@ def lire_liste(chemin, partenaire=False):
     return cmd, autres
 
 
+def fiche(c):
+    """La fiche d'une carte de Scryfall, telle que la lit le simulateur (sa première face)."""
+    f0 = (c.get("card_faces") or [c])[0]
+    return dict(nom=c["name"], cout=f0.get("mana_cost") or c.get("mana_cost") or "", type=f0.get("type_line") or c["type_line"],
+                texte=f0.get("oracle_text") or c.get("oracle_text") or "", force=f0.get("power"), endurance=f0.get("toughness"),
+                mots=c.get("keywords", []), produit=c.get("produced_mana") or [], identite=c.get("color_identity", []))
+
+
+def ranger(cache, bloc, cartes):
+    """Les fiches des cartes reçues de Scryfall, rangées sous les noms demandés (bloc) : aussi dans le navigateur
+    (simu_navigateur.py), où l'appli fait les requêtes."""
+    for c in cartes:
+        fi = fiche(c)
+        for n in bloc:
+            if n == c.get("_demande") or n == c["name"] or c["name"].startswith(n + " // ") or n.split(" // ")[0] == c["name"].split(" // ")[0]:
+                cache[n] = fi
+
+
 def fiches(noms):
     """Fiches Scryfall des cartes, gardées dans cache_cartes.json pour ne pas réinterroger Scryfall."""
     cache = json.load(open(CACHE, encoding="utf-8")) if os.path.exists(CACHE) else {}
@@ -179,14 +197,7 @@ def fiches(noms):
                 cartes.append(c)
             else:
                 print("Carte introuvable sur Scryfall :", nf["name"])
-        for c in cartes:
-            f0 = (c.get("card_faces") or [c])[0]
-            fiche = dict(nom=c["name"], cout=f0.get("mana_cost") or c.get("mana_cost") or "", type=f0.get("type_line") or c["type_line"],
-                         texte=f0.get("oracle_text") or c.get("oracle_text") or "", force=f0.get("power"), endurance=f0.get("toughness"),
-                         mots=c.get("keywords", []), produit=c.get("produced_mana") or [], identite=c.get("color_identity", []))
-            for n in bloc:
-                if n == c.get("_demande") or n == c["name"] or c["name"].startswith(n + " // ") or n.split(" // ")[0] == c["name"].split(" // ")[0]:
-                    cache[n] = fiche
+        ranger(cache, bloc, cartes)
     if manquants:
         json.dump(cache, open(CACHE, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     return cache

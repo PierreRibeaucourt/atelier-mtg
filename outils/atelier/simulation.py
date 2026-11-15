@@ -12,7 +12,6 @@ affrontent exactement les mêmes adversaires, comme `outils/simu.py`. Les listes
 (copie dans simulations/listes/) et le rapport est gardé dans simulations/AAAA-MM-JJ_HHMMSS.json.
 """
 import json
-import math
 import os
 import sys
 import threading
@@ -117,18 +116,11 @@ def _morceau(chemin, nom_table, debut, n, reglages, txt=None):
 def _couverture(chemin, txt=None, detail=False):
     """Cartes jouables (hors terrains et commandants) : combien le simulateur en comprend, et lesquelles il lit mal.
     detail : pour Claude, chaque carte mal lue avec ses lignes non comprises."""
-    from simu_cartes import construire, couverture, lire_liste
+    from simu_cartes import construire, lire_liste
+    from simu_rapport import couverture
     cmd, part, L = lire_liste(chemin, partenaire=True)
     C, cov = construire(L, cmd, part, txt)
-    jouables = {n for n in set(L) if not C[n]["terrain"]}
-    mal = {k: sorted(n for n in cov[k] if n in jouables) for k in ("partiel", "corps", "sans_effet")}
-    r = dict(mal, affinee=sorted(n for n in cov["affinee"] if n in jouables), total=len(jouables),
-             comprises=len(jouables) - sum(len(v) for v in mal.values()))
-    if detail:
-        r["non_lu"] = {n: C[n]["non_lu"] for v in mal.values() for n in v}
-        r["perso_non_lu"] = {n: C[n]["non_lu"] for n in (txt or {}) if n in C and C[n]["non_lu"]}
-        r["inconnues"] = sorted(n for n in (txt or {}) if n not in C)
-    return r
+    return couverture(C, cov, L, txt, detail)
 
 
 def couverture_deck(deck, detail=False):
@@ -136,16 +128,6 @@ def couverture_deck(deck, detail=False):
 
 
 # ---------------------------------------------------------------- lancement et suivi
-def _sans_nan(x):
-    if isinstance(x, float) and (math.isnan(x) or math.isinf(x)):
-        return None
-    if isinstance(x, dict):
-        return {str(k): _sans_nan(v) for k, v in x.items()}
-    if isinstance(x, (list, tuple)):
-        return [_sans_nan(v) for v in x]
-    return x
-
-
 def lancer(deck, a, b, tables, n, reglages=None):
     """a, b : fichiers de version (vide = liste actuelle ; b None = pas de comparaison). Les réglages du deck
     (simulateur.json) s'appliquent ; ceux passés ici les complètent."""
@@ -166,7 +148,7 @@ def lancer(deck, a, b, tables, n, reglages=None):
 
 def _execute(job, deck, a, b, tables, n, reglages, txt):
     try:
-        from simu import ecart, regularite, resume
+        from simu_rapport import resultats, sans_nan
         stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
         base = os.path.join(decks.RACINE, deck, DOSSIER)
         os.makedirs(os.path.join(base, "listes"), exist_ok=True)
@@ -197,17 +179,9 @@ def _execute(job, deck, a, b, tables, n, reglages, txt):
             r = f.result()
             brut[futurs[f]] = r
             job["fait"] += len(r)
-        res = {}
-        for t in tables:
-            ligne = {}
-            par = {cle: [x for d in range(0, n, MORCEAU) for x in brut[(cle, t, d)]] for cle, _ in versions}
-            for cle, _ in versions:
-                ligne[cle] = dict(resume(par[cle]), regularite=regularite(par[cle], mv[cle]))
-            if b is not None:
-                m, ic = ecart(par["A"], par["B"])
-                ligne["ecart"] = dict(m=m, ic=ic)
-            res[t] = ligne
-        rapport = _sans_nan(dict(date=datetime.now().isoformat(timespec="seconds"), deck=deck, n=n, tables=tables, reglages=reglages,
+        par = {(cle, t): [x for d in range(0, n, MORCEAU) for x in brut[(cle, t, d)]] for cle, _ in versions for t in tables}
+        res = resultats(par, mv, tables, [cle for cle, _ in versions])
+        rapport = sans_nan(dict(date=datetime.now().isoformat(timespec="seconds"), deck=deck, n=n, tables=tables, reglages=reglages,
                                  affine=bool(txt), versions=infos_v, resultats=res, duree=round(time.time() - job["debut"], 1)))
         nom = f"{stamp}.json"
         json.dump(rapport, open(os.path.join(base, nom), "w", encoding="utf-8"), ensure_ascii=False)
