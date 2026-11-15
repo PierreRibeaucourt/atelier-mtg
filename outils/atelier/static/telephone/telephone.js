@@ -27,6 +27,7 @@
   if (location.hash.includes("#appairer=")) history.replaceState(null, "", location.pathname + location.search);
   // connecté : les decks sont ici (@depot) et leurs pages faites ici
   let local = !!compte;
+  let enConnexion = false, suivi = null;              // seConnecter : la synchronisation sans calcul, puis l'avancement des pages
   // le budget par carte et les réglages de la page, connus avant app.js (qui les lit au chargement)
   try { window.REGLAGES = JSON.parse(lireLocal(REGLAGES) || "{}"); } catch (_) { window.REGLAGES = {}; }
 
@@ -640,6 +641,22 @@
     return f;
   }
 
+  // les cartes d'un deck, comme ficheCarte mais ensemble : celles que la base de cartes n'a pas (ou pas encore) en une
+  // recherche groupée sur Scryfall. Une par une, un deck de 100 cartes prenait plus d'une minute et demie
+  async function fichesCartes(noms) {
+    const res = {}, connues = await fichesConnues(), manque = [];
+    const cache = (await BD.lire("@cartes").catch(() => null)) || {};
+    for (const n of noms) {
+      const x = connues.get(n) || (cache[n] && cache[n].garde > Date.now() - 7 * 86400000 ? cache[n] : null);
+      if (x) res[n] = x; else manque.push(n);
+    }
+    if (!manque.length) return res;
+    const lus = await fiches(manque).catch(() => ({}));
+    for (const n of manque) if (lus[n] && lus[n].image) res[n] = cache[n] = { ...lus[n], garde: Date.now() };
+    await BD.ecrire("@cartes", cache);
+    return res;
+  }
+
   // la recherche pour ajouter une carte (infos_cartes.chercher) : chaque nouvelle recherche abandonne la précédente
   let tourRecherche = 0;
   const gardeDe = (tour) => () => { if (tour !== tourRecherche) throw Object.assign(new Error("abandonnée"), { abandon: true }); };
@@ -773,8 +790,8 @@
   }
   const texteCartes = (r) => JSON.stringify({ budget: r.budget ?? null, langue_cartes: r.langue_cartes || null,
     sans_ub_illustrations: r.sans_ub_illustrations ? true : null, sans_ub_suggestions: r.sans_ub_suggestions ? true : null }, null, 1) + "\n";
-  // reçus d'un autre appareil par la sauvegarde : appliqués ici, toutes les pages refaites
-  async function appliquerReglages(t) {
+  // reçus d'un autre appareil par la sauvegarde : appliqués ici, toutes les pages refaites (sauf refaire = false)
+  async function appliquerReglages(t, refaire = true) {
     let x;
     try { x = JSON.parse(t || "{}") || {}; } catch (_) { return; }
     const r = { ...(window.REGLAGES || {}), budget: typeof x.budget === "number" && x.budget >= 0 ? x.budget : null,
@@ -783,7 +800,7 @@
     window.REGLAGES = r;
     ecrireLocal(REGLAGES, JSON.stringify(r));
     if (etatBase.prete) await message("reglages", [{ sansUb: r.sans_ub_illustrations }]).catch(() => {});
-    recalculer(null).catch(() => {});
+    if (refaire) recalculer(null).catch(() => {});
   }
   async function ecrireOptions(d) {
     const ch = changerReglages(d), r = { ...(window.REGLAGES || {}), ...ch };
@@ -1366,8 +1383,20 @@
       fiches: async (noms) => {
         const lang = langueCartes(), locs = lang && etatBase.prete ? await impressionsLangue(noms, lang).catch(() => ({})) : {};
         const res = etatBase.prete ? await message("fiches", [noms, locs]).catch(() => ({})) : {};
-        for (const n of noms) if (!res[n]) { const x = await ficheCarte(n).catch(() => null); if (x && x.image) res[n] = x; }
+        const reste = noms.filter((n) => !res[n]);
+        if (reste.length) Object.assign(res, await fichesCartes(reste));
         return res;
+      },
+      // sans la base de cartes : les impressions choisies du deck demandées ensemble à Scryfall, pas une par carte
+      impressions: async (eds) => {
+        if (etatBase.prete) return;
+        const manque = [...new Map(eds.map((ed) => [`${String(ed.set).toLowerCase()}/${ed.num}/en`, ed])).entries()]
+          .filter(([k]) => !impressionsVues.has(k));
+        for (let i = 0; i < manque.length; i += 75) {
+          const r = await scryfall(`${SCRYFALL}/cards/collection`, { identifiers: manque.slice(i, i + 75)
+            .map(([, ed]) => ({ set: String(ed.set).toLowerCase(), collector_number: String(ed.num) })) }).catch(() => null);
+          for (const c of (r && r.data) || []) impressionsVues.set(`${c.set}/${c.collector_number}/en`, impression(c));
+        }
       },
       fonctions: avecBase("fonctionsCartes", {}),
       impressionImage: avecBase("impressionImage", null),
@@ -1501,10 +1530,13 @@
   }
 
   // se connecter : le code reçu par e-mail. Les decks déjà ici (d'avant les comptes) partent dans le compte ; ceux d'un
-  // autre compte, ou les pages reçues d'un PC relié, sont d'abord effacés
+  // autre compte, ou les pages reçues d'un PC relié, sont d'abord effacés. Les pages des decks sont refaites une seule
+  // fois, à la fin : toutes s'il n'y en a pas encore ici ou si les réglages viennent d'arriver, sinon celles des decks
+  // arrivés. progres(fait, total) : où en est ce calcul (beaucoup de decks : il prend du temps)
   const demanderCode = (email) => serveur("/connexion/code", "POST", { email });
-  async function seConnecter(email, code) {
+  async function seConnecter(email, code, progres = null) {
     const r = await serveur("/connexion/verifier", "POST", { email, code, appareil: nomAppareil() });
+    if (progres) progres(0, 0);
     const avant = (await BD.lire(ETAT).catch(() => null)) || {};
     if ((avant.email && avant.email !== r.email) || ANCIEN_PC) await viderIci();
     for (const k of ["telephone-acces", "telephone-commit", "telephone-compte-pc", "telephone-local", "telephone-connexion-github"]) ecrireLocal(k, null);
@@ -1516,10 +1548,16 @@
     if (!(await BD.lire("@depot").catch(() => null))) await BD.ecrire("@depot", { fichiers: {}, modifies: {} });
     window.REGLAGES = { budget: 5, sans_ub_illustrations: false, ...(window.REGLAGES || {}) };
     ecrireLocal(REGLAGES, JSON.stringify(window.REGLAGES));
-    try { await sauvegarder(); } catch (_) { /* pas de réseau : la synchronisation reprendra */ }
-    const reg = (await depot()).fichiers[REG_CARTES];
-    if (reg) await appliquerReglages(reg);
-    await recalculer(await depot());
+    let s = null;
+    enConnexion = true;
+    try { s = await sauvegarder(); } catch (_) { /* pas de réseau : la synchronisation reprendra */ } finally { enConnexion = false; }
+    const dp = await depot(), reg = dp.fichiers[REG_CARTES];
+    if (reg) await appliquerReglages(reg, false);
+    const tout = !(await BD.lire("index.json.gz").catch(() => null)) || (s && s.reglages);
+    if (tout || (s && s.touches.length)) {
+      suivi = progres;
+      try { await recalculer(dp, tout ? null : new Set(s.touches)); } finally { suivi = null; }
+    }
     location.hash = "#/";
     location.reload();
   }
@@ -1636,10 +1674,12 @@
       const sure = revision === l.revision + lots.length;
       e = { email: compte.email, revision: sure ? revision : null, fichiers, derniere: Date.now() / 1000, decks: nb };
       await BD.ecrire(ETAT, e);
-      if (touches.size) await recalculer(null, touches);
-      if (recus.includes(REG_CARTES)) await appliquerReglages(dep.fichiers[REG_CARTES]);     // changés sur un autre appareil
+      // à la connexion, seConnecter refait les pages une seule fois, à la fin
+      if (touches.size && !enConnexion) await recalculer(null, touches);
+      if (recus.includes(REG_CARTES) && !enConnexion) await appliquerReglages(dep.fichiers[REG_CARTES]);     // changés sur un autre appareil
       if (conflits.length) setTimeout(() => planifierSauvegarde(1000));   // la liste d'en face, gardée dans l'historique, part aussi
-      return { envoyes: envois.length + retraits.length, recus: recus.length, decks: nb,
+      return { envoyes: envois.length + retraits.length, recus: recus.length, decks: nb, touches: [...touches],
+        reglages: recus.includes(REG_CARTES),
         conflits: [...new Set(conflits.filter((rel) => rel.endsWith("/archidekt.txt")).map((rel) => rel.split("/")[0]))].sort(),
         decks_recus: PAGES.decksDe(f).filter((x) => !avantDecks.has(x)).sort() };
     }
@@ -1697,9 +1737,12 @@
   async function recalculerMaintenant(d, touches) {
     const f = d.fichiers, o = outilsPages(f), ids = PAGES.decksDe(f);
     const ancien = (await fichier("index.json.gz")) || { decks: {} }, pages = {}, decks = {};
+    const aFaire = new Set(ids.filter((id) => !touches || touches.has(id) || !ancien.decks[id]));
+    let fait = 0;
     for (const id of ids) {
       const k = "decks/" + id;
-      if (!touches || touches.has(id) || !ancien.decks[id]) {
+      if (aFaire.has(id)) {
+        if (suivi) suivi(fait++, aFaire.size);
         pages[id] = await PAGES.deck(id, f, { ...o, modifie: (d.modifies || {})[id] || 0 });
         await BD.ecrire(k, { sha: "local", donnees: pages[id] });
       } else pages[id] = await fichier(k);
@@ -1826,6 +1869,7 @@
               <button class="btn btn-accent">Valider</button></div>
             <button type="button" class="lien-discret" id="tel-autre">Changer d'adresse</button></form>
           <p class="erreur" id="tel-erreur" hidden></p>
+          <p class="chargement" id="tel-progres" hidden></p>
         </section>
         ${ANCIEN_LOCAL ? `<button class="lien-discret" id="tel-fichier">Enregistrer mes decks dans un fichier</button>` : ""}
         <a class="tel-decouvrir" href="https://atelier-mtg.com/fr/">C'est quoi, l'Atelier MTG ?</a>
@@ -1848,12 +1892,26 @@
         } catch (err) { erreur(err.message); }
         occupe(fe, false);
       };
+      // code bon : à la place du formulaire, la préparation des decks (gardés ici ou arrivés du compte) et son avancement
+      let prepare = false;
+      const progres = (fait, total) => {
+        if (!prepare) {
+          prepare = true;
+          el.querySelectorAll(".tel-choix > :not(h2), #tel-fichier").forEach((x) => { x.hidden = true; });
+          $("#tel-progres").hidden = false;
+        }
+        $("#tel-progres").textContent = total ? `Préparation de tes decks : ${fait + 1}/${total}` : "Préparation de tes decks…";
+      };
       fc.onsubmit = async (ev) => {
         ev.preventDefault();
         erreur("");
         occupe(fc, true);
-        try { await seConnecter(fc.dataset.email, $("#tel-code").value); }
-        catch (err) { erreur(err.message); occupe(fc, false); }
+        try { await seConnecter(fc.dataset.email, $("#tel-code").value, progres); }
+        catch (err) {
+          if (prepare) { location.hash = "#/"; location.reload(); return; }   // connecté : l'appli finit au démarrage
+          erreur(err.message);
+          occupe(fc, false);
+        }
       };
       $("#tel-autre").onclick = () => { fc.hidden = true; fe.hidden = false; erreur(""); $("#tel-email").focus(); };
       if ($("#tel-fichier")) $("#tel-fichier").onclick = () => enregistrerFichier().catch((err) => erreur(err.message));

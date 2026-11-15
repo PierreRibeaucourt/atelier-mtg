@@ -235,6 +235,7 @@ window.PAGES = (() => {
     const fiches = await o.fiches(noms), fns = await o.fonctions(noms);
     const langues = json(f[`${id}/visuels.json`], {});
     const vis = {};                                   // les impressions choisies (« (ima) 205 » dans la liste)
+    if (o.impressions) await o.impressions(entrees.map((e) => e.edition).filter((ed) => ed && ed.num));
     for (const e of entrees) {
       const ed = e.edition;
       if (!ed || !ed.num || vis[e.nom]) continue;
