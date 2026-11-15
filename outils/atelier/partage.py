@@ -16,6 +16,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import shutil
 import tempfile
 import threading
@@ -41,7 +42,14 @@ class PseudoRequis(RuntimeError):
     code = 409
 
 
+# le compte, avant tout affichage (comme telephone.js › marquerCompte) : l'en-tête montre « Mes decks » et le rond du pseudo
+TETE_COMPTE = ('<script>try { const c = JSON.parse(localStorage.getItem("atelier-compte") || "null"), h = document.documentElement; '
+               'if (c && c.jeton) { h.classList.add("connecte"); if (c.pseudo) h.style.setProperty("--initiale", '
+               'JSON.stringify(c.pseudo[0].toUpperCase())); } } catch (e) {}</script>')
+
+
 # ---------------------------------------------------------------- les pages du compte, d'après le dernier passage
+
 def _etat():
     import compte
     try:
@@ -59,8 +67,55 @@ def _ecrire_etat(e):
 
 
 def _registre():
-    """{deck: {url, date}} : les decks partagés du compte connecté."""
+    """{deck: {url, date, visibilite}} : les pages publiées du compte connecté."""
     return _etat().get("decks") or {}
+
+
+VISIBILITES = ("public", "non-repertorie", "prive")
+
+
+def visibilite(deck):
+    """Celle du deck (2.3.0) : « Deck X/page.json » › visibilite, synchronisé comme le reste du deck ; absent : public."""
+    try:
+        with open(os.path.join(decks.RACINE, deck, "page.json"), encoding="utf-8") as f:
+            v = json.load(f).get("visibilite")
+        return v if v in VISIBILITES else "public"
+    except (OSError, ValueError, AttributeError):
+        return "public"
+
+
+def changer_visibilite(deck, v):
+    """Public, non répertorié ou privé : rangé dans le deck (page.json) ; privé, la page est retirée tout de suite,
+    sinon surveiller() la publie dans la minute."""
+    if v not in VISIBILITES:
+        raise ValueError("Visibilité inconnue.")
+    p = os.path.join(decks.RACINE, deck, "page.json")
+    if v == "public":
+        try:
+            os.remove(p)
+        except OSError:
+            pass
+    else:
+        _ecrire(p, json.dumps({"visibilite": v}, ensure_ascii=False, indent=1) + "\n")
+    p = _registre().get(deck)
+    if v == "prive" and p:
+        retirer(deck)
+    elif p and p.get("visibilite", "public") != v:
+        e = _etat()
+        e["decks"][deck]["a_refaire"] = True
+        _ecrire_etat(e)
+    return etat_page(deck)
+
+
+def etat_page(deck):
+    """Pour « Partager » (app.js › modaleLien, comme telephone.js › etatPage) : {url, visibilite, publie, date}."""
+    import compte
+    if not compte._connexion().get("jeton"):
+        raise compte.NonConnecte("Connecte-toi à ton compte : la page de ce deck sera sur atelier-mtg.com.", 401)
+    p = _registre().get(deck) or {}
+    pseudo = _etat().get("pseudo") or compte._connexion().get("pseudo") or ""
+    url = p.get("url") or f"{DOMAINE_ATELIER}decks/{pseudo}/{slug(deck)}/"
+    return dict(url=url, visibilite=visibilite(deck), publie=bool(p), date=p.get("date"))
 
 
 def suivre(intervalle=300):
@@ -72,7 +127,8 @@ def suivre(intervalle=300):
     r = compte._appel("GET", "/partages")
     avant = e.get("decks") or {}
     e.update(lu=time.time(), pseudo=r.get("pseudo"),
-             decks={p["deck"]: dict(url=p["url"], date=p["date"], **({"a_refaire": True} if (avant.get(p["deck"]) or {}).get("a_refaire") else {}))
+             decks={p["deck"]: dict(url=p["url"], date=p["date"], visibilite=p.get("visibilite") or "public",
+                                    **({"a_refaire": True} if (avant.get(p["deck"]) or {}).get("a_refaire") else {}))
                     for p in r.get("partages") or []})
     _ecrire_etat(e)
 
@@ -267,6 +323,8 @@ def _page(dossier, donnees, entete):
         meta.append('<meta name="twitter:card" content="summary">')
     # le thème choisi (bouton ◐), avant tout affichage : la page et ses captures (claires ou sombres) sont justes d'emblée
     meta.append('<script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>')
+    # connecté (l'appli, sur ce domaine, garde « atelier-compte ») : « Mes decks » et l'initiale du pseudo dès l'affichage
+    meta.append(TETE_COMPTE)
     meta += entete.get("tete", [])
     html = (html.replace('<html lang="fr">', '<html lang="fr" class="partage">')    # barre de page partagée dès l'affichage
             .replace("<title>Atelier MTG</title>", "\n  ".join(meta))
@@ -336,10 +394,12 @@ def partager(deck, get, pseudo=None):
         image = _image(lambda ip, chemin: ip.image_deck(
             chemin, d["titre"], "Deck Commander" + (f" · {couleurs}" if couleurs else ""), cmds, images, d.get("art"),
             d.get("identite"), chiffres, auteur))
+        v = visibilite(deck)
         try:
             r = compte._appel("POST", "/partages", dict(
                 deck=deck, donnees=donnees, image=base64.b64encode(image).decode() if image else None,
-                budget=reglages.pour_la_page().get("budget"), pseudo=(pseudo or "").strip().lower() or None))
+                budget=reglages.pour_la_page().get("budget"), pseudo=(pseudo or "").strip().lower() or None,
+                visibilite=v if v != "prive" else "public", slug=slug(deck)))
         except compte.NonConnecte:
             raise
         except compte.Erreur as ex:
@@ -347,7 +407,7 @@ def partager(deck, get, pseudo=None):
                 raise PseudoRequis(str(ex)) from None
             raise
         e = _etat()
-        e.setdefault("decks", {})[deck] = dict(url=r["url"], date=r["date"])
+        e.setdefault("decks", {})[deck] = dict(url=r["url"], date=r["date"], visibilite=r.get("visibilite") or "public")
         e["pseudo"] = r.get("pseudo") or e.get("pseudo")
         _ecrire_etat(e)
     _echecs.pop(deck, None)
@@ -403,21 +463,32 @@ def derniere_modif(deck):
 
 
 def a_republier(maintenant=None):
-    """Les decks partagés modifiés sur ce PC depuis la publication de leur page (ou renommés), au calme depuis CALME
-    secondes, sans échec trop récent. Pas de republication quotidienne : la synchro du PC est manuelle, et une page
-    publiée depuis l'appli, plus récente, serait écrasée par une liste qui n'a pas encore été récupérée ici."""
+    """Depuis 2.3.0, chaque deck a sa page, sauf s'il est privé : les decks sans page, ceux modifiés sur ce PC (ou
+    arrivés du compte) depuis la publication de la leur, ou dont la visibilité a changé, au calme depuis CALME secondes,
+    sans échec trop récent. Un deck devenu privé (sur un autre appareil) : sa page est retirée."""
     if not actif():
         return []
     maintenant = maintenant or time.time()
     reg, r = _registre(), []
     for deck in decks.dossiers():
-        p, e = reg.get(deck), _echecs.get(deck)
-        if not p or (e and maintenant - e[0] < REESSAI):
+        p, e, v = reg.get(deck), _echecs.get(deck), visibilite(deck)
+        if v == "prive":
+            if p:
+                retirer(deck)
+            continue
+        if e and maintenant - e[0] < REESSAI:
             continue
         t = derniere_modif(deck)
-        if (t > p["date"] or p.get("a_refaire")) and maintenant - t >= CALME:
+        if maintenant - t >= CALME and (not p or t > p["date"] or p.get("a_refaire") or p.get("visibilite", "public") != v):
             r.append(deck)
     return r
+
+
+def slug(deck):
+    """L'adresse que le serveur donnera au deck (pages.slug_de, sans les adresses déjà prises : il les évite)."""
+    import unicodedata
+    s = unicodedata.normalize("NFD", deck.removeprefix("Deck ")).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", "-", s).strip("-")[:60].strip("-") or "deck"
 
 
 def surveiller(get, pause=30):

@@ -13,8 +13,7 @@
 - sans_ub_suggestions : ne pas suggérer les cartes qui n'existent qu'en Universes Beyond (Marvel, Final Fantasy…).
 - preferences : true une fois que la page a posé ses questions (fermeture, impression, Universes Beyond).
 - non_partages : decks retirés du partage à la main, que l'Atelier ne publie plus tout seul (voir partage.py).
-- sauvegarde : false = sauvegarde GitHub coupée (jusqu'à la 2.1.0, voir atelier/synchro.py).
-- github_migre : true = la dernière synchronisation avec la sauvegarde GitHub est faite (atelier/compte.py › finir_github).
+- sauvegarde, github_migre : la sauvegarde GitHub (jusqu'à la 2.2.0), retirée : plus lus.
 
 Les réglages des cartes (CARTES : budget, image des cartes, Universes Beyond) sont les mêmes sur tous les appareils (PC,
 navigateur, téléphone) : recopiés dans « Réglages Atelier/cartes.json », qui va sur le compte (atelier/compte.py).

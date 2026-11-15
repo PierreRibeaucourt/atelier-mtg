@@ -1,7 +1,12 @@
 """Le compte Atelier MTG sur ce PC : on s'y connecte par un code reçu par e-mail (api.atelier-mtg.com, outils/serveur/).
 
-L'appli du navigateur et du téléphone se synchronise toute seule avec le compte ; le PC, lui, quand on le demande
-(Options › Compte) :
+Depuis 2.3.0, le PC se synchronise tout seul avec le compte, comme l'appli (synchroniser(), en fond : boucle()). Il
+compare trois états, ses fichiers, ceux du compte et ceux de la dernière synchronisation (compte_etat.json › fichiers) :
+ce qui a changé d'un seul côté passe de l'autre ; changé des deux côtés, la version de ce PC l'emporte et la liste
+d'en face entre dans l'historique du deck (les journaux sont fusionnés) ; un deck supprimé ou renommé d'un côté, sans
+changement de l'autre, part dans la corbeille de ce PC (ou quitte le compte).
+
+Avant 2.3.0, le PC ne se synchronisait que quand on le demandait (envoyer(), recuperer(), gardés pour l'instant) :
 - Envoyer : les decks, le classeur et les réglages des cartes de ce PC partent sur le compte ;
 - Récupérer : ceux du compte arrivent sur ce PC.
 Dans les deux sens on ajoute et on remplace. La liste d'un deck qu'on remplace est d'abord gardée dans son historique,
@@ -191,8 +196,10 @@ def se_connecter(email, code):
     ancien = _connexion().get("jeton")
     r = _appel("POST", "/connexion/verifier", dict(email=str(email or "").strip(), code=str(code or "").strip(),
                                                    appareil=nom_appareil()), avec_jeton=False)
-    garder_chiffre(FICHIER, dict(email=r["email"], jeton=r["jeton"]))
+    with _verrou:                                                 # une synchronisation en cours finit avec l'ancien compte
+        garder_chiffre(FICHIER, dict(email=r["email"], jeton=r["jeton"], pseudo=r.get("pseudo")))
     suivi["erreur"] = ""
+    reveil.set()                                                  # la synchronisation, tout de suite
     if ancien and ancien != r["jeton"]:
         try:
             _appel("POST", "/deconnexion", {}, autre_jeton=ancien)
@@ -203,11 +210,12 @@ def se_connecter(email, code):
 
 def deconnecter():
     """Se déconnecter : le jeton est retiré du compte, puis oublié ici. Les decks de ce PC restent."""
-    try:
-        _appel("POST", "/deconnexion", {})
-    except Erreur:
-        pass
-    _oublier()
+    with _verrou:                                                 # pas au milieu d'une synchronisation
+        try:
+            _appel("POST", "/deconnexion", {})
+        except Erreur:
+            pass
+        _oublier()
     return etat()
 
 
@@ -501,35 +509,202 @@ def _recuperer():
                 supprimes=supprimes)
 
 
+# ---------------------------------------------------------------- la synchronisation automatique (2.3.0)
+_empreintes = {}       # chemin → (date, taille, sha) : un fichier qui n'a pas bougé n'est pas relu
+
+
+def _ici():
+    """{chemin dans le compte: sha} des fichiers de ce PC qui vont sur le compte (texte, 1 Mo au plus)."""
+    res = {}
+    for rel, chemin in locaux().items():
+        try:
+            s = os.stat(chemin)
+        except OSError:
+            continue
+        cle = (s.st_mtime_ns, s.st_size)
+        connu = _empreintes.get(chemin)
+        if connu and connu[0] == cle:
+            if connu[1]:
+                res[rel] = connu[1]
+            continue
+        texte = _texte(chemin)
+        _empreintes[chemin] = (cle, sha(texte) if texte is not None else None)
+        if texte is not None:
+            res[rel] = _empreintes[chemin][1]
+    return res
+
+
+def synchroniser():
+    """Ce PC et le compte, dans les deux sens (comme l'appli : telephone.js › synchroniserCompte). Renvoie {envoyes,
+    recus, decks_recus, conflits, supprimes}."""
+    return _avec_suivi(_synchroniser)
+
+
+def _synchroniser():
+    e = _etat()
+    for essai in range(3):
+        ici, avant, chemins = _ici(), e.get("fichiers") or {}, locaux()
+        rev = e.get("revision")
+        # rien de changé ici depuis la dernière fois : le serveur dit seulement si le compte a bougé
+        l = _appel("GET", "/fichiers" + (f"?revision={rev}" if rev is not None and ici == avant else ""))
+        if l.get("inchange"):
+            _ecrire_etat(derniere=time.time())
+            return dict(envoyes=0, recus=0, decks_recus=[], conflits=[], supprimes=[])
+        distant = l.get("fichiers") or {}
+        envois, retraits, recus, effaces, conflits = [], [], [], [], []
+        for rel in sorted(set(ici) | set(distant) | set(avant)):
+            a, r, b = ici.get(rel), distant.get(rel), avant.get(rel)
+            if a == r or not _chemin_sur(rel):
+                continue
+            if a == b:
+                (effaces if r is None else recus).append(rel)           # changé dans le compte seulement
+            elif r == b:
+                (retraits if a is None else envois).append(rel)         # changé ici seulement
+            elif a is None:
+                recus.append(rel)                                        # supprimé ici, changé là-bas : il revient
+            else:
+                envois.append(rel)                                       # changé des deux côtés : celui d'ici gagne
+                if r is not None:
+                    conflits.append(rel)
+        lus = _lire_distants(recus + [rel for rel in conflits if _est_liste(rel) or _est_journal(rel)])
+        # 1. changé des deux côtés : la liste d'en face dans l'historique du deck ; les journaux, fusionnés
+        textes = {rel: _texte(chemins[rel]) for rel in envois}
+        for rel in conflits:
+            if rel not in lus:
+                continue
+            if _est_liste(rel):
+                h = _dans_l_historique(rel.split("/")[0], lus[rel], AUTRE, "_autre-appareil", distant)
+                textes[h] = lus[rel]
+                j = f"{rel.split('/')[0]}/{decks.HISTO}/journal.json"
+                textes[j] = _texte(_chemin_sur(j))
+            elif _est_journal(rel):
+                textes[rel] = _fusion(lus[rel], textes[rel])
+                _ecrire(_chemin_sur(rel), textes[rel])
+        # 2. ce qui part
+        changements = [dict(chemin=rel, contenu=tx, base=distant.get(rel)) for rel, tx in sorted(textes.items()) if tx is not None]
+        changements += [dict(chemin=rel, contenu=None, base=distant.get(rel)) for rel in retraits]
+        revision, conflit, lots = l.get("revision"), False, 0
+        for lot in _lots(changements):
+            r = _appel("POST", "/fichiers/ecrire", dict(changements=lot))
+            conflit = conflit or bool(r.get("conflits"))
+            revision, lots = r.get("revision"), lots + 1
+        if conflit:                                                      # un autre appareil a écrit entre-temps
+            e = {**e, "revision": None}
+            continue
+        # 3. ce qui arrive : la liste de ce PC qu'on remplace, si elle n'est gardée nulle part, d'abord dans l'historique
+        touches, echecs = set(), []
+        for rel in recus:
+            texte = lus.get(rel)
+            if texte is None:
+                continue
+            p = _chemin_sur(rel)
+            if _est_liste(rel) and rel in ici and ici[rel] not in _connues(rel.split("/")[0], ici, distant):
+                _dans_l_historique(rel.split("/")[0], _texte(p), AVANT, "_ce-pc", distant)
+            if _est_journal(rel) and os.path.exists(p):
+                texte = _fusion(_texte(p), texte)
+            try:
+                _ecrire(p, texte)
+                touches.add(rel.split("/")[0])
+            except OSError:                                              # un nom que Windows refuse
+                echecs.append(rel)
+        # 4. ce qui a disparu du compte sans avoir changé ici : retiré ici aussi ; un deck entier, dans la corbeille
+        supprimes = []
+        partis = set(effaces)
+        for deck in sorted({rel.split("/")[0] for rel in effaces}):
+            if deck.startswith("Deck ") and not any(rel.split("/")[0] == deck and rel not in partis for rel in ici):
+                decks.supprimer(deck)
+                supprimes.append(deck)
+        for rel in effaces:
+            if rel.split("/")[0] not in supprimes:
+                try:
+                    os.remove(_chemin_sur(rel))
+                except OSError:
+                    pass
+        # l'état commun : celui du compte, avec ce qu'on vient d'y écrire ; la révision n'est sûre que si personne
+        # d'autre n'a écrit pendant l'envoi
+        commun = dict(distant)
+        for ch in changements:
+            if ch["contenu"] is None:
+                commun.pop(ch["chemin"], None)
+            else:
+                commun[ch["chemin"]] = sha(ch["contenu"])
+        for rel in recus:
+            if rel in lus and rel not in echecs:
+                commun[rel] = distant[rel]
+        for rel in effaces:
+            commun.pop(rel, None)
+        sure = revision is not None and l.get("revision") is not None and revision == l["revision"] + lots
+        _ecrire_etat(fichiers=commun, revision=revision if sure else None, derniere=time.time())
+        carte = f"{reglages.DOSSIER_CARTES}/cartes.json"
+        if carte in recus and carte in lus:
+            reglages.appliquer_cartes()
+        if (touches or supprimes) and quand_recu:
+            quand_recu()
+        return dict(envoyes=len(changements), recus=len(touches), conflits=sorted({rel.split("/")[0] for rel in conflits if _est_liste(rel)}),
+                    decks_recus=sorted(d for d in touches if d.startswith("Deck ")), supprimes=supprimes, echecs=echecs)
+    raise Erreur("Le compte change sans arrêt (un autre appareil ?) : réessaie dans un instant.")
+
+
+# ---------------------------------------------------------------- le pont avec l'appli en ligne (2.3.0)
+PONT = os.path.join(ICI, "pont.dat")
+
+
+def secret_pont():
+    """Le secret du pont (app.py › pont_avant) : créé une fois, gardé sur ce PC (pont.dat, jamais dans le dépôt)."""
+    try:
+        with open(PONT, encoding="utf-8") as f:
+            s = f.read().strip()
+        if len(s) >= 32:
+            return s
+    except OSError:
+        pass
+    import secrets
+    s = secrets.token_urlsafe(32)
+    with open(PONT, "w", encoding="utf-8") as f:
+        f.write(s)
+    return s
+
+
+def publier_pont(port):
+    """L'adresse de cet Atelier et le secret du pont, dans « Réglages Atelier/pont.json » (synchronisé) : l'appli en
+    ligne ouverte sur ce PC sait ainsi le joindre (Claude, synergies, MTGPics). Une entrée par PC."""
+    p = os.path.join(decks.RACINE, reglages.DOSSIER_CARTES, "pont.json")
+    try:
+        with open(p, encoding="utf-8") as f:
+            l = json.load(f)
+    except (OSError, ValueError):
+        l = {}
+    l = l if isinstance(l, dict) else {}
+    entree = dict(port=int(port), secret=secret_pont())
+    if l.get(nom_appareil()) != entree:
+        l[nom_appareil()] = entree
+        _ecrire(p, json.dumps(l, ensure_ascii=False, indent=1) + "\n")
+        reveil.set()
+
+
+PAUSE = 20             # secondes entre deux synchronisations, tant que l'Atelier tourne et qu'on est connecté
+reveil = threading.Event()
+
+
+def boucle():
+    """En fond (app.py) : synchronise toutes les PAUSE secondes, ou tout de suite si on la réveille (reveil.set() :
+    après une modification, ou quand l'appli en ligne le demande)."""
+    while True:
+        if _connexion().get("jeton"):
+            try:
+                synchroniser()
+            except Exception:                                            # noqa: BLE001 - suivi["erreur"] le dit
+                pass
+        reveil.wait(PAUSE)
+        reveil.clear()
+
+
 # ---------------------------------------------------------------- pour la page
 def etat():
-    """{connecte, email, synchro: "manuelle", en_cours, erreur, envoi, reception, derniere, a_envoyer, github}."""
+    """{connecte, email, pseudo, synchro: "auto", en_cours, erreur, derniere, decks}."""
     c = _connexion()
-    github = bool(reglages.lire().get("github_migre"))
     if not c.get("jeton"):
-        return dict(connecte=False, synchro="manuelle", github=github, decks=len(decks.dossiers()))
+        return dict(connecte=False, synchro="auto", decks=len(decks.dossiers()))
     e = _etat()
-    return dict(connecte=True, email=c.get("email"), synchro="manuelle", en_cours=suivi["en_cours"], erreur=suivi["erreur"],
-                envoi=e.get("envoi"), reception=e.get("reception"),
-                derniere=max(e.get("envoi") or 0, e.get("reception") or 0) or None,
-                a_envoyer=bool(decks.dossiers()) and empreinte() != e.get("empreinte"), github=github,
-                decks=len(decks.dossiers()))
-
-
-# ---------------------------------------------------------------- la fin de la sauvegarde GitHub (2.2.0)
-def finir_github(pause=300):
-    """Jusqu'à la 2.1.0, la sauvegarde en ligne allait sur GitHub (synchro.py). Une dernière synchronisation ramène
-    ici ce que les autres appareils y avaient mis ; puis elle s'arrête, et l'accueil propose d'envoyer les decks sur
-    le compte. En fond, au lancement ; sans réseau, nouvel essai cinq minutes plus tard."""
-    import synchro
-    time.sleep(5)
-    while synchro.active() and not reglages.lire().get("github_migre"):
-        try:
-            synchro.synchroniser(creer=False)
-            reglages.ecrire(github_migre=True, sauvegarde=False)
-            return
-        except Exception as e:
-            print(f"Dernière sauvegarde GitHub : {e}", file=sys.stderr, flush=True)
-            if isinstance(e, synchro.github.NonConnecte):
-                return
-        time.sleep(pause)
+    return dict(connecte=True, email=c.get("email"), pseudo=c.get("pseudo"), synchro="auto", en_cours=suivi["en_cours"],
+                erreur=suivi["erreur"], derniere=e.get("derniere"), decks=len(decks.dossiers()))

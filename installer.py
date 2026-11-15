@@ -176,7 +176,6 @@ def facultatif():
 def main():
     p = argparse.ArgumentParser(description="Installe l'Atelier MTG sur ce PC.")
     p.add_argument("--budget", type=float, help="budget par carte en euros (0 = pas d'alerte)")
-    p.add_argument("--github", help=argparse.SUPPRESS)                 # le partage par GitHub (jusqu'à 2.1.0) : ignoré
     p.add_argument("--sans-raccourci", action="store_true", help="ne pas créer de raccourci sur le bureau")
     p.add_argument("--bureau", help=argparse.SUPPRESS)                 # autre dossier pour le raccourci (essais)
     a = p.parse_args()

@@ -3,6 +3,7 @@
 Lancement : double-clic sur « Atelier MTG.bat » (dossier MTG), ou  python outils/atelier/app.py
 La page s'ouvre sur http://127.0.0.1:5000 (rien n'est accessible depuis l'extérieur de ton PC).
 """
+import hmac
 import os
 import re
 import socket
@@ -344,7 +345,55 @@ def api_options_ecrire():
     return api_options()
 
 
-# ---------------------------------------------------------------- le compte (compte.py) : Envoyer, Récupérer
+# ---------------------------------------------------------------- le pont avec l'appli en ligne (2.3.0)
+# Sur ce PC, l'appli en ligne (atelier-mtg.com, connectée au même compte) demande ici ce que seul le PC sait faire :
+# Claude, les synergies, MTGPics, et une synchronisation tout de suite. Seulement ces routes, seulement depuis cette
+# origine, et avec le secret du pont (compte.publier_pont le range dans les fichiers du compte, que l'appli lit).
+ORIGINES_PONT = {"https://atelier-mtg.com"} | {o for o in os.environ.get("ATELIER_PONT_ORIGINES", "").split(",") if o}
+ROUTES_PONT = re.compile(r"^/api/(pont|compte/synchroniser|discussion(/[a-z-]+)?|decks/[^/]+/(synergies|mtgpics)(/[a-z-]+)?)$")
+
+
+@app.before_request
+def pont_avant():
+    o = request.headers.get("Origin")
+    if o not in ORIGINES_PONT:
+        return None                                        # l'interface de ce PC (même origine) : rien ne change
+    if not ROUTES_PONT.match(request.path):
+        return Response("", 403)
+    if request.method == "OPTIONS":
+        return Response("", 204)                           # la vérification préalable du navigateur (en-têtes : pont_apres)
+    import compte
+    if not hmac.compare_digest(request.headers.get("X-Atelier-Pont", ""), compte.secret_pont()):
+        return jsonify(erreur="Atelier de ce PC : le pont refuse cette demande."), 403
+    return None
+
+
+@app.after_request
+def pont_apres(rep):
+    o = request.headers.get("Origin")
+    if o in ORIGINES_PONT and ROUTES_PONT.match(request.path):
+        rep.headers.update({"Access-Control-Allow-Origin": o, "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                            "Access-Control-Allow-Headers": "Content-Type, X-Atelier-Pont",
+                            "Access-Control-Allow-Private-Network": "true", "Access-Control-Max-Age": "600", "Vary": "Origin"})
+    return rep
+
+
+@app.get("/api/pont")
+def api_pont():
+    """L'appli en ligne cherche l'Atelier de ce PC : sa version, et le compte où il est connecté (le même, ou rien)."""
+    import compte
+    from version import __version__
+    return jsonify(atelier=__version__, email=compte._connexion().get("email"))
+
+
+@app.post("/api/compte/synchroniser")
+def api_compte_synchroniser():
+    """Ce PC et le compte, tout de suite (l'appli en ligne le demande quand Claude a fini ; Options › Compte)."""
+    import compte
+    return jsonify(resume=compte.synchroniser(), etat=compte.etat())
+
+
+# ---------------------------------------------------------------- le compte (compte.py) : connexion, synchronisation
 @app.get("/api/compte")
 def api_compte():
     import compte
@@ -363,7 +412,9 @@ def api_compte_connexion():
     """{email, code} : le code reçu ouvre le compte sur ce PC."""
     import compte
     d = request.get_json() or {}
-    return jsonify(compte.se_connecter(d.get("email"), d.get("code")))
+    r = compte.se_connecter(d.get("email"), d.get("code"))
+    compte.publier_pont(os.environ.get("ATELIER_PORT", PORT))
+    return jsonify(r)
 
 
 @app.post("/api/compte/envoyer")
@@ -740,9 +791,16 @@ def api_suggestions_ecarter(deck):
 
 @app.get("/api/decks/<path:deck>/partage")
 def api_partage(deck):
-    """Page publique du deck (atelier-mtg.com/decks/…) : {url, date}, ou {} s'il n'est pas partagé."""
+    """Page publique du deck (atelier-mtg.com/decks/…) : {url, visibilite, publie, date} ; 401 sans compte."""
     import partage
-    return jsonify(partage.etat(deck))
+    return jsonify(partage.etat_page(deck))
+
+
+@app.post("/api/decks/<path:deck>/visibilite")
+def api_visibilite(deck):
+    """{visibilite} : public, non répertorié ou privé (partage.changer_visibilite)."""
+    import partage
+    return jsonify(partage.changer_visibilite(deck, (request.get_json(silent=True) or {}).get("visibilite")))
 
 
 @app.post("/api/decks/<path:deck>/partage")
@@ -1348,6 +1406,9 @@ def montrer_icone():
         pass
 
 
+SITE_APPLI = "https://atelier-mtg.com/mes-decks/"   # l'appli en ligne : connecté, c'est elle qu'on ouvre (2.3.0)
+
+
 def barre_etat(url):
     """Le chaudron dans la barre d'état, près de l'horloge : clic = ouvrir l'Atelier ; clic droit › Quitter.
     Rend la main quand on choisit « Quitter »."""
@@ -1386,23 +1447,28 @@ if __name__ == "__main__":
             break
         if atelier_sur(p):                         # l'Atelier est déjà ouvert : on montre sa page
             if "--sans-navigateur" not in sys.argv:
-                webbrowser.open(f"http://127.0.0.1:{p}")
+                import compte
+                webbrowser.open(SITE_APPLI if compte._connexion().get("jeton") else f"http://127.0.0.1:{p}")
             sys.exit(0)
     url = f"http://127.0.0.1:{PORT}"
     os.environ["ATELIER_PORT"] = str(PORT)         # pour demander.py, que Claude lance depuis la discussion
+    import compte
+    if compte._connexion().get("jeton") and "--essai" not in sys.argv:
+        url = SITE_APPLI                           # connecté : l'appli en ligne, qui passe par cet Atelier pour Claude
     import simulation
     simulation.effacer_anciens()                   # rapports d'avant les jauges de régularité, avant que le partage ne parte
     en_fond(ic.mise_a_jour, tous_les_noms())
     import recherche
     en_fond(recherche.demarrer)                    # base de la recherche de cartes : chargée, puis surveillée (nouvelles cartes, prix)
     import compte
-    import synchro
-    compte.quand_recu = synchro.quand_recu = lambda: en_fond(ic.mise_a_jour, tous_les_noms())   # decks reçus : fiches, prix
+    compte.quand_recu = lambda: en_fond(ic.mise_a_jour, tous_les_noms())     # decks reçus : fiches, prix
+    if compte._connexion().get("jeton"):
+        compte.publier_pont(PORT)                  # l'appli en ligne, sur ce PC, saura joindre cet Atelier
+    en_fond(compte.boucle)                         # ce PC et le compte, synchronisés toutes les 20 s (connecté)
     if "--essai" not in sys.argv:                  # un Atelier d'essai lancé à côté ne publie rien et ne se met pas à jour
         import mise_a_jour
         import partage
         en_fond(partage.surveiller, app.test_client().get)     # pages partagées remises à jour quand un deck change
-        en_fond(compte.finir_github)                           # la sauvegarde GitHub (jusqu'à 2.1.0) : une dernière fois
         en_fond(mise_a_jour.surveiller)                        # nouvelle version de l'Atelier : lue une fois par jour
         enregistrer_lien()
     en_fond(surveiller_fermeture)                  # réglage « Arrêter l'Atelier » quand on ferme la page

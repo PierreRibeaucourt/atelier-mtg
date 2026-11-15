@@ -2,7 +2,7 @@
 
 Ce fichier s'adresse à l'assistant IA (Claude Code, Codex, Cursor, Copilot…) à qui l'on demande d'installer l'Atelier MTG, de le mettre à jour ou de le dépanner. Le README décrit l'outil pour la personne qui l'utilise.
 
-L'Atelier est une application web locale pour les joueurs de Magic: The Gathering au format Commander : decks, prix, bracket, combos, recherche de cartes, simulation, discussion avec Claude. C'est un serveur Flask qui écoute seulement sur `127.0.0.1:5000` et ouvre la page dans le navigateur. Interface en français. Les données restent sur le PC ; avec un compte (gratuit, connexion par un code reçu par e-mail), la personne les envoie en ligne et les récupère quand elle le veut (Options › Compte, `outils/atelier/compte.py`), pour les retrouver dans l'appli en ligne (https://app.atelier-mtg.com/), sur téléphone ou sur un autre PC.
+L'Atelier est une application web locale pour les joueurs de Magic: The Gathering au format Commander : decks, prix, bracket, combos, recherche de cartes, simulation, discussion avec Claude. C'est un serveur Flask qui écoute seulement sur `127.0.0.1:5000` et ouvre la page dans le navigateur. Interface en français. Les données restent sur le PC ; avec un compte (gratuit, connexion par un code reçu par e-mail), la personne les envoie en ligne et les récupère quand elle le veut (Options › Compte, `outils/atelier/compte.py`), pour les retrouver dans l'appli en ligne (https://atelier-mtg.com/mes-decks/), sur téléphone ou sur un autre PC.
 
 ## Installer
 
@@ -61,7 +61,7 @@ L'Atelier lance Claude Code (`claude -p`) dans le dossier du dépôt : pas de cl
 
 ### Partager des decks
 
-« Partager le deck… » donne un lien instantané (rien n'est publié) ou publie une page permanente, `https://atelier-mtg.com/decks/<pseudo>/<deck>/`. La page permanente demande d'être connecté à son compte (Options › Compte) ; au premier partage, la personne choisit son pseudo. Rien à installer ni à configurer : ni git, ni GitHub. L'Atelier envoie les données de la page et son image au serveur des comptes (`outils/atelier/partage.py` ; côté serveur, `outils/serveur/pages.py`), puis republie la page d'un deck partagé quand il change sur ce PC (`partage.surveiller`). Jusqu'à la 2.1.0, les pages allaient sur GitHub Pages : elles y restent, figées.
+Chaque deck a son adresse, `https://atelier-mtg.com/decks/<pseudo>/<deck>/`, qui est le lien à partager : il est publié tout seul, sauf s'il est privé. « Partager le deck… » copie ce lien et règle sa visibilité (public, non répertorié, privé ; `Deck X/page.json`). Il faut être connecté à son compte (Options › Compte) ; le pseudo se choisit à l'inscription. Rien à installer ni à configurer : ni git, ni GitHub. L'Atelier envoie les données de la page et son image au serveur des comptes (`outils/atelier/partage.py` ; côté serveur, `outils/serveur/pages.py`), puis republie la page d'un deck quand il change (`partage.surveiller`). Jusqu'à la 2.1.0, les pages allaient sur GitHub Pages : elles y restent, figées.
 
 ## Réglages
 
@@ -94,7 +94,7 @@ Tout ceci est ignoré par git et ne doit jamais être commité, poussé ni effac
 - `Partage Atelier/` : les pages partagées. `reglages.json` : les réglages. `Classeur/` : le classeur.
 - Les caches, dans `outils/` et `outils/atelier/` : base des cartes, prix, combos. Ils se reconstruisent tout seuls.
 
-Sauvegarder ses decks, c'est copier les dossiers `Deck …`, ou les envoyer sur le compte (Options › Compte › Envoyer). La connexion au compte (`outils/atelier/connexion_compte.dat`, chiffrée par Windows) et l'état des envois (`outils/atelier/compte_etat.json`) sont propres à chaque PC.
+Sauvegarder ses decks, c'est copier les dossiers `Deck …`, ou se connecter au compte (Options › Compte) : le PC s'y synchronise tout seul. La connexion au compte (`outils/atelier/connexion_compte.dat`, chiffrée par Windows) et l'état des envois (`outils/atelier/compte_etat.json`) sont propres à chaque PC.
 
 ## Dépannage
 
@@ -120,7 +120,7 @@ Sauvegarder ses decks, c'est copier les dossiers `Deck …`, ou les envoyer sur 
 - **Organisation du code** :
   - `outils/atelier/app.py`, le serveur et ses routes ;
   - `outils/atelier/static/`, l'interface, en JavaScript sans framework ;
-  - `outils/atelier/*.py`, les modules (decks, prix, bracket, combos, suggestions, recherche, simulation, discussion, partage, github pour la connexion du partage sans git, et compte pour Envoyer et Récupérer) ;
+  - `outils/atelier/*.py`, les modules (decks, prix, bracket, combos, suggestions, recherche, simulation, discussion, partage, et compte pour la synchronisation avec le compte et le pont avec l'appli en ligne) ;
   - `outils/serveur/`, le serveur des comptes (https://api.atelier-mtg.com/, Flask et MariaDB chez o2switch) ;
   - `outils/atelier/demander.py`, l'Atelier en ligne de commande pour les assistants ;
   - `connaissances/`, les repères de construction d'un deck ;
