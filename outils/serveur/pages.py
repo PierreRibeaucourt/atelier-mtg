@@ -9,7 +9,11 @@ d'aperçu ; le serveur écrit dans le dossier des pages (réglage « pages » �
 - sitemap.xml : toutes les pages, pour les moteurs de recherche.
 Ce qui vient de l'Atelier est neutralisé (ni balise HTML, ni lien javascript:) ; les achats n'y sont jamais.
 Réglages : {"dossier", "url" (adresse publique du dossier), "modeles" (index.html et jouer.html de static/),
-"interface" (dossier de app.js, style.css, jouer.js, jouer.css), "interface_url" (leur adresse)}.
+"interface" (dossier de app.js, style.css, jouer.js, jouer.css), "interface_url" (leur adresse), "appli" (l'adresse de
+l'appli, /mes-decks/ par défaut)}.
+Une page est « public » (dans le plan du site et la page du pseudo) ou « non-repertorie » (noindex, seulement par son
+lien). Son propriétaire, connecté sur ce domaine, est renvoyé vers l'appli (proprietaire()), qui remet l'adresse de la
+page dans la barre : l'adresse du deck est le lien à partager.
 """
 import hashlib
 import html
@@ -38,9 +42,31 @@ class Reglages:
         self.modeles = os.path.expanduser(r["modeles"])
         self.interface = os.path.expanduser(r["interface"])
         self.interface_url = r["interface_url"].rstrip("/") + "/"
+        self.appli = r.get("appli", "/mes-decks/").rstrip("/") + "/"
+
+
+def proprietaire(cfg, pseudo, deck=None):
+    """Le script de tête d'une page : connecté avec ce pseudo, on est chez soi ; l'appli ouvre le deck (ou ses decks)
+    à modifier, avant tout affichage. Un onglet après « # » (#/stats) suit."""
+    return ('<script>try { const c = JSON.parse(localStorage.getItem("atelier-compte") || "null"); '
+            f'if (c && c.jeton && c.pseudo === {json.dumps(pseudo)}) {{ const d = {json.dumps(deck)}, h = location.hash.replace(/^#\\/?/, ""); '
+            f'location.replace({json.dumps(cfg.appli)} + (d === null ? "#/" : h.startsWith("deck/") ? "#/" + h '
+            ': "#/deck/" + encodeURIComponent(d) + (h ? "/" + h : ""))); } } catch (e) {}</script>')
+
+
+def slug_valide(s):
+    """Une adresse de deck dans le dossier du pseudo (comme slug_de les fabrique)."""
+    return bool(re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?", s or "")) and "--" not in s and s not in RESERVES
+
+
+# le compte, avant tout affichage (comme telephone.js › marquerCompte) : l'en-tête montre « Mes decks » et le rond du pseudo
+TETE_COMPTE = ('<script>try { const c = JSON.parse(localStorage.getItem("atelier-compte") || "null"), h = document.documentElement; '
+               'if (c && c.jeton) { h.classList.add("connecte"); if (c.pseudo) h.style.setProperty("--initiale", '
+               'JSON.stringify(c.pseudo[0].toUpperCase())); } } catch (e) {}</script>')
 
 
 # ---------------------------------------------------------------- outils
+
 def pseudo_valide(p):
     """3 à 30 caractères : minuscules, chiffres, tirets (pas au début ni à la fin) ; ni un mot réservé."""
     return isinstance(p, str) and bool(PSEUDO.fullmatch(p)) and "--" not in p and p not in RESERVES
@@ -112,7 +138,8 @@ def _euros(x):
 
 # ---------------------------------------------------------------- une page
 def _page(cfg, dossier, donnees, entete):
-    """index.html et donnees.js d'une page (comme partage._page) ; entete : titre, description, url, image, alt."""
+    """index.html et donnees.js d'une page (comme partage._page) ; entete : titre, description, url, image, alt,
+    indexer (False : noindex), tete (lignes HTML en plus dans <head>)."""
     js = "window.PARTAGE = " + json.dumps(donnees, ensure_ascii=False, separators=(",", ":")) + ";\n"
     _ecrire(os.path.join(dossier, "donnees.js"), js)
     v = {f: _version(os.path.join(cfg.interface, f)) for f in ("app.js", "style.css")}
@@ -130,6 +157,11 @@ def _page(cfg, dossier, donnees, entete):
     else:
         meta.append('<meta name="twitter:card" content="summary">')
     meta.append('<script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>')
+    # connecté (l'appli, sur ce domaine, garde « atelier-compte ») : « Mes decks » et l'initiale du pseudo dès l'affichage
+    meta.append(TETE_COMPTE)
+    if entete.get("indexer") is False:
+        meta.append('<meta name="robots" content="noindex">')
+    meta += entete.get("tete", [])
     t = (_modele(cfg, "index.html").replace('<html lang="fr">', '<html lang="fr" class="partage">')
          .replace("<title>Atelier MTG</title>", "\n  ".join(meta))
          .replace('href="/static/style.css"', f'href="{cfg.interface_url}style.css?v={v["style.css"]}"')
@@ -155,9 +187,10 @@ def _page_jouer(cfg, dossier, v_donnees):
     _ecrire(os.path.join(dossier, "jouer", "index.html"), t)
 
 
-def ecrire_deck(cfg, pseudo, slug, deck, donnees, image=None, budget=None):
-    """La page d'un deck. donnees : {deck, date, api, comparer, version} (partage.capturer) ; image : le JPEG.
-    Renvoie (url, resume) : resume pour la page du pseudo (sans les cartes, avec la liste des noms)."""
+def ecrire_deck(cfg, pseudo, slug, deck, donnees, image=None, budget=None, indexer=True):
+    """La page d'un deck. donnees : {deck, date, api, comparer, version} (partage.capturer) ; image : le JPEG ;
+    indexer : False pour une page non répertoriée. Renvoie (url, resume) : resume pour la page du pseudo (sans les
+    cartes, avec la liste des noms)."""
     donnees = neutraliser(donnees)
     api = donnees.get("api")
     d = api.get(f"/api/decks/{deck}") if isinstance(api, dict) else None
@@ -185,7 +218,7 @@ def ecrire_deck(cfg, pseudo, slug, deck, donnees, image=None, budget=None):
     page.update(reglages={"budget": budget if isinstance(budget, (int, float)) and not isinstance(budget, bool) else 5},
                 atelier=DEPOT, auteur=pseudo, accueil="../")
     v = _page(cfg, dossier, page, dict(titre=f"{titre} : {genre}, par {pseudo}", description=description, url=url,
-                                       image=adresse_image,
+                                       image=adresse_image, indexer=indexer, tete=[proprietaire(cfg, pseudo, deck)],
                                        alt=f"{titre} : carte de {_liste(cmds) or 'son commandant'}, couleurs et chiffres du deck"))
     _page_jouer(cfg, dossier, v)
     resume = {k: x for k, x in d.items() if k not in ("cartes", "categories")}
@@ -215,7 +248,7 @@ def ecrire_pseudo(cfg, pseudo, decks):
     n = len(resumes)
     image = next((x["image"] for _, _, x in decks if x.get("image")), None)
     _page(cfg, dossier, donnees, dict(
-        titre=f"Decks Commander de {pseudo}", url=url, image=image, alt=f"Un deck de {pseudo}",
+        titre=f"Decks Commander de {pseudo}", url=url, image=image, alt=f"Un deck de {pseudo}", tete=[proprietaire(cfg, pseudo)],
         description=f"{n} deck{'s' if n > 1 else ''} Commander : {titres}. Listes, visuels, statistiques, combos et table "
                     "de jeu pour tester chaque deck."))
 

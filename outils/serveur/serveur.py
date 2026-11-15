@@ -57,7 +57,7 @@ def maintenant():
 
 
 def sha_blob(texte):
-    """L'empreinte git d'un fichier (comme github.sha_blob sur le PC et shaBlob dans l'appli)."""
+    """L'empreinte git d'un fichier (comme compte.sha sur le PC et shaBlob dans l'appli)."""
     o = texte.encode("utf-8")
     return hashlib.sha1(b"blob %d\0" % len(o) + o).hexdigest()
 
@@ -200,13 +200,14 @@ def creer(reglages):
         with base.session() as s:
             if not s.faire("DELETE FROM codes WHERE email = ?", email):
                 raise Refus("Code expiré : demande un nouveau code.")      # utilisé entre-temps
-            c = s.un("SELECT id FROM comptes WHERE email = ?", email)
+            c = s.un("SELECT id, pseudo FROM comptes WHERE email = ?", email)
             nouveau = not c
             compte = c[0] if c else s.inserer("INSERT INTO comptes (email, cree, vu) VALUES (?, ?, ?)", email, t, t)
+            pseudo = c[1] if c else None
             jeton = secrets.token_urlsafe(32)
             s.inserer("INSERT INTO sessions (compte, empreinte, appareil, cree, vu) VALUES (?, ?, ?, ?, ?)",
                       compte, hashlib.sha256(jeton.encode()).hexdigest(), appareil, t, t)
-        return jsonify(jeton=jeton, email=email, nouveau=nouveau)
+        return jsonify(jeton=jeton, email=email, nouveau=nouveau, pseudo=pseudo)
 
     @app.post("/deconnexion")
     @connecte
@@ -223,6 +224,34 @@ def creer(reglages):
             email, pseudo, cree, octets, revision = s.un(
                 "SELECT email, pseudo, cree, octets, revision FROM comptes WHERE id = ?", g.compte)
         return jsonify(email=email, pseudo=pseudo, cree=cree, octets=octets, quota=quota, revision=revision)
+
+    def fixer_pseudo(s, voulu):
+        """Le pseudo du compte, choisi une fois (à l'inscription ; avant, au premier partage) : None si c'est fait, sinon
+        ce qui ne va pas. Il est dans l'adresse des pages : il ne change pas (plus tard, avec une redirection)."""
+        voulu = str(voulu or "").strip().lower()
+        if not voulu:
+            return "Choisis ton pseudo : il sera dans l'adresse de tes decks."
+        if not pages.pseudo_valide(voulu):
+            return "Pseudo : de 3 à 30 lettres minuscules, chiffres ou tirets."
+        if s.un("SELECT 1 FROM comptes WHERE pseudo = ? AND id <> ?", voulu, g.compte):
+            return "Ce pseudo est déjà pris : choisis-en un autre."
+        actuel = s.un("SELECT pseudo FROM comptes WHERE id = ?", g.compte)[0]
+        if actuel and actuel != voulu:
+            return "Ton pseudo est déjà choisi."
+        s.faire("UPDATE comptes SET pseudo = ? WHERE id = ?", voulu, g.compte)
+        return None
+
+    @app.post("/compte/pseudo")
+    @connecte
+    def choisir_pseudo():
+        """{pseudo} : le pseudo du compte (à l'inscription). 409 {erreur} s'il est pris, invalide ou déjà choisi."""
+        with base.session() as s:
+            verrouiller(s)
+            erreur = fixer_pseudo(s, corps().get("pseudo"))
+            if erreur:
+                return jsonify(erreur=erreur), 409
+            pseudo = s.un("SELECT pseudo FROM comptes WHERE id = ?", g.compte)[0]
+        return jsonify(pseudo=pseudo)
 
     @app.delete("/compte")
     @connecte
@@ -367,32 +396,39 @@ def creer(reglages):
         return d
 
     def plan_du_site(s):
-        pages.ecrire_sitemap(cfg_pages, s.tous("SELECT c.pseudo, p.slug, p.maj FROM partages p JOIN comptes c ON c.id = p.compte"))
+        pages.ecrire_sitemap(cfg_pages, s.tous("SELECT c.pseudo, p.slug, p.maj FROM partages p JOIN comptes c ON c.id = p.compte "
+                                               "WHERE p.visibilite = 'public'"))
 
     def page_du_pseudo(s, pseudo):
-        lignes = s.tous("SELECT deck, slug, resume FROM partages WHERE compte = ? ORDER BY maj DESC", g.compte)
+        lignes = s.tous("SELECT deck, slug, resume FROM partages WHERE compte = ? AND visibilite = 'public' ORDER BY maj DESC",
+                        g.compte)
         pages.ecrire_pseudo(cfg_pages, pseudo, [(d, sl, json.loads(r)) for d, sl, r in lignes])
 
     @app.get("/partages")
     @connecte
     def partages():
-        """{pseudo, partages: [{deck, url, date}]}."""
+        """{pseudo, partages: [{deck, slug, url, date, visibilite}]}."""
         with base.session() as s:
             pseudo = s.un("SELECT pseudo FROM comptes WHERE id = ?", g.compte)[0]
-            lignes = s.tous("SELECT deck, slug, maj FROM partages WHERE compte = ? ORDER BY deck", g.compte)
+            lignes = s.tous("SELECT deck, slug, maj, visibilite FROM partages WHERE compte = ? ORDER BY deck", g.compte)
         url = cfg_pages.url if cfg_pages else ""
-        return jsonify(pseudo=pseudo, partages=[dict(deck=d, url=f"{url}{pseudo}/{sl}/", date=m) for d, sl, m in lignes])
+        return jsonify(pseudo=pseudo, partages=[dict(deck=d, slug=sl, url=f"{url}{pseudo}/{sl}/", date=m, visibilite=v)
+                                                for d, sl, m, v in lignes])
 
     @app.post("/partages")
     @connecte
     def partager():
-        """{deck, donnees (partage.capturer), image (JPEG en base64, facultative), budget, pseudo (au premier partage)} :
-        publie ou met à jour la page du deck. Renvoie {url, date, pseudo} ; 409 {pseudo_requis} sans pseudo."""
+        """{deck, donnees (partage.capturer), image (JPEG en base64, facultative), budget, pseudo (compte sans pseudo),
+        visibilite (« public », par défaut, ou « non-repertorie »), slug (l'adresse voulue par l'Atelier, la première
+        fois)} : publie ou met à jour la page du deck. Renvoie {url, slug, date, pseudo} ; 409 {pseudo_requis} sans pseudo."""
         pages_pretes()
         d = corps()
         deck, donnees = nom_deck(d.get("deck")), d.get("donnees")
         if not isinstance(donnees, dict) or not isinstance(donnees.get("api"), dict):
             raise Refus("Données de la page invalides.")
+        visibilite = d.get("visibilite") or "public"
+        if visibilite not in ("public", "non-repertorie"):
+            raise Refus("Visibilité invalide.")
         image = None
         if d.get("image"):
             try:
@@ -406,26 +442,27 @@ def creer(reglages):
             verrouiller(s)
             pseudo = s.un("SELECT pseudo FROM comptes WHERE id = ?", g.compte)[0]
             if not pseudo:
-                voulu = str(d.get("pseudo") or "").strip().lower()
-                if not voulu:
-                    return jsonify(erreur="Choisis ton pseudo : il sera dans l'adresse de tes pages.", pseudo_requis=True), 409
-                if not pages.pseudo_valide(voulu):
-                    return jsonify(erreur="Pseudo : de 3 à 30 lettres minuscules, chiffres ou tirets.", pseudo_requis=True), 409
-                if s.un("SELECT 1 FROM comptes WHERE pseudo = ?", voulu):
-                    return jsonify(erreur="Ce pseudo est déjà pris : choisis-en un autre.", pseudo_requis=True), 409
-                s.faire("UPDATE comptes SET pseudo = ? WHERE id = ?", voulu, g.compte)
-                pseudo = voulu
+                erreur = fixer_pseudo(s, d.get("pseudo"))
+                if erreur:
+                    return jsonify(erreur=erreur, pseudo_requis=True), 409
+                pseudo = s.un("SELECT pseudo FROM comptes WHERE id = ?", g.compte)[0]
             r = s.un("SELECT slug FROM partages WHERE compte = ? AND deck = ?", g.compte, deck)
-            slug = r[0] if r else pages.slug_de(deck, {x for (x,) in s.tous("SELECT slug FROM partages WHERE compte = ?", g.compte)})
+            if r:
+                slug = r[0]                                    # l'adresse d'une page ne change pas
+            else:
+                pris = {x for (x,) in s.tous("SELECT slug FROM partages WHERE compte = ?", g.compte)}
+                voulu = str(d.get("slug") or "")
+                slug = voulu if pages.slug_valide(voulu) and voulu not in pris else pages.slug_de(deck, pris)
             try:
-                url, resume = pages.ecrire_deck(cfg_pages, pseudo, slug, deck, donnees, image, d.get("budget"))
+                url, resume = pages.ecrire_deck(cfg_pages, pseudo, slug, deck, donnees, image, d.get("budget"),
+                                                indexer=visibilite == "public")
             except ValueError as e:
                 raise Refus(str(e)) from None
-            s.faire("REPLACE INTO partages (compte, deck, slug, maj, resume) VALUES (?, ?, ?, ?, ?)",
-                    g.compte, deck, slug, t, json.dumps(resume, ensure_ascii=False))
+            s.faire("REPLACE INTO partages (compte, deck, slug, maj, resume, visibilite) VALUES (?, ?, ?, ?, ?, ?)",
+                    g.compte, deck, slug, t, json.dumps(resume, ensure_ascii=False), visibilite)
             page_du_pseudo(s, pseudo)
             plan_du_site(s)
-        return jsonify(url=url, date=t, pseudo=pseudo)
+        return jsonify(url=url, slug=slug, date=t, pseudo=pseudo, visibilite=visibilite)
 
     @app.post("/partages/retirer")
     @connecte
@@ -464,18 +501,21 @@ def refaire_pages(reglages):
     tout juste redéployée) : python serveur.py --refaire-pages, lancé par la tâche qui déploie la page d'accueil."""
     cfg, base = pages.Reglages(reglages["pages"]), Base(reglages["base"])
     with base.session() as s:
-        lignes = s.tous("SELECT c.pseudo, p.deck, p.slug, p.resume FROM partages p JOIN comptes c ON c.id = p.compte "
-                        "ORDER BY p.maj DESC")
+        lignes = s.tous("SELECT c.pseudo, p.deck, p.slug, p.resume, p.visibilite FROM partages p "
+                        "JOIN comptes c ON c.id = p.compte ORDER BY p.maj DESC")
     par_pseudo = {}
-    for pseudo, deck, slug, resume in lignes:
+    for pseudo, deck, slug, resume, visibilite in lignes:
         try:
             d = pages.relire(cfg, pseudo, slug)
             jpg = os.path.join(cfg.dossier, pseudo, slug, "partage.jpg")
             image = open(jpg, "rb").read() if os.path.exists(jpg) else None
-            pages.ecrire_deck(cfg, pseudo, slug, deck, d, image, (d.get("reglages") or {}).get("budget"))
+            pages.ecrire_deck(cfg, pseudo, slug, deck, d, image, (d.get("reglages") or {}).get("budget"),
+                              indexer=visibilite == "public")
         except (OSError, ValueError) as e:
             print(f"{pseudo}/{slug} : {e}")
-        par_pseudo.setdefault(pseudo, []).append((deck, slug, json.loads(resume)))
+        par_pseudo.setdefault(pseudo, [])
+        if visibilite == "public":
+            par_pseudo[pseudo].append((deck, slug, json.loads(resume)))
     for pseudo, decks in par_pseudo.items():
         pages.ecrire_pseudo(cfg, pseudo, decks)
     return len(lignes)

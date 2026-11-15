@@ -214,6 +214,29 @@ def donnees(deck, titre="Kels", **en_plus):
                     f"/api/decks/{deck}/achats": {"possedees": {"Sol Ring": 1}}, "/api/recherche/fonctions": [["ramp", "Ramp"]]}}
 
 
+class EssaisBase(unittest.TestCase):
+    def test_colonne_ajoutee(self):
+        """Une base d'avant la visibilité des pages : la colonne est ajoutée, les pages gardées (publiques)."""
+        from base import Base
+        d = tempfile.mkdtemp()
+        try:
+            import sqlite3
+            f = os.path.join(d, "ancienne.db")
+            c = sqlite3.connect(f)
+            c.execute("CREATE TABLE partages (compte BIGINT NOT NULL, deck VARCHAR(200) NOT NULL, slug VARCHAR(80) NOT NULL, "
+                      "maj BIGINT NOT NULL, resume TEXT NOT NULL, PRIMARY KEY (compte, deck), UNIQUE (compte, slug))")
+            c.execute("INSERT INTO partages VALUES (1, 'Deck Kels', 'kels', 1, '{}')")
+            c.commit()
+            c.close()
+            b = Base("sqlite:///" + f)
+            b.creer_tables()
+            b.creer_tables()                                                              # une deuxième fois : rien à faire
+            with b.session() as s:
+                self.assertEqual(s.un("SELECT deck, visibilite FROM partages"), ("Deck Kels", "public"))
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+
 class EssaisPages(unittest.TestCase):
     """Les pages publiques des decks (pages.py)."""
     code, connecter, tearDown = Essais.code, Essais.connecter, Essais.tearDown
@@ -234,6 +257,52 @@ class EssaisPages(unittest.TestCase):
         import base64
         corps = {"deck": deck, "donnees": kw.pop("d", None) or donnees(deck), "image": base64.b64encode(JPEG).decode(), **kw}
         return self.c.post("/partages", json=corps, headers=h)
+
+    def test_visibilite_et_adresse(self):
+        h, _ = self.connecter()
+        self.c.post("/compte/pseudo", json={"pseudo": "joueur"}, headers=h)
+        r = self.partager(h, slug="mon-kels")
+        self.assertEqual((r.json["slug"], r.json["visibilite"]), ("mon-kels", "public"))
+        page = self.lire("joueur", "mon-kels", "index.html")
+        self.assertNotIn('content="noindex"', page)
+        self.assertIn('c.pseudo === "joueur"', page)                                   # le propriétaire va dans l'appli
+        self.assertIn('const d = "Deck Kels"', page)
+        # non répertoriée : noindex, hors du plan du site et de la page du pseudo ; une adresse déjà prise n'est pas reprise
+        r = self.partager(h, deck="Deck Sefris", d=donnees("Deck Sefris", titre="Sefris"), visibilite="non-repertorie", slug="mon-kels")
+        self.assertEqual((r.json["slug"], r.json["visibilite"]), ("sefris", "non-repertorie"))
+        self.assertIn('<meta name="robots" content="noindex">', self.lire("joueur", "sefris", "index.html"))
+        self.assertNotIn("joueur/sefris/", self.lire("sitemap.xml"))
+        self.assertNotIn("Deck Sefris", self.lire("joueur", "donnees.js"))
+        self.assertIn('c.pseudo === "joueur"', self.lire("joueur", "index.html"))
+        # devenue publique : même adresse (celle d'une page ne change pas), dans le plan du site
+        r = self.partager(h, deck="Deck Sefris", d=donnees("Deck Sefris", titre="Sefris"), slug="autre")
+        self.assertEqual((r.json["slug"], r.json["visibilite"]), ("sefris", "public"))
+        self.assertIn("joueur/sefris/", self.lire("sitemap.xml"))
+        self.assertIn("Deck Sefris", self.lire("joueur", "donnees.js"))
+        self.assertEqual(self.partager(h, visibilite="prive").status_code, 400)          # privé : on retire la page
+        l = {x["deck"]: (x["slug"], x["visibilite"]) for x in self.c.get("/partages", headers=h).json["partages"]}
+        self.assertEqual(l, {"Deck Kels": ("mon-kels", "public"), "Deck Sefris": ("sefris", "public")})
+        for mauvais in ("Mon Kels", "a--b", "decks", "-x"):                                # adresse invalide : celle du nom
+            r = self.partager(h, deck=f"Deck {mauvais}", d=donnees(f"Deck {mauvais}"), slug=mauvais)
+            self.assertNotEqual(r.json["slug"], mauvais)
+
+    def test_pseudo_a_l_inscription(self):
+        h, r = self.connecter()
+        self.assertIsNone(r["pseudo"])
+        for mauvais in ("", "ab", "Pierre!", "-pierre", "admin", "decks", "a" * 31):
+            self.assertEqual(self.c.post("/compte/pseudo", json={"pseudo": mauvais}, headers=h).status_code, 409, mauvais)
+        r = self.c.post("/compte/pseudo", json={"pseudo": " Pierre-MTG "}, headers=h)
+        self.assertEqual((r.status_code, r.json["pseudo"]), (200, "pierre-mtg"))
+        self.assertEqual(self.c.post("/compte/pseudo", json={"pseudo": "pierre-mtg"}, headers=h).status_code, 200)   # le même
+        r = self.c.post("/compte/pseudo", json={"pseudo": "autre"}, headers=h)
+        self.assertEqual((r.status_code, r.json["erreur"]), (409, "Ton pseudo est déjà choisi."))
+        self.assertEqual(self.c.get("/compte", headers=h).json["pseudo"], "pierre-mtg")
+        self.assertEqual(self.connecter()[1]["pseudo"], "pierre-mtg")              # renvoyé à la connexion
+        h2, _ = self.connecter("autre@exemple.fr")
+        r = self.c.post("/compte/pseudo", json={"pseudo": "pierre-mtg"}, headers=h2)
+        self.assertEqual((r.status_code, r.json["erreur"]), (409, "Ce pseudo est déjà pris : choisis-en un autre."))
+        r = self.partager(h)                                                         # plus de pseudo à donner au partage
+        self.assertEqual((r.status_code, r.json["url"]), (200, "https://atelier-mtg.com/decks/pierre-mtg/kels/"))
 
     def test_partager(self):
         h, _ = self.connecter()

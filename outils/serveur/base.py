@@ -19,8 +19,11 @@ TABLES = {
     "fichiers": "compte BIGINT NOT NULL, chemin VARCHAR(400) NOT NULL, contenu {texte} NOT NULL, sha CHAR(40) NOT NULL, "
                 "taille INT NOT NULL, maj BIGINT NOT NULL, PRIMARY KEY (compte, chemin)",
     "partages": "compte BIGINT NOT NULL, deck VARCHAR(200) NOT NULL, slug VARCHAR(80) NOT NULL, maj BIGINT NOT NULL, "
-                "resume {texte} NOT NULL, PRIMARY KEY (compte, deck), UNIQUE (compte, slug)",
+                "resume {texte} NOT NULL, visibilite VARCHAR(20) NOT NULL DEFAULT 'public', "
+                "PRIMARY KEY (compte, deck), UNIQUE (compte, slug)",
 }
+# les colonnes venues après la création des tables : ajoutées à une base qui ne les a pas encore
+AJOUTS = {"partages": {"visibilite": "VARCHAR(20) NOT NULL DEFAULT 'public'"}}
 INDEX = {"envois": "cle, quand", "sessions": "compte"}
 
 
@@ -63,6 +66,15 @@ class Base:
         with self.session() as s:
             for nom, colonnes in TABLES.items():
                 s.faire(f"CREATE TABLE IF NOT EXISTS {nom} ({colonnes.format(pk=pk, texte=texte)}){fin}")
+            for nom, ajouts in AJOUTS.items():
+                if self.mysql:
+                    vues = {x for (x,) in s.tous("SELECT column_name FROM information_schema.columns WHERE table_schema = "
+                                                 "DATABASE() AND table_name = ?", nom)}
+                else:
+                    vues = {x[1] for x in s.tous(f"PRAGMA table_info({nom})")}
+                for col, definition in ajouts.items():
+                    if col not in vues:
+                        s.faire(f"ALTER TABLE {nom} ADD COLUMN {col} {definition}")
             for nom, colonnes in INDEX.items():
                 if self.mysql:
                     if not s.un("SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE() "
