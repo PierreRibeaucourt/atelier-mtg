@@ -233,6 +233,8 @@ const ICONES = {
   simulation: '<rect x="3.5" y="3.5" width="17" height="17" rx="3"/>' + POINT(8.5, 8.5) + POINT(12, 12) + POINT(15.5, 15.5),
   rafraichir: '<path d="M20 12a8 8 0 1 1-2.3-5.7L20 8.5"/><path d="M20 3.5v5h-5"/>',
   theme: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/>',
+  compte: '<circle cx="12" cy="8" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/>',
+  sortir: '<path d="M9.5 20.5H6a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2h3.5"/><path d="m15.5 16.5 4.5-4.5-4.5-4.5M20 12H9.5"/>',
   discussion: '<path d="M20 15a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"/>',
   fermer: '<path d="M18 6 6 18M6 6l12 12"/>',
   maybe: '<path d="M3 13h5l1.5 2.5h5L16 13h5"/><path d="M5.6 5h12.8L21 13v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z"/>',
@@ -281,9 +283,73 @@ const SITE_ATELIER = !!PARTAGE && ["a-propos", "recherche"].includes(PARTAGE.pag
 // « Installer l'Atelier MTG » : la section Installation de cette page, pas GitHub (un débutant y attend un fichier à
 // télécharger, il y trouve du code)
 const INSTALLER = TELEPHONE ? ACCUEIL_ATELIER + "#installation" : !PARTAGE ? "#/a-propos/installation" : PARTAGE.page === "a-propos" ? "#installation" : A_PROPOS + "#installation";
-// les deux choix proposés partout hors de l'Atelier : un compte (l'appli en ligne) ou la version à installer
-const DEUX_CHOIX = (petit = "") => `<span class="deux-choix"><a class="btn btn-accent${petit}" href="https://app.atelier-mtg.com/#inscription">${ico("plus")}Créer un compte</a>
+// l'appli en ligne (telephone_site.py), sur le même domaine que le site : il sait si l'on y est connecté
+const MES_DECKS_URL = "https://atelier-mtg.com/mes-decks/";
+// les deux choix proposés partout hors de l'Atelier : un compte (l'appli en ligne) ou la version à installer ; connecté
+// (classe « connecte » : partage.TETE_COMPTE, telephone.js › marquerCompte), « Mes decks » à la place du compte
+const DEUX_CHOIX = (petit = "") => `<span class="deux-choix"><a class="btn btn-accent${petit} hors-compte" href="${MES_DECKS_URL}#inscription">${ico("plus")}Créer un compte</a>
+  <a class="btn btn-accent${petit} en-compte" href="${MES_DECKS_URL}">${ico("cartes")}Mes decks</a>
   <a class="btn btn-contour${petit}" href="${INSTALLER}">${ico("telecharger")}Télécharger</a></span>`;
+// ------------------------------------------------------------------ l'adresse, dans l'appli en ligne (site unique)
+// L'appli montre l'adresse publique de ce qu'on regarde, celle qu'on partage : ses decks à /decks/<pseudo>/, un deck à
+// /decks/<pseudo>/<slug>/ (#/onglet ensuite), le reste à l'adresse de l'appli (/mes-decks/#/…). Sa route reste
+// « #/deck/… » : routeHash(). Une page publique ouverte par son propriétaire le renvoie ici (pages.proprietaire) ; une
+// route écrite dans l'adresse (lien « #/… », location.hash = …) est traduite (hashchange, plus bas).
+const SITE_APPLI = !!TELEPHONE && !PARTAGE && !window.ATELIER_VOIR;
+const CHEMIN_APPLI = SITE_APPLI ? new URL(".", document.currentScript.src).pathname : "";
+const ECRANS_APPLI_ROUTE = new Set(["deck", "recherche", "options", "classeur", "proxies", "compte", "deconnexion", "slug", "a-propos"]);
+const pseudoLocal = () => { try { return (JSON.parse(localStorage.getItem("atelier-compte") || "null") || {}).pseudo || ""; } catch (_) { return ""; } };
+function adresseDeRoute(h) {
+  const p = pseudoLocal(), r = String(h || "").replace(/^#\/?/, "");
+  if (!p) return CHEMIN_APPLI + (r ? "#/" + r : "");
+  if (!r) return `/decks/${p}/`;
+  const m = r.match(/^deck\/([^/?]+)\/?(.*)$/s);
+  if (m) return `/decks/${p}/${TELEPHONE.slug(decodeURIComponent(m[1]))}/` + (m[2] ? "#/" + m[2] : "");
+  return CHEMIN_APPLI + "#/" + r;
+}
+function routeDepuisAdresse() {
+  const h = location.hash, r = h.replace(/^#\/?/, "");
+  if (!SITE_APPLI || location.pathname.startsWith(CHEMIN_APPLI)) return h;
+  const m = location.pathname.match(/^\/decks\/[^/]+\/(?:([^/]+)\/)?$/);
+  if (!m || ECRANS_APPLI_ROUTE.has(r.split(/[/?]/)[0])) return h;
+  if (!m[1]) return "#/";
+  const id = TELEPHONE.deckDeSlug(m[1]);
+  return id ? `#/deck/${enc(id)}${r ? "/" + r : ""}` : `#/slug/${m[1]}${r ? "/" + r : ""}`;
+}
+let routeActuelle = SITE_APPLI ? routeDepuisAdresse() : "";
+// la route affichée : celle de l'appli ; sur une page partagée, « #/stats » (l'onglet seul, comme l'adresse d'un deck
+// partagé depuis l'appli) vaut « #/deck/<deck>/stats »
+function routeHash() {
+  if (SITE_APPLI) return routeActuelle;
+  if (PARTAGE && PARTAGE.deck) {
+    const r = location.hash.replace(/^#\/?/, ""), o = r.split(/[/?]/)[0];
+    if (o && !ECRANS_APPLI_ROUTE.has(o)) return `#/deck/${enc(PARTAGE.deck)}/${r}`;
+  }
+  return location.hash;
+}
+// changer la route sans recharger la vue (history.replaceState), son adresse avec
+function remplacerRoute(h) {
+  if (SITE_APPLI) { routeActuelle = h; history.replaceState(history.state, "", adresseDeRoute(h)); }
+  else history.replaceState(null, "", h);
+}
+// les fichiers de l'appli (table de jeu…), quelle que soit l'adresse affichée
+const RACINE_APPLI = CHEMIN_APPLI;
+// le rond du compte, en haut à droite (site et appli) : Mes decks, Mon compte, Se déconnecter. Sur le site, ces liens
+// mènent à l'appli ; dans l'appli, à ses écrans
+function menuCompte() {
+  const b = $("#btn-compte");
+  if (!b) return;
+  b.classList.add("ouvre-menu");
+  b.addEventListener("click", () => {
+    if (!$("#menu").hidden) return fermerMenu();
+    let c = null;
+    try { c = JSON.parse(localStorage.getItem("atelier-compte") || "null"); } catch (_) { /* stockage refusé */ }
+    const ici = !!window.TELEPHONE && !PARTAGE, aller = (h) => () => { if (ici) location.hash = h; else location.href = MES_DECKS_URL + h; };
+    ouvrirMenu(b, [(c && (c.pseudo || c.email)) || "", ["Mes decks", aller("#/"), "", "cartes"], ["Mon compte", aller("#/compte"), "", "compte"],
+      null, ["Se déconnecter", aller("#/deconnexion"), "", "sortir"]].filter((x) => x !== ""));
+  });
+}
+menuCompte();
 if (PARTAGE) {
   const depot = PARTAGE.atelier ? esc(PARTAGE.atelier) : "";
   if (PARTAGE.recherche) $("#lien-recherche").href = PARTAGE.recherche;
@@ -385,9 +451,10 @@ function barreAppli(parts, qs) {
     titre = "Recherche avancée";
     if (rd) retour = `#/deck/${enc(rd)}`;
   } else if (parts[0] === "options") titre = "Options";
+  else if (parts[0] === "compte") { titre = "Mon compte"; retour = "#/"; }
   else if (parts[0] === "classeur") titre = "Classeur";
   else if (parts[0]) retour = "#/";
-  else etat.menuEcran = () => [["Importer des decks…", modaleImportDecks, "", "dossier"], ["Demander à Claude", () => surPC("claude"), "", "discussion"]];
+  else etat.menuEcran = () => [["Importer des decks…", modaleImportDecks, "", "dossier"], ["Demander à Claude", () => (TELEPHONE && TELEPHONE.pc ? ouvrirChat() : surPC("claude")), "", "discussion"]];
   $("#app-titre").textContent = titre;
   const r = $("#app-retour");
   r.hidden = !retour;
@@ -883,10 +950,10 @@ document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { fermer
 // titre de l'onglet du navigateur, la page d'abord : « Kels · Statistiques », « Recherche · « dragon » · Kels »
 function majTitre() {
   if (PARTAGE) {                                   // page partagée : le titre écrit par partage.py
-    document.title = location.hash.startsWith("#/a-propos") ? "L'Atelier MTG" : TITRE_PARTAGE;
+    document.title = routeHash().startsWith("#/a-propos") ? "L'Atelier MTG" : TITRE_PARTAGE;
     return;
   }
-  const [chemin, qs] = location.hash.replace(/^#\/?/, "").split(/\?(.*)/s);
+  const [chemin, qs] = routeHash().replace(/^#\/?/, "").split(/\?(.*)/s);
   const parts = chemin.split("/");
   let t = "Mes decks";
   if (parts[0] === "deck" && parts[1]) {
@@ -909,8 +976,18 @@ async function route() {
   cacherApercu();
   if (TELEPHONE) document.documentElement.classList.toggle("appli-prete", !!TELEPHONE.pret);
   if (TELEPHONE && !TELEPHONE.pret) return TELEPHONE.attente(vue);     // téléphone pas encore relié, ou decks en route
+  if (SITE_APPLI) {
+    const s = routeActuelle.match(/^#\/slug\/([^/?]+)\/?(.*)$/s);
+    if (s) {
+      const id = TELEPHONE.deckDeSlug(s[1]);
+      routeActuelle = id ? `#/deck/${enc(id)}${s[2] ? "/" + s[2] : ""}` : "#/";
+      if (!id) toast("Ce deck n'existe plus.");
+    }
+    const voulue = new URL(adresseDeRoute(routeActuelle), location.href).href;
+    if (location.href !== voulue) history.replaceState(history.state, "", voulue);
+  }
   majTitre();
-  const [chemin, qs] = location.hash.replace(/^#\/?/, "").split(/\?(.*)/s);
+  const [chemin, qs] = routeHash().replace(/^#\/?/, "").split(/\?(.*)/s);
   const parts = chemin.split("/");
   if (PARTAGE && PARTAGE.page === "recherche" && !parts[0]) parts[0] = "recherche";
   const ecran = parts[0] === "deck" ? "deck/" + parts[1] : parts[0];      // un autre écran s'ouvre en haut de page
@@ -932,6 +1009,8 @@ async function route() {
       parts[0] === "deck" && parts[2] === "suggestions" && parts[3] ? parts[3] : null);   // « Trouver d'autres combos »
     else if (PARTAGE && parts[0] === "deck" && parts[1]) location.replace(lienDeck(decodeURIComponent(parts[1])));
     else if (parts[0] === "recherche") await vueRecherche(new URLSearchParams(qs || ""));
+    else if (window.TELEPHONE && !PARTAGE && parts[0] === "compte") vueCompte();
+    else if (window.TELEPHONE && !PARTAGE && parts[0] === "deconnexion") await deconnexionDemandee();
     else if (!PARTAGE && parts[0] === "options") await vueOptions();
     else if (!PARTAGE && parts[0] === "classeur") await vueClasseur();
     else if (!PARTAGE && parts[0] === "proxies") await vueProxies(new URLSearchParams(qs || ""));
@@ -943,7 +1022,20 @@ async function route() {
   majTitre();                                      // la vue a pu compléter l'adresse
   barreAppli(parts, qs);
 }
-window.addEventListener("hashchange", route);
+if (SITE_APPLI) {
+  let parHistorique = false;
+  addEventListener("popstate", () => {
+    parHistorique = true;
+    setTimeout(() => { parHistorique = false; });
+    const r = routeDepuisAdresse();
+    if (r !== routeActuelle) { routeActuelle = r; route(); }
+  });
+  addEventListener("hashchange", () => {
+    if (parHistorique) return;                     // l'historique : popstate s'en est chargé
+    routeActuelle = location.hash;
+    route();
+  });
+} else window.addEventListener("hashchange", route);
 
 // « Tymna the Weaver + Thrasios, Triton Hero » : les deux commandants d'un deck à partenaires
 const nomsCommandants = (d) => ((d.commandants && d.commandants.length) ? d.commandants : d.commandant ? [d.commandant] : []).join(" + ");
@@ -960,8 +1052,8 @@ async function listeDecks() {
 // ------------------------------------------------------------------ champ du haut (Ctrl+K) : une carte, comme sur Magic-Ville, ou un deck
 // Le deck de la page (ou celui lié à la recherche) sert à marquer les cartes qu'il contient et à y ajouter la carte choisie.
 function deckDeLaPage() {
-  if (location.hash.startsWith("#/recherche")) return rch.deck || null;
-  if (location.hash.startsWith("#/deck/") && etat.deck) return etat.deck;
+  if (routeHash().startsWith("#/recherche")) return rch.deck || null;
+  if (routeHash().startsWith("#/deck/") && etat.deck) return etat.deck;
   return null;
 }
 
@@ -1307,7 +1399,7 @@ function modaleImportDecks() {
         const fini = () => {
           fermerModale();
           if (r.decks.length === 1) location.hash = `#/deck/${enc(r.decks[0])}`;
-          else if (location.hash.replace(/^#\/?/, "")) location.hash = "#/";
+          else if (routeHash().replace(/^#\/?/, "")) location.hash = "#/";
           else route();
         };
         const deja = (r.deja || []).length, la = deja ? ` ${deja > 1 ? `${deja} étaient` : "1 était"} déjà là.` : "";
@@ -1357,7 +1449,7 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
           <div class="chiffres" style="margin-top:.5rem">${chiffresDeck(d)}</div>
         </div>
         <div class="actions">
-          ${PARTAGE && PARTAGE.instantane ? "" : (TELEPHONE ? `<a class="btn" data-jouer="${esc(id)}" href="jouer/?deck=${enc(id)}">${ico("lancer")}Jouer</a>`
+          ${PARTAGE && PARTAGE.instantane ? "" : (TELEPHONE ? `<a class="btn" data-jouer="${esc(id)}" href="${RACINE_APPLI}jouer/?deck=${enc(id)}">${ico("lancer")}Jouer</a>`
             : `<a class="btn" href="${PARTAGE ? "jouer/" : `/jouer?deck=${enc(id)}`}" target="_blank" rel="noopener">${ico("lancer")}Jouer</a>`)}
           <a class="btn ecrit" href="#/recherche?deck=${enc(id)}">${ico("chercher")}Chercher pour ce deck</a>
           <button class="btn btn-icone ouvre-menu" id="btn-deck-menu" aria-label="Autres actions sur le deck" title="Autres actions">${ico("plus_de")}</button>
@@ -1392,8 +1484,8 @@ function menuDeck(d) {
     ...(PARTAGE ? [] : [["Cardmarket (à acheter)", () => copierCardmarket(d), "", "panier"]])];
   return [
     ...(ECRAN_TELEPHONE ? [["Chercher pour ce deck", () => { location.hash = `#/recherche?deck=${enc(d.id)}`; }, "", "chercher"],
-      ["Jouer", () => (TELEPHONE ? ouvrirJeu(d.id) : surPC("jouer")), "", "lancer"], ["Demander à Claude", () => surPC("claude"), "", "discussion"], null] : []),
-    ...(PARTAGEABLE ? [["Partager le deck…", () => modalePartage(d), "", "partager"]] : []),
+      ["Jouer", () => (TELEPHONE ? ouvrirJeu(d.id) : surPC("jouer")), "", "lancer"], ["Demander à Claude", () => (TELEPHONE && TELEPHONE.pc ? ouvrirChat() : surPC("claude")), "", "discussion"], null] : []),
+    ...(PARTAGEABLE ? [["Partager le deck…", () => modaleLien(d), "", "partager"]] : []),
     ...(PARTAGE ? [] : [["Imprimer les proxies…", () => { location.hash = `#/proxies?deck=${enc(d.id)}`; }, "", "imprimer"]]),
     ...(PARTAGEABLE ? [null] : []),
     // sur le téléphone, les formats dans un second menu : le premier tient à l'écran
@@ -1535,7 +1627,7 @@ async function ongletSuggestions(el, d, demande = null) {
   if (GROUPES_SUGG.some(([k]) => k === demande)) {
     groupe = demande;
     PREF.set("groupe-sugg", groupe);
-    history.replaceState(null, "", `#/deck/${enc(d.id)}/suggestions`);        // recharger la page garde le groupe choisi ensuite
+    remplacerRoute(`#/deck/${enc(d.id)}/suggestions`);        // recharger la page garde le groupe choisi ensuite
   }
   if (!GROUPES_SUGG.some(([k]) => k === groupe)) groupe = "theme";
   let tri = PREF.get("tri-sugg", "note");
@@ -1899,115 +1991,49 @@ async function ongletAchats(el, d, poss = null) {
   };
 }
 
-// page du deck publiée sur atelier-mtg.com (partage.py, partage.js) : lien, mise à jour, retrait ; au doigt, « Partager » ouvre le
-// partage du téléphone (messagerie, e-mail…)
+// au doigt, « Partager » ouvre le partage du téléphone (messagerie, e-mail…)
 const PARTAGE_NATIF = !!navigator.share && matchMedia("(pointer: coarse)").matches;
-// le lien instantané d'un deck : sa liste (format Archidekt), son titre et le budget, en JSON compressé après « # » ;
-// voir/ de l'appli en refait la page (telephone.js › voir). Rien n'est publié, mais le deck y est figé.
-async function lienInstantane(d) {
-  const texte = await api(`/api/decks/${enc(d.id)}/export?format=archidekt`);
-  const json = JSON.stringify({ v: 1, t: d.titre, b: BUDGET === Infinity ? 0 : BUDGET, l: texte });
-  const octets = new Uint8Array(await new Response(new Blob([json]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer());
-  let bin = "";
-  for (const x of octets) bin += String.fromCharCode(x);
-  return APPLI_TELEPHONE + "voir/#" + btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-// partager un deck : d'abord le lien instantané (rien de publié, figé), puis la page permanente sur atelier-mtg.com (à
-// jour toute seule, image d'aperçu, table de jeu ; partage.py, ou telephone/partage.js dans l'appli)
-function modalePartage(d) {
-  ouvrirModale(`<h2>Partager ${esc(d.titre)}</h2>
-    <section class="pt-bloc"><h3>Lien instantané</h3>
-      <div id="pt-lien"><p class="chargement">Préparation du lien…</p></div>
-      <p class="muet petit">Rien n'est publié : le lien contient la liste. C'est une photo du deck à cet instant :
-        s'il change, repartage-le.${TELEPHONE ? ` Claude est dans <a href="${INSTALLER}">l'Atelier à installer</a>.` : ""}</p>
-    </section>
-    <section class="pt-bloc"><h3>Page permanente</h3>
-      <div id="pt-zone"><p class="chargement">Chargement…</p></div>
-    </section>`, async (b) => {
-    const lien = $("#pt-lien", b);
-    lienInstantane(d).then((url) => {
-      lien.innerHTML = `<div class="form-ligne">
-          <input class="champ" id="pt-lien-url" readonly value="${esc(url)}" style="flex:1;min-width:200px" aria-label="Lien instantané">
-          ${PARTAGE_NATIF ? `<button class="btn btn-accent" id="pt-lien-envoyer">${ico("partager")}Partager</button>` : ""}
-          <button class="btn ${PARTAGE_NATIF ? "" : "btn-accent"}" id="pt-lien-copier">${ico("copier")}Copier le lien</button>
-          <a class="btn" href="${esc(url)}" target="_blank" rel="noopener">${ico("ouvrir")}Ouvrir</a>
-        </div>`;
-      $("#pt-lien-url", lien).onclick = (ev) => ev.target.select();
-      if (PARTAGE_NATIF) $("#pt-lien-envoyer", lien).onclick = () => navigator.share({ title: d.titre, url }).catch(() => {});
-      $("#pt-lien-copier", lien).onclick = async () => {
-        try { await navigator.clipboard.writeText(url); toast("Lien copié."); } catch (e) { erreur(e); }
-      };
-    }, (e) => { lien.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; });
+// partager un deck : son adresse est le lien (chaque deck a sa page, à jour toute seule, sauf s'il est privé :
+// telephone.js › publier, partage.py › a_republier) ; au doigt, « Partager » ouvre le partage du téléphone. Sur le PC,
+// sans compte : on s'y connecte d'abord
+const VISIBILITES = [["public", "Public", "visible par tous, sur Google aussi"], ["non-repertorie", "Non répertorié", "seulement avec le lien"],
+  ["prive", "Privé", "toi seul"]];
+function modaleLien(d) {
+  ouvrirModale(`<h2>Partager ${esc(d.titre)}</h2><div id="pt-zone"><p class="chargement">Chargement…</p></div>`, async (b) => {
     const zone = $("#pt-zone", b);
-    if (!zone) return;
     const rendre = (s) => {
-      zone.innerHTML = `
-        <div class="form-ligne">
-          <input class="champ" id="pt-url" readonly value="${esc(s.url)}" style="flex:1;min-width:240px" aria-label="Lien de la page">
-          ${PARTAGE_NATIF ? `<button class="btn btn-accent" id="pt-envoyer">${ico("partager")}Partager</button>` : ""}
-          <button class="btn ${PARTAGE_NATIF ? "" : "btn-accent"}" id="pt-copier">${ico("copier")}Copier le lien</button>
-          <a class="btn" href="${esc(s.url)}" target="_blank" rel="noopener">${ico("ouvrir")}Ouvrir</a>
-        </div>
-        <p class="muet petit">Mise à jour le ${esc(new Date(s.date * 1000).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" }))}</p>
-        ${s.erreur ? `<p class="erreur petit">${esc(s.erreur)}</p>` : ""}
-        <div class="boutons">
-          <button class="btn btn-danger" id="pt-retirer">${ico("corbeille")}Ne plus partager</button>
-          <button class="btn" id="pt-maj">${ico("rafraichir")}Mettre à jour</button>
-        </div>`;
+      const prive = s.visibilite === "prive";
+      zone.innerHTML = `<div class="form-ligne">
+          <input class="champ" id="pt-url" readonly value="${esc(s.url)}" style="flex:1;min-width:200px" aria-label="Lien du deck">
+          ${PARTAGE_NATIF && !prive ? `<button class="btn btn-accent" id="pt-envoyer">${ico("partager")}Partager</button>` : ""}
+          <button class="btn ${PARTAGE_NATIF || prive ? "" : "btn-accent"}" id="pt-copier">${ico("copier")}Copier le lien</button></div>
+        <fieldset class="pt-visibilite"><legend>Visibilité</legend>
+          ${VISIBILITES.map(([v, l, x]) => `<label class="pt-choix"><input type="radio" name="pt-vis" value="${v}"${s.visibilite === v ? " checked" : ""}>
+            <span><strong>${l}</strong> <span class="muet">· ${x}</span></span></label>`).join("")}
+        </fieldset>`;
       $("#pt-url", zone).onclick = (ev) => ev.target.select();
-      if (PARTAGE_NATIF) $("#pt-envoyer", zone).onclick = () => navigator.share({ title: d.titre, url: s.url }).catch(() => {});
+      if ($("#pt-envoyer", zone)) $("#pt-envoyer", zone).onclick = () => navigator.share({ title: d.titre, url: s.url }).catch(() => {});
       $("#pt-copier", zone).onclick = async () => {
         try { await navigator.clipboard.writeText(s.url); toast("Lien copié."); } catch (e) { erreur(e); }
       };
-      $("#pt-maj", zone).onclick = publier;
-      $("#pt-retirer", zone).onclick = async () => {
-        if (!confirm(`Retirer la page partagée de « ${d.titre} » ?`)) return;
-        zone.innerHTML = `<p class="chargement">Retrait…</p>`;
-        try { await api(`/api/decks/${enc(d.id)}/partage/retirer`, { method: "POST" }); fermerModale(); toast("Page retirée."); }
-        catch (e) { zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
-      };
+      $$("[name=pt-vis]", zone).forEach((r) => { r.onchange = async () => {
+        $$("[name=pt-vis]", zone).forEach((x) => { x.disabled = true; });
+        try { rendre(await api(`/api/decks/${enc(d.id)}/visibilite`, { method: "POST", body: { visibilite: r.value } })); }
+        catch (e) { erreur(e); rendre(s); }
+      }; });
     };
-    const publier = async (pseudo) => {
-      zone.innerHTML = `<p class="chargement">Publication…</p>`;
-      try { rendre(await api(`/api/decks/${enc(d.id)}/partage`, { method: "POST", body: pseudo ? { pseudo } : {} })); toast("Page publiée."); }
+    const charger = async () => {
+      try { rendre(await api(`/api/decks/${enc(d.id)}/partage`)); }
       catch (e) {
-        if (e.statut === 401 && !TELEPHONE) connexionCompte(zone, () => publier(pseudo));
-        else if (e.statut === 409) choisirPseudo(e.message, pseudo);
+        if (e.statut === 401 && !TELEPHONE) connexionCompte(zone, charger);
         else zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`;
       }
     };
-    // premier partage : le pseudo, qui sera dans l'adresse de toutes ses pages
-    const choisirPseudo = (message, avant = "") => {
-      zone.innerHTML = `<form class="form-ligne" id="pt-form-pseudo">
-          <input class="champ" id="pt-pseudo" maxlength="30" autocomplete="nickname" autocapitalize="none" spellcheck="false"
-            placeholder="pseudo" value="${esc(avant || "")}" aria-label="Pseudo" required style="flex:1;min-width:160px">
-          <button class="btn btn-accent">${ico("partager")}Publier la page</button></form>
-        <p class="muet petit" id="pt-adresse"></p>
-        <p class="${avant ? "erreur" : "muet"} petit">${esc(message)}</p>`;
-      const champ = $("#pt-pseudo", zone), adresse = () => {
-        $("#pt-adresse", zone).textContent = `atelier-mtg.com/decks/${champ.value.trim().toLowerCase() || "…"}/`;
-      };
-      champ.oninput = adresse;
-      adresse();
-      $("#pt-form-pseudo", zone).onsubmit = (ev) => { ev.preventDefault(); publier(champ.value.trim().toLowerCase()); };
-      champ.focus();
-    };
-    // ce qui sera visible de tous, et ce qui ne l'est pas, avant de publier
-    const avant = () => {
-      zone.innerHTML = `<p>Une page publique sur atelier-mtg.com, qui se met à jour quand le deck change, avec son image
-          d'aperçu et une table de jeu.</p>
-        <p class="muet petit">Toute personne qui a le lien, ou qui la trouve par un moteur de recherche, y voit la liste, les
-          statistiques, les combos et les tests du deck ; pas ton classeur, ni tes achats, ni tes discussions avec Claude.</p>
-        <div class="boutons"><button class="btn" id="pt-publier">${ico("partager")}Publier la page</button></div>`;
-      $("#pt-publier", zone).onclick = () => publier();
-    };
-    const s = await api(`/api/decks/${enc(d.id)}/partage`).catch(() => ({}));
-    if (s.url) rendre(s); else avant();
-  }, { focus: false });
+    charger();
+  });
 }
 
-// ------------------------------------------------------------------ le compte sur le PC (compte.py) : Envoyer, Récupérer
+// ------------------------------------------------------------------ le compte sur le PC (compte.py) : connexion, synchronisation
 // se connecter par un code reçu par e-mail ; suite(état du compte) une fois connecté
 function connexionCompte(zone, suite) {
   zone.innerHTML = `<form class="form-ligne" id="cc-form-email">
@@ -2047,8 +2073,12 @@ function connexionCompte(zone, suite) {
   $("#cc-autre", zone).onclick = () => { fc.hidden = true; fe.hidden = false; echec(""); $("#cc-email", zone).focus(); };
 }
 
-// ce qu'ont fait « Envoyer » et « Récupérer », en une phrase
+// ce qu'a fait la synchronisation (ou, avant 2.3.0, « Envoyer » et « Récupérer »), en une phrase
 function resumeCompte(r, contexte) {
+  if (contexte === "synchroniser") {                 // la synchronisation automatique (2.3.0) : ce qui est arrivé
+    const n = (r.decks_recus || []).length;
+    return n ? `À jour : ${n > 1 ? `${n} decks arrivés` : "1 deck arrivé"} de ton compte.` : "À jour.";
+  }
   const n = r.decks.length, k = (r.ignores || []).length;
   const quoi = [n > 1 ? `${n} decks` : n ? "1 deck" : "", r.classeur ? "le classeur" : ""].filter(Boolean).join(" et ");
   const fait = contexte === "recuperer" ? "Récupéré" : "Envoyé";
@@ -2059,14 +2089,15 @@ function resumeCompte(r, contexte) {
     + ((r.supprimes || []).length ? ` Dans la corbeille : ${r.supprimes.map((d) => d.replace(/^Deck /, "")).join(", ")}.` : "");
 }
 
-// « Récupérer mes decks » (accueil d'un nouveau PC) ou « Les envoyer sur mon compte » (bandeau) : se connecter si
-// besoin, puis agir
+// « Récupérer mes decks » (accueil d'un nouveau PC) ou « Connecter mon compte » (bandeau) : se connecter si besoin,
+// puis synchroniser (depuis 2.3.0, le PC et le compte se synchronisent tout seuls ensuite)
 function modaleCompte(contexte, fin = () => {}) {
-  ouvrirModale(`<h2>${contexte === "recuperer" ? "Récupérer mes decks" : "Envoyer mes decks sur mon compte"}</h2>
+  contexte = "synchroniser";
+  ouvrirModale(`<h2>Mon compte</h2>
     <div id="mc-zone"><p class="chargement">Chargement…</p></div>`, async (b) => {
     const zone = $("#mc-zone", b), fini = () => { fermerModale(); fin(); };
     const agir = async () => {
-      zone.innerHTML = `<p class="chargement">${contexte === "recuperer" ? "Récupération de tes decks…" : "Envoi de tes decks…"}</p>`;
+      zone.innerHTML = `<p class="chargement">Synchronisation de tes decks…</p>`;
       try {
         const r = await api(`/api/compte/${contexte}`, { method: "POST", body: {} });
         toast(resumeCompte(r.resume, contexte), 4000);
@@ -2084,27 +2115,23 @@ function modaleCompte(contexte, fin = () => {}) {
   }, { focus: false, fermer: () => { fermerModale(); fin(); } });
 }
 
-// accueil du PC : où en est le compte (un mot discret ; « À envoyer » envoie), ou un bandeau tant que les decks ne sont
-// que sur ce PC
+// accueil du PC : où en est la synchronisation avec le compte (un mot discret), ou un bandeau tant que les decks ne
+// sont que sur ce PC
 const PLUS_TARD_COMPTE = 7 * 86400 * 1000;
 async function etatCompte(petit, bandeau) {
   const c = await api("/api/compte").catch(() => null);
   if (!c || !petit.isConnected) return;
   const encore = () => etatCompte(petit, bandeau);
   if (c.connecte) {
-    petit.innerHTML = c.a_envoyer && !c.erreur
-      ? `<button type="button" class="etat-sauvegarde a-envoyer" id="ec-envoyer">${ico("nuage")}À envoyer</button>`
-      : `<a class="etat-sauvegarde ${c.erreur ? "en-echec" : ""}" href="#/options" title="${esc(c.erreur || (c.envoi ? `Envoyé le ${heureCourte(c.envoi)}` : ""))}">${ico("nuage")}${c.erreur ? "Échec de l'envoi" : "Envoyé"}</a>`;
-    if ($("#ec-envoyer", petit)) $("#ec-envoyer", petit).onclick = () => modaleCompte("envoyer", encore);
+    petit.innerHTML = `<a class="etat-sauvegarde ${c.erreur ? "en-echec" : ""}" href="#/options" title="${esc(c.erreur || (c.derniere ? `Synchronisé le ${heureCourte(c.derniere)}` : ""))}">${ico("nuage")}${c.erreur ? "Synchro en échec" : "Synchronisé"}</a>`;
     bandeau.innerHTML = "";
     return;
   }
   let tard = 0;
   try { tard = +localStorage.getItem("pref-compte-plus-tard") || 0; } catch (_) {}
   if (Date.now() - tard < PLUS_TARD_COMPTE) return;
-  bandeau.innerHTML = `<div class="bandeau-sauvegarde">${ico("nuage")}<p>${c.github ? "La sauvegarde sur GitHub s'arrête : tes decks vont maintenant sur ton compte Atelier MTG."
-      : "Tes decks ne sont que sur ce PC : s'il tombe en panne, ils sont perdus."}</p>
-    <button class="btn btn-accent btn-petit" id="bs-oui">Les envoyer sur mon compte</button>
+  bandeau.innerHTML = `<div class="bandeau-sauvegarde">${ico("nuage")}<p>Tes decks ne sont que sur ce PC : s'il tombe en panne, ils sont perdus.</p>
+    <button class="btn btn-accent btn-petit" id="bs-oui">Connecter mon compte</button>
     <button class="btn btn-discret btn-petit" id="bs-tard">Plus tard</button></div>`;
   $("#bs-oui", bandeau).onclick = () => modaleCompte("envoyer", encore);
   $("#bs-tard", bandeau).onclick = () => { PREF.set("compte-plus-tard", String(Date.now())); bandeau.innerHTML = ""; };
@@ -2128,7 +2155,7 @@ function modaleRenommer(d) {
         etat.deck = null;
         etat.decks = await api("/api/decks");
         remplirChoixDiscussion(etat.decks);
-        location.hash = `#/deck/${enc(r.id)}${location.hash.split("/")[3] ? "/" + location.hash.split("/")[3] : ""}`;
+        location.hash = `#/deck/${enc(r.id)}${routeHash().split("/")[3] ? "/" + routeHash().split("/")[3] : ""}`;
         toast("Deck renommé.");
       } catch (e) { erreur(e); ok.disabled = false; }
     };
@@ -2172,7 +2199,7 @@ function optionsTelephone() {
   vue.innerHTML = `<nav class="fil" aria-label="Fil d'Ariane"><a href="#/">Mes decks</a><span aria-hidden="true">›</span><span aria-current="page">Options</span></nav>
     <section class="panneau options"><div class="opt-titre"><h2>${ico("nuage")}Compte</h2></div>
       <div class="opt-lignes">${ECRAN_TELEPHONE && TELEPHONE.installee && !TELEPHONE.installee() ? `
-        <p><button class="btn btn-accent" id="tel-installer-app">${ico("telecharger")}Installer l'appli</button></p>` : ""}
+        <p><button class="btn btn-accent" id="tel-installer-app">${ico("plus")}Ajouter à l'écran d'accueil</button></p>` : ""}
         <div id="opt-compte"><p class="chargement">Chargement…</p></div>
       </div></section>
     <section class="panneau options opt-bloc" id="opt-cartes"></section>
@@ -2195,13 +2222,24 @@ function optionsTelephone() {
 
 // le compte : l'adresse, la dernière synchronisation, les appareils connectés ; exporter, se déconnecter, supprimer
 // (telephone.js › routeCompte ; sur le PC, app.py et compte.py : pas connecté, la connexion ; Envoyer et Récupérer)
+// Mon compte (l'appli, menu du rond en haut à droite) : ce que montre aussi Options › Compte
+function vueCompte() {
+  vue.innerHTML = `<div class="titre-page"><h1>Mon compte</h1></div>
+    <section class="panneau options opt-bloc"><div class="opt-lignes" id="opt-compte"><p class="chargement">Chargement…</p></div></section>`;
+  optionsCompte($("#opt-compte"));
+}
+// « Se déconnecter » du menu du compte (aussi depuis le site : MES_DECKS_URL#/deconnexion)
+async function deconnexionDemandee() {
+  if (!confirm(`Se déconnecter ? Tes decks quittent ${CET_APPAREIL} ; ils restent dans ton compte.`)) return location.replace("#/");
+  try { await api("/api/compte/deconnexion", { method: "POST" }); } catch (e) { erreur(e); location.replace("#/"); }
+}
 async function optionsCompte(el) {
   const quand = (t) => new Date(t * 1000).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
   const rendre = (c) => {
     if (!c.connecte && !TELEPHONE) return connexionCompte(el, () => optionsCompte(el));
     const manuel = c.synchro === "manuelle";
     const dates = [c.envoi ? `Envoyé le ${quand(c.envoi)}` : "", c.reception ? `Récupéré le ${quand(c.reception)}` : ""].filter(Boolean).join(" · ");
-    el.innerHTML = `<p><strong>${esc(c.email)}</strong></p>
+    el.innerHTML = `<p><strong>${esc(c.pseudo || c.email)}</strong>${c.pseudo ? ` <span class="muet">${esc(c.email)}</span>` : ""}</p>
       <p class="muet petit">${c.erreur ? `<span class="erreur">${esc(c.erreur)}</span>` : manuel ? esc(dates || "Rien envoyé pour l'instant")
         : c.derniere ? `Synchronisé le ${esc(quand(c.derniere))}` : "Pas encore synchronisé"}</p>
       <div class="form-ligne">${manuel ? `<button class="btn ${c.a_envoyer ? "btn-accent" : ""}" id="cpt-envoyer" data-action="envoyer">${ico("nuage")}Envoyer</button>
@@ -3019,7 +3057,7 @@ async function modifier(op, c, extra = {}, message = "Enregistré.") {
   try {
     const d = await api(`/api/decks/${enc(etat.deck.id)}/modifier`, { method: "POST", body: { op, index: c ? c.index : undefined, nom_actuel: c ? c.nom : undefined, ...extra } });
     const y = scrollY;
-    await vueDeck(d.id, location.hash.split("/")[3] === "achats" ? "achats" : "liste", null, d);
+    await vueDeck(d.id, routeHash().split("/")[3] === "achats" ? "achats" : "liste", null, d);
     scrollTo(0, y);
     api("/api/decks").then((x) => { etat.decks = x; }).catch(() => {});
     if (message) toast(message);
@@ -4118,7 +4156,7 @@ async function vueCombosCarte(zone, d, carte = null) {
 
   const choisir = (nom) => {
     courante = nom;
-    history.replaceState(null, "", `#/deck/${enc(d.id)}/combos/${enc(nom)}`);
+    remplacerRoute(`#/deck/${enc(d.id)}/combos/${enc(nom)}`);
     champ.value = affiche(nom);
     afficher();
   };
@@ -4154,7 +4192,7 @@ async function ongletCombos(el, d, carte = null) {
   const montrer = (v, nom = null) => {
     $$("[data-vue]", el).forEach((b) => { b.classList.toggle("actif", b.dataset.vue === v); b.setAttribute("aria-pressed", b.dataset.vue === v); });
     zone.choisir = null;
-    if (v === "deck") { history.replaceState(null, "", `#/deck/${enc(d.id)}/combos`); vueCombosDeck(zone, d); }
+    if (v === "deck") { remplacerRoute(`#/deck/${enc(d.id)}/combos`); vueCombosDeck(zone, d); }
     else vueCombosCarte(zone, d, nom);
   };
   $$("[data-vue]", el).forEach((b) => (b.onclick = () => montrer(b.dataset.vue)));
@@ -4793,8 +4831,8 @@ const CAPTURES_ATELIER = (PARTAGE && PARTAGE.captures) || DOMAINE_ATELIER + "a-p
 // les decks partagés de l'auteur : à quoi ressemble une page partagée, en vrai
 const EXEMPLES_ATELIER = "https://pierreribeaucourt.github.io/decks/";
 // l'Atelier sur téléphone (telephone.js), et son adresse en QR code pour qui visite la page depuis un ordinateur
-const APPLI_TELEPHONE = "https://app.atelier-mtg.com/";
-const QR_APPLI = `<svg class="ap-qr" viewBox="0 0 33 33" role="img" aria-label="QR code de app.atelier-mtg.com"><rect width="33" height="33" fill="#fff"/><path fill="#000" d="M2 2h7v1h-7zM10 2h2v1h-2zM14 2h4v1h-4zM20 2h3v1h-3zM24 2h7v1h-7zM2 3h1v1h-1zM8 3h1v1h-1zM10 3h4v1h-4zM15 3h1v1h-1zM18 3h1v1h-1zM20 3h1v1h-1zM22 3h1v1h-1zM24 3h1v1h-1zM30 3h1v1h-1zM2 4h1v1h-1zM4 4h3v1h-3zM8 4h1v1h-1zM11 4h1v1h-1zM13 4h2v1h-2zM18 4h1v1h-1zM20 4h3v1h-3zM24 4h1v1h-1zM26 4h3v1h-3zM30 4h1v1h-1zM2 5h1v1h-1zM4 5h3v1h-3zM8 5h1v1h-1zM10 5h4v1h-4zM16 5h2v1h-2zM19 5h2v1h-2zM22 5h1v1h-1zM24 5h1v1h-1zM26 5h3v1h-3zM30 5h1v1h-1zM2 6h1v1h-1zM4 6h3v1h-3zM8 6h1v1h-1zM11 6h1v1h-1zM13 6h1v1h-1zM16 6h1v1h-1zM18 6h1v1h-1zM21 6h1v1h-1zM24 6h1v1h-1zM26 6h3v1h-3zM30 6h1v1h-1zM2 7h1v1h-1zM8 7h1v1h-1zM15 7h1v1h-1zM17 7h6v1h-6zM24 7h1v1h-1zM30 7h1v1h-1zM2 8h7v1h-7zM10 8h1v1h-1zM12 8h1v1h-1zM14 8h1v1h-1zM16 8h1v1h-1zM18 8h1v1h-1zM20 8h1v1h-1zM22 8h1v1h-1zM24 8h7v1h-7zM10 9h1v1h-1zM12 9h2v1h-2zM17 9h3v1h-3zM2 10h1v1h-1zM4 10h2v1h-2zM7 10h3v1h-3zM11 10h1v1h-1zM15 10h1v1h-1zM17 10h1v1h-1zM19 10h2v1h-2zM24 10h1v1h-1zM27 10h1v1h-1zM29 10h2v1h-2zM4 11h1v1h-1zM6 11h2v1h-2zM9 11h5v1h-5zM15 11h3v1h-3zM20 11h7v1h-7zM30 11h1v1h-1zM4 12h1v1h-1zM6 12h3v1h-3zM15 12h1v1h-1zM18 12h1v1h-1zM25 12h2v1h-2zM28 12h2v1h-2zM2 13h1v1h-1zM5 13h1v1h-1zM7 13h1v1h-1zM9 13h1v1h-1zM12 13h1v1h-1zM18 13h1v1h-1zM20 13h7v1h-7zM30 13h1v1h-1zM3 14h3v1h-3zM8 14h1v1h-1zM12 14h1v1h-1zM16 14h2v1h-2zM19 14h1v1h-1zM21 14h1v1h-1zM27 14h2v1h-2zM6 15h2v1h-2zM10 15h3v1h-3zM16 15h1v1h-1zM18 15h1v1h-1zM21 15h5v1h-5zM28 15h3v1h-3zM4 16h2v1h-2zM8 16h1v1h-1zM10 16h2v1h-2zM13 16h1v1h-1zM15 16h1v1h-1zM17 16h5v1h-5zM23 16h2v1h-2zM28 16h3v1h-3zM6 17h2v1h-2zM10 17h2v1h-2zM13 17h1v1h-1zM16 17h1v1h-1zM18 17h1v1h-1zM21 17h1v1h-1zM23 17h1v1h-1zM26 17h1v1h-1zM29 17h1v1h-1zM4 18h2v1h-2zM7 18h2v1h-2zM10 18h2v1h-2zM13 18h1v1h-1zM16 18h3v1h-3zM20 18h1v1h-1zM23 18h1v1h-1zM26 18h2v1h-2zM29 18h1v1h-1zM4 19h1v1h-1zM6 19h2v1h-2zM12 19h1v1h-1zM16 19h1v1h-1zM18 19h2v1h-2zM22 19h1v1h-1zM25 19h1v1h-1zM27 19h3v1h-3zM2 20h1v1h-1zM5 20h2v1h-2zM8 20h1v1h-1zM10 20h2v1h-2zM15 20h4v1h-4zM22 20h1v1h-1zM26 20h1v1h-1zM28 20h1v1h-1zM7 21h1v1h-1zM9 21h2v1h-2zM12 21h1v1h-1zM15 21h2v1h-2zM19 21h2v1h-2zM23 21h1v1h-1zM25 21h1v1h-1zM28 21h1v1h-1zM3 22h1v1h-1zM5 22h2v1h-2zM8 22h3v1h-3zM12 22h5v1h-5zM18 22h2v1h-2zM21 22h8v1h-8zM10 23h1v1h-1zM12 23h3v1h-3zM17 23h4v1h-4zM22 23h1v1h-1zM26 23h5v1h-5zM2 24h7v1h-7zM10 24h1v1h-1zM13 24h1v1h-1zM16 24h2v1h-2zM20 24h3v1h-3zM24 24h1v1h-1zM26 24h2v1h-2zM29 24h1v1h-1zM2 25h1v1h-1zM8 25h1v1h-1zM10 25h2v1h-2zM15 25h3v1h-3zM20 25h1v1h-1zM22 25h1v1h-1zM26 25h2v1h-2zM30 25h1v1h-1zM2 26h1v1h-1zM4 26h3v1h-3zM8 26h1v1h-1zM11 26h1v1h-1zM13 26h1v1h-1zM18 26h1v1h-1zM20 26h1v1h-1zM22 26h5v1h-5zM28 26h1v1h-1zM30 26h1v1h-1zM2 27h1v1h-1zM4 27h3v1h-3zM8 27h1v1h-1zM10 27h2v1h-2zM13 27h2v1h-2zM21 27h3v1h-3zM26 27h2v1h-2zM29 27h1v1h-1zM2 28h1v1h-1zM4 28h3v1h-3zM8 28h1v1h-1zM10 28h1v1h-1zM14 28h1v1h-1zM16 28h1v1h-1zM19 28h4v1h-4zM25 28h1v1h-1zM28 28h1v1h-1zM30 28h1v1h-1zM2 29h1v1h-1zM8 29h1v1h-1zM12 29h2v1h-2zM17 29h1v1h-1zM19 29h2v1h-2zM22 29h1v1h-1zM24 29h4v1h-4zM29 29h1v1h-1zM2 30h7v1h-7zM10 30h1v1h-1zM13 30h2v1h-2zM16 30h1v1h-1zM19 30h4v1h-4zM25 30h1v1h-1zM29 30h1v1h-1z"/></svg>`;
+const APPLI_TELEPHONE = MES_DECKS_URL;
+const QR_APPLI = `<svg class="ap-qr" viewBox="0 0 33 33" role="img" aria-label="QR code de atelier-mtg.com/mes-decks"><rect width="33" height="33" fill="#fff"/><path fill="#000" d="M2 2h7v1h-7zM11 2h7v1h-7zM19 2h4v1h-4zM24 2h7v1h-7zM2 3h1v1h-1zM8 3h1v1h-1zM11 3h8v1h-8zM22 3h1v1h-1zM24 3h1v1h-1zM30 3h1v1h-1zM2 4h1v1h-1zM4 4h3v1h-3zM8 4h1v1h-1zM10 4h1v1h-1zM12 4h2v1h-2zM15 4h1v1h-1zM17 4h1v1h-1zM21 4h2v1h-2zM24 4h1v1h-1zM26 4h3v1h-3zM30 4h1v1h-1zM2 5h1v1h-1zM4 5h3v1h-3zM8 5h1v1h-1zM10 5h1v1h-1zM12 5h1v1h-1zM14 5h1v1h-1zM16 5h2v1h-2zM19 5h3v1h-3zM24 5h1v1h-1zM26 5h3v1h-3zM30 5h1v1h-1zM2 6h1v1h-1zM4 6h3v1h-3zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h2v1h-2zM17 6h6v1h-6zM24 6h1v1h-1zM26 6h3v1h-3zM30 6h1v1h-1zM2 7h1v1h-1zM8 7h1v1h-1zM10 7h1v1h-1zM14 7h1v1h-1zM19 7h1v1h-1zM22 7h1v1h-1zM24 7h1v1h-1zM30 7h1v1h-1zM2 8h7v1h-7zM10 8h1v1h-1zM12 8h1v1h-1zM14 8h1v1h-1zM16 8h1v1h-1zM18 8h1v1h-1zM20 8h1v1h-1zM22 8h1v1h-1zM24 8h7v1h-7zM10 9h5v1h-5zM16 9h1v1h-1zM18 9h1v1h-1zM21 9h1v1h-1zM2 10h1v1h-1zM4 10h5v1h-5zM19 10h1v1h-1zM24 10h5v1h-5zM7 11h1v1h-1zM15 11h3v1h-3zM19 11h8v1h-8zM30 11h1v1h-1zM3 12h1v1h-1zM5 12h1v1h-1zM8 12h1v1h-1zM11 12h1v1h-1zM15 12h4v1h-4zM23 12h2v1h-2zM26 12h1v1h-1zM2 13h4v1h-4zM7 13h1v1h-1zM9 13h3v1h-3zM13 13h3v1h-3zM18 13h1v1h-1zM21 13h2v1h-2zM25 13h1v1h-1zM27 13h1v1h-1zM29 13h1v1h-1zM4 14h5v1h-5zM10 14h5v1h-5zM16 14h1v1h-1zM19 14h1v1h-1zM21 14h1v1h-1zM27 14h2v1h-2zM4 15h3v1h-3zM9 15h1v1h-1zM12 15h1v1h-1zM20 15h2v1h-2zM23 15h4v1h-4zM30 15h1v1h-1zM2 16h2v1h-2zM5 16h6v1h-6zM13 16h2v1h-2zM17 16h2v1h-2zM22 16h1v1h-1zM25 16h4v1h-4zM2 17h1v1h-1zM12 17h1v1h-1zM16 17h1v1h-1zM21 17h2v1h-2zM25 17h2v1h-2zM29 17h1v1h-1zM3 18h2v1h-2zM6 18h3v1h-3zM10 18h2v1h-2zM13 18h2v1h-2zM17 18h3v1h-3zM27 18h2v1h-2zM2 19h6v1h-6zM9 19h1v1h-1zM11 19h2v1h-2zM14 19h3v1h-3zM18 19h1v1h-1zM21 19h2v1h-2zM24 19h3v1h-3zM28 19h1v1h-1zM30 19h1v1h-1zM2 20h1v1h-1zM6 20h1v1h-1zM8 20h2v1h-2zM11 20h10v1h-10zM23 20h1v1h-1zM26 20h1v1h-1zM28 20h1v1h-1zM2 21h1v1h-1zM4 21h2v1h-2zM9 21h1v1h-1zM12 21h1v1h-1zM15 21h1v1h-1zM22 21h5v1h-5zM29 21h1v1h-1zM2 22h1v1h-1zM4 22h7v1h-7zM12 22h3v1h-3zM16 22h1v1h-1zM19 22h2v1h-2zM22 22h5v1h-5zM28 22h3v1h-3zM10 23h1v1h-1zM12 23h3v1h-3zM18 23h5v1h-5zM26 23h5v1h-5zM2 24h7v1h-7zM14 24h1v1h-1zM17 24h2v1h-2zM21 24h2v1h-2zM24 24h1v1h-1zM26 24h3v1h-3zM2 25h1v1h-1zM8 25h1v1h-1zM10 25h4v1h-4zM16 25h1v1h-1zM21 25h2v1h-2zM26 25h1v1h-1zM29 25h2v1h-2zM2 26h1v1h-1zM4 26h3v1h-3zM8 26h1v1h-1zM10 26h1v1h-1zM12 26h1v1h-1zM17 26h1v1h-1zM19 26h1v1h-1zM22 26h5v1h-5zM28 26h2v1h-2zM2 27h1v1h-1zM4 27h3v1h-3zM8 27h1v1h-1zM10 27h2v1h-2zM14 27h1v1h-1zM16 27h1v1h-1zM18 27h1v1h-1zM20 27h2v1h-2zM23 27h1v1h-1zM25 27h1v1h-1zM27 27h4v1h-4zM2 28h1v1h-1zM4 28h3v1h-3zM8 28h1v1h-1zM10 28h2v1h-2zM13 28h3v1h-3zM17 28h2v1h-2zM21 28h9v1h-9zM2 29h1v1h-1zM8 29h1v1h-1zM12 29h3v1h-3zM17 29h2v1h-2zM20 29h1v1h-1zM22 29h1v1h-1zM24 29h4v1h-4zM29 29h1v1h-1zM2 30h7v1h-7zM10 30h8v1h-8zM19 30h1v1h-1zM21 30h1v1h-1zM26 30h1v1h-1zM28 30h1v1h-1z"/></svg>`;
 // un téléphone ou une tablette (iPadOS se présente comme un Mac, mais tactile)
 const SUR_TELEPHONE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 // pour qui n'a pas encore d'assistant IA : Claude Code dans l'application de bureau, sans terminal (guide en français)
@@ -4836,14 +4874,14 @@ const FAQ_ATELIER = [
     ["Pourquoi un compte ?",
       "Pour retrouver vos decks sur tous vos appareils : navigateur, téléphone et PC. Il ne demande qu'une adresse e-mail, qui sert seulement à vous envoyer le code de connexion. Vos decks sont gardés en France, et les options permettent à tout moment de les exporter ou de supprimer le compte."],
     ["Faut-il un compte pour la version à installer ?",
-      "Non. Sur PC, vos decks sont dans un dossier de votre disque. Le compte sert à les retrouver ailleurs : « Envoyer » les y range, « Récupérer » ramène ceux de vos autres appareils, quand vous le décidez."],
+      "Non. Sur PC, vos decks sont dans un dossier de votre disque. Avec un compte, ils se synchronisent tout seuls avec vos autres appareils, et l'appli en ligne ouverte sur ce PC lui demande Claude."],
     ["Comment entrent mes cartes ?",
       "On colle une liste copiée depuis Moxfield, Archidekt ou MTG Arena. La liste d'un deck préconstruit se trouve sur ces sites. Les cartes rangées hors des decks se collent de la même façon dans le classeur."],
     ["Peut-on créer un deck Magic en ligne, depuis son téléphone ?",
-      `<p>Oui : créez votre compte sur <a href="${APPLI_TELEPHONE}#inscription">app.atelier-mtg.com</a>, puis ajoutez l'appli à l'écran d'accueil de votre téléphone. Vos decks y restent même sans réseau, et se synchronisent dès qu'il revient. La discussion avec Claude et les combos MTGPics demandent l'Atelier installé sur PC.</p>
-      <p>Pour montrer un deck à quelqu'un, « Partager » donne un lien qui s'ouvre sans compte, sur téléphone comme sur ordinateur.</p>`],
+      `<p>Oui : <a href="${APPLI_TELEPHONE}#inscription">créez votre compte</a>, puis ajoutez l'appli à l'écran d'accueil de votre téléphone. Vos decks y restent même sans réseau, et se synchronisent dès qu'il revient. La discussion avec Claude et les combos MTGPics demandent l'Atelier installé sur votre PC : sur ce PC, l'appli en ligne passe par lui.</p>
+      <p>Pour montrer un deck à quelqu'un, son adresse suffit : sa page s'ouvre sans compte, sur téléphone comme sur ordinateur.</p>`],
     ["Et si mon PC tombe en panne ?",
-      "Envoyez vos decks sur votre compte : Options, Compte, « Envoyer ». Ils vous y attendent, avec leurs versions et votre classeur, en ligne comme sur un nouveau PC, où « Récupérer mes decks » les ramène."],
+      "Avec un compte, vos decks y sont déjà : le PC s'y synchronise tout seul, versions et classeur compris. Sur un nouveau PC, connectez-vous : ils reviennent."],
     ["Puis-je partir avec mes decks ?",
       "Oui. Sur PC, chaque deck est un dossier sur votre disque, avec sa liste en texte (format Archidekt, tags compris), son historique et ses versions. En ligne, « Exporter mes données » enregistre tout dans un fichier. Partout, le menu « … » copie la liste pour Archidekt, Moxfield, MTG Arena ou MTGO."],
   ]],
@@ -4904,21 +4942,22 @@ function vueAPropos(installation = false) {
   const installWindows = `<section class="ap-install">
           <div class="ap-install-tete"><svg class="ico ap-logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h8.4v8.4H3zM12.6 3H21v8.4h-8.4zM3 12.6h8.4V21H3zM12.6 12.6H21V21h-8.4z"/></svg><h3>Sur ordinateur</h3></div>
           <p class="ap-install-pour">Windows 10 et 11 · tout, Claude compris</p>
-          <a class="btn ${SUR_TELEPHONE ? "" : "btn-accent "}ap-install-action" href="${depot}/releases/latest/download/Atelier-MTG-Windows.exe">${ico("telecharger")}Télécharger pour Windows</a>
+          <a class="btn ${SUR_TELEPHONE ? "" : "btn-accent "}ap-install-action ap-windows" href="${depot}/releases/latest/download/Atelier-MTG-Windows.exe">${ico("telecharger")}Télécharger pour Windows</a>
           <ol>
             <li>Double-cliquez sur le fichier, puis sur <b>Installer</b>. Si Windows affiche <b>Windows a protégé votre
               ordinateur</b> : <b>Informations complémentaires</b>, puis <b>Exécuter quand même</b>.</li>
             <li>L'Atelier s'ouvre dans votre navigateur. Pour le rouvrir : raccourci <b>Atelier MTG</b> sur le bureau.</li>
-            <li>Vous avez un compte ? <b>Options</b>, puis <b>Compte</b>&nbsp;: <b>Récupérer</b> ramène vos decks sur le PC,
-              <b>Envoyer</b> y range les siens.</li>
+            <li>Vous avez un compte ? <b>Options</b>, puis <b>Compte</b>&nbsp;: connectez-vous. Vos decks se synchronisent tout
+              seuls, et l'Atelier s'ouvre ensuite sur atelier-mtg.com, Claude compris.</li>
           </ol>
         </section>`;
-  const installEnLigne = `<section class="ap-install">
+  const installEnLigne = `<section class="ap-install ap-en-ligne">
           <div class="ap-install-tete">${ico("nuage")}<h3>En ligne</h3></div>
           <p class="ap-install-pour">Navigateur, Android et iPhone · un compte gratuit</p>
-          <a class="btn ${SUR_TELEPHONE ? "btn-accent " : ""}ap-install-action" href="${APPLI_TELEPHONE}#inscription">${ico("plus")}Créer un compte</a>
+          <a class="btn ${SUR_TELEPHONE ? "btn-accent " : ""}ap-install-action hors-compte" href="${APPLI_TELEPHONE}#inscription">${ico("plus")}Créer un compte</a>
+          <a class="btn ${SUR_TELEPHONE ? "btn-accent " : ""}ap-install-action en-compte" href="${APPLI_TELEPHONE}">${ico("cartes")}Mes decks</a>
           ${SUR_TELEPHONE ? "" : `<div class="ap-qr-ligne"><span class="ap-qr-cadre">${QR_APPLI}</span>
-              <p>Sur votre téléphone : scannez ce code, ou ouvrez <a href="${APPLI_TELEPHONE}">app.atelier-mtg.com</a>.</p></div>`}
+              <p>Sur votre téléphone : scannez ce code, ou ouvrez <a href="${APPLI_TELEPHONE}">atelier-mtg.com/mes-decks</a>.</p></div>`}
           <ol>
             <li>Entrez votre adresse e-mail : vous recevez un code à 6 chiffres. Pas de mot de passe.</li>
             <li>Sur téléphone, ajoutez l'appli à l'écran d'accueil. Android : <b>Installer l'application</b> ; iPhone :
@@ -4938,7 +4977,8 @@ function vueAPropos(installation = false) {
           <h1>L'Atelier <span>MTG</span></h1>
           <p class="ap-accroche">Le deck builder Commander assisté,<br>en ligne et sur votre PC.</p>
           <ul class="ap-puces">${["Suggestions", "Base de mana", "Combos", "Bracket", "Simulation", "Table de jeu", "Recherche avancée", "Claude"].map((x) => `<li>${x}</li>`).join("")}</ul>
-          <p class="ap-cta"><a class="btn btn-accent" href="${APPLI_TELEPHONE}#inscription" id="ap-creer">${ico("plus")}Créer un compte</a>
+          <p class="ap-cta"><a class="btn btn-accent hors-compte" href="${APPLI_TELEPHONE}#inscription" id="ap-creer">${ico("plus")}Créer un compte</a>
+            <a class="btn btn-accent en-compte" href="${APPLI_TELEPHONE}" id="ap-mes-decks">${ico("cartes")}Mes decks</a>
             <a class="btn btn-contour" href="${INSTALLER}" id="ap-installer">${ico("telecharger")}Télécharger</a>
             <a class="ap-voir" href="${EXEMPLES_ATELIER}">Voir à quoi ça ressemble</a></p>
           <p class="ap-mention"><b>Gratuit</b> · open source · navigateur, téléphone et PC${versionAtelier ? ` · version ${esc(versionAtelier)}` : ""}</p>
@@ -4949,8 +4989,8 @@ function vueAPropos(installation = false) {
       <div class="ap-bandeau">
         <p class="ap-promesse">Gratuit, <em>en ligne</em> ou <em>sur votre PC</em>.</p>
         <div class="ap-grille ap-duo">
-          ${fonction(`${ico("nuage")}En ligne`, "Dans le navigateur et sur téléphone, avec un compte : vos decks se synchronisent tout seuls entre vos appareils. Tout y est, sauf Claude.")}
-          ${fonction(`${ico("telecharger")}Sur votre PC`, "Installé sur Windows : tout, Claude compris. Vos decks rejoignent votre compte quand vous le décidez.")}
+          ${fonction(`${ico("nuage")}En ligne`, "Dans le navigateur et sur téléphone, avec un compte : vos decks se synchronisent tout seuls entre vos appareils. Claude, avec l'Atelier installé sur votre PC.")}
+          ${fonction(`${ico("telecharger")}Sur votre PC`, "Installé sur Windows : tout, Claude compris. Connecté à votre compte, il se synchronise tout seul et prête Claude à l'appli en ligne.")}
         </div>
         <p>L'Atelier est un deck builder en français, pensé pour concevoir, tester et faire évoluer vos decks Magic: The
           Gathering en Commander.</p>
@@ -5146,7 +5186,7 @@ function nouvelleRecherche() {
   rch.fns = [];
   rch.ouvert = true;
   rch.res = null;
-  history.replaceState(null, "", "#/recherche?" + critVersHash(c));
+  remplacerRoute("#/recherche?" + critVersHash(c));
   rendreFormulaire();
   $("#rch-resultats").innerHTML = "";
   $("#moteur [name=nom]").focus();
@@ -5355,7 +5395,7 @@ function rendreResultats(z, r) {
   if (r.base && r.base.construction && r.base.construction.actif) majBase(pied, false);
   $$("[data-vue]", z).forEach((b) => b.addEventListener("click", () => {
     rch.crit.vue = b.dataset.vue === "images" ? "images" : "";
-    history.replaceState(null, "", "#/recherche?" + critVersHash(rch.crit));
+    remplacerRoute("#/recherche?" + critVersHash(rch.crit));
     rendreResultats(z, r);
   }));
   $("#rch-tri", z).onchange = (ev) => { location.hash = "#/recherche?" + critVersHash({ ...rch.crit, ordre: ev.target.value, sens: "", page: "" }); };
@@ -5372,7 +5412,7 @@ function rendreResultats(z, r) {
   $$("[data-par-page]", z).forEach((s) => s.addEventListener("change", () => {      // la 1re page, avec le nouveau nombre
     PREF.set("par-page", s.value);
     rch.crit.page = "";
-    history.replaceState(null, "", "#/recherche?" + critVersHash(rch.crit));
+    remplacerRoute("#/recherche?" + critVersHash(rch.crit));
     lancerRecherche();
   }));
   $$(".rch-page", z).forEach((p) => p.addEventListener("change", () => {
@@ -5550,7 +5590,7 @@ function remplacerResultat(x) {
 
 // le deck affiché sous la fiche : on le redessine avec la carte ajoutée (liste et statistiques)
 function majDeckOuvert(res) {
-  const parts = location.hash.replace(/^#\/?/, "").split("/");
+  const parts = routeHash().replace(/^#\/?/, "").split("/");
   if (parts[0] !== "deck" || decodeURIComponent(parts[1] || "") !== res.id) return;
   const onglet = parts[2] || "liste";
   if (onglet === "liste" || onglet === "stats") {
@@ -5581,7 +5621,7 @@ function blocAjoutRch(x, d) {
   const dans = x.dans === "deck" || x.dans === "commandant";
   const multi = plusieursExemplaires(x);
   if (dans && !multi) {
-    const ici = etat.deck && etat.deck.id === d.id && location.hash.startsWith("#/deck/");
+    const ici = etat.deck && etat.deck.id === d.id && routeHash().startsWith("#/deck/");
     return `<div class="rf-ajout rf-deja"><span class="ok">✓ ${x.dans === "commandant" ? "Commandant de" : "Déjà dans"} ${esc(d.titre)}</span>
       ${ici ? `<button type="button" class="lien-discret" data-act="fiche-deck">Voir dans le deck</button>` : `<a href="#/deck/${enc(d.id)}">Ouvrir le deck</a>`}</div>`;
   }
@@ -5701,18 +5741,18 @@ function versionsRecherche(i, ctx = null) {
 document.addEventListener("visibilitychange", async () => {
   if (document.hidden) return;
   try {
-    if (location.hash.startsWith("#/recherche") && rch.deck) {
+    if (routeHash().startsWith("#/recherche") && rch.deck) {
       const a = await api(`/api/decks/${enc(rch.deck.id)}/apercu`);
       if (a.modifie !== rch.deck.modifie) {
         rch.deck = a;
         majInfosDeck();
         if (rch.crit && rch.crit.r === "1" && $("#modale").hidden) lancerRecherche();
       }
-    } else if (location.hash.startsWith("#/deck/") && etat.deck && $("#modale").hidden) {
+    } else if (routeHash().startsWith("#/deck/") && etat.deck && $("#modale").hidden) {
       const a = await api(`/api/decks/${enc(etat.deck.id)}/apercu`);
       if (a.modifie !== etat.deck.modifie) {
         etat.decks = [];
-        const onglet = location.hash.split("/")[3] || "liste";
+        const onglet = routeHash().split("/")[3] || "liste";
         if (["liste", "stats", "versions", "historique"].includes(onglet.split("?")[0])) {
           const y = scrollY;
           await route();
@@ -5764,12 +5804,12 @@ function texteRiche(t) {
 }
 
 function pageCourante() {
-  if (location.hash.startsWith("#/recherche")) {
+  if (routeHash().startsWith("#/recherche")) {
     const crit = rch.crit ? resumeCrit(rch.crit) : [];
     return `recherche de cartes${rch.deck ? ` pour le deck « ${rch.deck.id} »` : ""}${crit.length ? " ; critères : " + crit.join(", ") : ""}`
       + (rch.res && rch.res.cartes.length ? ` ; résultats affichés : ${rch.res.cartes.slice(0, 30).map((x) => x.nom).join(", ")}` : "");
   }
-  const parts = location.hash.replace(/^#\/?/, "").split("/");
+  const parts = routeHash().replace(/^#\/?/, "").split("/");
   if (parts[0] === "deck" && parts[1]) return `deck « ${decodeURIComponent(parts[1])} », onglet ${parts[2] || "liste"}`;
   return "accueil (liste des decks)";
 }
@@ -5777,8 +5817,8 @@ function pageCourante() {
 // discussion de la page affichée : le deck ouvert, sinon la discussion générale ("")
 function cleCourante() {
   if (PARTAGE) return PARTAGE.deck || "";
-  if (location.hash.startsWith("#/recherche")) return rch.deck ? rch.deck.id : "";
-  const parts = location.hash.replace(/^#\/?/, "").split("/");
+  if (routeHash().startsWith("#/recherche")) return rch.deck ? rch.deck.id : "";
+  const parts = routeHash().replace(/^#\/?/, "").split("/");
   return parts[0] === "deck" && parts[1] ? decodeURIComponent(parts[1]) : "";
 }
 const nomDiscussion = (cle) => (cle ? cle.replace(/^Deck /, "") : "générale");
@@ -5786,7 +5826,7 @@ const qDeck = (cle) => "?deck=" + enc(cle || "");
 
 // le deck de la page de deck affichée, sinon null
 function deckDeLaPage() {
-  const parts = location.hash.replace(/^#\/?/, "").split("/");
+  const parts = routeHash().replace(/^#\/?/, "").split("/");
   return parts[0] === "deck" && parts[1] ? decodeURIComponent(parts[1]) : null;
 }
 
@@ -6059,7 +6099,7 @@ async function basculeChat(ouvrir) {
 }
 
 async function ouvrirChat(texte) {
-  if (TELEPHONE) return surPC("claude");
+  if (TELEPHONE && !TELEPHONE.pc) return surPC("claude");
   const ctx = deckDeLaPage();
   if (ctx !== null) await choisirDiscussion(ctx);      // « Expliquer avec Claude » : la discussion du deck affiché
   await basculeChat(true);
@@ -6110,7 +6150,7 @@ $("#btn-chat")?.addEventListener("click", () => basculeChat());       // page d'
 // decks), une fois le deck et ses jetons gardés pour elle (telephone.js › preparerJeu, jouer-appli.js)
 async function ouvrirJeu(id) {
   toast("Préparation de la table…");
-  try { await TELEPHONE.preparerJeu(id); location.href = `jouer/?deck=${enc(id)}`; } catch (e) { erreur(e); }
+  try { await TELEPHONE.preparerJeu(id); location.href = `${RACINE_APPLI}jouer/?deck=${enc(id)}`; } catch (e) { erreur(e); }
 }
 // téléphone : un élément « à faire sur le PC » dit où le faire, au lieu d'agir
 if (TELEPHONE) document.addEventListener("click", (ev) => {
@@ -6118,11 +6158,15 @@ if (TELEPHONE) document.addEventListener("click", (ev) => {
   if (j) { ev.preventDefault(); ouvrirJeu(j.dataset.jouer); return; }
   const el = ev.target.closest("[data-pc]");
   if (!el) return;
+  if (TELEPHONE.pc && ["claude", "synergies", "mtgpics"].includes(el.dataset.pc)) return;     // l'Atelier de ce PC le fait
   ev.preventDefault();
   ev.stopImmediatePropagation();
   surPC(el.dataset.pc);
 }, true);
-if (PC) {
+// la discussion avec Claude : sur le PC, et dans l'appli en ligne quand l'Atelier de ce PC est là (telephone.js › pont)
+function demarrerChat() {
+  if (chat.demarre) return;
+  chat.demarre = true;
   chat.contexte = deckDeLaPage();
   chat.cle = chat.contexte ?? PREF.get("chat-discussion", "");
   window.addEventListener("hashchange", changerDiscussion);
@@ -6131,6 +6175,8 @@ if (PC) {
   try { if (localStorage.getItem("chat-ouvert")) basculeChat(true); } catch (_) {}
   api("/api/discussion/en-cours").then((s) => { if (s.actives.length) suivreChat(); }).catch(() => {});   // une réponse tournait déjà
 }
+if (PC) demarrerChat();
+window.quandPc = () => { demarrerChat(); document.documentElement.classList.add("avec-pc"); if (TELEPHONE.pret) route(); };
 
 route();
 if (PC) suivreMaj();

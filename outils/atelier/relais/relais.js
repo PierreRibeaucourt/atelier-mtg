@@ -1,7 +1,7 @@
 // Relais de l'Atelier MTG en ligne : Commander Spellbook refuse les pages web (pas de CORS). Le relais transmet seulement
-// ces trois demandes, pour l'appli app.atelier-mtg.com. Aucun secret, rien n'est gardé. (Jusqu'à la refonte des comptes,
+// ces trois demandes, pour l'appli (atelier-mtg.com/mes-decks, et l'ancienne adresse app.atelier-mtg.com). Aucun secret, rien n'est gardé. (Jusqu'à la refonte des comptes,
 // il transmettait aussi la connexion à GitHub : elle n'existe plus.)
-const ORIGINES = ["https://app.atelier-mtg.com"];
+const ORIGINES = ["https://atelier-mtg.com", "https://app.atelier-mtg.com"];
 const SPELLBOOK = "https://backend.commanderspellbook.com/";
 const MAX = 300000;                                       // octets : une liste de 100 cartes en fait moins de 10 000
 

@@ -49,8 +49,9 @@ FAN_CONTENT = "https://company.wizards.com/en/legal/fancontentpolicy"
 # l'onglet « Installeur » ouvert dans le HTML, comme pour la plupart des visiteurs
 # la recherche de cartes (recherche/) : le moteur de l'appli du téléphone (static/telephone/cartes.js, copié ici) et sa
 # base, publiée sur le site de l'appli (base_telephone.py) ; le navigateur du visiteur la télécharge de là
-APPLI = "https://app.atelier-mtg.com/"                 # l'appli en ligne, avec un compte
-BASE_CARTES = APPLI + "base/"
+APPLI = "https://atelier-mtg.com/mes-decks/"           # l'appli en ligne, avec un compte (telephone_site.py, branche accueil)
+APPLI_CHEMIN = "/mes-decks/"
+BASE_CARTES = "https://app.atelier-mtg.com/base/"      # la base de cartes, toujours publiée avec l'ancienne adresse de l'appli
 SOURCE_MOTEUR = os.path.join(partage.STATIQUE, "telephone", "cartes.js")
 MOTEUR = "cartes.js?v=" + partage._version(SOURCE_MOTEUR)                 # dans recherche/
 TITRE_RECHERCHE = "Recherche avancée de cartes Magic en français | Atelier MTG"
@@ -179,9 +180,10 @@ def pre_rendre(dossier, marque='id="installation"'):
 
 
 def inserer(dossier, rendu, installation="#installation", classe="vue vue-pleine"):
-    """Le pré-rendu dans la page ; en haut, le champ « Rechercher une carte… » (app.js › BASE_WEB) et, à droite, les
-    deux mêmes choix que le haut de l'accueil : « Créer un compte » (l'appli) et « Télécharger » (sa section
-    Installation), à la place de « Demander à Claude », dont le panneau n'est qu'une vitrine ici."""
+    """Le pré-rendu dans la page ; en haut, le champ « Rechercher une carte… » (app.js › BASE_WEB) et, à droite, à la
+    place de « Demander à Claude » (son panneau n'est qu'une vitrine ici) : « Se connecter » et les deux mêmes choix que
+    le haut de l'accueil, « Créer un compte » (l'appli) et « Télécharger » (sa section Installation) ; connecté (classe
+    « connecte », partage.TETE_COMPTE), « Mes decks » et le rond du compte, avec son menu (app.js › menuCompte)."""
     index = os.path.join(dossier, "index.html")
     with open(index, encoding="utf-8") as f:
         html = f.read()
@@ -189,8 +191,12 @@ def inserer(dossier, rendu, installation="#installation", classe="vue vue-pleine
     chat = re.search(r'<button id="btn-chat".*?</button>', html)
     if vide not in html or not chat:
         raise SystemExit("static/index.html a changé : pré-rendu impossible.")
-    creer = (f'<a href="{APPLI}#inscription" id="btn-creer" class="btn btn-accent" data-ico="plus">Créer un compte</a>\n      '
-             f'<a href="{installation}" id="btn-installer" class="btn btn-contour" data-ico="telecharger">Télécharger</a>')
+    creer = (f'<a href="{APPLI}#connexion" id="btn-connexion" class="btn btn-discret hors-compte" data-ico="compte" '
+             f'aria-label="Se connecter"><span class="txt">Se connecter</span></a>\n      '
+             f'<a href="{APPLI}#inscription" id="btn-creer" class="btn btn-accent hors-compte" data-ico="plus">Créer un compte</a>\n      '
+             f'<a href="{installation}" id="btn-installer" class="btn btn-contour hors-compte" data-ico="telecharger">Télécharger</a>\n      '
+             f'<a href="{APPLI}" id="btn-mes-decks" class="btn btn-accent en-compte" data-ico="cartes">Mes decks</a>\n      '
+             f'<button id="btn-compte" class="btn btn-compte en-compte" data-ico="compte" aria-label="Mon compte"></button>')
     html = html.replace(vide, f'<main id="vue" class="{classe}">{rendu}</main>').replace(chat.group(0), creer)
     for a, b in (('class="partage"', 'class="partage site-atelier"'),                # le champ du haut : une carte
                  ('placeholder="Chercher une carte ou un deck…"', 'placeholder="Rechercher une carte…"'),
@@ -266,6 +272,40 @@ def page_legale(dossier, chemin, titre, description, corps):
 """)
 
 
+def introuvable(dossier):
+    """fr/introuvable.html : la page des adresses inconnues (.htaccess › ErrorDocument 404). L'adresse d'un deck qui n'a
+    pas de page (privé, ou pas encore publié), ouverte par son propriétaire connecté : l'appli l'ouvre (#/slug/…)."""
+    with open(os.path.join(partage.STATIQUE, "index.html"), encoding="utf-8") as f:
+        icone = re.search(r'<link rel="icon"[^>]*>', f.read()).group(0)
+    v = partage._version(os.path.join(dossier, "style.css"))
+    partage._ecrire(os.path.join(dossier, "introuvable.html"), f"""<!doctype html>
+<html lang="fr" class="partage">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Page introuvable · Atelier MTG</title>
+  <meta name="robots" content="noindex">
+  {icone}
+  <link rel="stylesheet" href="/fr/style.css?v={v}">
+  <script>try {{ const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; }} catch (e) {{}}</script>
+  <script>try {{ const c = JSON.parse(localStorage.getItem("atelier-compte") || "null"), m = location.pathname.match(/^\\/decks\\/([^/]+)\\/(?:([^/]+)\\/?)?$/);
+    if (c && c.jeton && m && c.pseudo === m[1]) {{ const h = location.hash.replace(/^#\\/?/, "");
+      location.replace("{APPLI_CHEMIN}" + (m[2] ? "#/slug/" + m[2] + (h ? "/" + h : "") : "#/")); }} }} catch (e) {{}}</script>
+</head>
+<body>
+  <header class="barre"><a href="/fr/" class="logo">Atelier MTG</a></header>
+  <div class="cadre">
+    <main class="vue vue-pleine"><article class="a-propos legal">
+      <h1>Page introuvable</h1>
+      <p>Cette page n'existe pas, ou ce deck est privé.</p>
+      <p><a href="/fr/">L'Atelier MTG</a></p>
+    </article></main>
+  </div>
+</body>
+</html>
+""")
+
+
 def mentions_legales(dossier):
     contact = _lien(f"mailto:{CONTACT}", CONTACT)
     page_legale(dossier, "mentions-legales", "Mentions légales",
@@ -277,10 +317,11 @@ def mentions_legales(dossier):
 
       <h2>Hébergement</h2>
       <ul>
-        <li><strong>Ce site</strong> ({DOMAINE}) et <strong>les comptes</strong> (api.{DOMAINE}) : o2switch, SAS au capital
+        <li><strong>Ce site</strong> ({DOMAINE}), <strong>l'appli</strong> ({DOMAINE}/mes-decks/) et <strong>les comptes</strong>
+          (api.{DOMAINE}) : o2switch, SAS au capital
           de 100 000 €, Chemin des Pardiaux, 63000 Clermont-Ferrand, France · RCS Clermont-Ferrand 510 909 807 ·
           04 44 44 60 40 · {_lien("https://www.o2switch.fr/")}</li>
-        <li><strong>L'appli</strong> (app.atelier-mtg.com) et <strong>le code source</strong> : GitHub, Inc.,
+        <li><strong>La base des cartes de l'appli</strong> (app.atelier-mtg.com) et <strong>le code source</strong> : GitHub, Inc.,
           88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis · {_lien("https://github.com/")}</li>
         <li><strong>Le relais de l'appli</strong> (relais.atelier-mtg.workers.dev) : Cloudflare, Inc.,
           101 Townsend Street, San Francisco, CA 94107, États-Unis · {_lien("https://www.cloudflare.com/")}</li>
@@ -345,14 +386,16 @@ def confidentialite(dossier):
 
       <h2>Ce site</h2>
       <p>{DOMAINE} ne dépose aucun cookie et ne mesure pas son audience. Si vous changez le thème (clair ou sombre),
-        votre choix est gardé dans votre navigateur, sans être envoyé nulle part.</p>
+        votre choix est gardé dans votre navigateur, sans être envoyé nulle part. Connecté à l'appli, la page lit aussi
+        votre connexion gardée par le navigateur, pour afficher « Mes decks ».</p>
       <p>Comme tout hébergeur, o2switch tient des journaux techniques (adresse IP, date, page demandée, navigateur)
         pour la sécurité et le bon fonctionnement de ses serveurs. L'éditeur ne s'en sert pas.</p>
 
       <h2>L'appli en ligne</h2>
-      <p>L'appli (app.atelier-mtg.com) garde une copie de vos decks dans le stockage de votre navigateur, pour marcher
+      <p>L'appli ({DOMAINE}/mes-decks/) garde une copie de vos decks dans le stockage de votre navigateur, pour marcher
         sans réseau, avec la clé de votre connexion et la base des cartes. Rien de tout cela ne sert à vous suivre, et
-        « Se déconnecter » efface vos decks et la clé. Elle interroge Scryfall pour les cartes, et Commander Spellbook par un petit relais
+        « Se déconnecter » efface vos decks et la clé. Sur un PC où l'Atelier est installé et connecté au même compte,
+        l'appli lui parle directement, sur ce PC, pour la discussion avec Claude. Elle interroge Scryfall pour les cartes, et Commander Spellbook par un petit relais
         (Cloudflare) qui transmet les demandes sans rien garder. Pour simuler des parties, elle télécharge une fois le
         langage Python, adapté au navigateur (Pyodide), depuis jsDelivr. Elle est hébergée par GitHub Pages, qui tient ses
         propres journaux techniques.</p>
@@ -428,6 +471,15 @@ RewriteRule ^ https://{DOMAINE}%{{REQUEST_URI}} [L,R=301]
 RewriteRule ^$ /fr/ [R=302,L]
 # les adresses françaises d'avant /fr/
 RewriteRule ^(recherche|mentions-legales|confidentialite)(?:/(.*))?$ /fr/$1/$2 [R=301,L]
+# une adresse inconnue ; celle d'un deck privé, ouverte par son propriétaire, l'emmène dans l'appli (introuvable())
+ErrorDocument 404 /fr/introuvable.html
+# l'appli (mes-decks/, telephone_site.py) : son manifeste, et son service worker toujours relu
+AddType application/manifest+json .webmanifest
+<IfModule mod_headers.c>
+  <Files "sw.js">
+    Header set Cache-Control "no-cache"
+  </Files>
+</IfModule>
 
 <IfModule mod_expires.c>
   ExpiresActive On
@@ -472,6 +524,7 @@ def construire(dossier):
     page_recherche(fr)
     mentions_legales(fr)
     confidentialite(fr)
+    introuvable(fr)
     partage._ecrire(os.path.join(dossier, "index.html"), partage.redirection(SITE))     # sans .htaccess : le navigateur
     sitemap(dossier)
     robots(dossier)

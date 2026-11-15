@@ -11,6 +11,7 @@
   // voir/ (lien instantané d'un deck) : ce script y fait la page du deck, puis charge app.js (VOIR : son adresse) en
   // page partagée, sans démarrer l'appli. ICI : le dossier de l'appli, pour ses fichiers (worker, base), d'où que l'on soit
   const VOIR = window.ATELIER_VOIR || "", ICI = new URL(".", document.currentScript.src).href;
+  const BASE_CARTES = new URL("__BASE_CARTES__", ICI).href;     // la base de cartes publiée (telephone_site.py)
   // ORDI : l'appli sur un grand écran à la souris (telephone_site.py › habillage) ; ses decks sont alors dans « ce navigateur »
   const ORDI = document.documentElement.classList.contains("ordinateur"), CET_APPAREIL = ORDI ? "ce navigateur" : "ce téléphone";
   if (!VOIR && !ORDI) document.documentElement.classList.add("telephone");
@@ -21,6 +22,15 @@
   const COMPTE = "atelier-compte", API_COMPTE = lireLocal("atelier-api") || "https://api.atelier-mtg.com";
   const lireCompte = () => { try { const c = JSON.parse(lireLocal(COMPTE) || "null"); return c && c.email && c.jeton ? c : null; } catch (_) { return null; } };
   let compte = VOIR ? null : lireCompte();
+  // l'en-tête (app.js › menuCompte) : connecté ou non, et l'initiale du pseudo, dès le premier affichage (comme les pages
+  // du site, site_atelier.py › TETE_COMPTE)
+  function marquerCompte() {
+    const h = document.documentElement;
+    h.classList.toggle("connecte", !!compte);
+    if (compte && compte.pseudo) h.style.setProperty("--initiale", JSON.stringify(compte.pseudo[0].toUpperCase()));
+    else h.style.removeProperty("--initiale");
+  }
+  if (!VOIR) marquerCompte();
   // d'avant les comptes : des decks gardés seulement ici (« Commencer »), ou reçus d'un PC relié par QR code
   const ANCIEN_LOCAL = !compte && lireLocal("telephone-local") === "1";
   const ANCIEN_PC = !compte && (!!lireLocal("telephone-acces") || location.hash.includes("#appairer="));
@@ -120,7 +130,7 @@
   const simuAttente = new Map();
   function simu(f, ...a) {
     if (!simuW) {
-      simuW = new Worker(SIMU);
+      simuW = new Worker(new URL(SIMU, ICI));
       simuW.onmessage = (ev) => {
         const x = simuAttente.get(ev.data.n);
         if (!x) return;
@@ -257,6 +267,7 @@
 
   async function api(chemin, opts = {}) {
     const u = new URL(chemin, "http://atelier"), k = cleDe(u), p = u.pathname;
+    if (pc && ROUTES_PONT.test(p)) return pontAppel(chemin, opts);
     if ((opts.method || "GET") !== "GET") return ecrire(u, opts.body || {});
     const s = (await lesSurcharges())[k];                // modifiée ici, pas encore recalculée par le PC
     if (s) return copie(s.v);
@@ -277,7 +288,7 @@
     if (p === "/api/recherche/noms") { pret(); return message("noms", [u.searchParams.get("q") || "", await dansDeck(u.searchParams.get("deck")), 8]); }
     if (p === "/api/recherche-cartes") return decksAvecCarte(u.searchParams.get("q") || "");
     const pm = p.match(/^\/api\/decks\/([^/]+)\/partage$/);
-    if (pm) return lePartage().etat(decodeURIComponent(pm[1]));
+    if (pm) return etatPage(decodeURIComponent(pm[1]));
     if (/^\/api\/compte(\/|$)/.test(p)) { const r = await routeCompte(p, "GET"); if (r !== undefined) return r; }
     if (p === "/api/jouer/jetons") {                     // les jetons que créent les cartes du deck (proxies), sur Scryfall
       const page = await api(`/api/decks/${encodeURIComponent(u.searchParams.get("deck") || "")}`);
@@ -384,7 +395,7 @@
   const reponses = new Map();
   function message(f, a = [], transfert = []) {
     if (!travailleur) {
-      travailleur = new Worker(CARTES);
+      travailleur = new Worker(new URL(CARTES, ICI));
       travailleur.onmessage = (ev) => {
         const r = reponses.get(ev.data.id);
         if (!r) return;
@@ -400,9 +411,9 @@
     const c = etatBase.construction;
     Object.assign(c, { actif: true, etape: "Téléchargement de la base de cartes", fait: 0, total: 0, unite: "octets", erreur: "" });
     try {
-      idx = idx || await (await fetch(new URL("base/index.json", ICI), { cache: "no-store" })).json();
+      idx = idx || await (await fetch(new URL("index.json", BASE_CARTES), { cache: "no-store" })).json();
       c.total = idx.taille;
-      const r = await fetch(new URL("base/" + idx.fichier, ICI));
+      const r = await fetch(new URL(idx.fichier, BASE_CARTES));
       if (!r.ok) throw new Error(`La base de cartes ne répond pas (${r.status}).`);
       const lecteur = r.body.getReader(), morceaux = [];
       for (;;) {
@@ -436,7 +447,7 @@
   // une nouvelle base publiée : téléchargée (pas sur les données mobiles, sauf si on la demande), puis relue
   async function nouvelleBase(force = false) {
     etatBase.verifie = Date.now() / 1000;
-    const idx = await (await fetch(new URL("base/index.json", ICI), { cache: "no-store" })).json();
+    const idx = await (await fetch(new URL("index.json", BASE_CARTES), { cache: "no-store" })).json();
     const g = await BD.lire("@base").catch(() => null);
     if (g && g.fichier === idx.fichier) return false;
     if (!force && mobile()) return false;
@@ -828,8 +839,10 @@
     }
     if (!(await fichier("index.json.gz"))) throw Object.assign(new Error("Tes decks ne sont pas encore arrivés."), { statut: 503 });
     if (p === "/api/corbeille/recuperer") return recupererLocal(b.fichier);
-    const pt = p.match(/^\/api\/decks\/([^/]+)\/partage(\/retirer)?$/);
-    if (pt) return pt[2] ? lePartage().retirer(decodeURIComponent(pt[1])) : lePartage().partager([decodeURIComponent(pt[1])], (b || {}).pseudo);
+    const pt = p.match(/^\/api\/decks\/([^/]+)\/(partage|partage\/retirer|visibilite)$/);
+    if (pt && pt[2] === "visibilite") return changerVisibilite(decodeURIComponent(pt[1]), (b || {}).visibilite);
+    if (pt && pt[2] === "partage/retirer") return changerVisibilite(decodeURIComponent(pt[1]), "prive");
+    if (pt) { await publier([decodeURIComponent(pt[1])]); return etatPage(decodeURIComponent(pt[1])); }
     if (p === "/api/decks") return creerDeck(b);
     if (p === "/api/decks/importer") return importerDecks(b);
     if (p === "/api/classeur/importer") return importerClasseur(b);
@@ -1355,23 +1368,141 @@
     lire: (k) => BD.lire(k).catch(() => null), ecrire: (k, v) => BD.ecrire(k, v),
     reglages: () => ({ budget: budget(), sans_ub_illustrations: !!(window.REGLAGES || {}).sans_ub_illustrations }),
   }));
-  // une page publique suit son deck : renommé (elle garde son adresse), supprimé (retirée), modifié ici (republiée une
-  // minute après la dernière modification, tant que l'appli est ouverte)
+  // ------------------------------------------------------------------ le pont avec l'Atelier de ce PC (2.3.0)
+  // Sur un ordinateur où l'Atelier est installé et connecté au même compte, ce que lui seul sait faire (Claude, les
+  // synergies, MTGPics) passe par lui. Il range son adresse et un secret dans « Réglages Atelier/pont.json »
+  // (compte.publier_pont) : on ne l'appelle que si ce fichier est là, car le navigateur demande alors, une fois, d'accéder
+  // au réseau local. Quand Claude a fini, ce qu'il a changé sur le PC arrive ici aussitôt.
+  const ROUTES_PONT = /^\/api\/(discussion(\/|$)|decks\/[^/]+\/(synergies|mtgpics)(\/|$))/;
+  let pc = null, claudeActif = false;
+  async function chercherPc() {
+    if (!ORDI || !compte || pc) return;
+    let l = {};
+    try { l = JSON.parse((await depot()).fichiers["Réglages Atelier/pont.json"] || "{}") || {}; } catch (_) { return; }
+    for (const x of Object.values(l)) {
+      try {
+        const r = await fetch(`http://127.0.0.1:${Number(x.port)}/api/pont`, { cache: "no-store", headers: { "X-Atelier-Pont": String(x.secret) } });
+        const d = r.ok ? await r.json() : {};
+        if (d.email && d.email === compte.email) {
+          pc = { port: Number(x.port), secret: String(x.secret), version: d.atelier };
+          T.pc = pc;
+          if (window.quandPc) window.quandPc();
+          return;
+        }
+      } catch (_) { /* pas sur ce PC, ou l'Atelier n'est pas lancé */ }
+    }
+  }
+  async function auPc(chemin, opts = {}) {
+    const corps = opts.body !== undefined && opts.body !== null;
+    let r;
+    try {
+      r = await fetch(`http://127.0.0.1:${pc.port}${chemin}`, { method: opts.method || "GET", cache: "no-store",
+        headers: { "X-Atelier-Pont": pc.secret, ...(corps ? { "Content-Type": "application/json" } : {}) },
+        body: corps ? JSON.stringify(opts.body) : undefined });
+    } catch (_) { throw Object.assign(new Error("L'Atelier de ce PC ne répond plus : relance-le."), { statut: 0 }); }
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw Object.assign(new Error(d.erreur || `L'Atelier de ce PC ne répond pas (${r.status}).`), { statut: r.status });
+    return d;
+  }
+  async function pontAppel(chemin, opts) {
+    const d = await auPc(chemin, opts);
+    if (chemin.startsWith("/api/discussion")) {
+      const actif = !!(d && (d.actif || (d.actives && d.actives.length)));
+      if (claudeActif && !actif) setTimeout(apresClaude, 500);
+      claudeActif = actif;
+    }
+    return d;
+  }
+  async function apresClaude() {
+    try { await auPc("/api/compte/synchroniser", { method: "POST", body: {} }); } catch (_) { /* il se synchronisera seul */ }
+    const r = await sauvegarder().catch(() => null);
+    if (r && r.recus && window.route && T.pret && document.querySelector("#modale")?.hidden !== false) route();
+  }
+
+  // ------------------------------------------------------------------ l'adresse et la page publique de chaque deck
+  // L'adresse d'un deck, atelier-mtg.com/decks/<pseudo>/<slug>/, est le lien à partager : celle de sa page publiée (le
+  // serveur la garde), sinon celle qu'il lui donnera (comme pages.slug_de), la même sur tous les appareils. Chaque deck
+  // est publié, sauf s'il est privé ; sa visibilité est dans « Deck X/page.json » (absent : public), synchronisée.
+  const RESERVES = new Set(["atelier", "atelier-mtg", "admin", "api", "app", "decks", "fr", "en", "a-propos", "recherche", "modeles",
+    "sitemap", "static", "jouer", "contact", "aide", "compte", "comptes", "partage", "voir", "www"]);
+  const VISIBILITES = ["public", "non-repertorie", "prive"];
+  const slugNom = (id) => String(id).replace(/^Deck /, "").normalize("NFD").replace(/[^\x00-\x7f]/g, "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60).replace(/-+$/, "") || "deck";
+  let slugs = new Map();
+  async function majSlugs() {
+    const e = (await BD.lire("@partages").catch(() => null)) || {}, publies = {};
+    for (const [d, x] of Object.entries(e.decks || {})) publies[d] = x.slug || String(x.url || "").split("/").filter(Boolean).pop();
+    const pris = new Set(Object.values(publies)), m = new Map();
+    for (const id of PAGES.decksDe((await depot()).fichiers).sort()) {
+      let s = publies[id];
+      if (!s) {
+        const b = slugNom(id);
+        s = b;
+        for (let i = 2; pris.has(s) || RESERVES.has(s); i++) s = `${b}-${i}`;
+        pris.add(s);
+      }
+      m.set(id, s);
+    }
+    slugs = m;
+  }
+  const slugDe = (id) => slugs.get(id) || slugNom(id);
+  const deckDeSlug = (s) => ([...slugs].find(([, x]) => x === s) || [null])[0];
+  async function visibilite(id) {
+    try { const v = JSON.parse((await depot()).fichiers[`${id}/page.json`] || "{}").visibilite; return VISIBILITES.includes(v) ? v : "public"; }
+    catch (_) { return "public"; }
+  }
+  async function etatPage(id) {
+    const x = ((await lePartage().partages()) || {})[id] || {};
+    return { url: `${location.origin}/decks/${(compte && compte.pseudo) || ""}/${slugDe(id)}/`, visibilite: await visibilite(id),
+      publie: !!x.url, date: x.date || null };
+  }
+  async function changerVisibilite(id, v) {
+    if (!VISIBILITES.includes(v)) throw new Error("Visibilité inconnue.");
+    await avecVerrou(async () => {
+      const d = await depot();
+      if (v === "public") delete d.fichiers[`${id}/page.json`];
+      else d.fichiers[`${id}/page.json`] = JSON.stringify({ visibilite: v }, null, 1) + "\n";
+      await BD.ecrire("@depot", d);
+    });
+    planifierSauvegarde();
+    // privé : la page est retirée tout de suite ; sinon publiée en fond (elle attend que les pages des decks soient prêtes)
+    if (v === "prive") { if ((await lePartage().partages())[id]) await lePartage().retirer(id); }
+    else suivrePartage({ op: "modifie", decks: [id], vite: true });
+    return etatPage(id);
+  }
+  // publier ces decks (sauf les privés) ; fort : l'erreur remonte (sinon, on essaiera plus tard)
+  async function publier(ids, fort = false) {
+    for (const id of ids) {
+      const v = await visibilite(id);
+      if (v === "prive") continue;
+      try { await lePartage().partager([id], null, () => ({ visibilite: v, slug: slugDe(id) })); }
+      catch (e) { if (fort) throw e; }
+    }
+    await majSlugs();
+  }
+  // une page publique suit son deck : renommé (elle garde son adresse), supprimé (retirée), modifié ici (republiée peu
+  // après la dernière modification, tant que l'appli est ouverte) ; au démarrage, les decks qui n'ont pas encore la leur
   const aRepublier = new Set();
   let minuteurPartage = null;
   async function suivrePartage(x) {
     try {
       const p = await lePartage().partages();
-      if (x.op === "renommer" && p[x.ancien]) { await lePartage().renommer(x.ancien, x.nouveau); aRepublier.add(x.nouveau); }
+      if (x.op === "renommer") { if (p[x.ancien]) await lePartage().renommer(x.ancien, x.nouveau); aRepublier.add(x.nouveau); }
       else if (x.op === "retirer" && p[x.deck]) await lePartage().retirer(x.deck);
-      else if (x.op === "modifie") for (const id of x.decks) if (p[id]) aRepublier.add(id);
-      if (aRepublier.size) { clearTimeout(minuteurPartage); minuteurPartage = setTimeout(republier, 60000); }
-    } catch (_) { /* pas de réseau : la page sera refaite au prochain partage */ }
+      else if (x.op === "modifie") for (const id of x.decks) aRepublier.add(id);
+      if (aRepublier.size) { clearTimeout(minuteurPartage); minuteurPartage = setTimeout(republier, x.vite ? 3000 : 20000); }
+    } catch (_) { /* pas de réseau : la page sera refaite plus tard */ }
   }
   async function republier() {
     const l = [...aRepublier];
     aRepublier.clear();
-    for (const id of l) await lePartage().partager([id]).catch(() => {});
+    const ids = new Set(PAGES.decksDe((await depot()).fichiers));
+    await publier(l.filter((id) => ids.has(id))).catch(() => {});
+  }
+  async function publierManquants() {
+    if (!compte || !compte.pseudo) return;
+    const p = await lePartage().partages(), ids = PAGES.decksDe((await depot()).fichiers).filter((id) => !p[id]);
+    if (ids.length) suivrePartage({ op: "modifie", decks: ids, vite: true });
   }
 
   // ------------------------------------------------------------------ les pages faites ici
@@ -1532,17 +1663,20 @@
   // se connecter : le code reçu par e-mail. Les decks déjà ici (d'avant les comptes) partent dans le compte ; ceux d'un
   // autre compte, ou les pages reçues d'un PC relié, sont d'abord effacés. Les pages des decks sont refaites une seule
   // fois, à la fin : toutes s'il n'y en a pas encore ici ou si les réglages viennent d'arriver, sinon celles des decks
-  // arrivés. progres(fait, total) : où en est ce calcul (beaucoup de decks : il prend du temps)
+  // arrivés. progres(fait, total) : où en est ce calcul (beaucoup de decks : il prend du temps). Un compte sans pseudo
+  // le choisit d'abord (demanderPseudo : l'écran de connexion) ; la connexion n'est gardée qu'ensuite
   const demanderCode = (email) => serveur("/connexion/code", "POST", { email });
-  async function seConnecter(email, code, progres = null) {
+  async function seConnecter(email, code, progres = null, demanderPseudo = null) {
     const r = await serveur("/connexion/verifier", "POST", { email, code, appareil: nomAppareil() });
+    compte = { email: r.email, jeton: r.jeton, pseudo: r.pseudo || null };
+    if (!compte.pseudo && demanderPseudo) await demanderPseudo();
     if (progres) progres(0, 0);
     const avant = (await BD.lire(ETAT).catch(() => null)) || {};
     if ((avant.email && avant.email !== r.email) || ANCIEN_PC) await viderIci();
     for (const k of ["telephone-acces", "telephone-commit", "telephone-compte-pc", "telephone-local", "telephone-connexion-github"]) ecrireLocal(k, null);
     for (const k of ["@github", "@sauvegarde", "@partage", "@partage-attente"]) await BD.effacer(k).catch(() => {});
-    compte = { email: r.email, jeton: r.jeton };
     ecrireLocal(COMPTE, JSON.stringify(compte));
+    marquerCompte();
     local = true;
     garderDonnees();
     if (!(await BD.lire("@depot").catch(() => null))) await BD.ecrire("@depot", { fichiers: {}, modifies: {} });
@@ -1560,6 +1694,14 @@
     }
     location.hash = "#/";
     location.reload();
+  }
+  // le pseudo du compte (serveur › choisir_pseudo), choisi une fois : il est dans l'adresse de ses decks
+  async function choisirPseudo(p) {
+    const r = await serveur("/compte/pseudo", "POST", { pseudo: p });
+    compte.pseudo = r.pseudo;
+    if (lireCompte()) ecrireLocal(COMPTE, JSON.stringify(compte));
+    marquerCompte();
+    return r.pseudo;
   }
   // se déconnecter : ce qui n'est pas encore parti part d'abord, puis les decks quittent cet appareil (ils restent dans
   // le compte). Refusé par le serveur (appareil retiré du compte) : on revient à la connexion, sans rien effacer
@@ -1678,6 +1820,7 @@
       if (touches.size && !enConnexion) await recalculer(null, touches);
       if (recus.includes(REG_CARTES) && !enConnexion) await appliquerReglages(dep.fichiers[REG_CARTES]);     // changés sur un autre appareil
       if (conflits.length) setTimeout(() => planifierSauvegarde(1000));   // la liste d'en face, gardée dans l'historique, part aussi
+      if (recus.includes("Réglages Atelier/pont.json")) setTimeout(() => chercherPc().catch(() => {}));   // l'Atelier d'un PC
       return { envoyes: envois.length + retraits.length, recus: recus.length, decks: nb, touches: [...touches],
         reglages: recus.includes(REG_CARTES),
         conflits: [...new Set(conflits.filter((rel) => rel.endsWith("/archidekt.txt")).map((rel) => rel.split("/")[0]))].sort(),
@@ -1699,7 +1842,7 @@
   }
   async function etatSauvegarde() {
     const e = await lEtat();
-    return { connecte: !!compte, email: compte ? compte.email : null, synchro: "auto", en_cours: !!sauvegarde,
+    return { connecte: !!compte, email: compte ? compte.email : null, pseudo: compte ? compte.pseudo : null, synchro: "auto", en_cours: !!sauvegarde,
       derniere: e.derniere || null, erreur: compte ? erreurSauvegarde : "", decks: e.decks ?? null };
   }
   async function exporterCompte() {                   // tout ce que garde le compte, dans un fichier (format atelier-mtg-appli)
@@ -1756,6 +1899,7 @@
     memoire.clear();
     fusion = null;
     connus = null;
+    await majSlugs().catch(() => {});
     setTimeout(() => spellbookEnFond(touches ? [...touches] : ids), 1000);
   }
   // ce qui n'est pas encore parti vers le compte ne vit qu'ici : on demande au navigateur de ne pas l'effacer
@@ -1800,7 +1944,7 @@
   let invite = null;                                   // Android : la demande d'installation du navigateur
   if (!VOIR) addEventListener("beforeinstallprompt", (ev) => { ev.preventDefault(); invite = ev; bandeauInstaller(); });
   addEventListener("appinstalled", () => { const b = document.getElementById("tel-bandeau"); if (b) b.remove(); });
-  if (!VOIR && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+  if (!VOIR && "serviceWorker" in navigator) navigator.serviceWorker.register(new URL("sw.js", ICI)).catch(() => {});
 
   // ouverte dans le navigateur (par le QR code) : un bandeau en bas propose de l'installer, tant qu'elle ne l'est pas.
   // Android : le bouton ouvre la demande du navigateur ; iPhone : la marche à suivre (Safari n'a pas de bouton).
@@ -1818,7 +1962,7 @@
     document.documentElement.style.setProperty("--tel-bandeau", b ? b.offsetHeight + 12 + "px" : "0px");
   }
   function bandeauInstaller() {
-    if (ORDI || installee() || !local || !document.body) return;     // ordinateur : l'Atelier à installer, c'est l'autre
+    if (ORDI || installee() || !local || T.pseudoRequis || !document.body) return;     // ordinateur : l'Atelier à installer, c'est l'autre
     if (Date.now() - Number(lireLocal(PLUS_TARD) || 0) < 3 * 86400 * 1000) return;
     let b = document.getElementById("tel-bandeau");
     if (!b) {
@@ -1826,15 +1970,15 @@
       b.id = "tel-bandeau";
       b.className = "tel-bandeau";
       b.setAttribute("role", "region");
-      b.setAttribute("aria-label", "Installer l'appli");
+      b.setAttribute("aria-label", "Ajouter à l'écran d'accueil");
       document.body.appendChild(b);
     }
-    b.innerHTML = `<div class="tel-bandeau-texte"><strong>Installe l'appli</strong>
+    b.innerHTML = `<div class="tel-bandeau-texte"><strong>Ajoute l'Atelier à ton écran d'accueil</strong>
         <span>${invite ? "Elle s'ouvrira depuis son icône, même sans réseau."
           : iphone ? "Touche Partager <span class=\"tel-partager\" aria-hidden=\"true\">⬆</span>, puis «&nbsp;Sur l'écran d'accueil&nbsp;». Ouvre-la ensuite depuis son icône et connecte-toi."
           : "Menu du navigateur ⋮, puis «&nbsp;Installer l'application&nbsp;» ou «&nbsp;Ajouter à l'écran d'accueil&nbsp;»."}</span></div>
       <div class="tel-bandeau-boutons">
-        ${invite ? `<button class="btn btn-accent btn-petit" id="tel-installer-oui">Installer</button>` : ""}
+        ${invite ? `<button class="btn btn-accent btn-petit" id="tel-installer-oui">Ajouter</button>` : ""}
         <button class="btn btn-discret btn-petit" id="tel-installer-non">Plus tard</button></div>`;
     const oui = b.querySelector("#tel-installer-oui");
     if (oui) oui.onclick = async () => {
@@ -1850,7 +1994,36 @@
   const e = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   // l'écran de connexion : l'adresse e-mail, puis le code reçu (le même geste crée le compte). Pour les decks d'avant les
   // comptes : ceux gardés ici partent dans le compte à la connexion ; ceux d'un PC relié, c'est le PC qui les envoie
+  // le pseudo (à l'inscription, ou à l'ouverture pour un compte d'avant) : l'adresse de ses decks se lit pendant qu'on l'écrit
+  const HTML_PSEUDO = `<form id="tel-form-pseudo">
+      <div class="form-ligne"><input class="champ" id="tel-pseudo" autocapitalize="none" autocomplete="username" spellcheck="false" maxlength="30"
+        placeholder="ton-pseudo" aria-label="Pseudo" required><button class="btn btn-accent">Valider</button></div>
+      <p class="muet petit tel-adresse">atelier-mtg.com/decks/<strong id="tel-pseudo-vu">ton-pseudo</strong>/</p></form>`;
+  function lierPseudo(zone, erreur, fini) {
+    const f = zone.querySelector("#tel-form-pseudo"), champ = f.querySelector("#tel-pseudo"), vu = f.querySelector("#tel-pseudo-vu");
+    const occupe = (oui) => f.querySelectorAll("button, input").forEach((x) => { x.disabled = oui; });
+    champ.oninput = () => {
+      const v = champ.value.toLowerCase().replace(/\s+/g, "-");
+      if (v !== champ.value) champ.value = v;
+      vu.textContent = v || "ton-pseudo";
+    };
+    f.onsubmit = async (ev) => {
+      ev.preventDefault();
+      erreur("");
+      occupe(true);
+      try { await choisirPseudo(champ.value); fini(); }
+      catch (err) { erreur(err.message); occupe(false); champ.focus(); }
+    };
+    champ.focus();
+  }
   function attenteVue(el) {
+    if (compte && T.pseudoRequis) {
+      el.innerHTML = `<div class="tel-accueil"><div class="tel-marque"><h1>Atelier MTG</h1></div>
+        <section class="tel-choix"><h2>Ton pseudo</h2>${HTML_PSEUDO}<p class="erreur" id="tel-erreur" hidden></p></section></div>`;
+      const z = el.querySelector("#tel-erreur");
+      lierPseudo(el, (m) => { z.textContent = m; z.hidden = !m; }, () => T.pseudoFait && T.pseudoFait());
+      return;
+    }
     if (!compte) {
       const creer = /inscription/.test(location.hash);
       el.innerHTML = `<div class="tel-accueil">
@@ -1898,15 +2071,23 @@
         if (!prepare) {
           prepare = true;
           el.querySelectorAll(".tel-choix > :not(h2), #tel-fichier").forEach((x) => { x.hidden = true; });
+          $(".tel-choix h2").textContent = "Bienvenue";
           $("#tel-progres").hidden = false;
         }
         $("#tel-progres").textContent = total ? `Préparation de tes decks : ${fait + 1}/${total}` : "Préparation de tes decks…";
       };
+      // code bon, compte sans pseudo : il le choisit avant d'entrer
+      const pseudo = () => new Promise((ok) => {
+        el.querySelectorAll(".tel-choix > :not(h2, #tel-erreur), #tel-fichier").forEach((x) => { x.hidden = true; });
+        $(".tel-choix h2").textContent = "Ton pseudo";
+        $(".tel-choix h2").insertAdjacentHTML("afterend", HTML_PSEUDO);
+        lierPseudo(el, erreur, ok);
+      });
       fc.onsubmit = async (ev) => {
         ev.preventDefault();
         erreur("");
         occupe(fc, true);
-        try { await seConnecter(fc.dataset.email, $("#tel-code").value, progres); }
+        try { await seConnecter(fc.dataset.email, $("#tel-code").value, progres, pseudo); }
         catch (err) {
           if (prepare) { location.hash = "#/"; location.reload(); return; }   // connecté : l'appli finit au démarrage
           erreur(err.message);
@@ -1937,11 +2118,27 @@
 
   async function demarrer() {
     if (!local) return window.route && route();         // pas connecté : l'écran de connexion
+    if (!compte.pseudo) {                               // compte d'avant le pseudo à l'inscription (hors ligne : plus tard)
+      const c = await serveur("/compte").catch(() => null);
+      if (c && c.pseudo) {
+        compte.pseudo = c.pseudo;
+        ecrireLocal(COMPTE, JSON.stringify(compte));
+        marquerCompte();
+      } else if (c) {
+        T.pseudoRequis = true;
+        if (window.route) route();
+        await new Promise((ok) => { T.pseudoFait = ok; });
+        T.pseudoRequis = false;
+      }
+    }
     preparerBase();
     bandeauInstaller();
     envoyer().catch(() => {});                            // ce qui n'était pas parti (hors ligne)
     try { await synchroniser(); T.erreur = ""; } catch (err) { T.erreur = err.message; }
+    await majSlugs().catch(() => {});
     T.pret = true;
+    setTimeout(() => publierManquants().catch(() => {}), 5000);
+    chercherPc().catch(() => {});
     if (window.route) route();
     setTimeout(async () => spellbookEnFond(PAGES.decksDe((await depot()).fichiers)), 3000);
     sauvegarderEnFond();
@@ -2067,7 +2264,7 @@
   }
 
   const T = window.TELEPHONE = {
-    api, attente: attenteVue, pret: false, erreur: "",
+    api, attente: attenteVue, pret: false, erreur: "", slug: slugDe, deckDeSlug,      // l'adresse des decks (app.js › adresseDeRoute)
     enAttente: async () => (await attente()).length,
     envoyer: () => envoyer(),
     local,

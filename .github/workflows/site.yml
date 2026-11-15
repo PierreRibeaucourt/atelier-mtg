@@ -39,6 +39,14 @@ jobs:
       - name: Page pré-rendue (Chrome sans interface)
         run: python outils/atelier/site_atelier.py site
 
+      # L'appli en ligne, sur le même domaine (https://atelier-mtg.com/mes-decks/) : les pages du site savent ainsi si
+      # l'on est connecté. Sa base de cartes reste publiée à l'ancienne adresse par le dépôt atelier-mtg/app.
+      - name: Pillow (icônes de l'appli)
+        run: python -m pip install --disable-pip-version-check pillow==12.3.0
+
+      - name: Appli (mes-decks/)
+        run: python outils/atelier/telephone_site.py site/mes-decks --base https://app.atelier-mtg.com/base/
+
       - name: Branche « accueil », pour l'hébergement
         env:
           JETON: ${{ github.token }}

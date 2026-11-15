@@ -10,7 +10,7 @@ const PARTAGE_TELEPHONE = (o) => {
   const ACCUEIL_ATELIER = "https://atelier-mtg.com/fr/";
   const ATELIER = "https://github.com/PierreRibeaucourt/atelier-mtg";
   const VERSION = "__VERSION_ATELIER__";               // version.py, écrite par telephone_site.py
-  const ETAT = "@partages";                            // {pseudo, lu, decks: {deck: {url, date}}} : les pages du compte
+  const ETAT = "@partages";                            // {pseudo, lu, decks: {deck: {url, slug, date, visibilite}}} : les pages du compte
   const COULEURS = { "": "incolore", W: "mono-blanc", U: "mono-bleu", B: "mono-noir", R: "mono-rouge", G: "mono-vert",
     WU: "Azorius", UB: "Dimir", BR: "Rakdos", RG: "Gruul", WG: "Selesnya", WB: "Orzhov", UR: "Izzet", BG: "Golgari", WR: "Boros",
     UG: "Simic", WUB: "Esper", UBR: "Grixis", BRG: "Jund", WRG: "Naya", WUG: "Bant", WBG: "Abzan", WUR: "Jeskai", UBG: "Sultai",
@@ -228,7 +228,8 @@ const PARTAGE_TELEPHONE = (o) => {
     if (frais || !e || Date.now() - (e.lu || 0) > 300000) {
       try {
         const r = await o.serveur("/partages");
-        e = { pseudo: r.pseudo, lu: Date.now(), decks: Object.fromEntries((r.partages || []).map((x) => [x.deck, { url: x.url, date: x.date }])) };
+        e = { pseudo: r.pseudo, lu: Date.now(), decks: Object.fromEntries((r.partages || []).map((x) => [x.deck,
+          { url: x.url, slug: x.slug, date: x.date, visibilite: x.visibilite || "public" }])) };
         await o.ecrire(ETAT, e);
       } catch (_) { /* pas de réseau : ce qu'on sait */ }
     }
@@ -236,10 +237,11 @@ const PARTAGE_TELEPHONE = (o) => {
   }
   async function etat(deck) {
     const x = ((await lesPages()).decks || {})[deck];
-    return x ? { url: x.url, date: x.date } : {};
+    return x ? { url: x.url, date: x.date, visibilite: x.visibilite } : {};
   }
-  // publie (ou met à jour) les pages de ces decks ; pseudo : au premier partage (sinon 409)
-  async function partager(decks, pseudo = null) {
+  // publie (ou met à jour) les pages de ces decks ; pseudo : un compte sans pseudo (sinon 409) ; voulu(deck) :
+  // {visibilite, slug} (l'adresse que le deck a déjà dans l'appli : telephone.js › slugs)
+  async function partager(decks, pseudo = null, voulu = () => ({})) {
     let e = await lesPages();
     for (const deck of decks) {
       const donnees = await capturer(deck), d = donnees.api[`/api/decks/${deck}`], b = donnees.api[`/api/decks/${deck}/bracket`] || {};
@@ -253,8 +255,8 @@ const PARTAGE_TELEPHONE = (o) => {
           d.art || (cmdCartes[0] && cmdCartes[0].info.art) || "", d.identite, chiffres, pseudo || e.pseudo || "");
       } catch (_) { /* sans image */ }
       const r = await o.serveur("/partages", "POST", { deck, donnees: { ...donnees, version: VERSION }, image: jpg ? base64(jpg) : null,
-        budget: o.reglages().budget, pseudo: pseudo || null });
-      e = { ...e, pseudo: r.pseudo, decks: { ...(e.decks || {}), [deck]: { url: r.url, date: r.date } } };
+        budget: o.reglages().budget, pseudo: pseudo || null, ...voulu(deck) });
+      e = { ...e, pseudo: r.pseudo, decks: { ...(e.decks || {}), [deck]: { url: r.url, slug: r.slug, date: r.date, visibilite: r.visibilite || "public" } } };
       await o.ecrire(ETAT, e);
     }
     return decks.length === 1 ? etat(decks[0]) : {};

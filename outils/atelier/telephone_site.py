@@ -1,6 +1,11 @@
 """Fabrique l'appli du téléphone : un site statique, installable sur l'écran d'accueil (appli web), sans serveur.
 
-    python outils/atelier/telephone_site.py [dossier]        (site-telephone/ à la racine par défaut)
+    python outils/atelier/telephone_site.py [dossier] [--base URL]      (site-telephone/ à la racine par défaut)
+    python outils/atelier/telephone_site.py dossier --demenagement     (l'ancienne adresse : vers la nouvelle)
+
+Depuis la refonte « site unique », l'appli est à https://atelier-mtg.com/mes-decks/, avec la page d'accueil (branche
+« accueil », .github/workflows/site.yml) : même domaine, donc les pages du site savent si l'on est connecté. --base :
+l'adresse de la base de cartes, restée à l'ancienne adresse (le dépôt « app » la publie avec demenagement()).
 
 Le site reprend l'interface de l'Atelier (static/index.html, app.js, style.css) avec telephone.js, qui garde les decks
 dans le navigateur et les synchronise avec le compte (outils/serveur/) au lieu du serveur Python, plus ce qu'il faut à
@@ -44,7 +49,7 @@ def _icones(dossier):
         im.convert("RGB").save(os.path.join(dossier, nom), optimize=True)
 
 
-def construire(dossier):
+def construire(dossier, base="base/"):
     if os.path.isdir(dossier):
         shutil.rmtree(dossier)
     os.makedirs(dossier)
@@ -91,9 +96,10 @@ def construire(dossier):
     with open(os.path.join(STATIQUE, "telephone", "telephone.js"), encoding="utf-8") as f:      # le Worker de la base de cartes
         tel = (f.read().replace("__CARTES__", "cartes.js?v=" + _empreinte(os.path.join(dossier, "cartes.js")))
                .replace("__SIMU__", "simulateur.js?v=" + _empreinte(os.path.join(dossier, "simulateur.js")))
-               .replace("__SIMU_FICHIERS__", json.dumps(simu)).replace("__SIMU_OPTIONS__", json.dumps(options, ensure_ascii=False)))
-        if "__SIMU" in tel:
-            raise SystemExit("telephone.js : une marque du simulateur n'a pas été remplacée")
+               .replace("__SIMU_FICHIERS__", json.dumps(simu)).replace("__SIMU_OPTIONS__", json.dumps(options, ensure_ascii=False))
+               .replace("__BASE_CARTES__", base))
+        if "__SIMU" in tel or "__BASE_CARTES__" in tel:
+            raise SystemExit("telephone.js : une marque n'a pas été remplacée")
     with open(os.path.join(dossier, "telephone.js"), "w", encoding="utf-8", newline="\n") as f:
         f.write(tel)
     _icones(dossier)
@@ -108,9 +114,13 @@ def construire(dossier):
     v = {f: _empreinte(os.path.join(dossier, f)) for f in ("app.js", "style.css", "moteur.js", "pages.js", "partage.js", "telephone.js", "cartes.js")}
     with open(os.path.join(STATIQUE, "index.html"), encoding="utf-8") as f:
         html = f.read()
-    # avant tout affichage : l'habillage (grand écran à la souris : la barre du PC, sans onglets en bas) et le thème choisi
+    # avant tout affichage : l'habillage (grand écran à la souris : la barre du PC, sans onglets en bas), le thème choisi
+    # et la connexion (le rond du compte, comme telephone.js › marquerCompte)
     habillage = ('<script>(function (h) { if (matchMedia("(min-width: 900px) and (pointer: fine)").matches) h.className = "ordinateur";\n'
-                 '    try { var t = localStorage.getItem("theme"); if (t) h.dataset.theme = t; } catch (e) {} })(document.documentElement);</script>')
+                 '    try { var t = localStorage.getItem("theme"); if (t) h.dataset.theme = t; } catch (e) {}\n'
+                 '    try { var c = JSON.parse(localStorage.getItem("atelier-compte") || "null"); if (c && c.jeton) { h.classList.add("connecte");\n'
+                 '      if (c.pseudo) h.style.setProperty("--initiale", JSON.stringify(c.pseudo[0].toUpperCase())); } } catch (e) {}\n'
+                 '  })(document.documentElement);</script>')
     tete = "\n  ".join([habillage, '<meta name="robots" content="noindex">',
                         f'<meta name="theme-color" content="{FOND}">',
                         '<meta name="apple-mobile-web-app-capable" content="yes">',
@@ -129,6 +139,10 @@ def construire(dossier):
          f'  <script src="partage.js?v={v["partage.js"]}"></script>\n'
          f'  <script src="telephone.js?v={v["telephone.js"]}"></script>\n'
          f'  <script src="app.js?v={v["app.js"]}"></script>'),
+        # en haut à droite, le rond du compte (app.js › menuCompte)
+        ('<span class="txt">Demander à Claude</span></button>',
+         '<span class="txt">Demander à Claude</span></button>\n'
+         '      <button id="btn-compte" class="btn btn-compte en-compte" data-ico="compte" aria-label="Mon compte"></button>'),
     ]
     for a, b in remplacements:
         if a not in html:
@@ -188,6 +202,49 @@ def voir(dossier, v):
         f.write(html)
 
 
+DEMENAGEMENT = """<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Atelier MTG</title>
+  <meta name="robots" content="noindex">
+  <link rel="canonical" href="{nouvelle}">
+  <script>
+    // la même page de l'appli à la nouvelle adresse : l'écran (#/deck/…), un lien instantané (voir/#…), la table de jeu
+    (function () {{
+      var p = location.pathname.replace(/^\\/+/, "");
+      location.replace("{nouvelle}" + (/^(voir|jouer)\\//.test(p) ? p : "") + location.search + location.hash);
+    }})();
+  </script>
+</head>
+<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:{fond};color:#ece6df;font-family:system-ui,sans-serif">
+  <p>L'Atelier MTG est maintenant à <a style="color:#f26b2c" href="{nouvelle}">atelier-mtg.com/mes-decks</a>.</p>
+</body>
+</html>
+"""
+
+
+def demenagement(dossier, nouvelle="https://atelier-mtg.com/mes-decks/"):
+    """L'ancienne adresse de l'appli (app.atelier-mtg.com, GitHub Pages) : toute page renvoie à la même à la nouvelle
+    adresse ; le service worker de l'ancienne appli efface ses fichiers puis s'en va. Le dépôt « app » y ajoute base/,
+    la base de cartes, que l'appli lit toujours là (--base)."""
+    if os.path.isdir(dossier):
+        shutil.rmtree(dossier)
+    os.makedirs(dossier)
+    page = DEMENAGEMENT.format(nouvelle=nouvelle, fond=FOND)
+    for f in ("index.html", "404.html"):
+        with open(os.path.join(dossier, f), "w", encoding="utf-8", newline="\n") as x:
+            x.write(page)
+    with open(os.path.join(dossier, "sw.js"), "w", encoding="utf-8", newline="\n") as f:
+        f.write("// L'ancienne adresse de l'appli : plus rien à garder ici (telephone_site.demenagement).\n"
+                "self.addEventListener(\"install\", () => self.skipWaiting());\n"
+                "self.addEventListener(\"activate\", (ev) => ev.waitUntil(caches.keys()\n"
+                "  .then((l) => Promise.all(l.map((k) => caches.delete(k)))).then(() => self.registration.unregister())));\n")
+    open(os.path.join(dossier, ".nojekyll"), "w").close()
+    return dossier
+
+
 def passerelle(dossier):
     """L'ancienne adresse de l'appli (atelier-mtg.github.io) : la passerelle vers la nouvelle (passerelle.html), qui
     emporte ce que le navigateur gardait ici ; la même page pour toute adresse (404.html), et un service worker qui
@@ -207,6 +264,9 @@ def passerelle(dossier):
 
 
 if __name__ == "__main__":
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    a = sys.argv[1:]
+    base = a[a.index("--base") + 1] if "--base" in a else "base/"
+    args = [x for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] == "--base")]
     sortie = os.path.abspath(args[0] if args else os.path.join(RACINE, "site-telephone"))
-    print(passerelle(sortie) if "--passerelle" in sys.argv else construire(sortie))
+    print(passerelle(sortie) if "--passerelle" in a else demenagement(sortie) if "--demenagement" in a
+          else construire(sortie, base))
