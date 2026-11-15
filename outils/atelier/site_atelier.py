@@ -49,7 +49,7 @@ FAN_CONTENT = "https://company.wizards.com/en/legal/fancontentpolicy"
 # l'onglet « Installeur » ouvert dans le HTML, comme pour la plupart des visiteurs
 # la recherche de cartes (recherche/) : le moteur de l'appli du téléphone (static/telephone/cartes.js, copié ici) et sa
 # base, publiée sur le site de l'appli (base_telephone.py) ; le navigateur du visiteur la télécharge de là
-APPLI = "https://app.atelier-mtg.com/"                 # l'appli : des decks sans rien installer
+APPLI = "https://app.atelier-mtg.com/"                 # l'appli en ligne, avec un compte
 BASE_CARTES = APPLI + "base/"
 SOURCE_MOTEUR = os.path.join(partage.STATIQUE, "telephone", "cartes.js")
 MOTEUR = "cartes.js?v=" + partage._version(SOURCE_MOTEUR)                 # dans recherche/
@@ -179,9 +179,9 @@ def pre_rendre(dossier, marque='id="installation"'):
 
 
 def inserer(dossier, rendu, installation="#installation", classe="vue vue-pleine"):
-    """Le pré-rendu dans la page ; en haut, le champ « Rechercher une carte… » (app.js › BASE_WEB) et, à droite,
-    « Installer l'Atelier MTG » (sa section Installation) et « Créer un deck » (l'appli, sans rien installer) à la
-    place de « Demander à Claude », dont le panneau n'est qu'une vitrine ici."""
+    """Le pré-rendu dans la page ; en haut, le champ « Rechercher une carte… » (app.js › BASE_WEB) et, à droite, les
+    deux mêmes choix que le haut de l'accueil : « Créer un compte » (l'appli) et « Télécharger » (sa section
+    Installation), à la place de « Demander à Claude », dont le panneau n'est qu'une vitrine ici."""
     index = os.path.join(dossier, "index.html")
     with open(index, encoding="utf-8") as f:
         html = f.read()
@@ -189,9 +189,8 @@ def inserer(dossier, rendu, installation="#installation", classe="vue vue-pleine
     chat = re.search(r'<button id="btn-chat".*?</button>', html)
     if vide not in html or not chat:
         raise SystemExit("static/index.html a changé : pré-rendu impossible.")
-    creer = (f'<a href="{installation}" id="btn-installer" class="btn btn-contour" data-ico="telecharger">'
-             f'<span>Installer<span class="long">&nbsp;l\'Atelier MTG</span></span></a>\n      '
-             f'<a href="{APPLI}" id="btn-creer" class="btn btn-accent" data-ico="plus">Créer un deck</a>')
+    creer = (f'<a href="{APPLI}#inscription" id="btn-creer" class="btn btn-accent" data-ico="plus">Créer un compte</a>\n      '
+             f'<a href="{installation}" id="btn-installer" class="btn btn-contour" data-ico="telecharger">Télécharger</a>')
     html = html.replace(vide, f'<main id="vue" class="{classe}">{rendu}</main>').replace(chat.group(0), creer)
     for a, b in (('class="partage"', 'class="partage site-atelier"'),                # le champ du haut : une carte
                  ('placeholder="Chercher une carte ou un deck…"', 'placeholder="Rechercher une carte…"'),

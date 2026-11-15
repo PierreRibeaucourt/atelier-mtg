@@ -281,17 +281,20 @@ const SITE_ATELIER = !!PARTAGE && ["a-propos", "recherche"].includes(PARTAGE.pag
 // « Installer l'Atelier MTG » : la section Installation de cette page, pas GitHub (un débutant y attend un fichier à
 // télécharger, il y trouve du code)
 const INSTALLER = TELEPHONE ? ACCUEIL_ATELIER + "#installation" : !PARTAGE ? "#/a-propos/installation" : PARTAGE.page === "a-propos" ? "#installation" : A_PROPOS + "#installation";
+// les deux choix proposés partout hors de l'Atelier : un compte (l'appli en ligne) ou la version à installer
+const DEUX_CHOIX = (petit = "") => `<span class="deux-choix"><a class="btn btn-accent${petit}" href="https://app.atelier-mtg.com/#inscription">${ico("plus")}Créer un compte</a>
+  <a class="btn btn-contour${petit}" href="${INSTALLER}">${ico("telecharger")}Télécharger</a></span>`;
 if (PARTAGE) {
   const depot = PARTAGE.atelier ? esc(PARTAGE.atelier) : "";
   if (PARTAGE.recherche) $("#lien-recherche").href = PARTAGE.recherche;
-  // lien instantané (voir/ de l'appli) : la liste au moment du partage ; on crée ses decks dans l'appli, sans rien installer
+  // lien instantané (voir/ de l'appli) : la liste au moment du partage
   if (PARTAGE.instantane) $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-partage">
     <p>Deck partagé avec <a href="${A_PROPOS}">l'Atelier MTG</a>, tel qu'il était au moment du partage. Pour gérer, tester et partager vos propres decks Commander, l'Atelier est gratuit.</p>
-    <a class="btn btn-accent btn-petit" href="${esc(PARTAGE.accueil)}#inscription">${ico("plus")}Créer mes decks</a>
+    ${DEUX_CHOIX(" btn-petit")}
   </div>`);
   else if (!SITE_ATELIER) $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-partage">
     <p>Page ${PARTAGE.auteur ? `de <strong>${esc(PARTAGE.auteur)}</strong>, ` : ""}partagée avec <a href="${A_PROPOS}">l'Atelier MTG</a>. Pour gérer, tester et partager vos propres decks Commander, l'Atelier est gratuit.</p>
-    <a class="btn btn-accent btn-petit" href="${INSTALLER}">${ico("telecharger")}Installer l'Atelier MTG</a>
+    ${DEUX_CHOIX(" btn-petit")}
   </div>`);
   $(".cadre").insertAdjacentHTML("afterend", piedPartage(PARTAGE.page === "a-propos" ? "" : A_PROPOS, depot, SITE_ATELIER, PARTAGE.page === "recherche" ? "../" : ""));
 }
@@ -5638,7 +5641,7 @@ function ficheRecherche(i, ctx = null) {
         </div>
       </div>
     </div>
-    ${BASE_WEB ? `<div class="modale-pied fc-pied"><a class="btn btn-accent" href="${INSTALLER}">${ico("plus")}Créer un deck</a></div>`
+    ${BASE_WEB ? `<div class="modale-pied fc-pied">${DEUX_CHOIX()}</div>`
       : piedFiche(d && !PARTAGE ? blocAjoutRch(x, d) : "")}`, (b) => {
     let dest = x.dans === "maybe" ? "deck" : PREF.get("rf-dest", "deck");
     ouEst($(".ou-est", b), x.nom, d && d.id);
@@ -6102,7 +6105,7 @@ async function arreterChat() {
   try { await api("/api/discussion/arreter", { method: "POST", body: { deck: chat.cle } }); } catch (e) { erreur(e); }
 }
 
-$("#btn-chat")?.addEventListener("click", () => basculeChat());       // page d'accueil : « Créer un deck » à sa place (site_atelier.py)
+$("#btn-chat")?.addEventListener("click", () => basculeChat());       // page d'accueil : « Créer un compte » et « Télécharger » à sa place (site_atelier.py)
 // l'appli : la table de jeu s'ouvre dans le même onglet (l'appli installée sur iPhone n'en ouvre pas d'autre qui voie ses
 // decks), une fois le deck et ses jetons gardés pour elle (telephone.js › preparerJeu, jouer-appli.js)
 async function ouvrirJeu(id) {
