@@ -2,7 +2,7 @@
 
 Ce fichier s'adresse à l'assistant IA (Claude Code, Codex, Cursor, Copilot…) à qui l'on demande d'installer l'Atelier MTG, de le mettre à jour ou de le dépanner. Le README décrit l'outil pour la personne qui l'utilise.
 
-L'Atelier est une application web locale pour les joueurs de Magic: The Gathering au format Commander : decks, prix, bracket, combos, recherche de cartes, simulation, discussion avec Claude. C'est un serveur Flask qui écoute seulement sur `127.0.0.1:5000` et ouvre la page dans le navigateur. Interface en français. Les données restent sur le PC.
+L'Atelier est une application web locale pour les joueurs de Magic: The Gathering au format Commander : decks, prix, bracket, combos, recherche de cartes, simulation, discussion avec Claude. C'est un serveur Flask qui écoute seulement sur `127.0.0.1:5000` et ouvre la page dans le navigateur. Interface en français. Les données restent sur le PC ; avec un compte (gratuit, connexion par un code reçu par e-mail), la personne les envoie en ligne et les récupère quand elle le veut (Options › Compte, `outils/atelier/compte.py`), pour les retrouver dans l'appli en ligne (https://app.atelier-mtg.com/), sur téléphone ou sur un autre PC.
 
 ## Installer
 
@@ -19,9 +19,9 @@ Parle à la personne en français, simplement, sans jargon. Fais tout toi-même 
    - Si elle a déjà un dossier de decks (sous-dossiers `Deck <nom>`), installe le code à côté ou dans ce dossier : les decks doivent finir à la racine du dépôt.
 3. **Lui poser trois questions, pas plus.**
    - Son budget maximum par carte, en euros. Les cartes plus chères sont signalées. 5 € par défaut ; 0 pour aucune alerte.
-   - Veut-elle partager ses decks en ligne, avec un lien à envoyer ? Il faut alors un compte GitHub (gratuit).
+   - Veut-elle retrouver ses decks en ligne (navigateur, téléphone, autre PC) et publier leurs pages ? Il faut alors un compte Atelier MTG, gratuit : Options › Compte, avec un code reçu par e-mail, une fois l'Atelier lancé.
    - Veut-elle discuter avec Claude depuis l'Atelier ? Il faut alors un abonnement Claude.
-4. **Lancer l'installeur** depuis la racine du dépôt : `python installer.py --budget 5` (avec `py` ou `python3` selon le système). Ajoute `--github <compte>` si elle partage ses decks.
+4. **Lancer l'installeur** depuis la racine du dépôt : `python installer.py --budget 5` (avec `py` ou `python3` selon le système).
    - L'installeur crée l'environnement `.venv` et y installe les dépendances (`requirements.txt` : Flask, Pillow, pystray, truststore).
    - Il écrit `reglages.json`, vérifie que l'Atelier démarre et crée le raccourci « Atelier MTG » sur le bureau.
    - Il signale enfin ce qui manque pour les fonctions facultatives.
@@ -44,7 +44,7 @@ Testé sous Windows. macOS et Linux devraient marcher (Python et Flask sont mult
 Un fichier `installation.json` à la racine le signale. L'installeur (Inno Setup, `installeur/atelier.iss`) met tout dans `%LOCALAPPDATA%\Programs\Atelier MTG`, sans droits d'administrateur : le code, un Python embarqué dans `python\` (avec Flask, Pillow, pystray et truststore), puis les decks, le classeur et les réglages que l'Atelier y crée, comme à la racine d'un dépôt. Raccourcis sur le bureau et dans le menu Démarrer ; désinstallation par Paramètres › Applications, qui demande avant d'effacer les decks.
 - Pas de git, pas de `.venv`, pas de pip : ne lance pas `installer.py`. Le Python à utiliser est `python\python.exe` ; dans la discussion, `python` y mène déjà. Son fichier `python312._pth` met `outils/` et `outils/atelier/` dans les chemins de Python.
 - Mises à jour : l'Atelier lit la dernière publication GitHub du dépôt (`installation.json` › `depot`) ; « Mettre à jour » télécharge son installeur et le lance sans fenêtre, puis l'Atelier redémarre. Journal : `%TEMP%\Atelier-MTG-mise-a-jour.log`. Si ça échoue, retélécharger l'installeur et le relancer suffit : il remplace le code et garde les decks.
-- Le partage des decks passe par la connexion à GitHub depuis l'Atelier (voir « Partager des decks ») : pas besoin de git.
+- Le compte et les pages publiques des decks passent par le serveur des comptes (api.atelier-mtg.com) : pas besoin de git.
 
 ## Fonctions facultatives
 
@@ -59,31 +59,13 @@ L'Atelier lance Claude Code (`claude -p`) dans le dossier du dépôt : pas de cl
   - macOS, Linux : `curl -fsSL https://claude.ai/install.sh | bash`.
 - Puis la personne lance `claude` une fois dans un terminal pour se connecter à son compte. Relance l'installeur : il doit afficher « Claude Code trouvé ».
 
-### Partager des decks (GitHub Pages)
+### Partager des decks
 
-« Partager le deck… » publie une copie en lecture seule de la page du deck sur GitHub Pages. Il faut un compte GitHub, gratuit.
-
-**Le plus simple : se connecter depuis l'Atelier.** Rien à installer ni à configurer : au premier partage (ou Options › GitHub › « Se connecter »), l'Atelier affiche un code ; la personne le colle sur github.com/login/device (où elle peut créer son compte) et accepte. L'Atelier crée alors son site, le dépôt `<compte>.github.io`, que GitHub publie tout seul, et y envoie les pages par l'API de GitHub, sans git : `https://<compte>.github.io/<deck>/`. Voir `outils/atelier/github.py`. La connexion ouvre les dépôts publics et privés (`repo`) : les pages vont dans un dépôt public, la sauvegarde en ligne (`outils/atelier/synchro.py`) dans le dépôt privé `atelier-mtg-sauvegarde`. Une connexion d'avant la sauvegarde (`public_repo`) demande un nouveau code, une fois. Son jeton reste sur le PC, chiffré par Windows (`outils/atelier/connexion_github.dat`), et ne passe jamais par la page. Si ce site existe déjà pour autre chose, les pages vont dans un dépôt `decks`, dont il faut activer GitHub Pages à la main (le message dit comment). Ses commits portent l'adresse anonyme du compte (`<id>+<compte>@users.noreply.github.com`), jamais son adresse e-mail : sans elle, GitHub y mettrait l'adresse principale du compte, visible de tous.
-
-**Avec git**, pour qui le préfère : le dépôt `decks`, servi à `https://<compte>.github.io/decks/<deck>/`. Mise en place, une seule fois, de préférence avec la CLI GitHub (`gh`, `winget install GitHub.cli` ou `brew install gh`) :
-
-1. `gh auth login`, puis `gh auth setup-git` : git peut alors envoyer vers GitHub en HTTPS.
-2. Une identité git, si `git config --global user.email` ne répond rien :
-   - `git config --global user.name "<pseudo>"` ;
-   - `git config --global user.email "<id>+<compte>@users.noreply.github.com"` : l'adresse « noreply » de GitHub, que l'on voit dans ses réglages, pour ne pas publier son adresse e-mail.
-3. `gh repo create decks --public --add-readme`
-4. Activer GitHub Pages : `gh api -X POST repos/<compte>/decks/pages -f "source[branch]=main" -f "source[path]=/"`
-5. `python installer.py --github <compte>`, ou bien la clé `"github"` dans `reglages.json`.
-
-Sans `gh` : créer le dépôt public `decks` sur github.com, avec un README, puis Settings › Pages › Deploy from a branch › `main` / `(root)`.
-
-Dans les deux cas, les pages sont préparées dans le dossier `Partage Atelier/` (avec git, un dépôt à part), ignoré par ce dépôt-ci. Connecté, l'Atelier publie par l'API même si `reglages.json` a un compte `github`. Une page publiée est en ligne au bout d'une minute environ (quelques minutes pour un site tout neuf).
-
-Le partage en place (connecté, ou `github` dans `reglages.json`), l'Atelier tient à jour les pages des decks partagés (`partage.surveiller`) ; un deck n'est publié que par « Partager », jamais tout seul : deck modifié deux minutes après la dernière modification, toutes les pages une fois par jour (prix du jour), et après une mise à jour de l'Atelier ; les pages à refaire partent en un seul envoi. « Ne plus partager » retire sa page, jusqu'à un nouveau « Partager ».
+« Partager le deck… » donne un lien instantané (rien n'est publié) ou publie une page permanente, `https://atelier-mtg.com/decks/<pseudo>/<deck>/`. La page permanente demande d'être connecté à son compte (Options › Compte) ; au premier partage, la personne choisit son pseudo. Rien à installer ni à configurer : ni git, ni GitHub. L'Atelier envoie les données de la page et son image au serveur des comptes (`outils/atelier/partage.py` ; côté serveur, `outils/serveur/pages.py`), puis republie la page d'un deck partagé quand il change sur ce PC (`partage.surveiller`). Jusqu'à la 2.1.0, les pages allaient sur GitHub Pages : elles y restent, figées.
 
 ## Réglages
 
-`reglages.json`, à la racine, est propre à chaque installation et ignoré par git. Toutes ses clés sont facultatives : `{"budget": 5, "github": "MonCompte", "nom": "Mon nom"}` (`nom` : affiché sur les pages partagées, le compte GitHub par défaut), plus les préférences demandées au premier lancement : `fermeture` (`"arreter"` : l'Atelier s'arrête une demi-minute après la fermeture de sa dernière page), `langue_cartes` (visuel par défaut : la moins chère dans cette langue, `"fr"`…) `sans_ub_illustrations` (visuel par défaut hors Universes Beyond quand il en existe un autre) et `sans_ub_suggestions` (pas de cartes Universes Beyond dans les suggestions). Voir `outils/reglages.py`. La page Options de l'Atelier (en haut à droite) les modifie et les applique tout de suite ; après une modification du fichier à la main, relance l'Atelier.
+`reglages.json`, à la racine, est propre à chaque installation et ignoré par git. Toutes ses clés sont facultatives : `{"budget": 5}`, plus les préférences demandées au premier lancement : `fermeture` (`"arreter"` : l'Atelier s'arrête une demi-minute après la fermeture de sa dernière page), `langue_cartes` (visuel par défaut : la moins chère dans cette langue, `"fr"`…) `sans_ub_illustrations` (visuel par défaut hors Universes Beyond quand il en existe un autre) et `sans_ub_suggestions` (pas de cartes Universes Beyond dans les suggestions). Voir `outils/reglages.py`. La page Options de l'Atelier (en haut à droite) les modifie et les applique tout de suite ; après une modification du fichier à la main, relance l'Atelier.
 
 La page Options règle aussi le lancement au démarrage de Windows (raccourci « Atelier MTG » du dossier Démarrage, sans ouvrir d'onglet) et le classeur : `Classeur/classeur.txt`, les cartes qu'on a en dehors des decks, « 1 Nom anglais » par ligne (les lignes `#` du début sont des notes gardées). Voir `outils/atelier/classeur.py`.
 
@@ -112,7 +94,7 @@ Tout ceci est ignoré par git et ne doit jamais être commité, poussé ni effac
 - `Partage Atelier/` : les pages partagées. `reglages.json` : les réglages. `Classeur/` : le classeur.
 - Les caches, dans `outils/` et `outils/atelier/` : base des cartes, prix, combos. Ils se reconstruisent tout seuls.
 
-Sauvegarder ses decks, c'est copier les dossiers `Deck …`.
+Sauvegarder ses decks, c'est copier les dossiers `Deck …`, ou les envoyer sur le compte (Options › Compte › Envoyer). La connexion au compte (`outils/atelier/connexion_compte.dat`, chiffrée par Windows) et l'état des envois (`outils/atelier/compte_etat.json`) sont propres à chaque PC.
 
 ## Dépannage
 
@@ -123,7 +105,7 @@ Sauvegarder ses decks, c'est copier les dossiers `Deck …`.
 - **Port 5000 déjà pris**, par exemple par le récepteur AirPlay d'un Mac. L'Atelier prend le port libre suivant et ouvre la bonne page. Pour imposer un port : variable d'environnement `ATELIER_PORT`.
 - **La recherche affiche « La base de cartes se construit ».** C'est normal au premier lancement (voir plus haut) : laisse l'Atelier ouvert. En cas d'erreur réseau, le bouton « Relancer » reprend la construction ; ensuite, « Mettre à jour », en bas des résultats, force une mise à jour.
 - **« Claude Code est introuvable » dans la discussion.** Voir « Discussion avec Claude », puis relance l'Atelier.
-- **Le partage échoue.** Le message dit quoi faire. Connecté : reconnecter l'Atelier (Options › GitHub) si la connexion a expiré. Avec git : compte absent de `reglages.json`, dépôt `decks` inexistant, accès refusé (`gh auth login`, puis `gh auth setup-git`), identité git manquante.
+- **Le partage échoue.** Le message dit quoi faire : se connecter à son compte (Options › Compte), choisir un autre pseudo s'il est déjà pris, ou réessayer quand le réseau revient. Avec git : compte absent de `reglages.json`, dépôt `decks` inexistant, accès refusé (`gh auth login`, puis `gh auth setup-git`), identité git manquante.
 - **Pour vérifier l'installation sans lancer l'interface :** `python installer.py --sans-raccourci`.
 
 ## Règles pour l'assistant
@@ -138,7 +120,8 @@ Sauvegarder ses decks, c'est copier les dossiers `Deck …`.
 - **Organisation du code** :
   - `outils/atelier/app.py`, le serveur et ses routes ;
   - `outils/atelier/static/`, l'interface, en JavaScript sans framework ;
-  - `outils/atelier/*.py`, les modules (decks, prix, bracket, combos, suggestions, recherche, simulation, discussion, partage, et github pour la connexion du partage sans git) ;
+  - `outils/atelier/*.py`, les modules (decks, prix, bracket, combos, suggestions, recherche, simulation, discussion, partage, github pour la connexion du partage sans git, et compte pour Envoyer et Récupérer) ;
+  - `outils/serveur/`, le serveur des comptes (https://api.atelier-mtg.com/, Flask et MariaDB chez o2switch) ;
   - `outils/atelier/demander.py`, l'Atelier en ligne de commande pour les assistants ;
   - `connaissances/`, les repères de construction d'un deck ;
   - `outils/simu*.py`, le simulateur. Un deck ne s'y écrit jamais : ses cartes et son plan de jeu vont dans `<deck>/simulateur.json`, qui survit aux mises à jour (`connaissances/simulateur.md`) ;

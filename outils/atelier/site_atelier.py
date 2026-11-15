@@ -44,7 +44,7 @@ CAPTURES = RACINE + "a-propos/"                                          # comme
 # dépôt) ; copiées sur le domaine à chaque construction
 SOURCE_CAPTURES = "https://pierreribeaucourt.github.io/decks/a-propos/"
 CONTACT = "contact@" + DOMAINE                                           # renvoyée vers l'auteur par l'hébergement
-MAJ_LEGAL = "13 novembre 2026"                                           # date des textes légaux : à changer avec eux
+MAJ_LEGAL = "15 novembre 2026"                                           # date des textes légaux : à changer avec eux
 FAN_CONTENT = "https://company.wizards.com/en/legal/fancontentpolicy"
 # l'onglet « Installeur » ouvert dans le HTML, comme pour la plupart des visiteurs
 # la recherche de cartes (recherche/) : le moteur de l'appli du téléphone (static/telephone/cartes.js, copié ici) et sa
@@ -139,6 +139,7 @@ def donnees_structurees(rendu=""):
                          "Simulateur de parties à quatre joueurs", "Table de jeu en solo",
                          "Recherche avancée de cartes en français", "Prix Cardmarket et budget",
                          "Suggestions de cartes", "Versions et historique des decks", "Partage des decks en ligne",
+                         "Compte gratuit : decks synchronisés entre navigateur, téléphone et PC",
                          "Discussion avec Claude (optionnelle)"],
          "author": {"@id": auteur["@id"]},
          "sameAs": [DEPOT]},
@@ -277,13 +278,19 @@ def mentions_legales(dossier):
 
       <h2>Hébergement</h2>
       <ul>
-        <li><strong>Ce site</strong> ({DOMAINE}) : o2switch, SAS au capital de 100 000 €, Chemin des Pardiaux,
-          63000 Clermont-Ferrand, France · RCS Clermont-Ferrand 510 909 807 · 04 44 44 60 40 · {_lien("https://www.o2switch.fr/")}</li>
+        <li><strong>Ce site</strong> ({DOMAINE}) et <strong>les comptes</strong> (api.{DOMAINE}) : o2switch, SAS au capital
+          de 100 000 €, Chemin des Pardiaux, 63000 Clermont-Ferrand, France · RCS Clermont-Ferrand 510 909 807 ·
+          04 44 44 60 40 · {_lien("https://www.o2switch.fr/")}</li>
         <li><strong>L'appli</strong> (app.atelier-mtg.com) et <strong>le code source</strong> : GitHub, Inc.,
           88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis · {_lien("https://github.com/")}</li>
-        <li><strong>Le relais de l'appli du téléphone</strong> (relais.atelier-mtg.workers.dev) : Cloudflare, Inc.,
+        <li><strong>Le relais de l'appli</strong> (relais.atelier-mtg.workers.dev) : Cloudflare, Inc.,
           101 Townsend Street, San Francisco, CA 94107, États-Unis · {_lien("https://www.cloudflare.com/")}</li>
       </ul>
+
+      <h2>Pages des decks</h2>
+      <p>Les pages publiées sous {DOMAINE}/decks/ sont celles des decks que leurs auteurs choisissent de partager, sous
+        leur pseudo. Pour signaler un contenu qui n'a rien à y faire, écrivez à {contact} en donnant l'adresse de la
+        page : elle sera retirée si elle enfreint la loi ou les droits d'autrui.</p>
 
       <h2>Magic: The Gathering</h2>
       <p>L'Atelier MTG est un contenu de fan non officiel, permis par la {_lien(FAN_CONTENT, "Fan Content Policy")} de
@@ -299,16 +306,43 @@ def mentions_legales(dossier):
 
       <h2>Code source</h2>
       <p>L'Atelier MTG est un logiciel libre, sous {_lien(DEPOT + "/blob/main/LICENSE", "licence MIT")} : son code est
-        {_lien(DEPOT, "sur GitHub")}. Il utilise qrcode-generator (Kazuhiko Arase, licence MIT) et jsQR (Cosmo Wolfe,
-        licence Apache 2.0).</p>""")
+        {_lien(DEPOT, "sur GitHub")}.</p>""")
 
 
 def confidentialite(dossier):
     contact = _lien(f"mailto:{CONTACT}", CONTACT)
     page_legale(dossier, "confidentialite", "Confidentialité",
-                "L'Atelier MTG ne demande aucun compte et ne recueille rien sur vous : ce qui part, où, et pourquoi.", f"""
-      <p class="legal-bref">En bref : l'Atelier MTG ne vous demande aucun compte, ne recueille rien sur vous,
-        n'affiche aucune publicité et ne vend rien. Vos decks restent chez vous.</p>
+                "Ce que l'Atelier MTG garde sur vous (votre adresse e-mail et vos decks, si vous créez un compte), où, "
+                "combien de temps, et vos droits.", f"""
+      <p class="legal-bref">En bref : sans compte, l'Atelier ne garde rien sur vous. Avec un compte, il garde votre adresse
+        e-mail et vos decks, en France, pour vous les rendre sur tous vos appareils. Rien d'autre, et rien n'est vendu ni
+        partagé. Vous pouvez tout exporter ou tout supprimer à tout moment.</p>
+
+      <h2>Responsable</h2>
+      <p>Pierre Ribeaucourt, éditeur de l'Atelier MTG (voir les {_lien("../mentions-legales/", "mentions légales")}) :
+        {contact}.</p>
+
+      <h2>Le compte</h2>
+      <p>Le compte est facultatif : la version à installer s'en passe. Il garde vos decks et les synchronise entre vos
+        appareils. Pour cela, il conserve :</p>
+      <ul>
+        <li><strong>votre adresse e-mail</strong>, pour vous envoyer le code de connexion, et rien d'autre : ni lettre
+          d'information, ni publicité ;</li>
+        <li><strong>vos decks</strong> et ce qui les accompagne : listes, historique, versions, achats, classeur, réglages
+          des cartes, rapports de simulation, et les discussions avec Claude que votre PC y envoie ;</li>
+        <li><strong>votre pseudo</strong>, si vous partagez une page, et ce qu'elle montre ;</li>
+        <li><strong>vos appareils connectés</strong> : un nom (« iPhone · Safari », « PC · … »), la date de connexion et
+          celle de la dernière visite, pour que vous puissiez les voir et les déconnecter ;</li>
+        <li><strong>pour la sécurité</strong> : le code de connexion, gardé sous une forme illisible et valable 15 minutes,
+          et pendant 24 heures
+          l'adresse IP qui a demandé un code, pour limiter les abus.</li>
+      </ul>
+      <p>Base légale : l'exécution du service que vous demandez en créant le compte (RGPD, article 6.1.b).</p>
+      <p>Ces données sont hébergées en France par o2switch, et les e-mails partent de ses serveurs. Elles ne sont ni
+        vendues, ni louées, ni partagées. L'éditeur n'y accède que pour faire fonctionner le service ou pour répondre à
+        votre demande.</p>
+      <p>Elles sont gardées tant que le compte existe. « Supprimer mon compte », dans les options, efface tout aussitôt :
+        adresse, decks et appareils.</p>
 
       <h2>Ce site</h2>
       <p>{DOMAINE} ne dépose aucun cookie et ne mesure pas son audience. Si vous changez le thème (clair ou sombre),
@@ -316,9 +350,17 @@ def confidentialite(dossier):
       <p>Comme tout hébergeur, o2switch tient des journaux techniques (adresse IP, date, page demandée, navigateur)
         pour la sécurité et le bon fonctionnement de ses serveurs. L'éditeur ne s'en sert pas.</p>
 
+      <h2>L'appli en ligne</h2>
+      <p>L'appli (app.atelier-mtg.com) garde une copie de vos decks dans le stockage de votre navigateur, pour marcher
+        sans réseau, avec la clé de votre connexion et la base des cartes. Rien de tout cela ne sert à vous suivre, et
+        « Se déconnecter » efface vos decks et la clé. Elle interroge Scryfall pour les cartes, et Commander Spellbook par un petit relais
+        (Cloudflare) qui transmet les demandes sans rien garder. Pour simuler des parties, elle télécharge une fois le
+        langage Python, adapté au navigateur (Pyodide), depuis jsDelivr. Elle est hébergée par GitHub Pages, qui tient ses
+        propres journaux techniques.</p>
+
       <h2>L'Atelier sur votre ordinateur</h2>
-      <p>L'Atelier s'installe et tourne sur votre ordinateur. Vos decks, votre classeur et vos réglages y sont rangés,
-        et nulle part ailleurs tant que vous n'activez pas la sauvegarde. Pour fonctionner, il interroge :</p>
+      <p>L'Atelier s'installe et tourne sur votre ordinateur. Vos decks, votre classeur et vos réglages y sont rangés, et
+        ne vont sur votre compte que si vous cliquez sur « Envoyer ». Pour fonctionner, il interroge :</p>
       <ul>
         <li><strong>Scryfall</strong>, pour les données, les prix et les images des cartes ;</li>
         <li><strong>Commander Spellbook</strong>, avec la liste des cartes d'un deck, pour trouver ses combos et estimer
@@ -330,33 +372,27 @@ def confidentialite(dossier):
         propre compte Anthropic : vos messages et les decks dont vous parlez sont alors envoyés à Anthropic, selon ses
         conditions. Rien ne part si vous ne vous en servez pas.</p>
 
-      <h2>L'appli</h2>
-      <p>L'appli (app.atelier-mtg.com) garde vos decks dans le stockage de votre navigateur, sur votre appareil.
-        Elle interroge Scryfall, et Commander Spellbook par un petit relais (Cloudflare) qui transmet les demandes sans
-        rien garder. Elle et sa base de cartes sont hébergées par GitHub Pages, qui tient ses propres journaux
-        techniques.</p>
-
-      <h2>Sauvegarde, téléphone relié et partage</h2>
-      <p>Ces fonctions sont facultatives. Elles utilisent <strong>votre</strong> compte GitHub, auquel vous connectez
-        l'Atelier ; depuis le téléphone, la connexion passe par le relais, qui ne garde rien. La clé d'accès reste sur
-        vos appareils, et « Déconnecter tous mes appareils », dans les options, la retire.</p>
-      <ul>
-        <li><strong>La sauvegarde</strong> range vos decks et votre classeur dans un dépôt privé de votre compte,
-          « atelier-mtg-sauvegarde », que vous seul voyez ;</li>
-        <li><strong>le téléphone relié</strong> reçoit vos decks par ce même dépôt ;</li>
-        <li><strong>le partage</strong> publie un deck sur une page publique de votre compte : sa liste, et le nom
-          affiché comme auteur (celui des options, sinon le nom du compte GitHub).</li>
-      </ul>
+      <h2>Le partage</h2>
+      <p>Le lien instantané contient la liste du deck dans son adresse : rien n'est publié, et seules les personnes à qui
+        vous l'envoyez la voient.</p>
+      <p>La page permanente d'un deck, que vous publiez depuis votre compte, est publique : sous {DOMAINE}/decks/, avec
+        votre pseudo, la liste, les statistiques, les combos et les tests du deck, et les moteurs de recherche peuvent la
+        trouver. Ni votre adresse e-mail, ni votre classeur, ni vos achats, ni vos discussions avec Claude n'y figurent.
+        « Ne plus partager » la retire, et « Supprimer mon compte » retire toutes vos pages.</p>
 
       <h2>Vos droits</h2>
-      <p>L'éditeur ne détient aucune donnée vous concernant : il n'y a ni compte ni base de données. Pour les données
-        tenues par les services cités plus haut, adressez-vous à eux : {_lien("https://scryfall.com/docs/privacy", "Scryfall")},
+      <p>À tout moment, depuis les options du compte : « Exporter mes données » vous les donne dans un fichier, et
+        « Supprimer mon compte » les efface. Pour les corriger, vous opposer à leur traitement ou poser une question,
+        écrivez à {contact} : réponse sous un mois.</p>
+      <p>Pour les données tenues par les services cités plus haut, adressez-vous à eux :
+        {_lien("https://scryfall.com/docs/privacy", "Scryfall")},
         {_lien("https://commanderspellbook.com/", "Commander Spellbook")},
         {_lien("https://docs.github.com/fr/site-policy/privacy-policies/github-general-privacy-statement", "GitHub")},
-        {_lien("https://www.cloudflare.com/privacypolicy/", "Cloudflare")},
-        {_lien("https://www.anthropic.com/legal/privacy", "Anthropic")}, {_lien("https://www.o2switch.fr/", "o2switch")}.</p>
-      <p>Pour toute question : {contact}. Vous pouvez aussi adresser une réclamation à la
-        {_lien("https://www.cnil.fr/", "CNIL")}.</p>""")
+        {_lien("https://www.cloudflare.com/privacypolicy/", "Cloudflare")}, {_lien("https://www.jsdelivr.com/terms/privacy-policy-jsdelivr-net", "jsDelivr")},
+        {_lien("https://www.anthropic.com/legal/privacy", "Anthropic")}, {_lien("https://www.o2switch.fr/", "o2switch")}.
+        Vous pouvez aussi adresser une réclamation à la {_lien("https://www.cnil.fr/", "CNIL")}.</p>
+      <p>Aujourd'hui, ni ce site ni l'appli n'affichent de publicité ni ne mesurent leur audience. Si cela changeait,
+        cette page le dirait avant.</p>""")
 
 
 # ----------------------------------------------------------------------------------------------- fichiers du domaine
@@ -373,7 +409,8 @@ def sitemap(dossier):
 
 
 def robots(dossier):
-    partage._ecrire(os.path.join(dossier, "robots.txt"), f"User-agent: *\nAllow: /\n\nSitemap: {RACINE}sitemap.xml\n")
+    partage._ecrire(os.path.join(dossier, "robots.txt"), f"User-agent: *\nAllow: /\nDisallow: /fr/modeles/\n\n"
+                    f"Sitemap: {RACINE}sitemap.xml\nSitemap: {RACINE}decks/sitemap.xml\n")
 
 
 def htaccess(dossier):
@@ -427,6 +464,12 @@ def construire(dossier):
     entete["tete"] = [donnees_structurees(rendu)]                    # avec les questions fréquentes
     partage._page(fr, donnees("../a-propos/"), entete)              # … publiée avec sa copie
     inserer(fr, rendu)
+    # les pages publiques des decks (outils/serveur/pages.py) : leurs modèles, et la table de jeu à côté de app.js
+    os.makedirs(os.path.join(fr, "modeles"), exist_ok=True)
+    for f in ("index.html", "jouer.html"):
+        shutil.copyfile(os.path.join(partage.STATIQUE, f), os.path.join(fr, "modeles", f))
+    for f in ("jouer.js", "jouer.css"):
+        shutil.copyfile(os.path.join(partage.STATIQUE, f), os.path.join(fr, f))
     page_recherche(fr)
     mentions_legales(fr)
     confidentialite(fr)
