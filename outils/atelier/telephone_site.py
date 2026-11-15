@@ -2,8 +2,9 @@
 
     python outils/atelier/telephone_site.py [dossier]        (site-telephone/ à la racine par défaut)
 
-Le site reprend l'interface de l'Atelier (static/index.html, app.js, style.css) avec telephone.js, qui lit les decks dans
-la sauvegarde en ligne au lieu du serveur Python (voir telephone.py), plus ce qu'il faut à une appli installable : le
+Le site reprend l'interface de l'Atelier (static/index.html, app.js, style.css) avec telephone.js, qui garde les decks
+dans le navigateur et les synchronise avec le compte (outils/serveur/) au lieu du serveur Python, plus ce qu'il faut à
+une appli installable : le
 manifeste, les icônes et le service worker (sw.js), qui la garde pour l'ouvrir sans réseau. Il est publié à
 https://app.atelier-mtg.com/ par l'organisation GitHub « atelier-mtg » (son dépôt « app » le fabrique à partir
 de ce dépôt-ci) ; son ancienne adresse, https://atelier-mtg.github.io/, n'est plus qu'une passerelle (passerelle()).
@@ -16,6 +17,10 @@ import sys
 
 ICI = os.path.dirname(os.path.abspath(__file__))
 STATIQUE = os.path.join(ICI, "static")
+OUTILS = os.path.dirname(ICI)
+# le simulateur, pour l'appli (simu_navigateur.py) : ses fichiers, et ceux qu'ils importent
+SIMU = ("simu.py", "simu_adversaires.py", "simu_cartes.py", "simu_engage.py", "simu_moteur.py", "simu_rapport.py",
+        "simu_navigateur.py", "prix.py", "reglages.py")
 RACINE = os.path.dirname(os.path.dirname(ICI))
 FOND = "#161513"                    # le fond du thème sombre (style.css) : écran de lancement et barre du téléphone
 ICONES = {"icone-192.png": (192, False), "icone-512.png": (512, False), "icone-masque-512.png": (512, True),
@@ -45,7 +50,7 @@ def construire(dossier):
     os.makedirs(dossier)
     for f in ("app.js", "style.css"):
         shutil.copyfile(os.path.join(STATIQUE, f), os.path.join(dossier, f))
-    for f in ("moteur.js", "pages.js", "cartes.js", "jsQR.js", "demenagement.html"):
+    for f in ("moteur.js", "pages.js", "cartes.js", "demenagement.html"):
         shutil.copyfile(os.path.join(STATIQUE, "telephone", f), os.path.join(dossier, f))
     # partager un deck sans PC (partage.js) : la version de l'Atelier, et les modèles de la page publiée (partage.py)
     sys.path.insert(0, ICI)
@@ -57,8 +62,38 @@ def construire(dossier):
     os.makedirs(os.path.join(dossier, "partage"))
     for f in ("index.html", "jouer.html", "jouer.js", "jouer.css"):
         shutil.copyfile(os.path.join(STATIQUE, f), os.path.join(dossier, "partage", f))
+    # la table de jeu de l'appli : jouer.js lit le deck que l'appli vient de préparer (jouer-appli.js)
+    shutil.copyfile(os.path.join(STATIQUE, "telephone", "jouer-appli.js"), os.path.join(dossier, "jouer-appli.js"))
+    os.makedirs(os.path.join(dossier, "jouer"))
+    with open(os.path.join(STATIQUE, "jouer.html"), encoding="utf-8") as f:
+        jeu = f.read()
+    ej, ec, ea = (_empreinte(os.path.join(dossier, "partage", "jouer.js")), _empreinte(os.path.join(dossier, "partage", "jouer.css")),
+                  _empreinte(os.path.join(dossier, "jouer-appli.js")))
+    jeu = (jeu.replace('href="/static/jouer.css"', f'href="../partage/jouer.css?v={ec}"')
+           .replace('<script src="/static/jouer.js"></script>',
+                    f'<script src="../jouer-appli.js?v={ea}" data-jouer="../partage/jouer.js?v={ej}"></script>'))
+    if "/static/" in jeu:
+        raise SystemExit("jouer.html : une adresse /static/ n'a pas été remplacée")
+    with open(os.path.join(dossier, "jouer", "index.html"), "w", encoding="utf-8", newline="\n") as f:
+        f.write(jeu)
+    # le simulateur dans l'appli (simulateur.js, un Worker avec Pyodide) : les fichiers Python du PC, et ses options
+    # (simulation.py : tables, réglages par défaut, nombre de parties d'un test, parties par morceau)
+    shutil.copyfile(os.path.join(STATIQUE, "telephone", "simulateur.js"), os.path.join(dossier, "simulateur.js"))
+    os.makedirs(os.path.join(dossier, "simu"))
+    simu = {}
+    for nom in SIMU:
+        shutil.copyfile(os.path.join(OUTILS, nom), os.path.join(dossier, "simu", nom))
+        simu[nom] = f"simu/{nom}?v={_empreinte(os.path.join(dossier, 'simu', nom))}"
+    sys.path[:0] = [ICI, OUTILS]
+    import simulation
+    options = dict(tables=simulation.tables_dispo(), defaut=simulation.reglages_defaut(), test_n=simulation.TEST_N,
+                   morceau=simulation.MORCEAU)
     with open(os.path.join(STATIQUE, "telephone", "telephone.js"), encoding="utf-8") as f:      # le Worker de la base de cartes
-        tel = f.read().replace("__CARTES__", "cartes.js?v=" + _empreinte(os.path.join(dossier, "cartes.js")))
+        tel = (f.read().replace("__CARTES__", "cartes.js?v=" + _empreinte(os.path.join(dossier, "cartes.js")))
+               .replace("__SIMU__", "simulateur.js?v=" + _empreinte(os.path.join(dossier, "simulateur.js")))
+               .replace("__SIMU_FICHIERS__", json.dumps(simu)).replace("__SIMU_OPTIONS__", json.dumps(options, ensure_ascii=False)))
+        if "__SIMU" in tel:
+            raise SystemExit("telephone.js : une marque du simulateur n'a pas été remplacée")
     with open(os.path.join(dossier, "telephone.js"), "w", encoding="utf-8", newline="\n") as f:
         f.write(tel)
     _icones(dossier)
@@ -104,7 +139,7 @@ def construire(dossier):
     voir(dossier, v)
     fichiers = ["./", f"app.js?v={v['app.js']}", f"style.css?v={v['style.css']}", f"moteur.js?v={v['moteur.js']}",
                 f"pages.js?v={v['pages.js']}", f"partage.js?v={v['partage.js']}", f"telephone.js?v={v['telephone.js']}", f"cartes.js?v={v['cartes.js']}",
-                "jsQR.js", "manifest.webmanifest", *ICONES]
+                "manifest.webmanifest", "jouer/", "jouer-appli.js", "partage/jouer.js", "partage/jouer.css", *ICONES]
     version = hashlib.sha1("".join(sorted(v.values())).encode() + html.encode()).hexdigest()[:12]
     with open(os.path.join(STATIQUE, "telephone", "sw.js"), encoding="utf-8") as f:
         sw = f.read().replace("__VERSION__", "atelier-" + version).replace("__FICHIERS__", json.dumps(fichiers))

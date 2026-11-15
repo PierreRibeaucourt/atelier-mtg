@@ -12,7 +12,7 @@ const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toL
 const PARTAGE = window.PARTAGE || null;
 const DECK = PARTAGE ? PARTAGE.deck : new URLSearchParams(location.search).get("deck") || "";
 const CLE = "partie-" + DECK;
-const RETOUR = PARTAGE ? "../" : `/#/deck/${encodeURIComponent(DECK)}/liste`;   // la page du deck
+const RETOUR = PARTAGE ? PARTAGE.retour || "../" : `/#/deck/${encodeURIComponent(DECK)}/liste`;   // la page du deck (appli : PARTAGE.retour)
 const TACTILE = matchMedia("(hover: none) and (pointer: coarse)").matches;       // téléphone, tablette
 const ZONES = ["bibliotheque", "main", "champ", "cimetiere", "exil", "commandement"];
 const NOM_ZONE = { bibliotheque: "Bibliothèque", main: "Main", champ: "Champ de bataille", cimetiere: "Cimetière", exil: "Exil", commandement: "Commandement" };

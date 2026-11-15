@@ -963,6 +963,9 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .ap-carte:last-child:nth-child(3n+1) { grid-column: 1 / -1; }      /* seule sur sa ligne : toute la largeur */
 .ap-carte h3 { margin: 0 0 .25rem; font-size: .95rem; }
 .ap-carte p { margin: 0; font-size: .88rem; line-height: 1.5; color: var(--texte-2); }
+.ap-duo { max-width: 44rem; margin: .9rem auto 1rem; text-align: center; }
+.ap-duo h3 { display: flex; align-items: center; justify-content: center; gap: .4rem; font-size: 1.05rem; }
+.ap-duo h3 .ico { width: 1.1rem; height: 1.1rem; color: var(--accent); }
 .ap-portrait { float: right; width: min(40%, 230px); margin: .2rem 0 .8rem 1.5rem; }
 .ap-portrait img { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--bord); box-shadow: var(--ombre); }
 /* en-tête pleine largeur : le titre, l'accroche et le bouton à gauche ; trois captures en perspective à droite */
@@ -1183,6 +1186,8 @@ button.badge:hover { box-shadow: inset 0 0 0 1px currentColor; }
 .etat-sauvegarde .ico { width: 1rem; height: 1rem; color: var(--bon); }
 .etat-sauvegarde:hover { color: var(--texte); }
 .etat-sauvegarde.en-echec, .etat-sauvegarde.en-echec .ico { color: var(--alerte); }
+button.etat-sauvegarde { background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit; }
+.etat-sauvegarde.a-envoyer, .etat-sauvegarde.a-envoyer .ico { color: var(--accent); }
 .bandeau-sauvegarde { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem; margin-top: 1rem; padding: .75rem 1rem;
   border: 1px solid var(--bord); border-radius: var(--rayon); background: var(--surface); }
 .bandeau-sauvegarde > .ico { width: 1.3rem; height: 1.3rem; color: var(--accent); flex: none; }

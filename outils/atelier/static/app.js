@@ -9,7 +9,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const sansAccent = (s) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const vue = $("#vue");
 const etat = { decks: [], deck: null, filtre: "" };
-// page partagée (publiée sur GitHub Pages par partage.py) : les réponses de l'API sont figées dans donnees.js,
+// page partagée (atelier-mtg.com/decks/…, écrite par le serveur des comptes) : les réponses de l'API sont figées dans donnees.js,
 // et tout ce qui modifie (classe « ecrit »), la recherche et la discussion sont masqués
 const PARTAGE = window.PARTAGE || null;
 if (PARTAGE) document.documentElement.classList.add("partage");
@@ -22,7 +22,7 @@ const ECRAN_TELEPHONE = !!TELEPHONE && !document.documentElement.classList.conta
 // où sont les decks : sur le PC, le téléphone, ou dans le navigateur (l'appli sur un ordinateur)
 const CET_APPAREIL = !TELEPHONE ? "ce PC" : ECRAN_TELEPHONE ? "ce téléphone" : "ce navigateur", AUTRE_APPAREIL = "un autre appareil";
 const SUR_CET_APPAREIL = (TELEPHONE && !ECRAN_TELEPHONE ? "dans " : "sur ") + CET_APPAREIL;
-// partager un deck (page sur GitHub Pages) : depuis le PC ou le téléphone (partage.js), relié au PC ou non
+// partager un deck (page sur atelier-mtg.com) : depuis le PC (partage.py) ou l'appli (partage.js)
 const PARTAGEABLE = PC || !!TELEPHONE;
 // le PC et le téléphone ont les mêmes droits sur les decks ; ce qui demande la puissance du PC reste visible sur le
 // téléphone (data-pc="…") et dit où le faire
@@ -32,19 +32,18 @@ const SUR_PC = {
   synergies: "La recherche des synergies par Claude se lance sur le PC.",
   mtgpics: "La lecture des combos MTGPics se lance sur le PC.",
   jouer: "La table de jeu s'ouvre sur le PC : elle se joue à la souris.",
-  proxies: "L'impression des proxies se fait sur le PC.",
 };
 // l'appli seule, sans PC relié : ces fonctions sont dans l'Atelier à installer
-const SANS_PC = { simulation: "la simulation", claude: "la discussion avec Claude", synergies: "la recherche des synergies",
-  mtgpics: "la lecture des combos MTGPics", jouer: "la table de jeu", proxies: "l'impression des proxies" };
+const SANS_PC = { claude: "la discussion avec Claude", synergies: "la recherche des synergies",
+  mtgpics: "la lecture des combos MTGPics" };
 function surPC(quoi) {
   if (TELEPHONE && TELEPHONE.local) return ouvrirModale(`<h2>Dans l'Atelier installé</h2>
-    <p>Pour utiliser ${esc(SANS_PC[quoi] || "cette fonction")}, il faut installer l'Atelier sur ton PC. Tu pourras ensuite y réimporter tes decks gratuitement.</p>
+    <p>Pour utiliser ${esc(SANS_PC[quoi] || "cette fonction")}, il faut installer l'Atelier sur ton PC. Tu y récupéreras ensuite tes decks depuis ton compte.</p>
     <div class="boutons"><a class="btn btn-accent" href="${INSTALLER}" target="_blank" rel="noopener">${ico("telecharger")}Installer l'Atelier</a></div>`);
   ouvrirModale(`<h2>Sur le PC</h2>
     <p>${esc(SUR_PC[quoi] || "Ça se fait sur le PC.")}</p>`);
 }
-// page partagée : à qui sont ces decks (reglages.json « nom », sinon le compte GitHub qui publie)
+// page partagée : à qui sont ces decks (le pseudo du compte qui publie)
 // titre_accueil : la page d'accueil de l'Atelier (site_atelier.py), qui n'est le site de decks de personne
 const MES_DECKS = PARTAGE && PARTAGE.titre_accueil || (PARTAGE && PARTAGE.auteur ? `Decks de ${PARTAGE.auteur}` : "Mes decks");
 let versionAtelier = (PARTAGE && PARTAGE.version) || "";       // version.py ; dans l'Atelier, lue par verifierVersion()
@@ -287,8 +286,8 @@ if (PARTAGE) {
   if (PARTAGE.recherche) $("#lien-recherche").href = PARTAGE.recherche;
   // lien instantané (voir/ de l'appli) : la liste au moment du partage ; on crée ses decks dans l'appli, sans rien installer
   if (PARTAGE.instantane) $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-partage">
-    <p>Deck partagé avec <a href="${A_PROPOS}">l'Atelier MTG</a>, tel qu'il était au moment du partage. Pour gérer, tester et partager vos propres decks Commander, l'Atelier est gratuit et sans compte.</p>
-    <a class="btn btn-accent btn-petit" href="${esc(PARTAGE.accueil)}">${ico("plus")}Créer mes decks</a>
+    <p>Deck partagé avec <a href="${A_PROPOS}">l'Atelier MTG</a>, tel qu'il était au moment du partage. Pour gérer, tester et partager vos propres decks Commander, l'Atelier est gratuit.</p>
+    <a class="btn btn-accent btn-petit" href="${esc(PARTAGE.accueil)}#inscription">${ico("plus")}Créer mes decks</a>
   </div>`);
   else if (!SITE_ATELIER) $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-partage">
     <p>Page ${PARTAGE.auteur ? `de <strong>${esc(PARTAGE.auteur)}</strong>, ` : ""}partagée avec <a href="${A_PROPOS}">l'Atelier MTG</a>. Pour gérer, tester et partager vos propres decks Commander, l'Atelier est gratuit.</p>
@@ -1084,14 +1083,14 @@ async function vueAccueil() {
       <div class="accueil-vide">
         <button type="button" class="av-choix" id="av-creer">${ico("plus")}<strong>Créer mon premier deck</strong>
           <span>À partir de son commandant, ou d'une liste copiée depuis Moxfield, Archidekt ou MTG Arena.</span></button>
-        <button type="button" class="av-choix" id="av-recuperer">${ico("nuage")}<strong>Récupérer mes decks</strong>
-          <span>Tu les as sauvegardés en ligne depuis ${AUTRE_APPAREIL}.</span></button>
+        ${PC ? `<button type="button" class="av-choix" id="av-recuperer">${ico("nuage")}<strong>Récupérer mes decks</strong>
+          <span>Depuis ton compte Atelier MTG.</span></button>` : ""}
         <button type="button" class="av-choix" id="av-importer">${ico("dossier")}<strong>Importer mes decks</strong>
           <span>Exportés de ManaBox, Moxfield, Archidekt… : un fichier par deck.</span></button>
       </div>${decksSupprimes}`;
     $("#av-creer").onclick = modaleNouveauDeck;
     $("#av-importer").onclick = modaleImportDecks;
-    $("#av-recuperer").onclick = () => modaleSauvegarde("recuperer", () => route());
+    if ($("#av-recuperer")) $("#av-recuperer").onclick = () => modaleCompte("recuperer", () => route());
     brancherCorbeille(corbeille);
     return;
   }
@@ -1116,7 +1115,7 @@ async function vueAccueil() {
     <div id="d-resultats"></div>
     ${decksSupprimes}`;
   $("#btn-nouveau").onclick = modaleNouveauDeck;
-  if (PC || (TELEPHONE && TELEPHONE.local)) etatSauvegarde($("#etat-sauvegarde"), $("#bandeau-sauvegarde"));
+  if (PC) etatCompte($("#etat-sauvegarde"), $("#bandeau-sauvegarde"));
   const zone = $("#d-resultats");
   let cartes = {}, numero = 0, minuteur;
   const rendre = () => rendreDecks(zone, cartes);
@@ -1278,11 +1277,11 @@ function modaleNouveauDeck() {
 // plusieurs decks d'un coup, exportés d'une autre appli (ManaBox, Moxfield, Archidekt…) : un fichier par deck, qui lui
 // donne son nom. Déjà montés (coché) : leurs cartes sont notées comme là, dans l'onglet Achats.
 // sur le PC, aussi le fichier « Enregistrer dans un fichier » de l'appli : tous ses decks d'un coup (decks.importer_appli)
-const CHOIX_IMPORT = `Choisir les fichiers (.txt ou .csv, un par deck${PC ? ", ou la sauvegarde de l'appli" : ""})`;
+const CHOIX_IMPORT = `Choisir les fichiers (.txt ou .csv, un par deck${PC || TELEPHONE ? ", ou la sauvegarde de l'appli" : ""})`;
 function modaleImportDecks() {
   ouvrirModale(`
     <h2>Importer des decks</h2>
-    <label class="import-zone"><input type="file" class="fichier-cache" id="im-fichiers" multiple accept=".txt,.csv,text/plain,text/csv${PC ? ",.json,application/json" : ""}">
+    <label class="import-zone"><input type="file" class="fichier-cache" id="im-fichiers" multiple accept=".txt,.csv,text/plain,text/csv${PC || TELEPHONE ? ",.json,application/json" : ""}">
       ${ico("dossier")}<span id="im-choix">${CHOIX_IMPORT}</span></label>
     <label class="petit"><input type="checkbox" id="im-montes" checked> Decks déjà montés</label>
     <div id="im-res"></div>
@@ -1355,7 +1354,8 @@ async function vueDeck(id, onglet, extra = null, donnees = null) {
           <div class="chiffres" style="margin-top:.5rem">${chiffresDeck(d)}</div>
         </div>
         <div class="actions">
-          ${PARTAGE && PARTAGE.instantane ? "" : `<a class="btn" data-pc="jouer" href="${PARTAGE ? "jouer/" : `/jouer?deck=${enc(id)}`}" target="_blank" rel="noopener">${ico("lancer")}Jouer</a>`}
+          ${PARTAGE && PARTAGE.instantane ? "" : (TELEPHONE ? `<a class="btn" data-jouer="${esc(id)}" href="jouer/?deck=${enc(id)}">${ico("lancer")}Jouer</a>`
+            : `<a class="btn" href="${PARTAGE ? "jouer/" : `/jouer?deck=${enc(id)}`}" target="_blank" rel="noopener">${ico("lancer")}Jouer</a>`)}
           <a class="btn ecrit" href="#/recherche?deck=${enc(id)}">${ico("chercher")}Chercher pour ce deck</a>
           <button class="btn btn-icone ouvre-menu" id="btn-deck-menu" aria-label="Autres actions sur le deck" title="Autres actions">${ico("plus_de")}</button>
         </div>
@@ -1389,9 +1389,9 @@ function menuDeck(d) {
     ...(PARTAGE ? [] : [["Cardmarket (à acheter)", () => copierCardmarket(d), "", "panier"]])];
   return [
     ...(ECRAN_TELEPHONE ? [["Chercher pour ce deck", () => { location.hash = `#/recherche?deck=${enc(d.id)}`; }, "", "chercher"],
-      ["Jouer", () => surPC("jouer"), "", "lancer"], ["Demander à Claude", () => surPC("claude"), "", "discussion"], null] : []),
+      ["Jouer", () => (TELEPHONE ? ouvrirJeu(d.id) : surPC("jouer")), "", "lancer"], ["Demander à Claude", () => surPC("claude"), "", "discussion"], null] : []),
     ...(PARTAGEABLE ? [["Partager le deck…", () => modalePartage(d), "", "partager"]] : []),
-    ...(PARTAGE ? [] : [["Imprimer les proxies…", () => { if (TELEPHONE) surPC("proxies"); else location.hash = `#/proxies?deck=${enc(d.id)}`; }, "", "imprimer"]]),
+    ...(PARTAGE ? [] : [["Imprimer les proxies…", () => { location.hash = `#/proxies?deck=${enc(d.id)}`; }, "", "imprimer"]]),
     ...(PARTAGEABLE ? [null] : []),
     // sur le téléphone, les formats dans un second menu : le premier tient à l'écran
     ...(ECRAN_TELEPHONE ? [["Copier la liste…", () => setTimeout(() => ouvrirMenu($("#app-menu"), copier)), "", "copier"]] : copier),
@@ -1896,7 +1896,7 @@ async function ongletAchats(el, d, poss = null) {
   };
 }
 
-// page du deck publiée sur GitHub Pages (partage.py) : lien, mise à jour, retrait ; au doigt, « Partager » ouvre le
+// page du deck publiée sur atelier-mtg.com (partage.py, partage.js) : lien, mise à jour, retrait ; au doigt, « Partager » ouvre le
 // partage du téléphone (messagerie, e-mail…)
 const PARTAGE_NATIF = !!navigator.share && matchMedia("(pointer: coarse)").matches;
 // le lien instantané d'un deck : sa liste (format Archidekt), son titre et le budget, en JSON compressé après « # » ;
@@ -1910,14 +1910,14 @@ async function lienInstantane(d) {
   return APPLI_TELEPHONE + "voir/#" + btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-// partager un deck : d'abord le lien instantané (sans compte, figé), puis la page permanente sur GitHub (à jour toute
-// seule, image d'aperçu, table de jeu)
+// partager un deck : d'abord le lien instantané (rien de publié, figé), puis la page permanente sur atelier-mtg.com (à
+// jour toute seule, image d'aperçu, table de jeu ; partage.py, ou telephone/partage.js dans l'appli)
 function modalePartage(d) {
   ouvrirModale(`<h2>Partager ${esc(d.titre)}</h2>
     <section class="pt-bloc"><h3>Lien instantané</h3>
       <div id="pt-lien"><p class="chargement">Préparation du lien…</p></div>
-      <p class="muet petit">Sans compte, rien n'est publié : le lien contient la liste. C'est une photo du deck à cet instant :
-        s'il change, repartage-le.${TELEPHONE ? ` La simulation, Claude et la table de jeu sont dans <a href="${INSTALLER}">l'Atelier à installer</a>.` : ""}</p>
+      <p class="muet petit">Rien n'est publié : le lien contient la liste. C'est une photo du deck à cet instant :
+        s'il change, repartage-le.${TELEPHONE ? ` Claude est dans <a href="${INSTALLER}">l'Atelier à installer</a>.` : ""}</p>
     </section>
     <section class="pt-bloc"><h3>Page permanente</h3>
       <div id="pt-zone"><p class="chargement">Chargement…</p></div>
@@ -1937,6 +1937,7 @@ function modalePartage(d) {
       };
     }, (e) => { lien.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; });
     const zone = $("#pt-zone", b);
+    if (!zone) return;
     const rendre = (s) => {
       zone.innerHTML = `
         <div class="form-ligne">
@@ -1964,233 +1965,146 @@ function modalePartage(d) {
         catch (e) { zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
       };
     };
-    const publier = async () => {
+    const publier = async (pseudo) => {
       zone.innerHTML = `<p class="chargement">Publication…</p>`;
-      try { rendre(await api(`/api/decks/${enc(d.id)}/partage`, { method: "POST" })); toast("Publié : en ligne d'ici une minute ou deux.", 4000); }
+      try { rendre(await api(`/api/decks/${enc(d.id)}/partage`, { method: "POST", body: pseudo ? { pseudo } : {} })); toast("Page publiée."); }
       catch (e) {
-        if (e.statut === 401) introGithub(zone, publier, "partage");
+        if (e.statut === 401 && !TELEPHONE) connexionCompte(zone, () => publier(pseudo));
+        else if (e.statut === 409) choisirPseudo(e.message, pseudo);
         else zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`;
       }
     };
-    // premier partage : ce qui sera visible de tous, et ce qui ne l'est pas, avant de publier
+    // premier partage : le pseudo, qui sera dans l'adresse de toutes ses pages
+    const choisirPseudo = (message, avant = "") => {
+      zone.innerHTML = `<form class="form-ligne" id="pt-form-pseudo">
+          <input class="champ" id="pt-pseudo" maxlength="30" autocomplete="nickname" autocapitalize="none" spellcheck="false"
+            placeholder="pseudo" value="${esc(avant || "")}" aria-label="Pseudo" required style="flex:1;min-width:160px">
+          <button class="btn btn-accent">${ico("partager")}Publier la page</button></form>
+        <p class="muet petit" id="pt-adresse"></p>
+        <p class="${avant ? "erreur" : "muet"} petit">${esc(message)}</p>`;
+      const champ = $("#pt-pseudo", zone), adresse = () => {
+        $("#pt-adresse", zone).textContent = `atelier-mtg.com/decks/${champ.value.trim().toLowerCase() || "…"}/`;
+      };
+      champ.oninput = adresse;
+      adresse();
+      $("#pt-form-pseudo", zone).onsubmit = (ev) => { ev.preventDefault(); publier(champ.value.trim().toLowerCase()); };
+      champ.focus();
+    };
+    // ce qui sera visible de tous, et ce qui ne l'est pas, avant de publier
     const avant = () => {
-      zone.innerHTML = `<p>Une page publique qui se met à jour toute seule quand le deck change, avec son image d'aperçu et
-          une table de jeu. Elle est publiée sur ton compte GitHub (gratuit).</p>
-        <p class="muet petit">Toute personne qui a le lien y voit la liste, les statistiques, les combos et les tests du deck ;
-          pas ton classeur, ni tes achats, ni tes discussions avec Claude.</p>
+      zone.innerHTML = `<p>Une page publique sur atelier-mtg.com, qui se met à jour quand le deck change, avec son image
+          d'aperçu et une table de jeu.</p>
+        <p class="muet petit">Toute personne qui a le lien, ou qui la trouve par un moteur de recherche, y voit la liste, les
+          statistiques, les combos et les tests du deck ; pas ton classeur, ni tes achats, ni tes discussions avec Claude.</p>
         <div class="boutons"><button class="btn" id="pt-publier">${ico("partager")}Publier la page</button></div>`;
-      $("#pt-publier", zone).onclick = publier;
+      $("#pt-publier", zone).onclick = () => publier();
     };
     const s = await api(`/api/decks/${enc(d.id)}/partage`).catch(() => ({}));
     if (s.url) rendre(s); else avant();
   }, { focus: false });
 }
 
-// ce qu'est GitHub et à quoi il sert, pour qui n'en a jamais entendu parler : avant toute connexion (sauvegarde,
-// récupération, partage, Options). Avec ou sans compte, on arrive à connexionGithub
-function introGithub(zone, suite, contexte = "") {
-  const pourquoi = {
-    sauvegarde: "Pour sauvegarder tes decks, l'Atelier passe par GitHub.",
-    recuperer: `Ta sauvegarde est sur GitHub : connecte l'Atelier au compte GitHub de ton autre ${TELEPHONE ? "appareil" : "PC"}.`,
-    partage: "Pour publier la page de ton deck, l'Atelier passe par GitHub.",
-  }[contexte];
-  const connecter = () => connexionGithub(zone, suite);
-  zone.innerHTML = `${pourquoi ? `<p class="gh-contexte">${pourquoi}</p>` : ""}
-    <div class="gh-presente">
-      <p><strong>GitHub</strong> est un service gratuit de Microsoft qui garde des fichiers en ligne.${PARTAGEABLE ? " L'Atelier s'en sert pour deux choses :" : ""}</p>
-      <ul class="gh-usages">
-        <li>${ico("nuage")}<span><strong>Sauvegarder tes decks</strong> dans un espace privé, que toi seul vois : tu les retrouves si ton ${!TELEPHONE ? "PC" : ECRAN_TELEPHONE ? "téléphone" : "ordinateur"} tombe en panne, ou sur ${AUTRE_APPAREIL}.</span></li>
-        ${PARTAGEABLE ? `<li>${ico("partager")}<span><strong>Publier les decks que tu partages</strong>, sur une page à envoyer à ton groupe de jeu.</span></li>` : ""}
-      </ul>
-    </div>
-    <p class="gh-compte">Il faut un compte GitHub : gratuit, avec une adresse e-mail.</p>
-    <div class="boutons">
-      <a class="btn" id="gh-creer" href="https://github.com/signup" target="_blank" rel="noopener">${ico("ouvrir")}Créer un compte</a>
-      <button class="btn btn-accent" id="gh-suite">J'ai un compte : me connecter</button>
-    </div>`;
-  $("#gh-suite", zone).onclick = connecter;
-  $("#gh-creer", zone).addEventListener("click", () => setTimeout(() => {   // le compte se crée dans l'onglet ouvert
-    zone.innerHTML = `<p>Crée ton compte sur la page de GitHub qui vient de s'ouvrir, puis reviens ici.</p>
-      <p class="muet petit">Ton nom d'utilisateur GitHub apparaîtra dans l'adresse des decks que tu partageras.</p>
-      <div class="boutons"><button class="btn btn-accent" id="gh-suite">Mon compte est créé : me connecter</button></div>`;
-    $("#gh-suite", zone).onclick = connecter;
-  }, 300));
+// ------------------------------------------------------------------ le compte sur le PC (compte.py) : Envoyer, Récupérer
+// se connecter par un code reçu par e-mail ; suite(état du compte) une fois connecté
+function connexionCompte(zone, suite) {
+  zone.innerHTML = `<form class="form-ligne" id="cc-form-email">
+      <input class="champ" id="cc-email" type="email" autocomplete="email" placeholder="ton@adresse.fr" aria-label="Adresse e-mail" required>
+      <button class="btn btn-accent">Recevoir un code</button></form>
+    <form id="cc-form-code" hidden>
+      <p id="cc-envoye"></p>
+      <div class="form-ligne"><input class="champ" id="cc-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123456" aria-label="Code reçu" required>
+        <button class="btn btn-accent">Valider</button></div>
+      <button type="button" class="lien-discret" id="cc-autre">Changer d'adresse</button></form>
+    <p class="erreur" id="cc-erreur" hidden></p>`;
+  const fe = $("#cc-form-email", zone), fc = $("#cc-form-code", zone), msg = $("#cc-erreur", zone);
+  const echec = (m) => { msg.textContent = m; msg.hidden = !m; };
+  const occupe = (f, oui) => $$("button, input", f).forEach((x) => { x.disabled = oui; });
+  fe.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const email = $("#cc-email", zone).value.trim();
+    echec("");
+    occupe(fe, true);
+    try {
+      await api("/api/compte/code", { method: "POST", body: { email } });
+      $("#cc-envoye", zone).innerHTML = `Code envoyé à <strong>${esc(email)}</strong>.`;
+      fe.hidden = true;
+      fc.hidden = false;
+      fc.dataset.email = email;
+      $("#cc-code", zone).focus();
+    } catch (e) { echec(e.message); }
+    occupe(fe, false);
+  };
+  fc.onsubmit = async (ev) => {
+    ev.preventDefault();
+    echec("");
+    occupe(fc, true);
+    try { suite(await api("/api/compte/connexion", { method: "POST", body: { email: fc.dataset.email, code: $("#cc-code", zone).value } })); }
+    catch (e) { echec(e.message); occupe(fc, false); }
+  };
+  $("#cc-autre", zone).onclick = () => { fc.hidden = true; fe.hidden = false; echec(""); $("#cc-email", zone).focus(); };
 }
 
-// connecté avant la sauvegarde : GitHub n'a ouvert que les dépôts publics, il faut un nouveau code
-function autoriserGithub(zone, suite) {
-  zone.innerHTML = `<p>La sauvegarde va dans un espace privé de ton compte GitHub. Pour y écrire, l'Atelier a besoin
-      d'une autorisation de plus : un nouveau code, comme à ta première connexion.</p>
-    <div class="boutons"><button class="btn btn-accent" id="gh-suite">Continuer</button></div>`;
-  $("#gh-suite", zone).onclick = () => connexionGithub(zone, suite);
+// ce qu'ont fait « Envoyer » et « Récupérer », en une phrase
+function resumeCompte(r, contexte) {
+  const n = r.decks.length, k = (r.ignores || []).length;
+  const quoi = [n > 1 ? `${n} decks` : n ? "1 deck" : "", r.classeur ? "le classeur" : ""].filter(Boolean).join(" et ");
+  const fait = contexte === "recuperer" ? "Récupéré" : "Envoyé";
+  return (quoi ? `${fait} : ${quoi}.` : r.fichiers || [r.echecs, r.retires, r.supprimes].some((l) => (l || []).length) ? `${fait}.`
+    : contexte === "recuperer" ? "Rien de nouveau sur ton compte." : "Ton compte est déjà à jour.")
+    + (k ? ` ${k} fichier${k > 1 ? "s" : ""} trop gros pour le compte, resté${k > 1 ? "s" : ""} ici.` : "")
+    + ((r.retires || []).length ? ` Retiré du compte : ${r.retires.map((d) => d.replace(/^Deck /, "")).join(", ")}.` : "")
+    + ((r.supprimes || []).length ? ` Dans la corbeille : ${r.supprimes.map((d) => d.replace(/^Deck /, "")).join(", ")}.` : "");
 }
 
-// se connecter à GitHub par un code (github.py). Le code s'affiche tout de suite, avec les trois gestes à faire sur
-// github.com ; la page suit GitHub et appelle suite(compte) une fois connecté
-async function connexionGithub(zone, suite) {
-  zone.innerHTML = `<p class="chargement">Demande d'un code à GitHub…</p>`;
-  let c;
-  try { c = await api("/api/github/connexion", { method: "POST", body: {} }); }
-  catch (e) {
-    zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>
-      <div class="gh-action"><button class="btn btn-accent" id="gh-encore">Réessayer</button></div>`;
-    $("#gh-encore", zone).onclick = () => connexionGithub(zone, suite);
-    return;
-  }
-  // l'écran d'autorisation de GitHub parle de « dépôts publics et privés » : dit avant, il n'inquiète pas
-  zone.innerHTML = `<ol class="gh-etapes">
-      <li><p class="gh-code" aria-label="Code de connexion">${esc(c.code)}</p>
-        <a class="btn btn-accent" id="gh-ouvrir" href="${esc(c.url)}" target="_blank" rel="noopener">${ico("copier")}Copier le code et ouvrir GitHub</a></li>
-      <li>Sur GitHub, connecte-toi si besoin, colle le code${TELEPHONE ? "" : " (Ctrl+V)"}, puis clique sur «&nbsp;Continue&nbsp;».</li>
-      <li>GitHub te montre ce que l'Atelier pourra faire : écrire dans tes dépôts, les dossiers de ton compte. C'est là
-        qu'il range ta sauvegarde${PARTAGEABLE ? " et tes pages" : ""}. Clique sur «&nbsp;Authorize Atelier MTG&nbsp;», puis reviens ici.</li>
-    </ol>
-    <p class="gh-attente" role="status">En attente de GitHub…</p>`;
-  $("#gh-ouvrir", zone).onclick = () => { navigator.clipboard.writeText(c.code).catch(() => {}); };
-  while (zone.isConnected) {
-    await attendre(2000);
-    let e;
-    try { e = await api("/api/github/connexion"); } catch (_) { continue; }
-    if (!zone.isConnected || e.etat === "attente") continue;
-    if (e.etat === "ok") { toast(`Connecté à GitHub : ${e.compte}.`); return suite(e.compte); }
-    zone.innerHTML = `<p>${esc({ refus: "Connexion refusée sur GitHub.", expire: "Le code a expiré." }[e.etat] || e.erreur || "Connexion impossible.")}</p>
-      <div class="gh-action"><button class="btn btn-accent" id="gh-encore">Recommencer</button></div>`;
-    $("#gh-encore", zone).onclick = () => connexionGithub(zone, suite);
-    return;
-  }
-}
-
-// retirer l'accès de tous les appareils : « Revoke access » sur la page GitHub de l'appli « Atelier MTG » retire toutes
-// ses clés (PC, téléphones, appareil perdu ou volé). La fenêtre suit GitHub : une fois la clé d'ici refusée, elle propose
-// de reconnecter cet appareil ; un téléphone relié au PC, lui, est délié (sa clé était celle du PC)
-const TOUS_APPAREILS = "Déconnecter tous mes appareils";
-function modaleRetirerAcces(appli, intro = "", fin = () => {}) {
-  ouvrirModale(`<h2>${TOUS_APPAREILS}</h2>
-    <div id="ra-zone">${intro ? `<p>${esc(intro)}</p>` : ""}
-      <p><strong>${TELEPHONE ? `${CET_APPAREIL[0].toUpperCase() + CET_APPAREIL.slice(1)}, ton PC` : "Ce PC, ton téléphone"}</strong> et tout appareil perdu ou volé
-        perdront l'accès à ta sauvegarde.</p>
-      <p>Sur GitHub, clique sur «&nbsp;Revoke access&nbsp;», puis reconnecte les appareils que tu gardes.</p>
-      <div class="gh-action"><a class="btn btn-accent" id="ra-ouvrir" href="${esc(appli)}" target="_blank" rel="noopener">Ouvrir GitHub</a></div>
-      <p class="gh-attente" role="status" hidden>En attente de GitHub…</p></div>`, (b) => {
-    const zone = $("#ra-zone", b), fini = () => { fermerModale(); fin(); };
-    let suivi = false;
-    $("#ra-ouvrir", b).onclick = async () => {
-      $(".gh-attente", zone).hidden = false;
-      if (suivi) return;
-      suivi = true;
-      for (const debut = Date.now(); zone.isConnected && Date.now() - debut < 15 * 60000;) {
-        await attendre(3000);
-        let v;
-        try { v = await api("/api/github/valide"); } catch (_) { continue; }
-        if (!zone.isConnected || v.valide) continue;
-        const relie = TELEPHONE && !TELEPHONE.local;
-        zone.innerHTML = `<p>C'est fait : plus aucun appareil n'a accès à ta sauvegarde, ${CET_APPAREIL} compris.${relie ? " Il est délié." : ""}</p>
-          <div class="gh-action"><button class="btn btn-accent" id="ra-suite">${relie ? "OK" : `Reconnecter ${CET_APPAREIL}`}</button></div>`;
-        const delie = () => { fermerModale(); location.hash = "#/"; TELEPHONE.delier(); };
-        $("#ra-suite", zone).onclick = relie ? delie : () => connexionGithub(zone, fini);
-        if (relie) $(".modale-fermer", b).onclick = delie;
-        return;
+// « Récupérer mes decks » (accueil d'un nouveau PC) ou « Les envoyer sur mon compte » (bandeau) : se connecter si
+// besoin, puis agir
+function modaleCompte(contexte, fin = () => {}) {
+  ouvrirModale(`<h2>${contexte === "recuperer" ? "Récupérer mes decks" : "Envoyer mes decks sur mon compte"}</h2>
+    <div id="mc-zone"><p class="chargement">Chargement…</p></div>`, async (b) => {
+    const zone = $("#mc-zone", b), fini = () => { fermerModale(); fin(); };
+    const agir = async () => {
+      zone.innerHTML = `<p class="chargement">${contexte === "recuperer" ? "Récupération de tes decks…" : "Envoi de tes decks…"}</p>`;
+      try {
+        const r = await api(`/api/compte/${contexte}`, { method: "POST", body: {} });
+        toast(resumeCompte(r.resume, contexte), 4000);
+        etat.decks = [];
+        fini();
+      } catch (e) {
+        if (e.statut === 401) return connexionCompte(zone, agir);
+        zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>
+          <div class="boutons"><button class="btn btn-accent" id="mc-encore">Réessayer</button></div>`;
+        $("#mc-encore", zone).onclick = agir;
       }
     };
+    const c = await api("/api/compte").catch(() => ({}));
+    if (c.connecte) agir(); else connexionCompte(zone, agir);
   }, { focus: false, fermer: () => { fermerModale(); fin(); } });
 }
 
-// ------------------------------------------------------------------ sauvegarde en ligne (synchro.py)
-// une fenêtre, trois portes : sauvegarder (bandeau de l'accueil, Options), récupérer (accueil vide d'un nouveau PC).
-// Chacune mène, si besoin, à la présentation de GitHub puis à la connexion ; fin() est appelé une fois tout fini
-function modaleSauvegarde(contexte, fin = () => {}) {
-  const titre = contexte === "recuperer" ? "Récupérer mes decks" : "Sauvegarder mes decks en ligne";
-  ouvrirModale(`<h2>${titre}</h2>
-    <div id="sv-zone"><p class="chargement">Chargement…</p></div>`, async (b) => {
-    const zone = $("#sv-zone", b);
-    const fini = () => { fermerModale(); fin(); };
-    const apres = () => (contexte === "recuperer" ? recupererDecks(zone, fini) : activerSauvegarde(zone, fini));
-    const g = await api("/api/github").catch(() => ({}));
-    if (g.compte && g.prive) apres();
-    else if (g.compte) autoriserGithub(zone, apres);
-    else introGithub(zone, apres, contexte === "recuperer" ? "recuperer" : "sauvegarde");
-  }, { focus: false, fermer: () => { fermerModale(); fin(); } });
-}
-
-// un échec : se reconnecter s'il le faut (401 : plus connecté ; 409 : connexion d'avant la sauvegarde), sinon réessayer
-function echecSauvegarde(zone, e, refaire, contexte) {
-  if (e.statut === 409) return autoriserGithub(zone, refaire);
-  if (e.statut === 401) return introGithub(zone, refaire, contexte);
-  zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>
-    <div class="boutons"><button class="btn btn-accent" id="sv-encore">Réessayer</button></div>`;
-  $("#sv-encore", zone).onclick = refaire;
-}
-
-async function activerSauvegarde(zone, fin) {
-  zone.innerHTML = `<p class="chargement">Sauvegarde de tes decks…</p>`;
-  let r;
-  try { r = await api("/api/sauvegarde", { method: "POST", body: { action: "activer" } }); }
-  catch (e) { return echecSauvegarde(zone, e, () => activerSauvegarde(zone, fin), "sauvegarde"); }
-  const n = r.resume.decks || 0;
-  zone.innerHTML = `<p class="sv-ok">${ico("nuage")}<span><strong>${n > 1 ? `Tes ${n} decks sont sauvegardés.` : n ? "Ton deck est sauvegardé." : "La sauvegarde est prête."}</strong>
-      Ensuite, chaque modification est sauvegardée toute seule.</span></p>
-    <p class="muet petit">${TELEPHONE ? "Sur un autre appareil : «&nbsp;Récupérer mes decks&nbsp;» sur la page d'accueil de l'Atelier." : "Sur un autre PC : installe l'Atelier, puis «&nbsp;Récupérer mes decks&nbsp;» sur sa page d'accueil."}</p>
-    <div class="boutons">${r.etat.url ? `<a class="btn" href="${esc(r.etat.url)}" target="_blank" rel="noopener">${ico("ouvrir")}Voir sur GitHub</a>` : ""}
-      <button class="btn btn-accent" id="sv-fin">OK</button></div>`;
-  $("#sv-fin", zone).onclick = fin;
-}
-
-async function recupererDecks(zone, fin) {
-  zone.innerHTML = `<p class="chargement">Recherche de ta sauvegarde…</p>`;
-  let s, g;
-  try { [s, g] = await Promise.all([api("/api/sauvegarde/distante"), api("/api/github")]); }
-  catch (e) { return echecSauvegarde(zone, e, () => recupererDecks(zone, fin), "recuperer"); }
-  if (!s.existe) {
-    zone.innerHTML = `<p>Aucune sauvegarde de decks sur le compte GitHub <strong>${esc(g.compte)}</strong>.</p>
-      <p class="muet petit">Elle se crée depuis ton autre ${TELEPHONE ? "appareil" : "PC"} : bandeau «&nbsp;Les sauvegarder en ligne&nbsp;» de sa page d'accueil, ou Options.</p>
-      <div class="boutons"><button class="btn btn-accent" id="sv-fin">OK</button></div>`;
-    $("#sv-fin", zone).onclick = fin;
-    return;
-  }
-  const quand = new Date(s.date).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" });
-  zone.innerHTML = `<p>La sauvegarde du compte <strong>${esc(g.compte)}</strong> contient ${s.decks.length > 1 ? `${s.decks.length} decks` : "1 deck"},
-      modifiée le ${esc(quand)} :</p>
-    <p class="sv-decks">${s.decks.map((n) => `<strong>${esc(n)}</strong>`).join(" · ")}</p>
-    <div class="boutons"><button class="btn btn-accent" id="sv-go">${ico("telecharger")}Récupérer ${SUR_CET_APPAREIL}</button></div>`;
-  $("#sv-go", zone).onclick = async () => {
-    zone.innerHTML = `<p class="chargement">Récupération de tes decks…</p>`;
-    try {
-      const r = await api("/api/sauvegarde/recuperer", { method: "POST", body: {} });
-      const n = r.resume.decks_recus ? r.resume.decks_recus.length : 0;
-      toast(n > 1 ? `${n} decks récupérés.` : n ? "1 deck récupéré." : "Tes decks sont à jour.");
-      etat.decks = [];
-      fin();
-    } catch (e) { echecSauvegarde(zone, e, () => recupererDecks(zone, fin), "recuperer"); }
-  };
-}
-
-// accueil : où en est la sauvegarde (un mot discret), ou un bandeau tant que les decks ne sont que sur ce PC
-const PLUS_TARD_SAUVEGARDE = 7 * 86400 * 1000;
-const SAFARI = /^((?!chrome|chromium|crios|fxios|edgios|android).)*safari/i.test(navigator.userAgent);
-async function etatSauvegarde(petit, bandeau) {
-  const s = await api("/api/sauvegarde").catch(() => null);
-  if (!s || !petit.isConnected) return;
-  if (s.active) {
-    const quand = s.derniere ? `Dernière sauvegarde : ${heureCourte(s.derniere)}` : "";
-    petit.innerHTML = `<a class="etat-sauvegarde ${s.erreur ? "en-echec" : ""}" href="#/options" title="${esc(s.erreur || quand)}">${ico("nuage")}${s.erreur ? "Sauvegarde en échec" : "Sauvegardé"}</a>`;
+// accueil du PC : où en est le compte (un mot discret ; « À envoyer » envoie), ou un bandeau tant que les decks ne sont
+// que sur ce PC
+const PLUS_TARD_COMPTE = 7 * 86400 * 1000;
+async function etatCompte(petit, bandeau) {
+  const c = await api("/api/compte").catch(() => null);
+  if (!c || !petit.isConnected) return;
+  const encore = () => etatCompte(petit, bandeau);
+  if (c.connecte) {
+    petit.innerHTML = c.a_envoyer && !c.erreur
+      ? `<button type="button" class="etat-sauvegarde a-envoyer" id="ec-envoyer">${ico("nuage")}À envoyer</button>`
+      : `<a class="etat-sauvegarde ${c.erreur ? "en-echec" : ""}" href="#/options" title="${esc(c.erreur || (c.envoi ? `Envoyé le ${heureCourte(c.envoi)}` : ""))}">${ico("nuage")}${c.erreur ? "Échec de l'envoi" : "Envoyé"}</a>`;
+    if ($("#ec-envoyer", petit)) $("#ec-envoyer", petit).onclick = () => modaleCompte("envoyer", encore);
     bandeau.innerHTML = "";
     return;
   }
   let tard = 0;
-  try { tard = +localStorage.getItem("pref-sauvegarde-plus-tard") || 0; } catch (_) {}
-  if ((s.connecte && s.prive && !s.voulue) || Date.now() - tard < PLUS_TARD_SAUVEGARDE) return;   // coupée exprès, ou « Plus tard »
-  // Safari (pas l'appli installée) efface ce qu'un site garde après 7 jours sans visite
-  const safari = TELEPHONE && SAFARI && !TELEPHONE.installee();
-  bandeau.innerHTML = `<div class="bandeau-sauvegarde ${safari ? "ferme" : ""}">${ico("nuage")}<p>${safari ? "Safari efface les decks gardés ici après 7 jours sans visite."
-      : `Tes decks ne sont que ${SUR_CET_APPAREIL} : ${TELEPHONE && !ECRAN_TELEPHONE ? "s'il les efface, ou si tu changes d'ordinateur, ils sont perdus" : "si tu le changes ou s'il tombe en panne, ils sont perdus"}.`}</p>
-    <button class="btn btn-accent btn-petit" id="bs-oui">Les sauvegarder en ligne</button>
-    ${TELEPHONE ? `<button class="btn btn-petit" id="bs-fichier">${ico("telecharger")}Dans un fichier</button>` : ""}
+  try { tard = +localStorage.getItem("pref-compte-plus-tard") || 0; } catch (_) {}
+  if (Date.now() - tard < PLUS_TARD_COMPTE) return;
+  bandeau.innerHTML = `<div class="bandeau-sauvegarde">${ico("nuage")}<p>${c.github ? "La sauvegarde sur GitHub s'arrête : tes decks vont maintenant sur ton compte Atelier MTG."
+      : "Tes decks ne sont que sur ce PC : s'il tombe en panne, ils sont perdus."}</p>
+    <button class="btn btn-accent btn-petit" id="bs-oui">Les envoyer sur mon compte</button>
     <button class="btn btn-discret btn-petit" id="bs-tard">Plus tard</button></div>`;
-  const plusTard = () => { PREF.set("sauvegarde-plus-tard", String(Date.now())); bandeau.innerHTML = ""; };
-  $("#bs-oui", bandeau).onclick = () => modaleSauvegarde("sauvegarde", () => etatSauvegarde(petit, bandeau));
-  $("#bs-tard", bandeau).onclick = plusTard;
-  // un fichier enregistré : le bandeau revient dans 7 jours, pour un fichier à jour
-  if (TELEPHONE) $("#bs-fichier", bandeau).onclick = () => TELEPHONE.enregistrerFichier().then(plusTard, erreur);
+  $("#bs-oui", bandeau).onclick = () => modaleCompte("envoyer", encore);
+  $("#bs-tard", bandeau).onclick = () => { PREF.set("compte-plus-tard", String(Date.now())); bandeau.innerHTML = ""; };
 }
 
 function modaleRenommer(d) {
@@ -2250,80 +2164,13 @@ function vueClasseur() {
   return classeurOptions($("#opt-classeur"));
 }
 
-// Options › Téléphone (sur le PC) : préparer les decks pour l'appli du téléphone, et la relier par un QR code
-async function ligneTelephone(el) {
-  let t;
-  try { t = await api("/api/telephone"); } catch (e) { el.innerHTML = `<p class="erreur petit">${esc(e.message)}</p>`; return; }
-  const action = async (a) => { try { t = await api("/api/telephone", { method: "POST", body: { action: a } }); rendre(); } catch (e) { erreur(e); } };
-  const rendre = () => {
-    if (!t.possible) {
-      el.innerHTML = `<p class="muet">Il faut d'abord la sauvegarde en ligne.</p>`;
-      return;
-    }
-    if (!t.voulu) {
-      el.innerHTML = `<button type="button" class="btn btn-accent" id="tel-activer">${ico("telephone")}Installer sur mon téléphone</button>`;
-      $("#tel-activer", el).onclick = async () => { await action("activer"); if (t.lien) modaleQrTelephone(t.lien); };
-      return;
-    }
-    el.innerHTML = `<p class="${t.erreur ? "erreur" : "muet"} petit">${t.erreur ? esc(t.erreur)
-        : t.en_cours ? "Préparation des decks…" : t.derniere ? `${t.decks} deck${t.decks > 1 ? "s" : ""} prêt${t.decks > 1 ? "s" : ""} pour le téléphone · ${esc(new Date(t.derniere * 1000).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }))}` : "Préparation des decks…"}</p>
-      <div class="opt-boutons">
-        ${t.lien ? `<button type="button" class="btn btn-petit" id="tel-qr">${ico("telephone")}Relier un téléphone</button>` : ""}
-        <button type="button" class="btn btn-petit btn-discret" id="tel-couper">Arrêter</button></div>`;
-    if ($("#tel-qr", el)) $("#tel-qr", el).onclick = () => modaleQrTelephone(t.lien);
-    // le téléphone garde la clé GitHub de ce PC : retirer l'accès est proposé aussitôt
-    $("#tel-couper", el).onclick = async () => {
-      if (!confirm("Arrêter l'appli du téléphone ? Elle ne recevra plus tes decks.")) return;
-      await action("couper");
-      const g = await api("/api/github").catch(() => ({}));
-      if (g.compte && g.appli) modaleRetirerAcces(g.appli, "Le téléphone garde sa clé de ta sauvegarde.", () => route());
-    };
-    if (t.en_cours || (!t.derniere && !t.erreur)) setTimeout(async () => {
-      if (!el.isConnected) return;
-      try { t = await api("/api/telephone"); rendre(); } catch (_) {}
-    }, 3000);
-  };
-  rendre();
-}
-
-// le QR code qui relie un téléphone : l'adresse de l'appli, avec le dépôt et la clé GitHub (qui ne quittent pas l'écran)
-async function modaleQrTelephone(lien) {
-  if (!window.qrcode) {
-    await new Promise((ok, ko) => { const s = document.createElement("script"); s.src = "/static/vendor/qrcode.js"; s.onload = ok; s.onerror = ko; document.head.appendChild(s); })
-      .catch(() => null);
-  }
-  if (!window.qrcode) return erreur(new Error("QR code indisponible : recharge la page."));
-  const q = qrcode(0, "M");
-  q.addData(lien);
-  q.make();
-  ouvrirModale(`<h2>Atelier sur ton téléphone</h2>
-    <div class="qr-telephone">${q.createSvgTag({ cellSize: 6, margin: 3, scalable: true })}</div>
-    <ol class="gh-etapes">
-      <li>Scanne ce QR code avec l'appareil photo du téléphone.</li>
-      <li>Installe l'appli. Android : «&nbsp;Installer l'application&nbsp;». iPhone : Partager › «&nbsp;Sur l'écran d'accueil&nbsp;», puis ouvre l'appli et scanne à nouveau ce code.</li>
-    </ol>
-    <p class="muet petit">Ce code ouvre tes decks : ne le montre qu'à tes téléphones.</p>
-    <div class="boutons"><button class="btn btn-petit" id="qr-copier">${ico("copier")}Copier le lien</button></div>`, (b) => {
-    $("#qr-copier", b).onclick = async () => { try { await navigator.clipboard.writeText(lien); toast("Lien copié."); } catch (e) { erreur(e); } };
-  });
-}
-
-// téléphone : à quel Atelier il est relié, quand les decks sont arrivés, et le classeur (en lecture)
+// téléphone et navigateur : le compte, les réglages des cartes, le thème
 function optionsTelephone() {
-  const a = TELEPHONE.acces();
   vue.innerHTML = `<nav class="fil" aria-label="Fil d'Ariane"><a href="#/">Mes decks</a><span aria-hidden="true">›</span><span aria-current="page">Options</span></nav>
-    <section class="panneau options"><div class="opt-titre"><h2>${ECRAN_TELEPHONE ? `${ico("telephone")}Téléphone` : `${ico("dossier")}Ce navigateur`}</h2></div>
+    <section class="panneau options"><div class="opt-titre"><h2>${ico("nuage")}Compte</h2></div>
       <div class="opt-lignes">${ECRAN_TELEPHONE && TELEPHONE.installee && !TELEPHONE.installee() ? `
-        <p><button class="btn btn-accent" id="tel-installer-app">${ico("telecharger")}Installer l'appli</button></p>` : ""}${a ? `
-        <p>Relié à la sauvegarde <strong>${esc(a.depot)}</strong></p>
-        <p class="muet petit" id="tel-attente" hidden></p>
-        <div class="form-ligne"><button class="btn" id="tel-maj">${ico("rafraichir")}Synchroniser</button>
-          <button class="btn btn-danger" id="tel-delier">Délier ${CET_APPAREIL}</button>
-          <button class="btn btn-discret" id="tel-retirer">${TOUS_APPAREILS}</button></div>` : `
-        <p id="tel-ou">Tes decks sont gardés ${SUR_CET_APPAREIL}.</p>
-        <div id="opt-github"></div>
-        <div class="form-ligne"><button class="btn" id="tel-fichier">${ico("telecharger")}Enregistrer dans un fichier</button>
-          <button class="btn btn-discret" id="tel-restaurer-fichier">Restaurer un fichier</button></div>`}
+        <p><button class="btn btn-accent" id="tel-installer-app">${ico("telecharger")}Installer l'appli</button></p>` : ""}
+        <div id="opt-compte"><p class="chargement">Chargement…</p></div>
       </div></section>
     <section class="panneau options opt-bloc" id="opt-cartes"></section>
     <section class="panneau options"><div class="opt-titre"><h2>${ico("theme")}Thème</h2></div>
@@ -2338,41 +2185,94 @@ function optionsTelephone() {
     try { if (t) localStorage.setItem("theme", t); else localStorage.removeItem("theme"); } catch (_) {}
     $$("#opt-theme button").forEach((x) => { x.classList.toggle("actif", x === b); x.setAttribute("aria-pressed", x === b); });
   }));
-  // sans PC : où sont les decks, et à quoi sert GitHub tant qu'on n'est pas connecté
-  const ouSont = (g, s) => {
-    const p = $("#tel-ou");
-    if (p) p.textContent = s.active ? `Tes decks sont ${SUR_CET_APPAREIL} et sauvegardés en ligne, sur ton compte GitHub.`
-      : g.compte ? `Tes decks sont gardés seulement ${SUR_CET_APPAREIL}.`
-      : `Tes decks sont gardés seulement ${SUR_CET_APPAREIL}. Avec un compte GitHub (gratuit), sauvegarde-les en ligne : `
-        + `tu les retrouves si tu perds ${ECRAN_TELEPHONE ? "ton téléphone" : "ce navigateur"}, ou sur ton PC, et tu peux les partager.`;
-  };
   optionsCartes($("#opt-cartes"));                 // les mêmes réglages sur tous les appareils
   if ($("#tel-installer-app")) $("#tel-installer-app").onclick = () => TELEPHONE.installer();
-  if (!a) {                                        // tout ce que l'appli garde ici, dans un fichier (telephone.js)
-    $("#tel-fichier").onclick = () => TELEPHONE.enregistrerFichier().catch(erreur);
-    $("#tel-restaurer-fichier").onclick = () => {
-      if (confirm("Remplacer tout ce que l'appli garde ici par le contenu du fichier ?")) TELEPHONE.restaurerFichier().catch(erreur);
+  optionsCompte($("#opt-compte"));
+}
+
+// le compte : l'adresse, la dernière synchronisation, les appareils connectés ; exporter, se déconnecter, supprimer
+// (telephone.js › routeCompte ; sur le PC, app.py et compte.py : pas connecté, la connexion ; Envoyer et Récupérer)
+async function optionsCompte(el) {
+  const quand = (t) => new Date(t * 1000).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+  const rendre = (c) => {
+    if (!c.connecte && !TELEPHONE) return connexionCompte(el, () => optionsCompte(el));
+    const manuel = c.synchro === "manuelle";
+    const dates = [c.envoi ? `Envoyé le ${quand(c.envoi)}` : "", c.reception ? `Récupéré le ${quand(c.reception)}` : ""].filter(Boolean).join(" · ");
+    el.innerHTML = `<p><strong>${esc(c.email)}</strong></p>
+      <p class="muet petit">${c.erreur ? `<span class="erreur">${esc(c.erreur)}</span>` : manuel ? esc(dates || "Rien envoyé pour l'instant")
+        : c.derniere ? `Synchronisé le ${esc(quand(c.derniere))}` : "Pas encore synchronisé"}</p>
+      <div class="form-ligne">${manuel ? `<button class="btn ${c.a_envoyer ? "btn-accent" : ""}" id="cpt-envoyer" data-action="envoyer">${ico("nuage")}Envoyer</button>
+          <button class="btn" id="cpt-recuperer" data-action="recuperer">${ico("telecharger")}Récupérer</button>`
+        : `<button class="btn" id="cpt-synchro">${ico("rafraichir")}Synchroniser</button>`}
+        <button class="btn" id="cpt-export">${ico("telecharger")}Exporter mes données</button></div>
+      <details id="cpt-appareils"><summary>Appareils connectés</summary><div id="cpt-liste"></div></details>
+      <div class="form-ligne"><button class="btn btn-discret" id="cpt-deconnexion">Se déconnecter</button>
+        <button class="btn btn-discret" id="cpt-supprimer">Supprimer mon compte</button></div>`;
+    if ($("#cpt-synchro", el)) $("#cpt-synchro", el).onclick = async (ev) => {
+      ev.currentTarget.disabled = true;
+      try { const r = await api("/api/compte/synchroniser", { method: "POST" }); rendre(r.etat); toast("À jour."); }
+      catch (e) { erreur(e); ev.target.disabled = false; }
     };
-    return ligneGithub($("#opt-github"), {}, ouSont);
-  }
-  const attente = async () => {
-    const n = await TELEPHONE.enAttente();
-    const el = $("#tel-attente");
-    el.textContent = n ? `${n} modification${n > 1 ? "s" : ""} pas encore envoyée${n > 1 ? "s" : ""}` : "";
-    el.hidden = !n;
+    $$("[data-action]", el).forEach((b) => { b.onclick = async () => {
+      $$("button", el).forEach((x) => { x.disabled = true; });
+      toast(b.dataset.action === "recuperer" ? "Récupération…" : "Envoi…");
+      try {
+        const r = await api(`/api/compte/${b.dataset.action}`, { method: "POST", body: {} });
+        toast(resumeCompte(r.resume, b.dataset.action), 4000);
+        if (b.dataset.action === "recuperer") etat.decks = [];
+        rendre(r.etat);
+      } catch (e) { erreur(e); optionsCompte(el); }
+    }; });
+    $("#cpt-export", el).onclick = () => exporterCompte().catch(erreur);
+    $("#cpt-appareils", el).ontoggle = (ev) => { if (ev.target.open) appareils(); };
+    $("#cpt-deconnexion", el).onclick = async () => {
+      if (TELEPHONE && !confirm(`Se déconnecter ? Tes decks quittent ${CET_APPAREIL} ; ils restent dans ton compte.`)) return;
+      try { const r = await api("/api/compte/deconnexion", { method: "POST" }); if (!TELEPHONE) rendre(r); } catch (e) { erreur(e); }
+    };
+    $("#cpt-supprimer", el).onclick = () => ouvrirModale(`<h2>Supprimer mon compte</h2>
+      <p>Tes decks enregistrés dans le compte et tes pages publiques seront effacés, sur tous tes appareils.${TELEPHONE ? "" : " Ceux de ce PC restent ici."}
+        Exporte-les d'abord si tu veux les garder.</p>
+      <label class="opt-champ"><span>Ton adresse e-mail, pour confirmer</span><input class="champ" id="cpt-confirmer" type="email" autocomplete="off"></label>
+      <div class="boutons"><button class="btn btn-danger" id="cpt-oui" disabled>Supprimer mon compte</button></div>`, (b) => {
+      const champ = $("#cpt-confirmer", b), oui = $("#cpt-oui", b);
+      champ.oninput = () => { oui.disabled = champ.value.trim().toLowerCase() !== c.email; };
+      oui.onclick = async () => {
+        oui.disabled = true;
+        try {
+          await api("/api/compte/supprimer", { method: "POST", body: { email: champ.value.trim() } });
+          if (!TELEPHONE) { fermerModale(); toast("Compte supprimé."); optionsCompte(el); }
+        } catch (e) { erreur(e); oui.disabled = false; }
+      };
+    });
   };
-  attente();
-  $("#tel-maj").onclick = async (ev) => {
-    const b = ev.currentTarget;
-    b.disabled = true;
-    try { await TELEPHONE.envoyer(); } catch (e) { toast(e.message); }
-    await TELEPHONE.synchroniser();
-    await attente();
-    toast(TELEPHONE.erreur || "À jour.");
-    b.disabled = false;
+  const appareils = async () => {
+    const z = $("#cpt-liste", el);
+    z.innerHTML = `<p class="chargement">Chargement…</p>`;
+    try {
+      const l = (await api("/api/compte/appareils")).appareils || [];
+      z.innerHTML = `<table class="tableau"><tbody>${l.map((a) => `<tr><td>${esc(a.appareil)}${a.courant ? ` <span class="muet petit">(cet appareil)</span>` : ""}
+          <div class="muet petit">vu le ${esc(quand(a.vu))}</div></td>
+        <td class="num">${a.courant ? "" : `<button class="btn btn-petit" data-oublier="${a.id}">Retirer</button>`}</td></tr>`).join("")}</tbody></table>`;
+      $$("[data-oublier]", z).forEach((b) => { b.onclick = async () => {
+        b.disabled = true;
+        try { await api("/api/compte/appareils/oublier", { method: "POST", body: { id: b.dataset.oublier } }); appareils(); }
+        catch (e) { erreur(e); b.disabled = false; }
+      }; });
+    } catch (e) { z.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
   };
-  $("#tel-delier").onclick = () => { if (confirm(`Délier ${CET_APPAREIL} ? Ses decks en seront effacés (ils restent sur ton PC).`)) TELEPHONE.delier(); };
-  $("#tel-retirer").onclick = () => modaleRetirerAcces(TELEPHONE.appliGithub);
+  try { rendre(await api("/api/compte")); } catch (e) { el.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
+}
+
+// « Exporter mes données » : l'appli enregistre le fichier elle-même ; le PC le demande au compte (app.py)
+async function exporterCompte() {
+  if (TELEPHONE) return api("/api/compte/exporter", { method: "POST" });
+  const r = await fetch("/api/compte/export");
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).erreur || "Export impossible.");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(await r.blob());
+  a.download = ((r.headers.get("Content-Disposition") || "").match(/filename="([^"]+)"/) || [])[1] || "atelier-mtg-compte.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 }
 
 // sans PC : les réglages des cartes, gardés sur ce téléphone (le bloc « Cartes » des Options du PC, sans la langue)
@@ -2434,12 +2334,7 @@ function optionsGenerales(el, o) {
   el.innerHTML = bloc("cartes", "Cartes", `
       <label class="opt-champ"><span>Budget par carte</span><span class="opt-euros"><input class="champ" name="budget" inputmode="decimal" value="${budget(o.budget)}" placeholder="${budget(o.budget_defaut)}">€</span></label>
       ${champVisuel(o)}${basculesUB(o)}`)
-    + bloc("nuage", "Sauvegarde et partage", `
-      <p class="opt-explication">L'Atelier tourne sur ton PC. Avec un compte GitHub, gratuit, il sauvegarde tes decks
-        dans un espace privé et publie ceux que tu partages.</p>
-      <div id="opt-github"></div>
-      <label class="opt-champ"><span>Nom sur les pages partagées</span><input class="champ" name="nom" maxlength="60" value="${esc(o.nom)}" placeholder="${esc(o.github)}"></label>`)
-    + bloc("telephone", "Téléphone", `<div id="opt-telephone"></div>`)
+    + bloc("nuage", "Compte", `<div id="opt-compte"><p class="chargement">Chargement…</p></div>`)
     + bloc("options", "L'Atelier", `
       ${o.demarrage == null ? "" : bascule("demarrage", o.demarrage, "Lancer au démarrage de Windows")}
       ${champFermeture(o)}
@@ -2453,7 +2348,6 @@ function optionsGenerales(el, o) {
       const r = await api("/api/options", { method: "POST", body: { [c.name]: c.type === "checkbox" ? c.checked : c.value } });
       Object.assign(o, r);
       majBudget(r.budget);
-      $('[name="nom"]', el).placeholder = r.github || $('[name="nom"]', el).placeholder;
       toast("Enregistré.");
     } catch (e) { erreur(e); }
     if (c.type === "checkbox") c.checked = !!o[c.name];
@@ -2468,60 +2362,7 @@ function optionsGenerales(el, o) {
       setTimeout(() => location.reload(), 1500);
     } catch (e) { erreur(e); }
   };
-  ligneGithub($("#opt-github", el), o);
-  ligneTelephone($("#opt-telephone", el));
-}
-
-// le compte GitHub (connecté par code, github.py ; ou celui du partage avec git, reglages.json) et la sauvegarde en ligne
-async function ligneGithub(el, o, apres = null) {
-  const [g, s] = await Promise.all([api("/api/github").catch(() => ({})), api("/api/sauvegarde").catch(() => ({}))]);
-  const nom = $('[name="nom"]');
-  if (nom) nom.placeholder = g.compte || o.github || "";
-  const encore = () => ligneGithub(el, o, apres);
-  const compte = g.git && !g.compte
-    ? `<label class="opt-champ"><span>Compte GitHub des pages</span><input class="champ" name="github" maxlength="39" value="${esc(o.github)}" autocomplete="off" spellcheck="false"></label>`
-    : `<div class="opt-champ"><span>Compte GitHub</span><span class="opt-github">${g.compte
-      ? `<strong>${esc(g.compte)}</strong><button type="button" class="btn btn-petit btn-discret" id="gh-deconnecter">Se déconnecter</button>
-        <button type="button" class="btn btn-petit btn-discret" id="gh-retirer">${TOUS_APPAREILS}</button>`
-      : `<button type="button" class="btn btn-accent btn-petit" id="gh-options">Se connecter à GitHub</button>`}</span></div>`;
-  // la sauvegarde : son interrupteur et où elle en est ; sans connexion (ou d'avant la sauvegarde), le bouton qui la met en place
-  const etatTexte = s.erreur ? `<span class="erreur">${esc(s.erreur)}</span>`
-    : s.en_cours ? "Sauvegarde en cours…" : s.derniere ? `À jour · ${esc(heureCourte(s.derniere))}` : "";
-  // pas connecté : le seul bouton « Se connecter » suffit, la sauvegarde se met en place avec la connexion
-  const sauvegarde = s.active ? `<div>
-      <label class="opt-bascule"><span>Sauvegarde en ligne</span><input type="checkbox" role="switch" id="sv-bascule" checked></label>
-      <div class="opt-sauvegarde petit muet">${etatTexte}
-        <button type="button" class="lien-discret" id="sv-maintenant">Sauvegarder maintenant</button>
-        ${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">Voir sur GitHub ↗</a>` : ""}</div></div>`
-    : s.connecte && s.prive ? `<label class="opt-bascule"><span>Sauvegarde en ligne</span><input type="checkbox" role="switch" id="sv-bascule"></label>`
-    : s.connecte ? `<div class="opt-champ"><span>Sauvegarde en ligne</span><span><button type="button" class="btn btn-petit" id="sv-activer">${ico("nuage")}Sauvegarder mes decks</button></span></div>`
-    : "";
-  el.innerHTML = compte + sauvegarde;
-  if (apres) apres(g, s);
-  const deco = $("#gh-deconnecter", el), co = $("#gh-options", el);
-  if (deco) deco.onclick = async () => {
-    try { await api("/api/github/deconnexion", { method: "POST", body: {} }); encore(); } catch (e) { erreur(e); }
-  };
-  if (co) co.onclick = () => modaleSauvegarde("sauvegarde", encore);
-  const retirer = $("#gh-retirer", el);
-  if (retirer) retirer.onclick = () => modaleRetirerAcces(TELEPHONE ? TELEPHONE.appliGithub : g.appli, "", encore);
-  const activer = $("#sv-activer", el);
-  if (activer) activer.onclick = () => modaleSauvegarde("sauvegarde", encore);
-  const b = $("#sv-bascule", el);
-  if (b) b.onchange = async () => {
-    try {
-      if (b.checked) { toast("Sauvegarde…"); await api("/api/sauvegarde", { method: "POST", body: { action: "activer" } }); toast("Decks sauvegardés."); }
-      else await api("/api/sauvegarde", { method: "POST", body: { action: "couper" } });
-    } catch (e) { erreur(e); }
-    encore();
-  };
-  const maintenant = $("#sv-maintenant", el);
-  if (maintenant) maintenant.onclick = async () => {
-    maintenant.disabled = true;
-    try { await api("/api/sauvegarde", { method: "POST", body: { action: "maintenant" } }); toast("Decks sauvegardés."); }
-    catch (e) { erreur(e); }
-    encore();
-  };
+  optionsCompte($("#opt-compte", el));
 }
 
 // le classeur, présenté comme les résultats de la recherche : en-têtes Coul. · Nom VO · Nom VF · Type · Coût · Qté · Prix
@@ -3959,7 +3800,7 @@ async function ongletVersions(el, d) {
     const v = vs[+b.dataset.i];
     if (b.dataset.act !== "menu") return agir(b.dataset.act, v);
     ouvrirMenu(b, [v.nom,
-      [TELEPHONE ? "Simuler…" : "Simuler", () => agir("simuler", v), "", "simulation"],
+      ["Simuler", () => agir("simuler", v), "", "simulation"],
       ["Restaurer cette version", () => agir("restaurer", v), "", "annuler"],
       ...(v.type === "nommee" ? [null, ["Supprimer la version", () => agir("supprimer", v), "btn-danger", "corbeille"]] : [])]);
   }));
@@ -4425,7 +4266,7 @@ function afficheRapport(zone, r) {
           ${deux ? `<thead><tr><th></th>${cles.map((k) => `<th class="num">${esc(r.versions[k].nom)}</th>`).join("")}</tr></thead>` : ""}
           <tbody>${mesures}</tbody></table></div>
       </details>
-      <div class="boutons ecrit"><button class="btn" id="rap-claude">${ico("discussion")}Expliquer avec Claude</button></div>
+      <div class="boutons ecrit"><button class="btn" id="rap-claude" ${TELEPHONE ? 'data-pc="claude"' : ""}>${ico("discussion")}Expliquer avec Claude</button></div>
     </div>`;
   $("#rap-claude", zone).onclick = () => ouvrirChat(`Explique-moi le test du simulateur ${r.deck}/simulations/${zone.dataset.fichier || ""}`
     + ` (python outils/atelier/demander.py rapport) : qu'est-ce qui ressort, et que me conseilles-tu ?`);
@@ -4447,7 +4288,7 @@ async function ongletSimulation(conteneur, d, rapportInitial = null) {
   el.innerHTML = `
     <div class="panneau sim-lancer ecrit">
       <div class="sim-boutons">
-        <button class="btn btn-accent" id="s-lancer" data-pc="simulation">${ico("lancer")}Tester le deck</button>
+        <button class="btn btn-accent" id="s-lancer">${ico("lancer")}Tester le deck</button>
         <button class="btn" id="s-claude" data-pc="claude">${ico("discussion")}Affiner avec Claude</button>
       </div>
       ${nivCov ? `<div class="sim-couverture"><span>Cartes comprises</span>
@@ -4490,6 +4331,7 @@ async function ongletSimulation(conteneur, d, rapportInitial = null) {
   const lancer = async (corps) => {
     try {
       const job = await api(`/api/decks/${enc(d.id)}/simulations`, { method: "POST", body: corps });
+      simEnCours = { deck: d.id, id: job.id };
       suivreSimulation(el, d, job.id, (f) => ongletSimulation(conteneur, d, f));
     } catch (e) { erreur(e); }
   };
@@ -4504,22 +4346,35 @@ async function ongletSimulation(conteneur, d, rapportInitial = null) {
       + ` simulateur.json, trois essais au plus), puis explique-moi le résultat.`);
     envoyerChat();
   };
+  // un test lancé avant que l'onglet ne soit redessiné (synchronisation, retour sur l'onglet) : sa progression revient
+  if (simEnCours && simEnCours.deck === d.id) suivreSimulation(el, d, simEnCours.id, (f) => ongletSimulation(conteneur, d, f));
 }
 
+// le test qui tourne : l'onglet Simulation le retrouve s'il est redessiné pendant ce temps
+let simEnCours = null;
 async function suivreSimulation(el, d, id, fini) {
   const prog = $("#s-prog", el);
   const boutons = $$("#s-lancer, #s-comparer-lancer", el);
   boutons.forEach((b) => (b.disabled = true));
   const tour = async () => {
+    if (!el.isConnected) return;                     // onglet redessiné : la nouvelle vue suit le test
     let j;
-    try { j = await api("/api/jobs/" + id); } catch (e) { prog.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; boutons.forEach((b) => (b.disabled = false)); return; }
+    try { j = await api("/api/jobs/" + id); }
+    catch (e) {
+      if (simEnCours && simEnCours.id === id) simEnCours = null;
+      prog.innerHTML = `<p class="erreur">${esc(e.message)}</p>`;
+      boutons.forEach((b) => (b.disabled = false));
+      return;
+    }
     if (j.statut === "en_cours") {
       prog.innerHTML = `<div class="barre-prog"><div style="width:${(100 * j.fait / j.total).toFixed(1)}%"></div></div>
-        <div class="form-ligne" style="justify-content:space-between;margin:0"><span class="petit muet">${j.reste != null ? `encore ${j.reste < 90 ? j.reste + " s" : Math.round(j.reste / 60) + " min"}` : ""}</span>
+        <div class="form-ligne" style="justify-content:space-between;margin:0"><span class="petit muet">${j.etape ? esc(j.etape) : j.reste != null ? `encore ${j.reste < 90 ? j.reste + " s" : Math.round(j.reste / 60) + " min"}` : ""}</span>
         <button class="btn btn-petit" id="s-stop">${ico("arreter")}Arrêter</button></div>`;
       $("#s-stop", prog).onclick = () => api(`/api/jobs/${id}/annuler`, { method: "POST" });
       return setTimeout(tour, 700);
     }
+    if (simEnCours && simEnCours.id === id) simEnCours = null;
+    if (!el.isConnected) return;
     boutons.forEach((b) => (b.disabled = false));
     if (j.statut === "erreur") { prog.innerHTML = `<p class="erreur">${esc(j.erreur)}</p>`; return; }
     if (j.statut === "annule") { prog.innerHTML = ""; return; }
@@ -4943,7 +4798,7 @@ const SUR_TELEPHONE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (
 const CLAUDE_BUREAU = "https://code.claude.com/docs/fr/desktop-quickstart";
 // [capture, titre, texte] ; « Les bases » : ce qu'on attend de tout gestionnaire de decks
 const MODULES_BASES = [
-  ["appareils", "Vos decks, sans compte ni prise de tête", "Création, import, affichage en liste ou visuel, taille des cartes réglable, tri par type, tag ou fonction : organisez vos cartes exactement comme vous l'entendez. Utilisez l'outil sur ordinateur, sur mobile, ou synchronisez les deux selon vos besoins."],
+  ["appareils", "Vos decks sur tous vos appareils", "Création, import, affichage en liste ou visuel, taille des cartes réglable, tri par type, tag ou fonction : organisez vos cartes exactement comme vous l'entendez. Sur ordinateur ou sur téléphone, votre compte garde vos decks à jour partout."],
   ["recherche", "Recherche avancée", "Une recherche multicritère comme celle de Magic-Ville, avec en plus un filtre de prix Cardmarket et une catégorisation automatique des cartes : ramp, pioche, tuteur, removal…"],
   ["jouer", "Table de jeu", "Jouez vos decks en solo pour tester les mains de départ et les premiers tours : pioche, mulligan, jetons, marqueurs, planeswalkers, tout au clic ou au glisser."],
   ["versions", "Versions et historique", "Chaque modification est gardée. Enregistrez des versions, comparez deux listes, revenez en arrière."],
@@ -4962,11 +4817,11 @@ const MODULES_ATOUTS = [
 const FAQ_ATELIER = [
   ["Installation et sécurité", [
     ["Je ne suis pas informaticien : c'est compliqué à installer ?",
-      "Non. Sous Windows, téléchargez l'installeur et lancez-le, comme n'importe quel programme : il contient tout ce qu'il faut et crée un raccourci sur le bureau. Ensuite, les mises à jour s'installent en un clic. Sous macOS et Linux, confiez l'installation à un assistant IA qui agit sur votre ordinateur, comme Claude Code : collez-lui la consigne ci-dessus."],
+      "Non. Le plus simple : créez un compte, il n'y a rien à installer. Pour la version complète, sous Windows, téléchargez l'installeur et lancez-le, comme n'importe quel programme : il contient tout ce qu'il faut et crée un raccourci sur le bureau. Ensuite, les mises à jour s'installent en un clic. Sous macOS et Linux, confiez l'installation à un assistant IA qui agit sur votre ordinateur, comme Claude Code : collez-lui la consigne ci-dessus."],
     ["Ça marche sur Mac et Linux ?",
-      "<p>En principe oui : c'est le même programme, lancé par <code>atelier.sh</code>. Mais pour l'instant, seul Windows est testé.</p>"],
+      "<p>En ligne, oui : l'Atelier s'ouvre dans n'importe quel navigateur. La version à installer marche en principe aussi, lancée par <code>atelier.sh</code>, mais pour l'instant seul Windows est testé.</p>"],
     ["Est-ce sûr ?",
-      "L'Atelier ne s'ouvre que sur votre PC : il n'est pas accessible depuis le réseau. Son installeur n'est pas signé (une signature coûte plusieurs centaines d'euros par an), d'où l'avertissement de Windows au premier lancement ; mais tout son code est public : vous, ou votre assistant IA, pouvez le lire avant de l'installer."],
+      "En ligne, on se connecte avec un code envoyé par e-mail : il n'y a pas de mot de passe à se faire voler. Sur votre PC, l'Atelier ne s'ouvre que chez vous : il n'est pas accessible depuis le réseau. Son installeur n'est pas signé (une signature coûte plusieurs centaines d'euros par an), d'où l'avertissement de Windows au premier lancement ; mais tout son code est public : vous, ou votre assistant IA, pouvez le lire avant de l'installer."],
   ]],
   ["Claude", [
     ["Faut-il payer pour Claude ?",
@@ -4974,16 +4829,20 @@ const FAQ_ATELIER = [
     ["Va-t-il épuiser mon abonnement ?",
       "Il ne travaille que quand vous lui écrivez, ou quand vous cliquez sur un bouton qui l'appelle, comme l'analyse des synergies d'un deck ou « Affiner avec Claude » : rien ne tourne en arrière-plan. Les suggestions, les combos, le bracket, les statistiques, les fonctions des cartes et le test du simulateur ne passent pas par lui. « Compacter » résume une longue discussion pour qu'elle consomme moins."],
   ]],
-  ["Vos cartes et vos données", [
+  ["Votre compte et vos données", [
+    ["Pourquoi un compte ?",
+      "Pour retrouver vos decks sur tous vos appareils : navigateur, téléphone et PC. Il ne demande qu'une adresse e-mail, qui sert seulement à vous envoyer le code de connexion. Vos decks sont gardés en France, et les options permettent à tout moment de les exporter ou de supprimer le compte."],
+    ["Faut-il un compte pour la version à installer ?",
+      "Non. Sur PC, vos decks sont dans un dossier de votre disque. Le compte sert à les retrouver ailleurs : « Envoyer » les y range, « Récupérer » ramène ceux de vos autres appareils, quand vous le décidez."],
     ["Comment entrent mes cartes ?",
       "On colle une liste copiée depuis Moxfield, Archidekt ou MTG Arena. La liste d'un deck préconstruit se trouve sur ces sites. Les cartes rangées hors des decks se collent de la même façon dans le classeur."],
     ["Peut-on créer un deck Magic en ligne, depuis son téléphone ?",
-      `<p>Oui : ouvrez <a href="${APPLI_TELEPHONE}">app.atelier-mtg.com</a> sur votre téléphone, puis ajoutez-la à l'écran d'accueil. Elle marche seule, sans PC ni compte, ou reliée à l'Atelier de votre PC par un QR code, et garde vos decks même sans réseau. La simulation, la table de jeu, les proxies et la discussion avec Claude restent sur PC.</p>
-      <p>Pour montrer un deck à quelqu'un, « Partager » le publie sur une page <a href="${EXEMPLES_ATELIER}">comme celles-ci</a>, qui se lit sur téléphone et se met à jour toute seule. Il faut un compte GitHub, gratuit : c'est lui qui héberge votre page.</p>`],
+      `<p>Oui : créez votre compte sur <a href="${APPLI_TELEPHONE}#inscription">app.atelier-mtg.com</a>, puis ajoutez l'appli à l'écran d'accueil de votre téléphone. Vos decks y restent même sans réseau, et se synchronisent dès qu'il revient. La discussion avec Claude et les combos MTGPics demandent l'Atelier installé sur PC.</p>
+      <p>Pour montrer un deck à quelqu'un, « Partager » donne un lien qui s'ouvre sans compte, sur téléphone comme sur ordinateur.</p>`],
     ["Et si mon PC tombe en panne ?",
-      "Activez la sauvegarde en ligne, facultative : l'Atelier range une copie de vos decks, de leurs versions et de votre classeur sur votre propre compte GitHub, gratuit, dans un espace privé que vous seul voyez. Chaque modification s'y ajoute toute seule. Sur un autre PC, « Récupérer mes decks » les ramène."],
+      "Envoyez vos decks sur votre compte : Options, Compte, « Envoyer ». Ils vous y attendent, avec leurs versions et votre classeur, en ligne comme sur un nouveau PC, où « Récupérer mes decks » les ramène."],
     ["Puis-je partir avec mes decks ?",
-      "Oui. Chaque deck est un dossier sur votre disque, avec sa liste en texte (format Archidekt, tags compris), son historique et ses versions. Le menu « … » copie la liste pour Archidekt, Moxfield, MTG Arena ou MTGO."],
+      "Oui. Sur PC, chaque deck est un dossier sur votre disque, avec sa liste en texte (format Archidekt, tags compris), son historique et ses versions. En ligne, « Exporter mes données » enregistre tout dans un fichier. Partout, le menu « … » copie la liste pour Archidekt, Moxfield, MTG Arena ou MTGO."],
   ]],
   ["Magic", [
     ["Peut-on jouer en ligne contre d'autres joueurs ?",
@@ -5041,24 +4900,26 @@ function vueAPropos(installation = false) {
   const autreOuvert = !SUR_TELEPHONE && /Mac|Linux|X11|CrOS/i.test(plateforme) && !/Windows/i.test(plateforme);
   const installWindows = `<section class="ap-install">
           <div class="ap-install-tete"><svg class="ico ap-logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h8.4v8.4H3zM12.6 3H21v8.4h-8.4zM3 12.6h8.4V21H3zM12.6 12.6H21V21h-8.4z"/></svg><h3>Sur ordinateur</h3></div>
-          <p class="ap-install-pour">Windows 10 et 11 · rien d'autre à installer</p>
+          <p class="ap-install-pour">Windows 10 et 11 · tout, Claude compris</p>
           <a class="btn ${SUR_TELEPHONE ? "" : "btn-accent "}ap-install-action" href="${depot}/releases/latest/download/Atelier-MTG-Windows.exe">${ico("telecharger")}Télécharger pour Windows</a>
           <ol>
             <li>Double-cliquez sur le fichier, puis sur <b>Installer</b>. Si Windows affiche <b>Windows a protégé votre
               ordinateur</b> : <b>Informations complémentaires</b>, puis <b>Exécuter quand même</b>.</li>
             <li>L'Atelier s'ouvre dans votre navigateur. Pour le rouvrir : raccourci <b>Atelier MTG</b> sur le bureau.</li>
+            <li>Vous avez un compte ? <b>Options</b>, puis <b>Compte</b>&nbsp;: <b>Récupérer</b> ramène vos decks sur le PC,
+              <b>Envoyer</b> y range les siens.</li>
           </ol>
         </section>`;
-  const installTel = `<section class="ap-install">
-          <div class="ap-install-tete">${ico("telephone")}<h3>Sur téléphone</h3></div>
-          <p class="ap-install-pour">Android et iPhone · sans store, sans compte</p>
-          ${SUR_TELEPHONE ? `<a class="btn btn-accent ap-install-action" href="${APPLI_TELEPHONE}">${ico("telephone")}Ouvrir l'Atelier MTG</a>`
-            : `<div class="ap-qr-ligne"><span class="ap-qr-cadre">${QR_APPLI}</span>
-              <p>Scannez ce code avec votre téléphone, ou ouvrez <a href="${APPLI_TELEPHONE}">app.atelier-mtg.com</a>.</p></div>`}
+  const installEnLigne = `<section class="ap-install">
+          <div class="ap-install-tete">${ico("nuage")}<h3>En ligne</h3></div>
+          <p class="ap-install-pour">Navigateur, Android et iPhone · un compte gratuit</p>
+          <a class="btn ${SUR_TELEPHONE ? "btn-accent " : ""}ap-install-action" href="${APPLI_TELEPHONE}#inscription">${ico("plus")}Créer un compte</a>
+          ${SUR_TELEPHONE ? "" : `<div class="ap-qr-ligne"><span class="ap-qr-cadre">${QR_APPLI}</span>
+              <p>Sur votre téléphone : scannez ce code, ou ouvrez <a href="${APPLI_TELEPHONE}">app.atelier-mtg.com</a>.</p></div>`}
           <ol>
-            <li>Ajoutez l'appli à l'écran d'accueil. Android : <b>Installer l'application</b> ; iPhone : <b>Partager</b>, puis
-              <b>Sur l'écran d'accueil</b>.</li>
-            <li>Touchez <b>Commencer</b>. L'Atelier est déjà sur votre PC ? <b>Relier à mon PC</b>.</li>
+            <li>Entrez votre adresse e-mail : vous recevez un code à 6 chiffres. Pas de mot de passe.</li>
+            <li>Sur téléphone, ajoutez l'appli à l'écran d'accueil. Android : <b>Installer l'application</b> ; iPhone :
+              <b>Partager</b>, puis <b>Sur l'écran d'accueil</b>.</li>
           </ol>
         </section>`;
   vue.classList.add("vue-pleine");
@@ -5072,20 +4933,24 @@ function vueAPropos(installation = false) {
         </div>
         <div class="ap-tete-texte">
           <h1>L'Atelier <span>MTG</span></h1>
-          <p class="ap-accroche">Le deck builder Commander assisté,<br>100% local et sans compte.</p>
+          <p class="ap-accroche">Le deck builder Commander assisté,<br>en ligne et sur votre PC.</p>
           <ul class="ap-puces">${["Suggestions", "Base de mana", "Combos", "Bracket", "Simulation", "Table de jeu", "Recherche avancée", "Claude"].map((x) => `<li>${x}</li>`).join("")}</ul>
-          <p class="ap-cta"><a class="btn btn-accent" href="${PARTAGE ? APPLI_TELEPHONE : "#/"}" id="ap-creer">${ico("plus")}Créer un deck</a>
-            <a class="btn btn-contour" href="${INSTALLER}" id="ap-installer">${ico("telecharger")}Installer l'Atelier MTG</a>
+          <p class="ap-cta"><a class="btn btn-accent" href="${APPLI_TELEPHONE}#inscription" id="ap-creer">${ico("plus")}Créer un compte</a>
+            <a class="btn btn-contour" href="${INSTALLER}" id="ap-installer">${ico("telecharger")}Télécharger</a>
             <a class="ap-voir" href="${EXEMPLES_ATELIER}">Voir à quoi ça ressemble</a></p>
-          <p class="ap-mention"><b>Gratuit</b> · open source · PC et téléphone${versionAtelier ? ` · version ${esc(versionAtelier)}` : ""}</p>
+          <p class="ap-mention"><b>Gratuit</b> · open source · navigateur, téléphone et PC${versionAtelier ? ` · version ${esc(versionAtelier)}` : ""}</p>
         </div>
       </div>
     </header>
     <article class="a-propos">
       <div class="ap-bandeau">
-        <p class="ap-promesse">Zéro pub, zéro compte, zéro cloud : l'Atelier tourne <em>uniquement sur vos appareils</em>, PC ou téléphone.</p>
-        <p>L'Atelier est un deck builder en français, gratuit et local, qui s'ouvre dans votre navigateur : il est pensé pour
-          concevoir, tester et faire évoluer vos decks Magic: The Gathering en Commander.</p>
+        <p class="ap-promesse">Gratuit, <em>en ligne</em> ou <em>sur votre PC</em>.</p>
+        <div class="ap-grille ap-duo">
+          ${fonction(`${ico("nuage")}En ligne`, "Dans le navigateur et sur téléphone, avec un compte : vos decks se synchronisent tout seuls entre vos appareils. Tout y est, sauf Claude.")}
+          ${fonction(`${ico("telecharger")}Sur votre PC`, "Installé sur Windows : tout, Claude compris. Vos decks rejoignent votre compte quand vous le décidez.")}
+        </div>
+        <p>L'Atelier est un deck builder en français, pensé pour concevoir, tester et faire évoluer vos decks Magic: The
+          Gathering en Commander.</p>
       </div>
 
       <h2>Les bases : un constructeur de deck Magic complet</h2>
@@ -5097,25 +4962,24 @@ function vueAPropos(installation = false) {
       <h2>Et aussi</h2>
       <div class="ap-grille">
         ${fonction("Import en un collage", "Une liste copiée depuis Moxfield, Archidekt ou MTG Arena devient un deck, rangé par catégories.")}
-        ${fonction("Partage simplifié", `Chaque deck a sa page en ligne, tenue à jour toute seule, à envoyer à votre groupe de jeu : liste, visuel, statistiques, et une table pour le tester. <a href="${EXEMPLES_ATELIER}">Voir des exemples</a>`)}
+        ${fonction("Partage simplifié", `Un lien à envoyer à votre groupe de jeu, qui s'ouvre sans compte : liste, visuel et statistiques du deck. <a href="${EXEMPLES_ATELIER}">Voir des exemples</a>`)}
       </div>
 
-      <h2>Philosophie : local, ouvert et transparent</h2>
+      <h2>Philosophie : ouvert et transparent</h2>
       <ul class="ap-principes">
         <li><strong>Open source et gratuit.</strong> Le code est publié sous <a href="${depot}/blob/main/LICENSE" target="_blank" rel="noopener">licence MIT</a> :
           accessible, vérifiable et modifiable par tous sur GitHub.</li>
-        <li><strong>Vos decks sont stockés sur vos appareils.</strong> Rien n'est collecté. Seules sortent les
-          requêtes nécessaires : données, images et prix des cartes (Scryfall), combos et bracket (Commander Spellbook, MTGPics),
-          la discussion avec Claude si vous l'utilisez, la sauvegarde en ligne si vous l'activez, et les pages que vous
-          choisissez de partager.</li>
+        <li><strong>Vos decks vous appartiennent.</strong> Avec un compte, ils sont gardés en France, et vous pouvez à tout
+          moment les exporter ou supprimer le compte. Sur votre PC, chaque deck est un dossier de votre disque, qui ne
+          rejoint votre compte que si vous le demandez. Votre adresse e-mail ne sert qu'à vous connecter.</li>
         <li><strong>L'IA est optionnelle.</strong> Tri, statistiques, suggestions, test du simulateur et jeu en solo
           fonctionnent sans aucune configuration IA.</li>
       </ul>
 
       <h2 id="installation">Installation</h2>
-      <p>Ce logiciel de construction de deck Magic s'utilise sur votre ordinateur Windows ou sur votre téléphone. Gratuit,
-        sans compte.</p>
-      <div class="ap-install-duo">${SUR_TELEPHONE ? installTel + installWindows : installWindows + installTel}</div>
+      <p>Ce logiciel de construction de deck Magic s'utilise en ligne, dans votre navigateur ou sur votre téléphone, ou
+        installé sur votre ordinateur Windows. Gratuit dans les deux cas.</p>
+      <div class="ap-install-duo">${SUR_TELEPHONE ? installEnLigne + installWindows : installWindows + installEnLigne}</div>
       <p class="ap-autres-titre">Autres façons d'installer</p>
       <p class="ap-autres-texte">Sur Mac, sur Linux, ou pour tout contrôler vous-même.</p>
       <div class="ap-autres">
@@ -6239,8 +6103,16 @@ async function arreterChat() {
 }
 
 $("#btn-chat")?.addEventListener("click", () => basculeChat());       // page d'accueil : « Créer un deck » à sa place (site_atelier.py)
+// l'appli : la table de jeu s'ouvre dans le même onglet (l'appli installée sur iPhone n'en ouvre pas d'autre qui voie ses
+// decks), une fois le deck et ses jetons gardés pour elle (telephone.js › preparerJeu, jouer-appli.js)
+async function ouvrirJeu(id) {
+  toast("Préparation de la table…");
+  try { await TELEPHONE.preparerJeu(id); location.href = `jouer/?deck=${enc(id)}`; } catch (e) { erreur(e); }
+}
 // téléphone : un élément « à faire sur le PC » dit où le faire, au lieu d'agir
 if (TELEPHONE) document.addEventListener("click", (ev) => {
+  const j = ev.target.closest("[data-jouer]");
+  if (j) { ev.preventDefault(); ouvrirJeu(j.dataset.jouer); return; }
   const el = ev.target.closest("[data-pc]");
   if (!el) return;
   ev.preventDefault();

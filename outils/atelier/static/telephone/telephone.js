@@ -1,19 +1,13 @@
-// L'Atelier sur téléphone : pas de serveur Python ici. Les données viennent de la sauvegarde en ligne (dépôt GitHub privé
-// du compte, branche « telephone »), où l'Atelier du PC dépose les pages de tous les decks (telephone.py). Chargé avant
-// app.js, qui passe toutes ses demandes par TELEPHONE.api, comme une page partagée lit ses données figées.
-//
-// Le téléphone est relié une fois au PC : Options › Téléphone y montre un QR code, qui donne le dépôt et la clé GitHub
-// (après « # » dans l'adresse : le navigateur ne l'envoie à aucun serveur). Les fichiers reçus restent sur le téléphone
-// (IndexedDB) : l'appli s'ouvre aussitôt, même sans réseau, puis regarde s'il y a du nouveau.
+// L'Atelier dans le navigateur et sur téléphone : pas de serveur Python ici. On se connecte à son compte
+// (api.atelier-mtg.com, code reçu par e-mail). Les decks sont gardés ici (IndexedDB, « @depot », rangés comme les dossiers
+// de l'Atelier du PC) et synchronisés avec le compte : l'appli s'ouvre aussitôt, même sans réseau, puis envoie et reçoit
+// ce qui a changé. Leurs pages sont faites ici (pages.js). Chargé avant app.js, qui passe toutes ses demandes par
+// TELEPHONE.api, comme une page partagée lit ses données figées.
 (() => {
-  const FORMAT = 1;                                   // telephone.py › FORMAT
-  const GH = "https://api.github.com";
-  const BRANCHE = "telephone";
+  const FORMAT = 1;                                   // format des pages gardées ici (index.json.gz)
   const CORBEILLE = "Corbeille Atelier";               // decks.CORBEILLE
-  // la page GitHub de l'appli « Atelier MTG » (relais.js › CLIENT_ID) : « Revoke access » y retire toutes ses clés
-  const APPLI_GITHUB = "https://github.com/settings/connections/applications/Ov23li9fE6JyGKnCmR3L";
-  const ACCES = "telephone-acces", COMMIT = "telephone-commit", REGLAGES = "telephone-reglages";
-  const DISTANT = 5 * 60 * 1000;                      // coup d'œil au dépôt toutes les cinq minutes, appli ouverte
+  const REGLAGES = "telephone-reglages";
+  const DISTANT = 5 * 60 * 1000;                      // coup d'œil au compte toutes les cinq minutes, appli ouverte
   // voir/ (lien instantané d'un deck) : ce script y fait la page du deck, puis charge app.js (VOIR : son adresse) en
   // page partagée, sans démarrer l'appli. ICI : le dossier de l'appli, pour ses fichiers (worker, base), d'où que l'on soit
   const VOIR = window.ATELIER_VOIR || "", ICI = new URL(".", document.currentScript.src).href;
@@ -23,13 +17,16 @@
 
   const lireLocal = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
   const ecrireLocal = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (_) {} };
-  const lireAcces = () => { try { const a = JSON.parse(lireLocal(ACCES) || "null"); return a && a.d && a.c ? a : null; } catch (_) { return null; } };
-  let acces = lireAcces();
-  // sans PC (« Commencer ici ») : les decks sont gardés sur le téléphone (@depot, rangés comme dans la sauvegarde), et
-  // leurs pages sont faites ici (pages.js) au lieu d'arriver du PC
-  const LOCAL = "telephone-local";
-  let local = !acces && lireLocal(LOCAL) === "1";
-  if (VOIR) acces = local = null;                     // voir/ : rien à synchroniser
+  // le compte : {email, jeton} ; « atelier-api » : l'adresse d'un serveur d'essai
+  const COMPTE = "atelier-compte", API_COMPTE = lireLocal("atelier-api") || "https://api.atelier-mtg.com";
+  const lireCompte = () => { try { const c = JSON.parse(lireLocal(COMPTE) || "null"); return c && c.email && c.jeton ? c : null; } catch (_) { return null; } };
+  let compte = VOIR ? null : lireCompte();
+  // d'avant les comptes : des decks gardés seulement ici (« Commencer »), ou reçus d'un PC relié par QR code
+  const ANCIEN_LOCAL = !compte && lireLocal("telephone-local") === "1";
+  const ANCIEN_PC = !compte && (!!lireLocal("telephone-acces") || location.hash.includes("#appairer="));
+  if (location.hash.includes("#appairer=")) history.replaceState(null, "", location.pathname + location.search);
+  // connecté : les decks sont ici (@depot) et leurs pages faites ici
+  let local = !!compte;
   // le budget par carte et les réglages de la page, connus avant app.js (qui les lit au chargement)
   try { window.REGLAGES = JSON.parse(lireLocal(REGLAGES) || "{}"); } catch (_) { window.REGLAGES = {}; }
 
@@ -64,83 +61,25 @@
     return memoire.get(chemin);
   }
 
-  // ------------------------------------------------------------------ la sauvegarde en ligne (API de GitHub)
-  async function gh(chemin, brut = false) {
-    const r = await fetch(GH + chemin, { cache: "no-store", headers: {
-      Authorization: "Bearer " + acces.c, "X-GitHub-Api-Version": "2022-11-28",
-      Accept: brut ? "application/vnd.github.raw" : "application/vnd.github+json" } });
-    if (r.status === 401) {
-      oublier();
-      throw Object.assign(new Error(`La clé de ton Atelier n'est plus valable : relie à nouveau ${CET_APPAREIL}.`), { statut: 401 });
-    }
-    if (r.status === 404) throw Object.assign(new Error("Tes decks ne sont pas encore prêts : ouvre l'Atelier sur ton PC, Options › Téléphone."), { statut: 404 });
-    if (!r.ok) throw Object.assign(new Error(`GitHub ne répond pas (${r.status}).`), { statut: r.status });
-    return brut ? r : r.json();
-  }
-
-  // la clé GitHub d'ici marche-t-elle encore ? (« Retirer l'accès », app.js) Refusée, elle est oubliée : relié au PC, le
-  // téléphone est délié (gh) ; sans PC, ses decks restent, il n'y a qu'à le reconnecter (ghCompte)
-  async function cleValide() {
+  // ------------------------------------------------------------------ le serveur des comptes (outils/serveur)
+  async function serveur(chemin, methode = "GET", corps = null) {
+    let r;
     try {
-      if (local) {
-        const g = await leCompte();
-        if (!g) return { valide: false };
-        await ghCompte(g.jeton, "GET", "/user");
-      } else if (acces) await gh("/user");
-      else return { valide: false };
-      return { valide: true };
-    } catch (e) {
-      if (e.statut === 401) return { valide: false };
-      throw e;
-    }
+      r = await fetch(API_COMPTE + chemin, { method: methode, cache: "no-store", body: corps ? JSON.stringify(corps) : undefined,
+        headers: { ...(compte ? { Authorization: "Bearer " + compte.jeton } : {}), ...(corps ? { "Content-Type": "application/json" } : {}) } });
+    } catch (_) { throw Object.assign(new Error("Pas de réseau : réessaie dans un moment."), { statut: 0 }); }
+    const d = await r.json().catch(() => ({}));
+    if (r.status === 401 && compte && !chemin.startsWith("/connexion/")) deconnecte(false);   // appareil retiré du compte
+    if (!r.ok) throw Object.assign(new Error(d.erreur || `Le serveur ne répond pas (${r.status}).`), { statut: r.status });
+    return d;
   }
 
-  // reçoit ce qui a changé depuis la dernière fois ; true s'il y avait du nouveau
+  // les pages des decks : faites ici si elles manquent ; true si elles viennent d'être faites
   let enCours = null;
   function synchroniser() {
     return enCours || (enCours = (async () => {
-      if (local) {                                      // sans PC : rien à recevoir ; les pages, faites ici si elles manquent
-        if (!(await fichier("index.json.gz"))) { await recalculer(await depot()); return true; }
-        return false;
-      }
-      // la branche des decks a disparu alors qu'on l'avait reçue : le PC a arrêté l'appli du téléphone (telephone.couper)
-      let commit;
-      try { commit = (await gh(`/repos/${acces.d}/git/ref/heads/${BRANCHE}`)).object.sha; }
-      catch (e) {
-        if (e.statut === 404 && await fichier("index.json.gz")) {
-          T.arrete = true;
-          throw Object.assign(new Error("Ton PC n'envoie plus tes decks."), { statut: 404 });
-        }
-        throw e;
-      }
-      T.arrete = false;
-      if (commit === lireLocal(COMMIT)) return false;
-      const c = await gh(`/repos/${acces.d}/git/commits/${commit}`);
-      const arbre = (await gh(`/repos/${acces.d}/git/trees/${c.tree.sha}?recursive=1`)).tree.filter((x) => x.type === "blob");
-      const a_recevoir = [];
-      for (const x of arbre) {
-        const ici = await BD.lire(x.path).catch(() => null);
-        if (!ici || ici.sha !== x.sha) a_recevoir.push(x);
-      }
-      const recevoir = async (x) => {
-        const r = await gh(`/repos/${acces.d}/git/blobs/${x.sha}`, true);
-        const donnees = await new Response(r.body.pipeThrough(new DecompressionStream("gzip"))).json();
-        if (x.path === "index.json.gz" && donnees.format !== FORMAT) {
-          throw new Error(donnees.format > FORMAT ? "Mets l'appli à jour : ferme-la, puis rouvre-la." : "Mets à jour l'Atelier de ton PC.");
-        }
-        await BD.ecrire(x.path, { sha: x.sha, donnees });
-      };
-      for (let i = 0; i < a_recevoir.length; i += 4) await Promise.all(a_recevoir.slice(i, i + 4).map(recevoir));
-      const garder = new Set(arbre.map((x) => x.path));
-      for (const k of await BD.cles()) if (!garder.has(k) && !String(k).startsWith("@")) await BD.effacer(k);
-      memoire.clear();
-      fusion = null;
-      connus = null;
-      const index = await fichier("index.json.gz");
-      if (index) ecrireLocal(REGLAGES, JSON.stringify(index.reglages || {}));
-      ecrireLocal(COMMIT, commit);
-      if (index) await nettoyerSurcharges(index).catch(() => {});
-      return true;
+      if (!(await fichier("index.json.gz"))) { await recalculer(await depot()); return true; }
+      return false;
     })().finally(() => { enCours = null; }));
   }
 
@@ -165,6 +104,136 @@
           verdict: (A.regularite || {}).verdict, verdict_b: (B.regularite || {}).verdict, victoire_a: A.victoire,
           victoire_b: B.victoire, ecart: l.ecart };
       }).filter(Boolean);
+  }
+
+  // ------------------------------------------------------------------ le simulateur, ici (comme simulation.py)
+  // Python compilé en WebAssembly (Pyodide), dans un Worker (simulateur.js), avec les fichiers du simulateur du PC
+  // (simu_navigateur.py). Mêmes listes, mêmes graines, mêmes fiches Scryfall : mêmes parties que sur le PC. Le rapport et
+  // les listes jouées vont dans le dossier du deck (simulations/), puis sur le compte, comme le reste.
+  const SIMU = new URL("__SIMU__", ICI).href;                           // simulateur.js?v=… (telephone_site.py)
+  const SIMU_FICHIERS = Object.fromEntries(Object.entries(__SIMU_FICHIERS__).map(([n, u]) => [n, new URL(u, ICI).href]));
+  const SIMU_OPTIONS = __SIMU_OPTIONS__;                                // {tables, defaut, test_n, morceau}
+  const FICHES_SIMU = "@simu-fiches";                                   // les fiches lues sur Scryfall : cache_cartes.json
+  const travaux = new Map();
+  let simuW = null, simuN = 0;
+  const simuAttente = new Map();
+  function simu(f, ...a) {
+    if (!simuW) {
+      simuW = new Worker(SIMU);
+      simuW.onmessage = (ev) => {
+        const x = simuAttente.get(ev.data.n);
+        if (!x) return;
+        simuAttente.delete(ev.data.n);
+        if ("e" in ev.data) x.ko(new Error(ev.data.e)); else x.ok(ev.data.r);
+      };
+      simuW.onerror = () => {
+        for (const x of simuAttente.values()) x.ko(new Error("Le simulateur s'est arrêté : recharge l'appli."));
+        simuAttente.clear();
+        simuW = null;
+      };
+    }
+    return new Promise((ok, ko) => { const n = ++simuN; simuAttente.set(n, { ok, ko }); simuW.postMessage({ n, f, a }); });
+  }
+  // simulateur.json, dans le dossier du deck : {reglages, cartes} (écrit par Claude sur le PC) ; pilote.json, l'ancien
+  function simulateurDe(f, id) {
+    try { const d = JSON.parse(f[`${id}/simulateur.json`] || "{}"); return d && typeof d === "object" ? d : {}; } catch (_) { return {}; }
+  }
+  function textesSim(f, id) {
+    const c = simulateurDe(f, id).cartes;
+    return c && typeof c === "object" ? Object.fromEntries(Object.entries(c).filter(([k, v]) => typeof v === "string" && v.trim())) : {};
+  }
+  function reglagesSim(f, id) {
+    const r = { ...SIMU_OPTIONS.defaut };
+    let d = simulateurDe(f, id).reglages;
+    if (!d || typeof d !== "object") { try { d = JSON.parse(f[`${id}/pilote.json`] || "{}"); } catch (_) { d = {}; } }
+    for (const k of Object.keys(r)) if (d && k in d) r[k] = d[k];
+    return r;
+  }
+  function libelleSim(f, id, fichier) {                                  // decks.libelle
+    if (!fichier) return "Liste actuelle";
+    const b = fichier.split("/").pop();
+    let meta = {};
+    try { meta = JSON.parse(f[`${id}/versions/versions.json`] || "{}") || {}; } catch (_) {}
+    if (fichier.startsWith("versions/") && meta[b]) return meta[b].nom;
+    if (fichier.startsWith("historique/")) {
+      const m = b.match(/^(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})\d{2}(?:_\d+)?\.txt$/);
+      return m ? `Historique du ${m[1]} ${m[2]}:${m[3]}` : "Historique : " + b.replace(/\.[^.]*$/, "");
+    }
+    return b.replace(/\.[^.]*$/, "").replace(/_/g, " ");
+  }
+  function suiviTravail(j) {                                             // simulation.suivi
+    const ecoule = Date.now() / 1000 - j.debut, reste = j.fait ? ecoule / j.fait * (j.total - j.fait) : null;
+    const { annule, ...x } = j;
+    return { ...x, ecoule: Math.round(ecoule), reste: reste ? Math.round(reste) : null };
+  }
+  async function simulerIci(id, b) {                                    // simulation.lancer
+    const f = (await depot()).fichiers;
+    if (f[`${id}/archidekt.txt`] == null) throw Object.assign(new Error("Deck introuvable."), { statut: 404 });
+    const tables = (b.tables || []).filter((t) => SIMU_OPTIONS.tables.includes(t));
+    if (!tables.length) tables.push("Mixte");
+    const n = Math.max(10, Math.min(parseInt(b.n, 10) || 1000, 20000));
+    const reglages = reglagesSim(f, id);
+    for (const [k, v] of Object.entries(b.reglages || {})) if (k in SIMU_OPTIONS.defaut) reglages[k] = v;
+    const versions = [["A", b.a || ""], ...(b.b != null ? [["B", b.b]] : [])], listes = {};
+    for (const [cle, fichier] of versions) {
+      listes[cle] = f[`${id}/${fichier || "archidekt.txt"}`];
+      if (listes[cle] == null) throw new Error("Version introuvable.");
+    }
+    const j = { id: Math.random().toString(36).slice(2, 10), deck: id, statut: "en_cours", fait: 0,
+      total: n * tables.length * versions.length, debut: Date.now() / 1000, erreur: null, rapport: null, annule: false, etape: "" };
+    travaux.set(j.id, j);
+    simuler(j, f, id, versions, listes, tables, n, reglages, textesSim(f, id))
+      .catch((e) => Object.assign(j, e.annule ? { statut: "annule" } : { statut: "erreur", erreur: e.message }));
+    return suiviTravail(j);
+  }
+  async function simuler(j, f, id, versions, listes, tables, n, reglages, txt) {   // simulation._execute
+    const stamp = horodatage(), garde = () => { if (j.annule) throw Object.assign(new Error("annulé"), { annule: true }); };
+    j.etape = "Chargement du simulateur…";
+    await simu("init", SIMU_FICHIERS);
+    garde();
+    j.etape = "Lecture des cartes…";
+    const manque = JSON.parse(await simu("preparer", JSON.stringify(listes), JSON.stringify((await BD.lire(FICHES_SIMU).catch(() => null)) || {})));
+    for (let i = 0; i < manque.length; i += 75) {                        // les fiches qui manquent : simu_cartes.fiches
+      garde();
+      const bloc = manque.slice(i, i + 75);
+      const rep = (await scryfall(`${SCRYFALL}/cards/collection`, { identifiers: bloc.map((x) => ({ name: x })) })) || {};
+      const cartes = [...(rep.data || [])];
+      for (const nf of rep.not_found || []) {
+        const c = (await scryfall(`${SCRYFALL}/cards/named?exact=${encodeURIComponent(nf.name.split(" // ")[0])}`))
+          || (await scryfall(`${SCRYFALL}/cards/named?fuzzy=${encodeURIComponent(nf.name)}`));
+        if (c) { c._demande = nf.name; cartes.push(c); }
+      }
+      await simu("ranger", JSON.stringify(bloc), JSON.stringify(cartes));
+    }
+    if (manque.length) await BD.ecrire(FICHES_SIMU, JSON.parse(await simu("fiches")));
+    garde();
+    const decks = JSON.parse(await simu("construire", JSON.stringify(txt))), M = SIMU_OPTIONS.morceau;
+    j.etape = "";
+    for (const [cle] of versions) {
+      for (const t of tables) {
+        for (let d = 0; d < n; d += M) {
+          garde();
+          j.fait += await simu("morceau", cle, t, d, Math.min(M, n - d), JSON.stringify(reglages));
+        }
+      }
+    }
+    const infos = Object.fromEntries(versions.map(([cle, fichier]) => [cle, { fichier, nom: libelleSim(f, id, fichier),
+      liste: `simulations/listes/${stamp}_${cle}.txt`, couverture: decks[cle].couverture }]));
+    const t = new Date(), date = `${stamp.slice(0, 10)}T${date2(t.getHours())}:${date2(t.getMinutes())}:${date2(t.getSeconds())}`;
+    const entete = { date, deck: id, n, tables, reglages, affine: Object.keys(txt).length > 0, versions: infos,
+      duree: Math.round((Date.now() / 1000 - j.debut) * 10) / 10 };
+    const rapport = await simu("rapport", JSON.stringify(entete), JSON.stringify(Object.fromEntries(versions.map(([cle]) => [cle, decks[cle].mv]))), M);
+    const d = { [`simulations/${stamp}.json`]: rapport };
+    for (const [cle] of versions) d[`simulations/listes/${stamp}_${cle}.txt`] = listes[cle];
+    await enAttente({ f: "simulation", deck: id, d });
+    await envoyer();                                                     // le rapport tout de suite dans l'onglet
+    Object.assign(j, { statut: "fini", rapport: `${stamp}.json` });
+  }
+  async function reglagesSimulation(id, r) {                            // simulation.ecrire_reglages
+    const defaut = SIMU_OPTIONS.defaut, propre = {};
+    for (const k of Object.keys(defaut)) if (k in r && JSON.stringify(r[k]) !== JSON.stringify(defaut[k])) propre[k] = r[k];
+    await enAttente({ f: "reglagesSim", deck: id, d: propre });
+    return { ...defaut, ...propre };
   }
 
   // les noms des cartes citées de tous les decks, pour l'aperçu au survol partout
@@ -192,7 +261,7 @@
     if (s) return copie(s.v);
     // ce qui n'a pas de sens ici : rien ne tourne en fond, pas de discussion avec Claude, pas de mise à jour à installer
     if (p === "/api/etat") return { maj: {} };
-    if (p === "/api/corbeille") return local ? corbeilleLocale() : (((await fichier("index.json.gz")) || {}).api || {})["/api/corbeille"] || [];
+    if (p === "/api/corbeille") return corbeilleLocale();
     if (p.startsWith("/api/discussion")) return { actif: false, actives: [], erreur: "", etapes: [], mode: "", outils: [], messages: [] };
     // les cartes : sur Scryfall
     if (p === "/api/chercher") return chercher(u.searchParams.get("q") || "");
@@ -206,15 +275,25 @@
     if (p === "/api/recherche/tags") return demander("suggestions", u.searchParams.get("q") || "");
     if (p === "/api/recherche/noms") { pret(); return message("noms", [u.searchParams.get("q") || "", await dansDeck(u.searchParams.get("deck")), 8]); }
     if (p === "/api/recherche-cartes") return decksAvecCarte(u.searchParams.get("q") || "");
-    if (p === "/api/github/valide") return cleValide();
     const pm = p.match(/^\/api\/decks\/([^/]+)\/partage$/);
     if (pm) return lePartage().etat(decodeURIComponent(pm[1]));
-    if (local && /^\/api\/(github|sauvegarde)(\/|$)/.test(p)) { const r = await routeGithub(p, "GET"); if (r !== undefined) return r; }
-    // sans PC : l'onglet Simulation montre les tests faits sur le PC ; en lancer un se fait sur le PC
+    if (/^\/api\/compte(\/|$)/.test(p)) { const r = await routeCompte(p, "GET"); if (r !== undefined) return r; }
+    if (p === "/api/jouer/jetons") {                     // les jetons que créent les cartes du deck (proxies), sur Scryfall
+      const page = await api(`/api/decks/${encodeURIComponent(u.searchParams.get("deck") || "")}`);
+      return { jetons: await lePartage().jetons(page.cartes.filter((c) => c.cat !== "Maybeboard").map((c) => c.nom)).catch(() => []) };
+    }
+    // l'onglet Simulation : les tests faits ici (simulerIci) et ceux venus du PC ; un test en cours (/api/jobs/…)
     const sim = p.match(/^\/api\/decks\/([^/]+)\/(simulation\/options|simulations)(?:\/([^/]+))?$/);
+    const job = p.match(/^\/api\/jobs\/([^/]+)$/);
+    if (job) {
+      const j = travaux.get(decodeURIComponent(job[1]));
+      if (!j) throw Object.assign(new Error("Simulation inconnue : l'appli a peut-être été rechargée."), { statut: 404 });
+      return suiviTravail(j);
+    }
     if (sim && local) {
       const id = decodeURIComponent(sim[1]), f = (await depot()).fichiers, pre = `${id}/simulations/`;
-      if (sim[2] === "simulation/options") return { tables: [], reglages: {}, defaut: {}, coeurs: 1, couverture: null, affine: false, test_n: 1000,
+      if (sim[2] === "simulation/options") return { tables: [...SIMU_OPTIONS.tables], reglages: reglagesSim(f, id), defaut: { ...SIMU_OPTIONS.defaut },
+        coeurs: 1, couverture: null, affine: Object.keys(textesSim(f, id)).length > 0, test_n: SIMU_OPTIONS.test_n,
         versions: await api(`/api/decks/${encodeURIComponent(id)}/versions`).catch(() => []) };
       if (sim[3]) {
         const x = f[pre + decodeURIComponent(sim[3])];
@@ -283,21 +362,6 @@
     for (const [k, v] of Object.entries(reponses)) s[k] = { v, c: null, quand: Date.now() };
     await BD.ecrire("@surcharges", s);
   }
-  async function nettoyerSurcharges(index) {
-    const s = await lesSurcharges(), commits = [...new Set(Object.values(s).map((x) => x.c).filter(Boolean))];
-    let change = false;
-    for (const c of commits) {
-      let inclus = false;
-      if (index.source) {
-        const r = await gh(`/repos/${acces.d}/compare/${c}...${index.source}`).catch(() => null);
-        inclus = !!r && (r.status === "identical" || r.status === "ahead");
-      } else inclus = index.date * 1000 > Math.max(...Object.values(s).filter((x) => x.c === c).map((x) => x.quand)) + 600000;
-      if (!inclus) continue;
-      for (const [k, x] of Object.entries(s)) if (x.c === c) { delete s[k]; change = true; }
-    }
-    if (change) await BD.ecrire("@surcharges", s);
-  }
-
   async function attente() { return (await BD.lire("@attente").catch(() => null)) || []; }
   let minuterie = null;
   async function enAttente(o) {
@@ -305,7 +369,7 @@
     l.push({ ...o, quand: Date.now(), id: Math.random().toString(36).slice(2) });
     await BD.ecrire("@attente", l);
     clearTimeout(minuterie);
-    minuterie = setTimeout(() => envoyer().catch(() => {}), local ? 300 : 2500);     // une série de modifications part en une fois
+    minuterie = setTimeout(() => envoyer().catch(() => {}), 300);     // une série de modifications part en une fois
   }
 
   // ------------------------------------------------------------------ la base de cartes (cartes.js, dans un Worker)
@@ -721,13 +785,6 @@
     if (etatBase.prete) await message("reglages", [{ sansUb: r.sans_ub_illustrations }]).catch(() => {});
     recalculer(null).catch(() => {});
   }
-  // relié au PC : le changement part par la sauvegarde ; les Options le montrent tout de suite
-  async function ecrireOptionsRelie(d) {
-    const ch = changerReglages(d), o = { ...(await api("/api/options")), ...ch };
-    await surcharger({ "/api/options": o });
-    if (Object.keys(ch).length) await enAttente({ f: "reglages", d: ch });
-    return o;
-  }
   async function ecrireOptions(d) {
     const ch = changerReglages(d), r = { ...(window.REGLAGES || {}), ...ch };
     window.REGLAGES = r;
@@ -743,8 +800,8 @@
   }
   async function ecrire(u, b) {
     const p = u.pathname, m = p.match(/^\/api\/decks\/([^/]+)\/(modifier|achats|suggestions\/ecarter)$/);
-    if (local && /^\/api\/(github|sauvegarde)(\/|$)/.test(p)) { const r = await routeGithub(p, "POST", b); if (r !== undefined) return r; }
-    if (p === "/api/options") return local ? ecrireOptions(b) : ecrireOptionsRelie(b);
+    if (/^\/api\/compte(\/|$)/.test(p)) { const r = await routeCompte(p, "POST", b); if (r !== undefined) return r; }
+    if (p === "/api/options") return ecrireOptions(b);
     if (p === "/api/prix") return prixEtNoms(b.noms || []);
     if (p === "/api/recherche/base") {                    // « Mettre à jour » : une nouvelle base, même sur les données mobiles
       const c = etatBase.construction;
@@ -753,10 +810,9 @@
       return copie(etatBase);
     }
     if (!(await fichier("index.json.gz"))) throw Object.assign(new Error("Tes decks ne sont pas encore arrivés."), { statut: 503 });
-    if (!local && T.arrete) throw Object.assign(new Error("Ton PC n'envoie plus tes decks."), { statut: 409 });
-    if (p === "/api/corbeille/recuperer") return local ? recupererLocal(b.fichier) : recupererRelie(b.fichier);
+    if (p === "/api/corbeille/recuperer") return recupererLocal(b.fichier);
     const pt = p.match(/^\/api\/decks\/([^/]+)\/partage(\/retirer)?$/);
-    if (pt) return pt[2] ? lePartage().retirer(decodeURIComponent(pt[1])) : lePartage().partager([decodeURIComponent(pt[1])]);
+    if (pt) return pt[2] ? lePartage().retirer(decodeURIComponent(pt[1])) : lePartage().partager([decodeURIComponent(pt[1])], (b || {}).pseudo);
     if (p === "/api/decks") return creerDeck(b);
     if (p === "/api/decks/importer") return importerDecks(b);
     if (p === "/api/classeur/importer") return importerClasseur(b);
@@ -771,6 +827,11 @@
       suivrePartage({ op: "retirer", deck: decodeURIComponent(r[1]) });
       return res;
     }
+    const sl = p.match(/^\/api\/decks\/([^/]+)\/(simulations|reglages)$/);
+    if (sl && sl[2] === "simulations") return simulerIci(decodeURIComponent(sl[1]), b);
+    if (sl) return reglagesSimulation(decodeURIComponent(sl[1]), b || {});
+    const ja = p.match(/^\/api\/jobs\/([^/]+)\/annuler$/);
+    if (ja) { const j = travaux.get(decodeURIComponent(ja[1])); if (j) j.annule = true; return { ok: true }; }
     const v = p.match(/^\/api\/decks\/([^/]+)\/(versions|versions\/supprimer|restaurer)$/);
     if (v && v[2] === "versions") return sauverVersion(decodeURIComponent(v[1]), b);
     if (v && v[2] === "restaurer") return restaurer(decodeURIComponent(v[1]), b.fichier);
@@ -995,9 +1056,12 @@
   // montes : toutes leurs cartes sont notées comme déjà là (onglet Achats)
   async function importerDecks(b) {
     const faits = [], echecs = [], pris = new Set((await api("/api/decks")).map((d) => d.id.toLowerCase()));
+    const deja = [];
     for (const f of (b.fichiers || []).slice(0, 200)) {
       const nom = String(f.nom || "").split(/[\\/]/).pop().replace(/\.[^.]*$/, "");
       let texte = String(f.texte || "");
+      const appli = texte.trimStart().startsWith("{") ? await importerAppli(texte) : null;      // un fichier de sauvegarde
+      if (appli) { faits.push(...appli.decks); deja.push(...appli.deja); appli.decks.forEach((id) => pris.add(id.toLowerCase())); continue; }
       const c = lireCsv(texte);
       if (c) texte = [...c].map(([carte, n]) => `${n} ${carte}`).join("\n");
       if (!MOTEUR.lireLignes(texte.split(/\r?\n/)).length) { echecs.push({ nom, erreur: "aucune carte reconnue" }); continue; }
@@ -1012,7 +1076,7 @@
         faits.push(id);
       } catch (e) { echecs.push({ nom, erreur: e.message }); }
     }
-    return { decks: faits, echecs };
+    return { decks: faits, deja, echecs };
   }
   // une collection : {texte, sans_decks, remplacer, apercu} → {cartes, en_decks, inconnues} (en exemplaires), et le
   // classeur s'il a changé (app.py › api_classeur_importer). sans_decks : sans les exemplaires déjà notés dans les decks
@@ -1047,23 +1111,8 @@
   // l'envoi : les opérations en attente, rejouées sur les fichiers de la sauvegarde, en un commit
   const date2 = (n) => String(n).padStart(2, "0");
   const horodatage = (t = new Date()) => `${t.getFullYear()}-${date2(t.getMonth() + 1)}-${date2(t.getDate())}_${date2(t.getHours())}${date2(t.getMinutes())}${date2(t.getSeconds())}`;
-  const chemin = (rel) => rel.split("/").map(encodeURIComponent).join("/");
-  async function ghEcrire(methode, url, corps) {
-    const r = await fetch(GH + url, { method: methode, headers: { Authorization: "Bearer " + acces.c, "X-GitHub-Api-Version": "2022-11-28",
-      Accept: "application/vnd.github+json", "Content-Type": "application/json" }, body: JSON.stringify(corps) });
-    if (!r.ok) throw Object.assign(new Error(`GitHub refuse l'envoi (${r.status}).`), { statut: r.status });
-    return r.json();
-  }
-  async function contenu(rel, ref) {
-    const r = await fetch(`${GH}/repos/${acces.d}/contents/${chemin(rel)}?ref=${ref}`, { cache: "no-store", headers: {
-      Authorization: "Bearer " + acces.c, "X-GitHub-Api-Version": "2022-11-28", Accept: "application/vnd.github.raw" } });
-    if (r.status === 404) return null;
-    if (!r.ok) throw Object.assign(new Error(`GitHub ne répond pas (${r.status}).`), { statut: r.status });
-    return r.text();
-  }
-  // les opérations en attente, rejouées sur des fichiers : ceux de la sauvegarde (relié au PC), ou ceux gardés sur le
-  // téléphone (sans PC). source(rel) : le contenu d'un fichier au départ (null s'il n'existe pas). prefixe : devant ce
-  // que l'historique du deck note (« Téléphone : … » quand le PC le lira).
+  // les opérations en attente, rejouées sur les fichiers gardés ici. source(rel) : le contenu d'un fichier au départ
+  // (null s'il n'existe pas). prefixe : devant ce que l'historique du deck note.
   async function rejouer(ops, source, prefixe) {
     const originaux = new Map(), fichiers = new Map(), supprimes = new Set();
     // un deck renommé ou supprimé : tout son dossier part (effaces), et va sous le nouveau nom (origine : nouveau
@@ -1155,6 +1204,16 @@
           }
           for (const [nom, n] of Object.entries(o.d)) poss[nom] = Math.max(0, parseInt(n, 10) || 0);
           fichiers.set(`${o.deck}/achats.json`, JSON.stringify({ possedees: poss }, null, 1));
+        } else if (o.f === "simulation") {                   // un test du simulateur : son rapport et ses listes
+          for (const [rel, t] of Object.entries(o.d)) if (/^simulations\/[\w./-]+$/.test(rel) && !rel.includes("..")) fichiers.set(`${o.deck}/${rel}`, t);
+          nouveaux.push(`test de ${titre(o.deck)}`);
+        } else if (o.f === "reglagesSim") {                  // simulation.ecrire_reglages
+          const rel = `${o.deck}/simulateur.json`;
+          let d = {};
+          try { d = JSON.parse((await lire(rel)) || "{}") || {}; } catch (_) {}
+          if (Object.keys(o.d).length) d.reglages = o.d; else delete d.reglages;
+          if (Object.keys(d).length) { fichiers.set(rel, JSON.stringify(d, null, 1)); supprimes.delete(rel); }
+          else if ((await lire(rel)) != null) { fichiers.set(rel, null); supprimes.add(rel); }
         } else if (o.f === "ecarter") {
           const t = await lire(`${o.deck}/suggestions.json`);
           const l = ((t && JSON.parse(t).ecartees) || []).filter((n) => n !== o.d.nom);
@@ -1179,46 +1238,7 @@
     return { originaux, fichiers, supprimes, origine, effaces, resume, touches, sous };
   }
 
-  // relié au PC : un commit sur la branche des decks de la sauvegarde ; le PC le recevra par sa synchronisation
-  async function envoyerGithub(ops) {
-    const index = await fichier("index.json.gz");
-    const branche = (index && index.branche) || "main";
-    for (let essai = 0; essai < 3; essai++) {
-      const tete = (await gh(`/repos/${acces.d}/git/ref/heads/${branche}`)).object.sha;
-      const arbre = (await gh(`/repos/${acces.d}/git/commits/${tete}`)).tree.sha;
-      const r = await rejouer(ops, (rel) => contenu(rel, tete), "Téléphone : ");
-      // les dossiers renommés ou supprimés : chaque fichier effacé, ou repris tel quel sous le nouveau nom (sans le télécharger)
-      const entrees = new Map();
-      if (r.effaces.size) {
-        const tout = await gh(`/repos/${acces.d}/git/trees/${arbre}?recursive=1`);
-        if (tout.truncated) throw new Error("La sauvegarde est trop grande pour renommer un deck d'ici : fais-le sur le PC.");
-        const blobs = (tout.tree || []).filter((x) => x.type === "blob");
-        for (const x of blobs) if (r.effaces.has(x.path.split("/")[0])) entrees.set(x.path, { path: x.path, mode: x.mode, type: "blob", sha: null });
-        for (const [n, a] of r.origine) {
-          for (const x of blobs) if (r.sous(x.path, a)) entrees.set(n + x.path.slice(a.length), { path: n + x.path.slice(a.length), mode: x.mode, type: "blob", sha: x.sha });
-        }
-      }
-      for (const rel of r.supprimes) if (r.originaux.get(rel) != null) entrees.set(rel, { path: rel, mode: "100644", type: "blob", sha: null });
-      for (const [rel, t] of r.fichiers) {
-        if (t == null || (t === r.originaux.get(rel) && !entrees.has(rel))) continue;
-        if (t === r.originaux.get(rel) && entrees.get(rel).sha) continue;                 // déplacé tel quel
-        const b = await ghEcrire("POST", `/repos/${acces.d}/git/blobs`, { content: t, encoding: "utf-8" });
-        entrees.set(rel, { path: rel, mode: "100644", type: "blob", sha: b.sha });
-      }
-      if (!entrees.size) return null;
-      const nouvel = await ghEcrire("POST", `/repos/${acces.d}/git/trees`, { base_tree: arbre, tree: [...entrees.values()] });
-      const commit = (await ghEcrire("POST", `/repos/${acces.d}/git/commits`, { message: "Téléphone : " + (r.resume || "achats, classeur"), tree: nouvel.sha, parents: [tete] })).sha;
-      try {
-        await ghEcrire("PATCH", `/repos/${acces.d}/git/refs/heads/${branche}`, { sha: commit });
-        return commit;
-      } catch (err) {
-        if (err.statut !== 422) throw err;                 // 422 : le PC a envoyé entre-temps, on rejoue sur sa version
-      }
-    }
-    throw new Error("La sauvegarde change trop vite : nouvel essai plus tard.");
-  }
-
-  // sans PC : les fichiers du téléphone (@depot), puis les pages des decks touchés, refaites ici
+  // les fichiers gardés ici (@depot), puis les pages des decks touchés, refaites ici
   async function envoyerLocal(ops) {
     const d = await depot(), f = d.fichiers, depart = { ...f };
     const r = await rejouer(ops, async (rel) => (rel in depart ? depart[rel] : null), "");
@@ -1234,24 +1254,21 @@
     for (const id of Object.keys(d.modifies)) if (!(`${id}/archidekt.txt` in f)) delete d.modifies[id];
     await BD.ecrire("@depot", d);
     await recalculer(d, r.touches);
+    suivrePartage({ op: "modifie", decks: [...r.touches] });
   }
 
   let envoi = null;
   function envoyer() {
     return envoi || (envoi = (async () => {
       const ops = await attente();
-      if (!ops.length || !(acces || local) || (!local && T.arrete)) return false;
-      const commit = local ? await avecVerrou(() => envoyerLocal(ops)) : await envoyerGithub(ops);
-      if (local) { planifierSauvegarde(); planifierPartage(); }      // sauvegarde, puis pages partagées, une fois la série finie
-      // fait : ces opérations partent de la file ; sans PC, les pages refaites ici remplacent tout de suite celles
-      // d'attente ; relié au PC, elles attendent celles du PC qui les contiennent
+      if (!ops.length || !local) return false;
+      await avecVerrou(() => envoyerLocal(ops));
+      planifierSauvegarde();                              // vers le compte, une fois la série finie
+      // fait : ces opérations partent de la file ; les pages refaites ici remplacent tout de suite celles d'attente
       const restent = (await attente()).filter((x) => !ops.some((y) => y.id === x.id));
       await BD.ecrire("@attente", restent);
       const s = await lesSurcharges(), fin = Math.max(...ops.map((x) => x.quand));
-      for (const [k, x] of Object.entries(s)) {
-        if (x.c || x.quand > fin) continue;
-        if (local || !commit) delete s[k]; else x.c = commit;
-      }
+      for (const [k, x] of Object.entries(s)) if (x.quand <= fin) delete s[k];
       await BD.ecrire("@surcharges", s);
       return true;
     })().finally(() => { envoi = null; }));
@@ -1311,92 +1328,36 @@
       return { id: nom };
     });
   }
-  async function recupererRelie(fichierCorbeille) {
-    const nom = String(fichierCorbeille).replace(/__[^_]+_\d{6}$/, ""), index = await fichier("index.json.gz");
-    const branche = (index && index.branche) || "main", D = `/repos/${acces.d}`;
-    for (let essai = 0; essai < 3; essai++) {
-      const tete = (await gh(`${D}/git/ref/heads/${branche}`)).object.sha, arbre = (await gh(`${D}/git/commits/${tete}`)).tree.sha;
-      const ici = await gh(`${D}/git/trees/${arbre}?recursive=1`);
-      if ((ici.tree || []).some((x) => x.path.startsWith(nom + "/"))) throw new Error(`Le deck « ${nom.replace(/^Deck /, "")} » est déjà là : il arrive dès que ton PC l'aura préparé.`);
-      // le dernier commit qui touche sa liste est celui qui l'a supprimé : son dossier est dans le commit d'avant
-      const c = (await gh(`${D}/commits?path=${encodeURIComponent(nom + "/archidekt.txt")}&sha=${encodeURIComponent(branche)}&per_page=1`))[0];
-      const avant = c && (await gh(`${D}/git/commits/${c.sha}`)).parents[0];
-      const vieux = avant ? await gh(`${D}/git/trees/${(await gh(`${D}/git/commits/${avant.sha}`)).tree.sha}?recursive=1`) : { tree: [] };
-      const entrees = (vieux.tree || []).filter((x) => x.type === "blob" && x.path.startsWith(nom + "/")).map((x) => ({ path: x.path, mode: x.mode, type: "blob", sha: x.sha }));
-      if (!entrees.length) throw new Error("Ce deck n'est plus dans l'historique de la sauvegarde : récupère-le depuis l'Atelier de ton PC.");
-      const nouvel = await ghEcrire("POST", `${D}/git/trees`, { base_tree: arbre, tree: entrees });
-      const commit = (await ghEcrire("POST", `${D}/git/commits`, { message: `Téléphone : ${nom.replace(/^Deck /, "")} récupéré`, tree: nouvel.sha, parents: [tete] })).sha;
-      try { await ghEcrire("PATCH", `${D}/git/refs/heads/${branche}`, { sha: commit }); }
-      catch (e) { if (e.statut === 422) continue; throw e; }
-      return { id: null, message: `${nom.replace(/^Deck /, "")} est récupéré : il revient ici dès que ton PC l'aura reçu.` };
-    }
-    throw new Error("La sauvegarde change trop vite : réessaie dans un instant.");
-  }
-
-  // ------------------------------------------------------------------ partager un deck sans PC (partage.js)
-  // La même page que celle du PC, dans le même site GitHub du compte. Un deck partagé qui change est republié deux
-  // minutes après la dernière modification (partage.CALME), comme sur le PC.
-  // Relié au PC, le téléphone partage avec la clé GitHub du PC (celle du QR code) et la page préparée par le PC
-  // (simulations comprises), avec ce qui a été modifié ici depuis (@surcharges) ; le PC la tient ensuite à jour.
-  let partageTel = null, minuteriePartage = null;
-  async function compteRelie() {
-    if (!acces) return null;
-    let login = lireLocal("telephone-compte-pc");
-    if (!login) { login = (await gh("/user")).login; ecrireLocal("telephone-compte-pc", login); }
-    return { jeton: acces.c, compte: login };
-  }
-  async function pageRelie(id) {
-    const index = await fichier("index.json.gz"), f = index && index.decks && index.decks[id], d = f ? await fichier(f) : null;
-    if (!d) return null;
-    const api = { ...d.api };
-    const R = `/api/decks/${id}`;
-    for (const [k, x] of Object.entries(await lesSurcharges())) if (k === R || k.startsWith(R + "/") || k.startsWith(R + "?")) api[k] = x.v;
-    return { ...d, api };
-  }
-  const ghRelie = (methode, url, corps) => (methode === "GET" ? gh(url) : ghEcrire(methode, url, corps));
+  // ------------------------------------------------------------------ partager un deck (partage.js)
+  // Le lien instantané (voir/) ne demande rien. La page permanente d'un deck viendra du serveur des comptes : en
+  // attendant, partage.js n'a pas de compte où publier.
+  let partageTel = null;
   const lePartage = () => partageTel || (partageTel = PARTAGE_TELEPHONE({
-    api, compte: async () => (local ? leCompte() : compteRelie()), gh: (jeton, m, url, corps) => (local ? ghCompte(jeton, m, url, corps) : ghRelie(m, url, corps)),
-    scryfall: (url, corps) => scryfall(url, corps),
-    page: async (id) => { if (!local) return pageRelie(id); await calculs; return fichier("decks/" + id); },
+    api, serveur, scryfall: (url, corps) => scryfall(url, corps),
+    page: async (id) => { await calculs; return fichier("decks/" + id); },
     lire: (k) => BD.lire(k).catch(() => null), ecrire: (k, v) => BD.ecrire(k, v),
     reglages: () => ({ budget: budget(), sans_ub_illustrations: !!(window.REGLAGES || {}).sans_ub_illustrations }),
   }));
-  function planifierPartage(ms = 120000) {
-    clearTimeout(minuteriePartage);
-    minuteriePartage = setTimeout(() => republier().catch(() => {}), ms);
+  // une page publique suit son deck : renommé (elle garde son adresse), supprimé (retirée), modifié ici (republiée une
+  // minute après la dernière modification, tant que l'appli est ouverte)
+  const aRepublier = new Set();
+  let minuteurPartage = null;
+  async function suivrePartage(x) {
+    try {
+      const p = await lePartage().partages();
+      if (x.op === "renommer" && p[x.ancien]) { await lePartage().renommer(x.ancien, x.nouveau); aRepublier.add(x.nouveau); }
+      else if (x.op === "retirer" && p[x.deck]) await lePartage().retirer(x.deck);
+      else if (x.op === "modifie") for (const id of x.decks) if (p[id]) aRepublier.add(id);
+      if (aRepublier.size) { clearTimeout(minuteurPartage); minuteurPartage = setTimeout(republier, 60000); }
+    } catch (_) { /* pas de réseau : la page sera refaite au prochain partage */ }
   }
   async function republier() {
-    await partageEnAttente().catch(() => {});
-    if (!local || !(await leCompte())) return;                 // relié : le PC republie
-    const reg = await lePartage().partages(), d = await depot();
-    const ids = Object.keys(reg).filter((id) => `${id}/archidekt.txt` in d.fichiers
-      && (reg[id].a_refaire || ((d.modifies || {})[id] || 0) > (reg[id].date || 0)));
-    if (ids.length) await lePartage().partager(ids);
-  }
-  // un deck renommé ou supprimé ici : sa page partagée suit (même adresse, nouveau titre ; ou retirée), comme sur le PC.
-  // Sans réseau ou sans compte, c'est refait au prochain lancement (@partage-attente).
-  async function suivrePartage(o) {
-    const l = (await BD.lire("@partage-attente").catch(() => null)) || [];
-    l.push(o);
-    await BD.ecrire("@partage-attente", l);
-    partageEnAttente().then(() => { if (local) planifierPartage(); }).catch(() => {});
-  }
-  let attentePartage = null;
-  function partageEnAttente() {
-    return attentePartage || (attentePartage = (async () => {
-      let l = (await BD.lire("@partage-attente").catch(() => null)) || [];
-      if (!l.length || !(await lePartage().compteConnu())) return;
-      while (l.length) {
-        const o = l[0];
-        if (o.op === "renommer") await lePartage().renommer(o.ancien, o.nouveau);
-        else await lePartage().retirer(o.deck);
-        l = l.slice(1);
-        await BD.ecrire("@partage-attente", l);
-      }
-    })().finally(() => { attentePartage = null; }));
+    const l = [...aRepublier];
+    aRepublier.clear();
+    for (const id of l) await lePartage().partager([id]).catch(() => {});
   }
 
-  // ------------------------------------------------------------------ sans PC : les pages faites ici
+  // ------------------------------------------------------------------ les pages faites ici
   const depot = async () => (await BD.lire("@depot").catch(() => null)) || { fichiers: {}, modifies: {} };
   // ce dont pages.js a besoin : les fiches (base de cartes, sinon Scryfall), les fonctions, les impressions choisies
   function outilsPages(f) {
@@ -1427,7 +1388,7 @@
     };
   }
   // ------------------------------------------------------------------ Commander Spellbook, par le relais (bracket.spellbook)
-  // Spellbook et la connexion GitHub refusent les pages web : un petit relais sans secret (outils/atelier/relais) les transmet.
+  // Spellbook refuse les pages web : un petit relais sans secret (outils/atelier/relais) lui transmet les demandes.
   const RELAIS = "https://relais.atelier-mtg.workers.dev";
   async function relais(chemin, corps, ms = 60000) {
     if (navigator.onLine === false) throw new Error("pas de réseau");
@@ -1508,199 +1469,139 @@
       filtre, new Set(page.cartes.filter((c) => c.cat === "Maybeboard").map((c) => c.nom)), erreur);
   }
 
-  // ------------------------------------------------------------------ sans PC : la sauvegarde sur GitHub (synchro.py)
-  // Le téléphone se connecte lui-même à GitHub (le code à recopier, comme sur le PC, par le relais) et range ses decks
-  // dans le même dépôt privé que l'Atelier du PC : un PC les récupère ensuite (« Récupérer mes decks »), un autre
-  // téléphone aussi. Synchroniser compare trois états : les fichiers du téléphone (@depot), ceux du dépôt et ceux de la
-  // dernière synchronisation (@sauvegarde). Ce qui a changé d'un seul côté passe de l'autre ; changé des deux côtés, la
-  // version du téléphone l'emporte et la liste d'en face entre dans l'historique du deck.
-  const NOM_DEPOT = "atelier-mtg-sauvegarde";
-  const DESCRIPTION = "Sauvegarde privée de l'Atelier MTG : decks et classeur (ne pas modifier à la main)";
-  const LISEZMOI = "README.md";                       // synchro.TEXTE_LISEZMOI, à l'identique
-  const TEXTE_LISEZMOI = "# Sauvegarde de l'Atelier MTG\n\nCe dépôt est **privé** : toi seul le vois. L'Atelier MTG y range une copie de tes decks (listes, versions,\nsimulations, discussions, achats) et de ton classeur, pour les retrouver si ton PC tombe en panne, ou sur un autre PC.\n\n- L'Atelier le tient à jour tout seul : ne modifie pas ces fichiers à la main.\n- Sur un autre PC : installe l'Atelier MTG, puis « Récupérer mes decks » sur sa page d'accueil.\n- Les photos rangées dans les dossiers des decks ne sont pas sauvegardées.\n";
-  const GITHUB = "@github", SAUVEGARDE = "@sauvegarde";
+  // ------------------------------------------------------------------ le compte : connexion et synchronisation
+  // Synchroniser compare trois états : les fichiers d'ici (@depot), ceux du compte et ceux de la dernière
+  // synchronisation (@compte-etat). Ce qui a changé d'un seul côté passe de l'autre ; changé des deux côtés, la version
+  // d'ici l'emporte et la liste d'en face entre dans l'historique du deck. La corbeille reste ici.
+  const ETAT = "@compte-etat";
   const CALME = 5000;                                 // ms sans modification avant d'envoyer : une série d'ajouts part une fois
-  const leCompte = async () => (await BD.lire(GITHUB).catch(() => null)) || null;    // {jeton, compte, id}
-  // l'état de la dernière synchronisation, s'il est celui de ce compte
-  const lEtat = async (g) => { const e = (await BD.lire(SAUVEGARDE).catch(() => null)) || {}; return !g || e.compte === g.compte ? e : { voulue: e.voulue }; };
-  async function ghCompte(jeton, methode, url, corps) {
-    const r = await fetch(GH + url, { method: methode, cache: "no-store", body: corps ? JSON.stringify(corps) : undefined, headers: {
-      Authorization: "Bearer " + jeton, "X-GitHub-Api-Version": "2022-11-28", Accept: "application/vnd.github+json",
-      ...(corps ? { "Content-Type": "application/json" } : {}) } });
-    if (r.status === 401) {
-      await BD.effacer(GITHUB).catch(() => {});
-      throw Object.assign(new Error(`GitHub ne reconnaît plus ${CET_APPAREIL} : reconnecte-le.`), { statut: 401 });
-    }
-    if (!r.ok) throw Object.assign(new Error(`GitHub ne répond pas (${r.status}).`), { statut: r.status });
-    return r.status === 204 ? null : r.json();
-  }
-  async function shaBlob(texte) {                     // l'empreinte d'un fichier pour git (github.sha_blob)
+  const LOT = 400, LOT_OCTETS = 4000000;               // fichiers et octets par envoi au serveur
+  const CACHES = new Set(["@base", "@cartes", "@langues", "@spellbook"]);   // gardés en changeant de compte
+  async function shaBlob(texte) {                     // l'empreinte git d'un fichier (serveur.sha_blob)
     const o = new TextEncoder().encode(texte), t = new TextEncoder().encode(`blob ${o.length}\0`), tout = new Uint8Array(t.length + o.length);
     tout.set(t);
     tout.set(o, t.length);
     return [...new Uint8Array(await crypto.subtle.digest("SHA-1", tout))].map((b) => b.toString(16).padStart(2, "0")).join("");
   }
-  function texteDe(base64) {                          // le contenu d'un blob ; null s'il n'est pas du texte (une photo)
-    const s = atob(base64.replace(/\s/g, "")), o = new Uint8Array(s.length);
-    for (let i = 0; i < s.length; i++) o[i] = s.charCodeAt(i);
-    try { return new TextDecoder("utf-8", { fatal: true }).decode(o); } catch (_) { return null; }
+  const lEtat = async () => { const e = (await BD.lire(ETAT).catch(() => null)) || {}; return compte && e.email === compte.email ? e : { fichiers: {} }; };
+  // le nom de cet appareil dans la liste du compte
+  function nomAppareil() {
+    const ua = navigator.userAgent;
+    const os = /iphone/i.test(ua) ? "iPhone" : iphone ? "iPad" : /android/i.test(ua) ? "Android" : /windows/i.test(ua) ? "Windows"
+      : /mac os/i.test(ua) ? "Mac" : /linux/i.test(ua) ? "Linux" : "Appareil";
+    const nav = /edg\//i.test(ua) ? "Edge" : /firefox|fxios/i.test(ua) ? "Firefox" : /chrome|crios/i.test(ua) ? "Chrome" : /safari/i.test(ua) ? "Safari" : "";
+    return os + (nav ? " · " + nav : "") + (installee() ? " · appli" : "");
+  }
+  async function viderIci() {                         // tout ce que l'appli garde ici, sauf la base de cartes et les caches
+    for (const k of await BD.cles()) if (!CACHES.has(k)) await BD.effacer(k);
+    memoire.clear();
+    fusion = null;
+    connus = null;
+    surcharges = null;
   }
 
-  // se connecter : un code à recopier sur github.com/login/device (github.connecter, etat_connexion). La connexion en
-  // cours est gardée : l'appli peut être rouverte pendant qu'on est sur GitHub (iPhone), elle la finit alors seule
-  const FLUX = "telephone-connexion-github";
-  let flux = (() => { try { const f = JSON.parse(lireLocal(FLUX) || "null"); return f && Date.now() < f.expire ? f : null; } catch (_) { return null; } })();
-  const garderFlux = () => ecrireLocal(FLUX, flux && flux.etat === "attente" ? JSON.stringify({ ...flux, demande: false }) : null);
-  async function connecterGithub() {
-    const c = await relais("/github/code", {}).catch((e) => { throw new Error(`GitHub ne répond pas : ${e.message}`); });
-    if (!c.device_code) throw new Error(c.error_description || "GitHub ne répond pas.");
-    const pas = (c.interval || 5) * 1000;
-    flux = { code: c.device_code, pas, prochain: Date.now() + pas, expire: Date.now() + (c.expires_in || 900) * 1000, etat: "attente" };
-    garderFlux();
-    return { etat: "attente", code: c.user_code, url: c.verification_uri };
+  // se connecter : le code reçu par e-mail. Les decks déjà ici (d'avant les comptes) partent dans le compte ; ceux d'un
+  // autre compte, ou les pages reçues d'un PC relié, sont d'abord effacés
+  const demanderCode = (email) => serveur("/connexion/code", "POST", { email });
+  async function seConnecter(email, code) {
+    const r = await serveur("/connexion/verifier", "POST", { email, code, appareil: nomAppareil() });
+    const avant = (await BD.lire(ETAT).catch(() => null)) || {};
+    if ((avant.email && avant.email !== r.email) || ANCIEN_PC) await viderIci();
+    for (const k of ["telephone-acces", "telephone-commit", "telephone-compte-pc", "telephone-local", "telephone-connexion-github"]) ecrireLocal(k, null);
+    for (const k of ["@github", "@sauvegarde", "@partage", "@partage-attente"]) await BD.effacer(k).catch(() => {});
+    compte = { email: r.email, jeton: r.jeton };
+    ecrireLocal(COMPTE, JSON.stringify(compte));
+    local = true;
+    garderDonnees();
+    if (!(await BD.lire("@depot").catch(() => null))) await BD.ecrire("@depot", { fichiers: {}, modifies: {} });
+    window.REGLAGES = { budget: 5, sans_ub_illustrations: false, ...(window.REGLAGES || {}) };
+    ecrireLocal(REGLAGES, JSON.stringify(window.REGLAGES));
+    try { await sauvegarder(); } catch (_) { /* pas de réseau : la synchronisation reprendra */ }
+    const reg = (await depot()).fichiers[REG_CARTES];
+    if (reg) await appliquerReglages(reg);
+    await recalculer(await depot());
+    location.hash = "#/";
+    location.reload();
   }
-  async function etatConnexion() {
-    const f = flux;
-    if (!f) return { etat: "erreur", erreur: "Aucune connexion en cours." };
-    if (f.etat === "attente" && Date.now() > f.expire) f.etat = "expire";
-    if (f.etat === "attente" && !f.demande && Date.now() >= f.prochain) {
-      f.demande = true;
-      try {
-        const r = await relais("/github/jeton", { device_code: f.code });
-        f.prochain = Date.now() + f.pas;
-        if (r.access_token) {
-          const moi = await ghCompte(r.access_token, "GET", "/user");
-          await BD.ecrire(GITHUB, { jeton: r.access_token, compte: moi.login, id: moi.id });
-          Object.assign(f, { etat: "ok", compte: moi.login });
-        } else if (r.error === "slow_down") f.pas += 5000;
-        else if (r.error === "access_denied") f.etat = "refus";
-        else if (r.error === "expired_token") f.etat = "expire";
-        else if (r.error !== "authorization_pending") Object.assign(f, { etat: "erreur", erreur: r.error_description || r.error || "Connexion impossible." });
-      } catch (_) { f.prochain = Date.now() + f.pas; }   // pas de réseau : on réessaie
-      finally { f.demande = false; garderFlux(); }
-    }
-    return { etat: f.etat, compte: f.compte || null, erreur: f.erreur || "" };
+  // se déconnecter : ce qui n'est pas encore parti part d'abord, puis les decks quittent cet appareil (ils restent dans
+  // le compte). Refusé par le serveur (appareil retiré du compte) : on revient à la connexion, sans rien effacer
+  async function deconnecter() {
+    await envoyer().catch(() => {});
+    await sauvegarder();
+    await serveur("/deconnexion", "POST").catch(() => {});
+    await deconnecte(true);
   }
-  async function reprendreConnexion() {
-    while (flux && flux.etat === "attente" && Date.now() < flux.expire) {
-      await new Promise((ok) => setTimeout(ok, 2000));
-      await etatConnexion();
-    }
-    if (flux && flux.etat === "ok") {
-      await sauvegarderEnFond();
-      if (window.route && document.querySelector("#modale")?.hidden !== false) route();
-    }
-  }
-
-  // le dépôt de sauvegarde du compte : {depot, branche, id}, créé (privé) s'il n'existe pas et creer ; null sinon
-  async function leDepot(q, g, creer) {
-    let r;
-    try { r = await q("GET", `/repos/${g.compte}/${NOM_DEPOT}`); }
-    catch (e) {
-      if (e.statut !== 404) throw e;
-      if (!creer) return null;
-      r = await q("POST", "/user/repos", { name: NOM_DEPOT, private: true, description: DESCRIPTION, auto_init: true,
-        has_issues: false, has_projects: false, has_wiki: false });
-    }
-    if (!r.private) throw new Error(`Ton dépôt GitHub « ${NOM_DEPOT} » est public : l'Atelier n'y range pas ta sauvegarde. Rends-le privé sur GitHub (Settings › Danger Zone), ou supprime-le.`);
-    return { depot: r.full_name, branche: r.default_branch, id: r.id };
-  }
-  // le dernier commit : {tete, arbre, distant: {chemin: empreinte}, date} ; attend un dépôt tout juste créé
-  async function laTete(q, d) {
-    for (let essai = 0; ; essai++) {
-      try {
-        const tete = (await q("GET", `/repos/${d.depot}/git/ref/heads/${d.branche}`)).object.sha;
-        const c = await q("GET", `/repos/${d.depot}/git/commits/${tete}`);
-        const t = await q("GET", `/repos/${d.depot}/git/trees/${c.tree.sha}?recursive=1`);
-        const distant = {};
-        for (const x of t.tree) if (x.type === "blob") distant[x.path] = x.sha;
-        return { tete, arbre: c.tree.sha, distant, date: c.committer && c.committer.date };
-      } catch (e) {
-        if (![404, 409].includes(e.statut) || essai === 7) throw e;
-        await new Promise((ok) => setTimeout(ok, 2000));
-      }
-    }
-  }
-  // ce qu'il y a dans la sauvegarde, sans rien télécharger (« Récupérer mes decks »)
-  async function sauvegardeDistante() {
-    const g = await leCompte();
-    if (!g) throw Object.assign(new Error(`Connecte ${CET_APPAREIL} à GitHub.`), { statut: 401 });
-    const q = (m, u, c) => ghCompte(g.jeton, m, u, c), d = await leDepot(q, g, false);
-    if (!d) return { existe: false, decks: [] };
-    const { distant, date } = await laTete(q, d);
-    const noms = [...new Set(Object.keys(distant).filter((p) => p.startsWith("Deck ") && p.split("/").length === 2 && p.endsWith("/archidekt.txt"))
-      .map((p) => p.split("/")[0]))].sort();
-    return { existe: noms.length > 0, decks: noms.map((n) => n.slice(5)), date };
+  async function deconnecte(vider) {
+    compte = null;
+    local = false;
+    ecrireLocal(COMPTE, null);
+    if (vider) await viderIci();
+    location.hash = "#/";
+    location.reload();
   }
 
   // un seul à la fois : les modifications faites ici (envoyerLocal) et la synchronisation touchent aux mêmes fichiers
   let verrouDepot = Promise.resolve();
   const avecVerrou = (fn) => { const p = verrouDepot.then(fn); verrouDepot = p.catch(() => {}); return p; };
   let sauvegarde = null, erreurSauvegarde = "";
-  // synchroniser : {envoyes, recus, conflits, decks, decks_recus} ; {vide: true} sans dépôt quand creer est faux
-  function sauvegarder(creer = true) {
-    return sauvegarde || (sauvegarde = avecVerrou(() => synchroniserGithub(creer))
+  // synchroniser : {envoyes, recus, conflits, decks, decks_recus}
+  function sauvegarder() {
+    return sauvegarde || (sauvegarde = avecVerrou(() => synchroniserCompte())
       .then((r) => { erreurSauvegarde = ""; return r; }, (e) => { erreurSauvegarde = e.message; throw e; })
       .finally(() => { sauvegarde = null; }));
   }
-  async function synchroniserGithub(creer) {
-    const g = await leCompte();
-    if (!g) throw Object.assign(new Error(`Connecte ${CET_APPAREIL} à GitHub (compte gratuit).`), { statut: 401 });
-    const q = (m, u, c) => ghCompte(g.jeton, m, u, c), d = await leDepot(q, g, creer);
-    if (!d) return { vide: true };
-    let e = await lEtat(g);
-    if (e.id !== d.id) e = { voulue: e.voulue, fichiers: {} };   // autre dépôt (premier passage, ou refait) : rien de connu
-    Object.assign(e, d, { compte: g.compte });
+  const pareils = (a, b) => { const k = Object.keys(a); return k.length === Object.keys(b).length && k.every((x) => a[x] === b[x]); };
+  function enLots(liste) {
+    const lots = [];
+    let lot = [], taille = 0;
+    for (const x of liste) {
+      const n = (x.contenu || "").length + 200;
+      if (lot.length && (taille + n > LOT_OCTETS || lot.length >= LOT)) { lots.push(lot); lot = []; taille = 0; }
+      lot.push(x);
+      taille += n;
+    }
+    if (lot.length) lots.push(lot);
+    return lots;
+  }
+  async function synchroniserCompte() {
+    if (!compte) throw Object.assign(new Error("Connecte-toi."), { statut: 401 });
+    let e = await lEtat();
     for (let essai = 0; essai < 3; essai++) {
-      const { tete, arbre, distant } = await laTete(q, d);
-      const lisezmoi = distant[LISEZMOI];
-      delete distant[LISEZMOI];
-      if (e.commit && tete !== e.commit) {               // le dernier commit connu a disparu (dépôt refait) : on repart de zéro
-        try { await q("GET", `/repos/${d.depot}/git/commits/${e.commit}`); }
-        catch (x) { if (![404, 422].includes(x.statut)) throw x; Object.assign(e, { commit: null, fichiers: {} }); }
-      }
-      const avant = e.commit ? e.fichiers : {}, dep = await depot(), ici = {};
+      const dep = await depot(), ici = {}, avant = e.fichiers || {};
       for (const [rel, t] of Object.entries(dep.fichiers)) if (!rel.startsWith(CORBEILLE + "/")) ici[rel] = await shaBlob(t);
-      for (const rel of e.ignores || []) if (rel in distant) ici[rel] = distant[rel];   // les photos : pas sur le téléphone
+      // rien de changé ici depuis la dernière fois : le serveur dit seulement si le compte a bougé
+      const l = await serveur("/fichiers" + (e.revision != null && pareils(ici, avant) ? `?revision=${e.revision}` : ""));
+      if (l.inchange) {
+        await BD.ecrire(ETAT, { ...e, email: compte.email, derniere: Date.now() / 1000 });
+        return { envoyes: 0, recus: 0, decks: e.decks ?? 0, conflits: [], decks_recus: [] };
+      }
+      const distant = l.fichiers || {};
       const envois = [], retraits = [], recus = [], effaces = [], conflits = [];
       for (const rel of [...new Set([...Object.keys(ici), ...Object.keys(distant), ...Object.keys(avant)])].sort()) {
-        const l = ici[rel] ?? null, r = distant[rel] ?? null, b = avant[rel] ?? null;
-        if (l === r) continue;
-        if (l === b) (r === null ? effaces : recus).push(rel);              // changé sur GitHub seulement
-        else if (r === b) (l === null ? retraits : envois).push(rel);       // changé ici seulement
-        else if (l === null) recus.push(rel);                                // supprimé ici, changé là-bas : il revient
+        const a = ici[rel] ?? null, r = distant[rel] ?? null, b = avant[rel] ?? null;
+        if (a === r) continue;
+        if (a === b) (r === null ? effaces : recus).push(rel);              // changé dans le compte seulement
+        else if (r === b) (a === null ? retraits : envois).push(rel);       // changé ici seulement
+        else if (a === null) recus.push(rel);                                // supprimé ici, changé là-bas : il revient
         else { envois.push(rel); if (r !== null) conflits.push(rel); }      // changé des deux côtés : celui d'ici gagne
       }
-      // 1. ce qui part : un seul commit
-      let nouveau = tete;
-      const entrees = envois.map((rel) => ({ path: rel, mode: "100644", type: "blob", content: dep.fichiers[rel] }));
-      for (const rel of retraits) entrees.push({ path: rel, mode: "100644", type: "blob", sha: null });
-      if (lisezmoi !== await shaBlob(TEXTE_LISEZMOI)) entrees.push({ path: LISEZMOI, mode: "100644", type: "blob", content: TEXTE_LISEZMOI });
-      if (entrees.length) {
-        let base = arbre, lot = [], taille = 0;
-        const lots = [];
-        for (const x of entrees) {                       // par lots, comme synchro._nouvel_arbre
-          const n = (x.content || "").length + 200;
-          if (lot.length && (taille + n > 2000000 || lot.length >= 400)) { lots.push(lot); lot = []; taille = 0; }
-          lot.push(x);
-          taille += n;
-        }
-        if (lot.length) lots.push(lot);
-        for (const l of lots) base = (await q("POST", `/repos/${d.depot}/git/trees`, { base_tree: base, tree: l })).sha;
-        const t = new Date(), quand = `${date2(t.getDate())}/${date2(t.getMonth() + 1)}/${t.getFullYear()} ${date2(t.getHours())}:${date2(t.getMinutes())}`;
-        nouveau = (await q("POST", `/repos/${d.depot}/git/commits`, { message: `Sauvegarde du ${quand} (téléphone)`, tree: base, parents: [tete] })).sha;
-        try { await q("PATCH", `/repos/${d.depot}/git/refs/heads/${d.branche}`, { sha: nouveau }); }
-        catch (x) { if (x.statut === 422 && essai < 2) continue; throw x; }   // un autre appareil a envoyé entre-temps
+      // 1. ce qui arrive, et la liste d'en face quand celle d'ici l'emporte (lue avant d'être remplacée)
+      const lus = new Map(), aLire = [...recus, ...conflits.filter((rel) => rel.endsWith("/archidekt.txt"))];
+      for (let i = 0; i < aLire.length; i += LOT) {
+        const r = await serveur("/fichiers/lire", "POST", { chemins: aLire.slice(i, i + LOT) });
+        for (const [rel, t] of Object.entries(r.fichiers || {})) lus.set(rel, t);
       }
-      // 2. ce qui arrive ; la liste d'en face, quand celle d'ici l'emporte, dans l'historique du deck
-      const lus = new Map(), ignores = new Set(e.ignores || []);
-      const aLire = [...recus, ...conflits.filter((rel) => rel.endsWith("/archidekt.txt"))];
-      for (let i = 0; i < aLire.length; i += 6) {
-        await Promise.all(aLire.slice(i, i + 6).map(async (rel) => {
-          const t = texteDe((await q("GET", `/repos/${d.depot}/git/blobs/${distant[rel]}`)).content);
-          if (t === null) ignores.add(rel); else lus.set(rel, t);
-        }));
+      // 2. ce qui part ; un autre appareil a écrit entre-temps (conflit) : on recommence
+      const lots = enLots([...envois.map((rel) => ({ chemin: rel, contenu: dep.fichiers[rel], base: distant[rel] ?? null })),
+        ...retraits.map((rel) => ({ chemin: rel, contenu: null, base: distant[rel] ?? null }))]);
+      let revision = l.revision, conflit = false;
+      for (const lot of lots) {
+        const r = await serveur("/fichiers/ecrire", "POST", { changements: lot });
+        if (Object.keys(r.conflits || {}).length) conflit = true;
+        revision = r.revision;
       }
+      if (conflit) { e = { ...e, revision: null }; continue; }
+      // 3. ce qui est arrivé, rangé ici
       const f = dep.fichiers, touches = new Set(), avantDecks = new Set(PAGES.decksDe(f));
       dep.modifies = dep.modifies || {};
       for (const rel of recus) {
@@ -1715,12 +1616,12 @@
         f[`${deck}/historique/${nom}`] = lus.get(rel);
         let j = {};
         try { j = JSON.parse(f[jf] || "{}"); } catch (_) {}
-        j[nom] = "Liste d'un autre appareil (sauvegarde en ligne)";
+        j[nom] = "Liste d'un autre appareil (compte)";
         f[jf] = JSON.stringify(j, null, 1);
         touches.add(deck);
       }
-      // 3. ce qui a disparu là-bas (sans avoir changé ici) : retiré ici aussi
-      const partis = new Set(effaces);                    // un deck supprimé sur un autre appareil : dans la corbeille d'ici
+      // 4. ce qui a disparu du compte (sans avoir changé ici) : retiré ici aussi ; un deck entier, dans la corbeille d'ici
+      const partis = new Set(effaces);
       for (const id of new Set(effaces.map((rel) => rel.split("/")[0]))) {
         if (id.startsWith("Deck ") && !Object.keys(f).some((rel) => rel.startsWith(id + "/") && !partis.has(rel))) jeter(f, id);
       }
@@ -1731,8 +1632,10 @@
       for (const rel of envois) fichiers[rel] = ici[rel];
       for (const rel of retraits) delete fichiers[rel];
       const nb = new Set(Object.keys(fichiers).filter((rel) => rel.startsWith("Deck ")).map((rel) => rel.split("/")[0])).size;
-      Object.assign(e, { commit: nouveau, fichiers, derniere: Date.now() / 1000, decks: nb, ignores: [...ignores] });
-      await BD.ecrire(SAUVEGARDE, e);
+      // la révision n'est sûre que si personne d'autre n'a écrit pendant l'envoi
+      const sure = revision === l.revision + lots.length;
+      e = { email: compte.email, revision: sure ? revision : null, fichiers, derniere: Date.now() / 1000, decks: nb };
+      await BD.ecrire(ETAT, e);
       if (touches.size) await recalculer(null, touches);
       if (recus.includes(REG_CARTES)) await appliquerReglages(dep.fichiers[REG_CARTES]);     // changés sur un autre appareil
       if (conflits.length) setTimeout(() => planifierSauvegarde(1000));   // la liste d'en face, gardée dans l'historique, part aussi
@@ -1740,14 +1643,13 @@
         conflits: [...new Set(conflits.filter((rel) => rel.endsWith("/archidekt.txt")).map((rel) => rel.split("/")[0]))].sort(),
         decks_recus: PAGES.decksDe(f).filter((x) => !avantDecks.has(x)).sort() };
     }
-    throw new Error("La sauvegarde n'a pas pu s'enregistrer : réessaie.");
+    throw new Error("Le compte change trop vite : réessaie dans un instant.");
   }
-  // en fond : après une série de modifications, au lancement, et un coup d'œil toutes les cinq minutes (un autre
+  // en fond : après une série de modifications, au lancement, au retour sur l'appli et toutes les cinq minutes (un autre
   // appareil a pu changer un deck) ; la page se refait si des fichiers sont arrivés
   let minuteurSauvegarde = null;
   async function sauvegarderEnFond() {
-    const g = await leCompte();
-    if (!g || (await lEtat(g)).voulue === false) return;
+    if (!compte) return;
     const r = await sauvegarder().catch(() => null);
     if (r && r.recus && window.route && T.pret && document.querySelector("#modale")?.hidden !== false) route();
   }
@@ -1756,28 +1658,31 @@
     minuteurSauvegarde = setTimeout(sauvegarderEnFond, ms);
   }
   async function etatSauvegarde() {
-    const g = await leCompte(), e = await lEtat(g), voulue = e.voulue !== false;
-    return { connecte: !!g, compte: g ? g.compte : null, prive: !!g, voulue, active: !!g && voulue, en_cours: !!sauvegarde,
-      derniere: e.derniere || null, erreur: g ? erreurSauvegarde : "", url: e.depot ? `https://github.com/${e.depot}` : null, decks: e.decks ?? null };
+    const e = await lEtat();
+    return { connecte: !!compte, email: compte ? compte.email : null, synchro: "auto", en_cours: !!sauvegarde,
+      derniere: e.derniere || null, erreur: compte ? erreurSauvegarde : "", decks: e.decks ?? null };
   }
-  // les demandes de l'écran GitHub de l'Atelier (app.py › api_github, api_sauvegarde…)
-  async function routeGithub(p, methode, b) {
-    const g = await leCompte(), compte = () => leCompte().then((x) => ({ compte: x ? x.compte : null, git: null, disponible: true, prive: !!x }));
+  async function exporterCompte() {                   // tout ce que garde le compte, dans un fichier (format atelier-mtg-appli)
+    const d = await serveur("/compte/export");
+    const a = Object.assign(document.createElement("a"), {
+      href: URL.createObjectURL(new Blob([JSON.stringify(d)], { type: "application/json" })), download: `atelier-mtg-${String(d.date || "").slice(0, 10)}.json` });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  }
+  // les demandes de l'écran Compte (app.js › optionsCompte ; sur le PC, app.py › api_compte…)
+  async function routeCompte(p, methode, b) {
     if (methode === "GET") {
-      if (p === "/api/github") return compte();
-      if (p === "/api/github/connexion") return etatConnexion();
-      if (p === "/api/sauvegarde") return etatSauvegarde();
-      if (p === "/api/sauvegarde/distante") return sauvegardeDistante();
+      if (p === "/api/compte") return etatSauvegarde();
+      if (p === "/api/compte/appareils") return serveur("/appareils");
       return undefined;
     }
-    if (p === "/api/github/connexion") return connecterGithub();
-    if (p === "/api/github/deconnexion") { flux = null; garderFlux(); await BD.effacer(GITHUB); return compte(); }
-    if (p === "/api/sauvegarde" || p === "/api/sauvegarde/recuperer") {
-      const action = p.endsWith("/recuperer") ? "activer" : b.action || "maintenant", e = await lEtat(g);
-      if (action === "couper" || action === "activer") await BD.ecrire(SAUVEGARDE, { ...e, voulue: action !== "couper" });
-      if (action === "couper") return { etat: await etatSauvegarde() };
-      return { resume: await sauvegarder(!p.endsWith("/recuperer")), etat: await etatSauvegarde() };
-    }
+    if (p === "/api/compte/synchroniser") { await envoyer().catch(() => {}); return { resume: await sauvegarder(), etat: await etatSauvegarde() }; }
+    if (p === "/api/compte/appareils/oublier") return serveur(`/appareils/${encodeURIComponent(b.id)}`, "DELETE");
+    if (p === "/api/compte/exporter") { await exporterCompte(); return { ok: true }; }
+    if (p === "/api/compte/deconnexion") { await deconnecter(); return { ok: true }; }
+    if (p === "/api/compte/supprimer") { await serveur("/compte", "DELETE", { email: b.email }); await deconnecte(true); return { ok: true }; }
     return undefined;
   }
 
@@ -1810,21 +1715,9 @@
     connus = null;
     setTimeout(() => spellbookEnFond(touches ? [...touches] : ids), 1000);
   }
-  // sans PC, les decks ne vivent que dans ce navigateur : on lui demande de ne jamais les effacer pour faire de la place
+  // ce qui n'est pas encore parti vers le compte ne vit qu'ici : on demande au navigateur de ne pas l'effacer
   function garderDonnees() {
     try { navigator.storage && navigator.storage.persist && navigator.storage.persist().catch(() => {}); } catch (e) { /* navigateur ancien */ }
-  }
-  // « Commencer ici » : un Atelier sur ce téléphone, sans PC ni compte
-  async function commencerIci() {
-    garderDonnees();
-    ecrireLocal(LOCAL, "1");
-    local = true;
-    if (!(await BD.lire("@depot").catch(() => null))) await BD.ecrire("@depot", { fichiers: {}, modifies: {} });
-    window.REGLAGES = { budget: 5, sans_ub_illustrations: false, ...(window.REGLAGES || {}) };
-    ecrireLocal(REGLAGES, JSON.stringify(window.REGLAGES));
-    await recalculer(await depot());
-    location.hash = "#/";
-    location.reload();
   }
 
   // les versions d'un deck : enregistrer la liste actuelle sous un nom, en supprimer une, revenir à une version
@@ -1847,7 +1740,7 @@
     return { ok: true };
   }
   async function restaurer(id, fichier) {
-    const texte = local ? (await depot()).fichiers[`${id}/${fichier}`] : await contenu(`${id}/${fichier}`, ((await fichier_("index.json.gz")) || {}).branche || "main");
+    const texte = (await depot()).fichiers[`${id}/${fichier}`];
     if (texte == null) throw new Error(`version introuvable : ${fichier}`);
     const v = ((await api(`/api/decks/${id}/versions`).catch(() => [])).find((x) => x.fichier === fichier) || {}).nom || fichier;
     const prec = await api(`/api/decks/${id}`), entrees = MOTEUR.lire(texte), infos = {};
@@ -1856,76 +1749,6 @@
     await surcharger({ [`/api/decks/${id}`]: page, [`/api/decks/${id}/export?format=archidekt`]: MOTEUR.texte(entrees) });
     await enAttente({ f: "restaurer", deck: id, fichier, raison: `retour à « ${v} »` });
     return copie(page);
-  }
-  const fichier_ = (k) => fichier(k);
-
-  // ------------------------------------------------------------------ relier le téléphone au PC
-  const PAS_LE_LIEN = ORDI ? "Ce n'est pas le lien de ton Atelier : copie-le à nouveau sur ton PC." : "Ce n'est pas le QR code de l'Atelier.";
-  function appairer(texte) {
-    const code = String(texte || "").split("#appairer=")[1];
-    if (!code) throw new Error(PAS_LE_LIEN);
-    let a;
-    try {
-      a = JSON.parse(decodeURIComponent(escape(atob(code.trim().replace(/-/g, "+").replace(/_/g, "/")))));
-    } catch (_) { throw new Error(PAS_LE_LIEN); }
-    if (!a || typeof a.c !== "string" || !/^[\w.-]+\/[\w.-]+$/.test(a.d || "")) throw new Error(PAS_LE_LIEN);
-    acces = { d: a.d, c: a.c };
-    ecrireLocal(ACCES, JSON.stringify(acces));
-    ecrireLocal(COMMIT, null);
-    memoire.clear();
-    fusion = null;
-    connus = null;
-    return BD.vider().catch(() => {});
-  }
-  function oublier() {
-    acces = null;
-    ecrireLocal(ACCES, null);
-    ecrireLocal(COMMIT, null);
-    memoire.clear();
-    fusion = null;
-    connus = null;
-    T.pret = false;
-    T.arrete = false;
-    bandeauArrete();
-    BD.vider().catch(() => {});
-  }
-
-  // lecture du QR code par l'appareil photo : le détecteur du navigateur s'il y en a un (Android), sinon jsQR (iPhone)
-  const charger = (src) => new Promise((ok, ko) => {
-    const s = document.createElement("script");
-    s.src = src;
-    s.onload = ok;
-    s.onerror = () => ko(new Error("Lecteur de QR code introuvable : vérifie la connexion."));
-    document.head.appendChild(s);
-  });
-  async function scanner(video, trouve) {
-    const flux = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
-    video.srcObject = flux;
-    video.hidden = false;
-    await video.play();
-    let detecteur = null;
-    try { if ("BarcodeDetector" in window) detecteur = new BarcodeDetector({ formats: ["qr_code"] }); } catch (_) {}
-    if (!detecteur && !window.jsQR) await charger("jsQR.js");
-    const toile = document.createElement("canvas"), ctx = toile.getContext("2d", { willReadFrequently: true });
-    const arreter = () => { flux.getTracks().forEach((t) => t.stop()); video.hidden = true; };
-    const tour = async () => {
-      if (!flux.active || !video.isConnected) return arreter();
-      let texte = null;
-      if (detecteur) {
-        texte = ((await detecteur.detect(video).catch(() => []))[0] || {}).rawValue;
-      } else if (video.videoWidth) {
-        const r = Math.min(1, 720 / video.videoWidth);
-        toile.width = Math.round(video.videoWidth * r);
-        toile.height = Math.round(video.videoHeight * r);
-        ctx.drawImage(video, 0, 0, toile.width, toile.height);
-        const img = ctx.getImageData(0, 0, toile.width, toile.height);
-        texte = (window.jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" }) || {}).data;
-      }
-      if (texte && texte.includes("#appairer=")) { arreter(); return trouve(texte); }
-      setTimeout(tour, 150);
-    };
-    tour();
-    return arreter;
   }
 
   // ------------------------------------------------------------------ l'appli installée sur l'écran d'accueil
@@ -1951,28 +1774,8 @@
     const b = document.querySelector("body > .tel-bandeau");
     document.documentElement.style.setProperty("--tel-bandeau", b ? b.offsetHeight + 12 + "px" : "0px");
   }
-  // relié au PC : le PC a arrêté l'appli du téléphone (Options › Téléphone › Arrêter). Ses decks restent lisibles ici,
-  // sans modification possible ; relancée sur le PC, l'appli reprend toute seule
-  function bandeauArrete() {
-    let b = document.getElementById("tel-arrete");
-    if (!T.arrete || !acces || !document.body) { if (b) b.remove(); return; }
-    const installer = document.getElementById("tel-bandeau");
-    if (installer) installer.remove();
-    if (!b) {
-      b = document.createElement("div");
-      b.id = "tel-arrete";
-      b.className = "tel-bandeau";
-      b.setAttribute("role", "status");
-      document.body.appendChild(b);
-    }
-    b.innerHTML = `<div class="tel-bandeau-texte"><strong>Ton PC n'envoie plus tes decks</strong></div>
-      <div class="tel-bandeau-boutons"><button class="btn btn-danger btn-petit" id="tel-arrete-delier">Délier ${CET_APPAREIL}</button></div>`;
-    majBandeau();
-    b.querySelector("#tel-arrete-delier").onclick = () => { if (confirm(`Délier ${CET_APPAREIL} ? Ses decks en seront effacés.`)) T.delier(); };
-  }
-
   function bandeauInstaller() {
-    if (ORDI || installee() || !(acces || local) || !document.body || T.arrete) return;     // ordinateur : l'Atelier à installer, c'est l'autre
+    if (ORDI || installee() || !local || !document.body) return;     // ordinateur : l'Atelier à installer, c'est l'autre
     if (Date.now() - Number(lireLocal(PLUS_TARD) || 0) < 3 * 86400 * 1000) return;
     let b = document.getElementById("tel-bandeau");
     if (!b) {
@@ -1985,8 +1788,7 @@
     }
     b.innerHTML = `<div class="tel-bandeau-texte"><strong>Installe l'appli</strong>
         <span>${invite ? "Elle s'ouvrira depuis son icône, même sans réseau."
-          : iphone ? "Touche Partager <span class=\"tel-partager\" aria-hidden=\"true\">⬆</span>, puis «&nbsp;Sur l'écran d'accueil&nbsp;». Ouvre-la ensuite depuis son icône"
-            + (local ? " : les decks créés dans Safari restent dans Safari." : " et scanne à nouveau le QR code.")
+          : iphone ? "Touche Partager <span class=\"tel-partager\" aria-hidden=\"true\">⬆</span>, puis «&nbsp;Sur l'écran d'accueil&nbsp;». Ouvre-la ensuite depuis son icône et connecte-toi."
           : "Menu du navigateur ⋮, puis «&nbsp;Installer l'application&nbsp;» ou «&nbsp;Ajouter à l'écran d'accueil&nbsp;»."}</span></div>
       <div class="tel-bandeau-boutons">
         ${invite ? `<button class="btn btn-accent btn-petit" id="tel-installer-oui">Installer</button>` : ""}
@@ -2003,75 +1805,63 @@
   }
 
   const e = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-  // l'écran d'attente : la première fois, deux chemins selon qu'on a déjà l'Atelier sur un PC ou non ; ensuite, la
-  // réception des decks. iPhone hors de l'appli installée : l'installer d'abord, car Safari et l'appli installée ne
-  // partagent pas leurs données (des decks commencés dans Safari n'y seraient pas).
+  // l'écran de connexion : l'adresse e-mail, puis le code reçu (le même geste crée le compte). Pour les decks d'avant les
+  // comptes : ceux gardés ici partent dans le compte à la connexion ; ceux d'un PC relié, c'est le PC qui les envoie
   function attenteVue(el) {
-    if (!acces) {
-      const dabord = iphone && !installee() && !el.dataset.safari;
+    if (!compte) {
+      const creer = /inscription/.test(location.hash);
       el.innerHTML = `<div class="tel-accueil">
         <div class="tel-marque"><h1>Atelier MTG</h1>
-          <p class="tel-accroche">Tes decks Commander, ${ORDI ? "sans rien installer" : "dans ta poche"}.</p>
-          <p class="tel-rassure">Gratuit · sans compte · sans pub</p></div>
-        ${dabord ? `<section class="tel-choix">
-          <h2>D'abord, installe l'appli</h2>
-          <ol class="tel-etapes"><li>Touche Partager <span class="tel-partager" aria-hidden="true">⬆</span> en bas de Safari.</li>
-            <li>Choisis «&nbsp;Sur l'écran d'accueil&nbsp;».</li><li>Ouvre l'Atelier depuis sa nouvelle icône.</li></ol>
+          <p class="tel-accroche">Tes decks Commander, partout.</p></div>
+        <section class="tel-choix">
+          <h2>${creer ? "Créer ton compte" : "Connexion"}</h2>
+          ${ANCIEN_LOCAL ? `<p>Connecte-toi pour garder les decks de ${CET_APPAREIL} : ils rejoignent ton compte.</p>` : ""}
+          ${ANCIEN_PC ? `<p>Tes decks passent maintenant par ton compte. Sur ton PC : mets l'Atelier à jour, puis Options › Compte › Envoyer.</p>` : ""}
+          <form class="form-ligne" id="tel-form-email">
+            <input class="champ" id="tel-email" type="email" autocomplete="email" placeholder="ton@adresse.fr" aria-label="Adresse e-mail" required>
+            <button class="btn btn-accent">Recevoir un code</button></form>
+          <form id="tel-form-code" hidden>
+            <p id="tel-envoye"></p>
+            <div class="form-ligne"><input class="champ" id="tel-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123456" aria-label="Code reçu" required>
+              <button class="btn btn-accent">Valider</button></div>
+            <button type="button" class="lien-discret" id="tel-autre">Changer d'adresse</button></form>
+          <p class="erreur" id="tel-erreur" hidden></p>
         </section>
-        <button class="lien-discret" id="tel-safari">Continuer dans Safari</button>` : `<section class="tel-choix">
-          <h2>Nouveau sur l'Atelier ?</h2>
-          <p>Tes decks restent ${ORDI ? "dans ce navigateur" : "sur ce téléphone"}.</p>
-          <button class="btn btn-accent" id="tel-commencer">Commencer</button>
-          <button class="lien-discret" id="tel-restaurer">Restaurer un fichier</button>
-        </section>
-        <section class="tel-choix tel-choix-pc">
-          <h2>Déjà l'Atelier sur ton PC ?</h2>
-          <p>Retrouve ici les decks de ton PC.</p>
-          <button class="btn" id="tel-relier-pc" aria-expanded="false" aria-controls="tel-relier">Relier à mon PC</button>
-          <div id="tel-relier" class="tel-relier" hidden>${ORDI ? `
-            <ol class="tel-etapes"><li>Sur ton PC, ouvre l'Atelier, puis Options › Téléphone.</li><li>Sous le QR code, clique sur «&nbsp;Copier le lien&nbsp;», puis colle-le ici.</li></ol>
-            <div class="form-ligne"><input class="champ" id="tel-lien" placeholder="https://app.atelier-mtg.com/#appairer=…" autocomplete="off" aria-label="Lien du PC">
-            <button class="btn btn-accent" id="tel-relier-lien">Relier</button></div>` : `
-            <ol class="tel-etapes"><li>Sur ton PC, ouvre l'Atelier, puis Options › Téléphone.</li><li>Scanne le QR code qui s'affiche.</li></ol>
-            <button class="btn btn-accent" id="tel-scanner">Scanner le QR code</button>
-            <video id="tel-video" playsinline muted hidden></video>
-            <details class="tel-coller"><summary>Pas d'appareil photo ?</summary>
-              <p>Sur le PC, touche «&nbsp;Copier le lien&nbsp;» sous le QR code, envoie-le sur ce téléphone et colle-le ici.</p>
-              <div class="form-ligne"><input class="champ" id="tel-lien" placeholder="https://app.atelier-mtg.com/#appairer=…" autocomplete="off" aria-label="Lien du PC">
-              <button class="btn" id="tel-relier-lien">Relier</button></div></details>`}
-          </div>
-        </section>`}
-        <p class="erreur" id="tel-erreur" hidden></p>
+        ${ANCIEN_LOCAL ? `<button class="lien-discret" id="tel-fichier">Enregistrer mes decks dans un fichier</button>` : ""}
         <a class="tel-decouvrir" href="https://atelier-mtg.com/fr/">C'est quoi, l'Atelier MTG ?</a>
       </div>`;
-      const erreur = (m) => { const x = el.querySelector("#tel-erreur"); x.textContent = m; x.hidden = !m; };
-      if (dabord) {
-        el.querySelector("#tel-safari").onclick = () => { el.dataset.safari = "1"; attenteVue(el); };
-        return;
-      }
-      const relier = async (texte) => {
-        try { await appairer(texte); demarrer(); } catch (err) { erreur(err.message); }
-      };
-      el.querySelector("#tel-relier-pc").onclick = (ev) => {
-        const b = ev.currentTarget, z = el.querySelector("#tel-relier");
-        z.hidden = !z.hidden;
-        b.setAttribute("aria-expanded", String(!z.hidden));
-        b.hidden = !z.hidden;
-      };
-      if (!ORDI) el.querySelector("#tel-scanner").onclick = async (ev) => {      // ordinateur : le lien collé, sans appareil photo
-        ev.currentTarget.disabled = true;
+      const $ = (s) => el.querySelector(s), fe = $("#tel-form-email"), fc = $("#tel-form-code");
+      const erreur = (m) => { $("#tel-erreur").textContent = m; $("#tel-erreur").hidden = !m; };
+      const occupe = (f, oui) => f.querySelectorAll("button, input").forEach((x) => { x.disabled = oui; });
+      fe.onsubmit = async (ev) => {
+        ev.preventDefault();
+        const email = $("#tel-email").value.trim();
         erreur("");
-        try { await scanner(el.querySelector("#tel-video"), relier); }
-        catch (err) { erreur(err.name === "NotAllowedError" ? "Autorise l'appareil photo, ou colle le lien." : err.message); ev.target.disabled = false; }
+        occupe(fe, true);
+        try {
+          await demanderCode(email);
+          $("#tel-envoye").innerHTML = `Code envoyé à <strong>${e(email)}</strong>.`;
+          fe.hidden = true;
+          fc.hidden = false;
+          fc.dataset.email = email;
+          $("#tel-code").focus();
+        } catch (err) { erreur(err.message); }
+        occupe(fe, false);
       };
-      el.querySelector("#tel-relier-lien").onclick = () => relier(el.querySelector("#tel-lien").value);
-      el.querySelector("#tel-commencer").onclick = (ev) => { ev.currentTarget.disabled = true; commencerIci().catch((err) => erreur(err.message)); };
-      el.querySelector("#tel-restaurer").onclick = () => restaurerFichier().catch((err) => erreur(err.message));
+      fc.onsubmit = async (ev) => {
+        ev.preventDefault();
+        erreur("");
+        occupe(fc, true);
+        try { await seConnecter(fc.dataset.email, $("#tel-code").value); }
+        catch (err) { erreur(err.message); occupe(fc, false); }
+      };
+      $("#tel-autre").onclick = () => { fc.hidden = true; fe.hidden = false; erreur(""); $("#tel-email").focus(); };
+      if ($("#tel-fichier")) $("#tel-fichier").onclick = () => enregistrerFichier().catch((err) => erreur(err.message));
       return;
     }
     el.innerHTML = T.erreur ? `<div class="tel-accueil"><h1>Atelier MTG</h1><p class="erreur">${e(T.erreur)}</p>
         <button class="btn" id="tel-reessayer">Réessayer</button></div>`
-      : `<p class="chargement">Réception de tes decks…</p>`;
+      : `<p class="chargement">Chargement de tes decks…</p>`;
     const r = el.querySelector("#tel-reessayer");
     if (r) r.onclick = () => { T.erreur = ""; attenteVue(el); demarrer(); };
   }
@@ -2088,50 +1878,31 @@
   }
 
   async function demarrer() {
+    if (!local) return window.route && route();         // pas connecté : l'écran de connexion
     preparerBase();
-    if (local) {                                          // sans PC : tout est ici
-      bandeauInstaller();
-      envoyer().catch(() => {});
-      try { await synchroniser(); T.erreur = ""; } catch (err) { T.erreur = err.message; }
-      T.pret = true;
-      if (window.route) route();
-      setTimeout(async () => spellbookEnFond(PAGES.decksDe((await depot()).fichiers)), 3000);
-      sauvegarderEnFond();
-      planifierPartage(30000);
-      if (flux) reprendreConnexion();
-      return;
-    }
-    if (!acces) return window.route && route();
     bandeauInstaller();
-    envoyer().catch(() => {});                             // ce qui n'était pas parti (hors ligne)
-    if (!T.pret && await fichier("index.json.gz")) {   // ce qu'on a déjà : tout de suite, même sans réseau
-      T.pret = true;
-      if (window.route) route();
-    }
-    try {
-      const nouveau = await synchroniser();
-      T.erreur = "";
-      if (nouveau || !T.pret) {
-        T.pret = true;
-        T.date = Date.now();
-        if (window.route) route();
-      }
-    } catch (err) {
-      T.erreur = err.message;
-      if (!T.pret && window.route) route();
-    }
-    bandeauArrete();
-    if (!T.arrete) partageEnAttente().catch(() => {});        // un renommage ou une suppression à reporter sur le site
+    envoyer().catch(() => {});                            // ce qui n'était pas parti (hors ligne)
+    try { await synchroniser(); T.erreur = ""; } catch (err) { T.erreur = err.message; }
+    T.pret = true;
+    if (window.route) route();
+    setTimeout(async () => spellbookEnFond(PAGES.decksDe((await depot()).fichiers)), 3000);
+    sauvegarderEnFond();
   }
 
   // ------------------------------------------------------------------ fichier de sauvegarde
-  // Tout ce que l'appli garde dans ce navigateur (decks, réglages, connexion), sauf la base de cartes, retéléchargée.
-  // Même format que la passerelle de l'ancienne adresse (passerelle.html) : un fichier enregistré là-bas se restaure ici.
+  // Tout ce que l'appli garde dans ce navigateur (decks, réglages), sauf la base de cartes et la connexion au compte.
+  // Même format que l'export du compte (serveur › exporter) : il s'importe ici (importerDecks) et sur le PC.
   const FICHIER_SAUVEGARDE = "atelier-mtg-appli";
+  const PAS_DANS_LE_FICHIER = new Set(["@base", "@github", ETAT]), PAS_DANS_LE_FICHIER_LOCAL = new Set([COMPTE, "telephone-acces"]);
   async function enregistrerFichier() {
     const fichiers = {}, locaux = {};
-    for (const k of await BD.cles()) if (k !== "@base") fichiers[k] = await BD.lire(k);
-    try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); locaux[k] = localStorage.getItem(k); } } catch (_) {}
+    for (const k of await BD.cles()) if (!PAS_DANS_LE_FICHIER.has(k)) fichiers[k] = await BD.lire(k);
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!PAS_DANS_LE_FICHIER_LOCAL.has(k)) locaux[k] = localStorage.getItem(k);
+      }
+    } catch (_) {}
     const d = { format: FICHIER_SAUVEGARDE, version: 1, date: new Date().toISOString(), fichiers, local: locaux };
     const a = Object.assign(document.createElement("a"), {
       href: URL.createObjectURL(new Blob([JSON.stringify(d)], { type: "application/json" })), download: `atelier-mtg-${d.date.slice(0, 10)}.json` });
@@ -2140,22 +1911,40 @@
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 60000);
   }
-  // remplace tout ce que l'appli garde ici par le fichier, puis repart de zéro
-  async function restaurerFichier() {
-    const f = await new Promise((ok) => {
-      const i = Object.assign(document.createElement("input"), { type: "file", accept: ".json,application/json" });
-      i.onchange = () => ok(i.files[0] || null);
-      i.click();
-    });
-    if (!f) return false;
+  // un fichier de sauvegarde (le sien, ou l'export du compte) : ses decks rejoignent ceux d'ici, comme sur le PC
+  // (decks.importer_appli) : même liste → déjà là ; une autre liste du même nom → un nom libre ; le classeur, s'il n'y en
+  // a pas encore. null si ce n'est pas un tel fichier
+  async function importerAppli(texte) {
     let d = null;
-    try { d = JSON.parse(await f.text()); } catch (_) { /* pas du JSON */ }
-    if (!d || d.format !== FICHIER_SAUVEGARDE || !d.fichiers) throw new Error("Ce fichier n'est pas une sauvegarde de l'Atelier.");
-    for (const k of await BD.cles()) if (k !== "@base") await BD.effacer(k);
-    for (const [k, v] of Object.entries(d.fichiers)) await BD.ecrire(k, v);
-    try { localStorage.clear(); for (const [k, v] of Object.entries(d.local || {})) localStorage.setItem(k, v); } catch (_) {}
-    location.replace(location.pathname);
-    return true;
+    try { d = JSON.parse(texte); } catch (_) { return null; }
+    if (!d || d.format !== FICHIER_SAUVEGARDE) return null;
+    const src = (((d.fichiers || {})["@depot"] || {}).fichiers) || {}, parDossier = new Map();
+    for (const [rel, t] of Object.entries(src)) {
+      const parts = rel.split("/");
+      if (typeof t !== "string" || parts.length < 2 || rel.includes("\\") || rel.includes(":") || parts.some((x) => !x.trim() || x.startsWith("."))) continue;
+      if (!parDossier.has(parts[0])) parDossier.set(parts[0], {});
+      parDossier.get(parts[0])[parts.slice(1).join("/")] = t;
+    }
+    return avecVerrou(async () => {
+      const dep = await depot(), f = dep.fichiers, crees = [], deja = [];
+      const pris = new Set(Object.keys(f).map((rel) => rel.split("/")[0].toLowerCase()));
+      for (const [dossier, contenu] of parDossier) {
+        if (dossier.startsWith("Deck ") && "archidekt.txt" in contenu) {
+          if (f[`${dossier}/archidekt.txt`] === contenu["archidekt.txt"]) { deja.push(dossier); continue; }
+          const id = pris.has(dossier.toLowerCase()) ? MOTEUR.dossier(nomLibre(dossier.replace(/^Deck /, ""), pris)) : dossier;
+          pris.add(id.toLowerCase());
+          for (const [rel, t] of Object.entries(contenu)) f[`${id}/${rel}`] = t;
+          dep.modifies = { ...(dep.modifies || {}), [id]: Date.now() / 1000 };
+          crees.push(id);
+        } else if (dossier === "Classeur" && !f["Classeur/classeur.txt"]) {
+          for (const [rel, t] of Object.entries(contenu)) f[`Classeur/${rel}`] = t;
+        }
+      }
+      await BD.ecrire("@depot", dep);
+      await recalculer(dep, new Set(crees));
+      planifierSauvegarde();
+      return { decks: crees, deja };
+    });
   }
 
   // ------------------------------------------------------------------ voir/ : le lien instantané d'un deck
@@ -2195,8 +1984,8 @@
     if (!etatBase.prete) { const gc = await gameChangersScryfall().catch(() => []); o.gcListe = async () => gc; }
     const p = await PAGES.deck(id, f, { ...o, modifie: 0 });
     const pt = PARTAGE_TELEPHONE({ api, scryfall: (url, corps) => scryfall(url, corps), page: async () => p,
-      lire: (k) => BD.lire(k).catch(() => null), ecrire: (k, v) => BD.ecrire(k, v), compte: async () => null,
-      gh: async () => { throw new Error("Pas de compte ici."); }, reglages: () => ({ budget: budget(), sans_ub_illustrations: false }) });
+      lire: (k) => BD.lire(k).catch(() => null), ecrire: (k, v) => BD.ecrire(k, v),
+      serveur: async () => { throw new Error("Pas de compte ici."); }, reglages: () => ({ budget: budget(), sans_ub_illustrations: false }) });
     window.PARTAGE = { reglages: { budget: budget(), sans_ub_illustrations: false }, atelier: "https://github.com/PierreRibeaucourt/atelier-mtg",
       auteur: null, version: "", ...(await pt.capturer(id)), accueil: "../", titre_accueil: "Atelier MTG", instantane: true };
     const s = document.createElement("script");
@@ -2212,30 +2001,29 @@
     return;
   }
 
+  // la table de jeu (jouer/, jouer-appli.js) : le deck et ses jetons, gardés ici pour la page qui s'ouvre
+  async function preparerJeu(id) {
+    const page = await api(`/api/decks/${encodeURIComponent(id)}`);
+    const jetons = await api(`/api/jouer/jetons?deck=${encodeURIComponent(id)}`).catch(() => ({ jetons: [] }));
+    await BD.ecrire("@jouer", { deck: id, quand: Date.now(), api: { [`/api/decks/${id}`]: page, [`/api/jouer/jetons?deck=${id}`]: jetons } });
+  }
+
   const T = window.TELEPHONE = {
-    api, attente: attenteVue, pret: false, erreur: "", arrete: false, appliGithub: APPLI_GITHUB,
+    api, attente: attenteVue, pret: false, erreur: "",
     enAttente: async () => (await attente()).length,
     envoyer: () => envoyer(),
-    acces: () => acces && { depot: acces.d },
     local,
-    delier: () => { oublier(); route(); },
+    compte: () => compte && { email: compte.email },
     synchroniser: () => demarrer(),
     installee,
     installer: () => { ecrireLocal(PLUS_TARD, "0"); bandeauInstaller(); },     // Options : le bandeau, même après « Plus tard »
     enregistrerFichier,
-    restaurerFichier,
+    preparerJeu,
   };
 
-  // relié par l'adresse du QR code (appareil photo du téléphone) : on retire aussitôt la clé de l'adresse
-  if (location.hash.includes("#appairer=")) {
-    const texte = location.hash;
-    history.replaceState(null, "", location.pathname + location.search);
-    appairer(texte).then(demarrer, (err) => { T.erreur = err.message; demarrer(); });
-  } else demarrer();
+  demarrer();
   if (local) garderDonnees();
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && acces) demarrer(); });
-  setInterval(() => { if (!document.hidden && acces) demarrer(); }, DISTANT);
-  // sans PC : la sauvegarde sur GitHub regarde aussi s'il y a du nouveau
+  // un autre appareil a pu changer un deck : un coup d'œil au compte au retour sur l'appli, et toutes les cinq minutes
   document.addEventListener("visibilitychange", () => { if (!document.hidden && local) planifierSauvegarde(500); });
   setInterval(() => { if (!document.hidden && local) sauvegarderEnFond(); }, DISTANT);
 })();
