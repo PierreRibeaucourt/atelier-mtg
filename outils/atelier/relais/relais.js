@@ -1,10 +1,7 @@
-// Relais de l'Atelier MTG sur téléphone : GitHub (connexion par appareil) et Commander Spellbook refusent les pages web
-// (pas de CORS). Le relais transmet seulement ces cinq demandes, pour l'appli app.atelier-mtg.com (et son ancienne
-// adresse, atelier-mtg.github.io, le temps du déménagement). Aucun secret : l'identifiant de l'application GitHub est
-// public, et le jeton obtenu repart aussitôt vers le téléphone, sans être gardé.
-const ORIGINES = ["https://app.atelier-mtg.com", "https://atelier-mtg.github.io", "http://127.0.0.1:5078"];
-const CLIENT_ID = "Ov23li9fE6JyGKnCmR3L";
-const PORTEE = "repo";
+// Relais de l'Atelier MTG en ligne : Commander Spellbook refuse les pages web (pas de CORS). Le relais transmet seulement
+// ces trois demandes, pour l'appli app.atelier-mtg.com. Aucun secret, rien n'est gardé. (Jusqu'à la refonte des comptes,
+// il transmettait aussi la connexion à GitHub : elle n'existe plus.)
+const ORIGINES = ["https://app.atelier-mtg.com"];
 const SPELLBOOK = "https://backend.commanderspellbook.com/";
 const MAX = 300000;                                       // octets : une liste de 100 cartes en fait moins de 10 000
 
@@ -17,12 +14,6 @@ function reponse(corps, statut, origine) {
   return new Response(corps, { status: statut, headers: { ...entetes(origine), "Content-Type": "application/json; charset=utf-8" } });
 }
 
-async function github(url, donnees) {
-  const r = await fetch(url, { method: "POST", body: new URLSearchParams(donnees),
-    headers: { "Accept": "application/json", "User-Agent": "atelier-mtg" } });
-  return [await r.text(), r.status];
-}
-
 export default {
   async fetch(req) {
     const origine = req.headers.get("Origin") || "";
@@ -33,14 +24,6 @@ export default {
     if (corps.length > MAX) return reponse('{"erreur":"trop long"}', 413, origine);
     const chemin = new URL(req.url).pathname;
     try {
-      if (chemin === "/github/code") return reponse(...await github("https://github.com/login/device/code",
-        { client_id: CLIENT_ID, scope: PORTEE }), origine);
-      if (chemin === "/github/jeton") {
-        const code = String(JSON.parse(corps || "{}").device_code || "");
-        if (!code || code.length > 100) return reponse('{"erreur":"code manquant"}', 400, origine);
-        return reponse(...await github("https://github.com/login/oauth/access_token",
-          { client_id: CLIENT_ID, device_code: code, grant_type: "urn:ietf:params:oauth:grant-type:device_code" }), origine);
-      }
       if (chemin === "/spellbook/variants") {               // les combos d'une carte : {q} (syntaxe de recherche de Spellbook)
         const q = String(JSON.parse(corps || "{}").q || "");
         if (!q || q.length > 300) return reponse('{"erreur":"recherche manquante"}', 400, origine);
