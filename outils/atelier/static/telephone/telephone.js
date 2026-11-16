@@ -75,13 +75,19 @@
   }
 
   // ------------------------------------------------------------------ le serveur des comptes (outils/serveur)
+  // Ses réponses, demandées compressées (?gz=1) : le proxy de l'hébergeur ne compresse pas le JSON, et les fichiers et
+  // les pages d'un compte pèsent six fois moins ainsi. Elles arrivent alors en application/octet-stream.
+  const GZ = typeof DecompressionStream === "function";
+  const avecGz = (chemin) => (GZ ? chemin + (chemin.includes("?") ? "&" : "?") + "gz=1" : chemin);
+  const lireJson = (r) => (r.ok && (r.headers.get("Content-Type") || "").startsWith("application/octet-stream")
+    ? new Response(r.body.pipeThrough(new DecompressionStream("gzip"))).json() : r.json());
   async function serveur(chemin, methode = "GET", corps = null) {
     let r;
     try {
-      r = await fetch(API_COMPTE + chemin, { method: methode, cache: "no-store", body: corps ? JSON.stringify(corps) : undefined,
+      r = await fetch(API_COMPTE + avecGz(chemin), { method: methode, cache: "no-store", body: corps ? JSON.stringify(corps) : undefined,
         headers: { ...(compte ? { Authorization: "Bearer " + compte.jeton } : {}), ...(corps ? { "Content-Type": "application/json" } : {}) } });
     } catch (_) { throw Object.assign(new Error("Pas de réseau : réessaie dans un moment."), { statut: 0 }); }
-    const d = await r.json().catch(() => ({}));
+    const d = await lireJson(r).catch(() => ({}));
     if (r.status === 401 && compte && !chemin.startsWith("/connexion/")) deconnecte(false);   // appareil retiré du compte
     if (!r.ok) throw Object.assign(new Error(d.erreur || `Le serveur ne répond pas (${r.status}).`), { statut: r.status });
     return d;
@@ -1604,9 +1610,10 @@
   const niveauDe = (id, page) => (etatBase.prete ? 2 : 0) + (((page.api || {})[`/api/decks/${id}/bracket`] || {}).spellbook_a_jour ? 1 : 0);
   const pagesDuCompte = async () => (await serveur("/pages")).pages || {};
   async function lirePage(id) {                       // {empreinte, niveau, donnees}
-    const r = await fetch(`${API_COMPTE}/pages/lire?deck=${encodeURIComponent(id)}`, { cache: "no-store", headers: { Authorization: "Bearer " + compte.jeton } });
+    const r = await fetch(API_COMPTE + avecGz(`/pages/lire?deck=${encodeURIComponent(id)}`), { cache: "no-store",
+      headers: { Authorization: "Bearer " + compte.jeton } });
     if (!r.ok) throw new Error(`page ${r.status}`);
-    return { empreinte: r.headers.get("X-Empreinte"), niveau: Number(r.headers.get("X-Niveau")) || 0, donnees: await r.json() };
+    return { empreinte: r.headers.get("X-Empreinte"), niveau: Number(r.headers.get("X-Niveau")) || 0, donnees: await lireJson(r) };
   }
   async function deposerPage(id, empreinte, niveau, donnees) {
     const texte = JSON.stringify(donnees);
