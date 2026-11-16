@@ -91,7 +91,7 @@
   let enCours = null;
   function synchroniser() {
     return enCours || (enCours = (async () => {
-      if (!(await fichier("index.json.gz"))) { await recalculer(await depot()); return true; }
+      if (!(await fichier("index.json.gz"))) { await recalculer(await depot(), null, true); return true; }
       return false;
     })().finally(() => { enCours = null; }));
   }
@@ -441,8 +441,10 @@
       await message("reglages", [{ sansUb: !!(window.REGLAGES || {}).sans_ub_illustrations }]);
       Object.assign(etatBase, { prete: true, date: r.date, nb: r.nb });
       etatBase.construction.etape = "";
-      if (local) {                                         // sans PC : les pages refaites avec la base (prix, noms français)
-        recalculer(await depot()).then(() => { if (window.route && T.pret && document.querySelector("#modale")?.hidden !== false) route(); }).catch(() => {});
+      if (local) {                    // les pages faites sans elle, refaites avec (fonctions, Game Changers, suggestions)
+        recalculer(await depot(), BESOIN, true).then((r) => {
+          if (r.ameliorees && window.route && T.pret && document.querySelector("#modale")?.hidden !== false) route();
+        }).catch(() => {});
       }
     })().catch((e) => { baseEnCours = null; etatBase.construction.erreur = e.message; throw e; }));
   }
@@ -813,7 +815,7 @@
     window.REGLAGES = r;
     ecrireLocal(REGLAGES, JSON.stringify(r));
     if (etatBase.prete) await message("reglages", [{ sansUb: r.sans_ub_illustrations }]).catch(() => {});
-    if (refaire) recalculer(null).catch(() => {});
+    if (refaire) recalculer(null, null, true).catch(() => {});
   }
   async function ecrireOptions(d) {
     const ch = changerReglages(d), r = { ...(window.REGLAGES || {}), ...ch };
@@ -1572,6 +1574,97 @@
       categories: PAGES.categories(f),
     };
   }
+  // ------------------------------------------------------------------ les pages toutes prêtes, dans le compte
+  // Les pages d'un deck se font là où sont ses fichiers ; l'appareil qui les a faites les dépose dans le compte
+  // (serveur › pages toutes prêtes), avec l'empreinte des fichiers dont elles sont tirées et leur niveau. Un autre
+  // appareil qui a les mêmes fichiers les reprend telles quelles : un nouveau téléphone ouvre ses decks aussitôt, sans
+  // rien demander à Scryfall ni attendre la base de cartes. Niveau : 2 avec la base de cartes (fonctions, Game Changers,
+  // suggestions), +1 avec l'analyse de Commander Spellbook de la liste. L'empreinte (même calcul sur le PC, compte.py ›
+  // empreintes) : les fichiers du deck, le classeur et les réglages des cartes ; pour l'accueil (@index), le classeur,
+  // les réglages et l'empreinte de chaque deck.
+  const FORMAT_PAGES = "1", INDEX_PAGES = "@index", BESOIN = "besoin", SEMAINE = 7 * 86400;
+  const sha1 = async (t) => [...new Uint8Array(await crypto.subtle.digest("SHA-1", new TextEncoder().encode(t)))]
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+  async function shasDe(f) {                          // {chemin: empreinte git}, comme le compte les garde
+    const r = {};
+    for (const [rel, t] of Object.entries(f)) if (!rel.startsWith(CORBEILLE + "/")) r[rel] = await shaBlob(t);
+    return r;
+  }
+  async function empreintes(shas) {                   // {deck: empreinte, "@index": empreinte}
+    const ligne = async (rel) => `${await sha1(rel)} ${shas[rel] || "-"}`, res = {}, parDeck = {};
+    const reg = await ligne(REG_CARTES), cl = await ligne("Classeur/classeur.txt");     // le classeur : les suggestions
+    for (const rel of Object.keys(shas)) (parDeck[rel.split("/")[0]] = parDeck[rel.split("/")[0]] || []).push(rel);
+    for (const id of PAGES.decksDe(shas)) {
+      res[id] = await sha1(["pages " + FORMAT_PAGES, reg, cl, ...(await Promise.all(parDeck[id].map(ligne))).sort()].join("\n"));
+    }
+    const l = await Promise.all(Object.keys(res).map(async (id) => `${await sha1(id)} ${res[id]}`));
+    res[INDEX_PAGES] = await sha1(["index " + FORMAT_PAGES, reg, cl, ...l.sort()].join("\n"));
+    return res;
+  }
+  const niveauDe = (id, page) => (etatBase.prete ? 2 : 0) + (((page.api || {})[`/api/decks/${id}/bracket`] || {}).spellbook_a_jour ? 1 : 0);
+  const pagesDuCompte = async () => (await serveur("/pages")).pages || {};
+  async function lirePage(id) {                       // {empreinte, niveau, donnees}
+    const r = await fetch(`${API_COMPTE}/pages/lire?deck=${encodeURIComponent(id)}`, { cache: "no-store", headers: { Authorization: "Bearer " + compte.jeton } });
+    if (!r.ok) throw new Error(`page ${r.status}`);
+    return { empreinte: r.headers.get("X-Empreinte"), niveau: Number(r.headers.get("X-Niveau")) || 0, donnees: await r.json() };
+  }
+  async function deposerPage(id, empreinte, niveau, donnees) {
+    const texte = JSON.stringify(donnees);
+    let corps = texte, type = "application/json";
+    if (typeof CompressionStream === "function") {
+      try {
+        corps = await new Response(new Blob([texte]).stream().pipeThrough(new CompressionStream("gzip"))).blob();
+        type = "application/gzip";
+      } catch (_) { corps = texte; }
+    }
+    const q = new URLSearchParams({ deck: id, empreinte, niveau: String(niveau) });
+    const r = await fetch(`${API_COMPTE}/pages?${q}`, { method: "PUT", cache: "no-store", body: corps,
+      headers: { Authorization: "Bearer " + compte.jeton, "Content-Type": type } });
+    if (!r.ok) throw new Error(`page ${r.status}`);
+  }
+  async function enParallele(liste, n, fn) {
+    const file = [...liste];
+    await Promise.all(Array.from({ length: Math.min(n, file.length) }, async () => { while (file.length) await fn(file.shift()); }));
+  }
+  // l'analyse de Spellbook d'une page reçue du compte, gardée comme si elle avait été faite ici : rien à redemander
+  async function garderAnalyse(id, page, f) {
+    const b = page.api[`/api/decks/${id}/bracket`];
+    if (!b || !b.spellbook || !b.spellbook_a_jour || f[`${id}/archidekt.txt`] == null) return;
+    const k = await cleListe(PAGES.corpsSpellbook(MOTEUR.lire(f[`${id}/archidekt.txt`]))), c = await lesAnalyses();
+    if (c.analyses[k]) return;
+    c.analyses[k] = b.spellbook;
+    c.dernier[id] = k;
+    await BD.ecrire(SB, c);
+  }
+  // celles faites ici, pour les autres appareils : une fois leurs fichiers dans le compte (à la synchronisation), si le
+  // compte n'a pas déjà la même, ou mieux
+  let pagesAEnvoyer = false, envoiPages = null, minuteurPages = null;
+  function planifierEnvoiPages(ms = 3000) {
+    if (!compte) return;
+    clearTimeout(minuteurPages);
+    minuteurPages = setTimeout(() => envoyerPages().catch(() => { pagesAEnvoyer = true; }), ms);
+  }
+  function envoyerPages() {
+    return envoiPages || (envoiPages = (async () => {
+      if (!compte) return 0;
+      pagesAEnvoyer = false;
+      const f = (await depot()).fichiers, dansLeCompte = await empreintes((await lEtat()).fichiers || {}), ici = await empreintes(await shasDe(f));
+      const l = await pagesDuCompte();
+      let n = 0;
+      for (const id of [...PAGES.decksDe(f), INDEX_PAGES]) {
+        const g = await BD.lire(id === INDEX_PAGES ? "index.json.gz" : "decks/" + id).catch(() => null);
+        if (!g || !g.donnees || !g.empreinte || g.sha === "compte") continue;
+        if (g.empreinte !== dansLeCompte[id]) { if (g.empreinte === ici[id]) pagesAEnvoyer = true; continue; }   // pas encore partis
+        const x = l[id];
+        if (x && x.empreinte === g.empreinte && x.niveau >= g.niveau) continue;
+        const api = id === INDEX_PAGES ? Object.fromEntries(Object.entries(g.donnees.api).filter(([k]) => k !== "/api/options")) : null;
+        await deposerPage(id, g.empreinte, g.niveau, api ? { date: g.donnees.date, date_fiches: g.donnees.date_fiches, api } : g.donnees);
+        n++;
+      }
+      return n;
+    })().finally(() => { envoiPages = null; }));
+  }
+
   // ------------------------------------------------------------------ Commander Spellbook, par le relais (bracket.spellbook)
   // Spellbook refuse les pages web : un petit relais sans secret (outils/atelier/relais) lui transmet les demandes.
   const RELAIS = "https://relais.atelier-mtg.workers.dev";
@@ -1715,7 +1808,7 @@
     const tout = !(await BD.lire("index.json.gz").catch(() => null)) || (s && s.reglages);
     if (tout || (s && s.touches.length)) {
       suivi = progres;
-      try { await recalculer(dp, tout ? null : new Set(s.touches)); } finally { suivi = null; }
+      try { await recalculer(dp, tout ? null : new Set(s.touches), true); } finally { suivi = null; }
     }
     location.hash = "#/";
     location.reload();
@@ -1752,7 +1845,8 @@
   // synchroniser : {envoyes, recus, conflits, decks, decks_recus}
   function sauvegarder() {
     return sauvegarde || (sauvegarde = avecVerrou(() => synchroniserCompte())
-      .then((r) => { erreurSauvegarde = ""; return r; }, (e) => { erreurSauvegarde = e.message; throw e; })
+      .then((r) => { erreurSauvegarde = ""; if (pagesAEnvoyer) planifierEnvoiPages(1000); return r; },
+        (e) => { erreurSauvegarde = e.message; throw e; })
       .finally(() => { sauvegarde = null; }));
   }
   const pareils = (a, b) => { const k = Object.keys(a); return k.length === Object.keys(b).length && k.every((x) => a[x] === b[x]); };
@@ -1842,7 +1936,7 @@
       e = { email: compte.email, revision: sure ? revision : null, fichiers, derniere: Date.now() / 1000, decks: nb };
       await BD.ecrire(ETAT, e);
       // à la connexion, seConnecter refait les pages une seule fois, à la fin
-      if (touches.size && !enConnexion) await recalculer(null, touches);
+      if (touches.size && !enConnexion) await recalculer(null, touches, true);
       if (recus.includes(REG_CARTES) && !enConnexion) await appliquerReglages(dep.fichiers[REG_CARTES]);     // changés sur un autre appareil
       if (conflits.length) setTimeout(() => planifierSauvegarde(1000));   // la liste d'en face, gardée dans l'historique, part aussi
       if (recus.includes("Réglages Atelier/pont.json")) setTimeout(() => chercherPc().catch(() => {}));   // l'Atelier d'un PC
@@ -1894,38 +1988,105 @@
     return undefined;
   }
 
-  // les pages des decks touchés (tous si touches est vide), puis l'accueil, rangées comme celles du PC ; une seule à la
-  // fois (d vide : les fichiers du téléphone au moment du calcul)
+  // les pages des decks, puis l'accueil, rangées comme celles du PC ; un calcul à la fois (d vide : les fichiers du
+  // téléphone au moment du calcul). touches : les decks à refaire (null : tous ; BESOIN : ceux faits sans la base de
+  // cartes, ou il y a plus d'une semaine) ; et toujours ceux qui n'ont pas de page ou dont les fichiers ont changé
+  // depuis. distant : une page que le compte a déjà, faite par un autre appareil pour les mêmes fichiers, est reprise
+  // telle quelle au lieu d'être refaite. {faites, recues, ameliorees (faites avec la base, sans elle avant)}
   let calculs = Promise.resolve();
-  function recalculer(d, touches = null) {
-    const p = calculs.then(async () => recalculerMaintenant(d || await depot(), touches));
+  function recalculer(d, touches = null, distant = false) {
+    const p = calculs.then(async () => recalculerMaintenant(d || await depot(), touches, distant));
     calculs = p.catch(() => {});
     return p;
   }
-  async function recalculerMaintenant(d, touches) {
-    const f = d.fichiers, o = outilsPages(f), ids = PAGES.decksDe(f);
-    const ancien = (await fichier("index.json.gz")) || { decks: {} }, pages = {}, decks = {};
-    const aFaire = new Set(ids.filter((id) => !touches || touches.has(id) || !ancien.decks[id]));
-    let fait = 0;
+  async function recalculerMaintenant(d, touches, distant) {
+    const f = d.fichiers, o = outilsPages(f), ids = PAGES.decksDe(f), emp = await empreintes(await shasDe(f));
+    const ancien = (await fichier("index.json.gz")) || { decks: {} }, pages = {}, decks = {}, gardees = {};
+    for (const id of ids) gardees[id] = await BD.lire("decks/" + id).catch(() => null);
+    const t = Date.now() / 1000, niveau = (id) => (gardees[id] && gardees[id].empreinte === emp[id] ? gardees[id].niveau ?? 0 : -1);
+    const aRefaire = (id) => {
+      const g = gardees[id];
+      if (!g || !g.donnees || !ancien.decks[id] || (g.empreinte && g.empreinte !== emp[id])) return true;
+      if (touches === BESOIN) return etatBase.prete && (!(g.niveau >= 2) || t - (g.donnees.date || 0) > SEMAINE);
+      return !touches || touches.has(id);
+    };
+    const aFaire = new Set(ids.filter(aRefaire)), recues = new Set();
+    let duCompte = null;
+    if (distant && compte && aFaire.size) {
+      duCompte = await pagesDuCompte().catch(() => ({}));
+      const voulues = [...aFaire].filter((id) => {
+        const x = duCompte[id], n = niveau(id);
+        return x && x.empreinte === emp[id] && (x.niveau > n || (x.niveau === n && x.maj > (((gardees[id] || {}).donnees || {}).date || 0) + 60));
+      });
+      if (suivi && voulues.length) suivi(0, 0);
+      await enParallele(voulues, 4, async (id) => {
+        const x = await lirePage(id).catch(() => null);
+        if (!x || x.empreinte !== emp[id] || !x.donnees || !x.donnees.api) return;
+        gardees[id] = { sha: "compte", empreinte: x.empreinte, niveau: x.niveau, donnees: x.donnees };
+        await BD.ecrire("decks/" + id, gardees[id]);
+        recues.add(id);
+      });
+      for (const id of recues) {
+        await garderAnalyse(id, gardees[id].donnees, f).catch(() => {});
+        if (!(etatBase.prete && gardees[id].niveau < 2)) aFaire.delete(id);
+      }
+    }
+    let fait = 0, ameliorees = 0;
+    const faites = [];
     for (const id of ids) {
       const k = "decks/" + id;
       if (aFaire.has(id)) {
         if (suivi) suivi(fait++, aFaire.size);
+        const avant = gardees[id] ? gardees[id].niveau ?? 0 : -1;
         pages[id] = await PAGES.deck(id, f, { ...o, modifie: (d.modifies || {})[id] || 0 });
-        await BD.ecrire(k, { sha: "local", donnees: pages[id] });
-      } else pages[id] = await fichier(k);
+        const nv = niveauDe(id, pages[id]);
+        if (avant >= 0 && avant < 2 && nv >= 2) ameliorees++;
+        await BD.ecrire(k, { sha: "local", empreinte: emp[id], niveau: nv, donnees: pages[id] });
+        faites.push(id);
+      } else pages[id] = gardees[id] ? gardees[id].donnees : await fichier(k);
       decks[id] = k;
     }
     for (const k of await BD.cles()) if (String(k).startsWith("decks/") && !Object.values(decks).includes(k)) await BD.effacer(k);
-    const api = await PAGES.index(f, pages, o);
+    // l'accueil : celui du compte, s'il est tiré des mêmes fichiers et que rien n'a été refait ici ; sinon fait ici, avec
+    // les fiches du classeur déjà connues (l'accueil d'avant, ou celui du compte) : seules les nouvelles cartes sont demandées
+    const avant = await BD.lire("index.json.gz").catch(() => null);
+    let api = null, source = avant && avant.donnees, niveauIndex = etatBase.prete ? 2 : 0, origine = "local";
+    if (distant && compte && (!avant || avant.empreinte !== emp[INDEX_PAGES] || recues.size)) {
+      const x = (duCompte || await pagesDuCompte().catch(() => ({})))[INDEX_PAGES];
+      const lu = x && (x.empreinte === emp[INDEX_PAGES] || !source) ? await lirePage(INDEX_PAGES).catch(() => null) : null;
+      if (lu && lu.donnees && lu.donnees.api) {
+        if (lu.empreinte === emp[INDEX_PAGES] && !faites.length) {
+          api = { ...lu.donnees.api };
+          niveauIndex = lu.niveau;
+          origine = "compte";
+          source = lu.donnees;
+        } else if (!source) source = lu.donnees;
+      }
+    }
+    const frais = !source || (touches === BESOIN && etatBase.prete && t - (source.date_fiches || source.date || 0) > SEMAINE);
+    if (touches === BESOIN && !faites.length && !recues.size && !frais && avant && avant.empreinte === emp[INDEX_PAGES]
+        && avant.niveau >= niveauIndex) return { faites, recues: [], ameliorees };      // rien de changé
+    if (!api) {
+      const connues = new Map();
+      if (!frais) for (const x of ((source.api || {})["/api/classeur"] || {}).cartes || []) if (x.info && x.info.nom) connues.set(x.nom, x.info);
+      const fiches = async (noms) => {
+        const res = {}, reste = [];
+        for (const n of noms) if (connues.has(n)) res[n] = connues.get(n); else reste.push(n);
+        return reste.length ? { ...res, ...(await o.fiches(reste)) } : res;
+      };
+      api = await PAGES.index(f, pages, { ...o, fiches });
+    }
     api["/api/options"] = options();
-    await BD.ecrire("index.json.gz", { sha: "local", donnees: { format: FORMAT, date: Date.now() / 1000, version: "", compte: null,
-      reglages: window.REGLAGES, decks, api, source: null, branche: null, local: true } });
+    const dateFiches = origine === "compte" ? source.date_fiches || source.date : frais ? t : source.date_fiches || source.date || t;
+    await BD.ecrire("index.json.gz", { sha: origine, empreinte: emp[INDEX_PAGES], niveau: niveauIndex, donnees: { format: FORMAT,
+      date: t, date_fiches: dateFiches, version: "", compte: null, reglages: window.REGLAGES, decks, api, source: null, branche: null, local: true } });
     memoire.clear();
     fusion = null;
     connus = null;
     await majSlugs().catch(() => {});
-    setTimeout(() => spellbookEnFond(touches ? [...touches] : ids), 1000);
+    setTimeout(() => spellbookEnFond(touches instanceof Set ? [...touches] : ids), 1000);
+    if (compte && (faites.length || origine === "local")) { pagesAEnvoyer = true; planifierEnvoiPages(8000); }
+    return { faites, recues: [...recues], ameliorees };
   }
   // ce qui n'est pas encore parti vers le compte ne vit qu'ici : on demande au navigateur de ne pas l'effacer
   function garderDonnees() {
@@ -2167,6 +2328,7 @@
     chercherPc().catch(() => {});
     if (window.route) route();
     setTimeout(async () => spellbookEnFond(PAGES.decksDe((await depot()).fichiers)), 3000);
+    pagesAEnvoyer = true;                                 // après la synchronisation : celles faites ici, pour les autres
     sauvegarderEnFond();
   }
 
