@@ -60,7 +60,7 @@ def construire(dossier, base="base/"):
         shutil.copyfile(os.path.join(STATIQUE, "telephone", f), os.path.join(dossier, f))
     # partager un deck sans PC (partage.js) : la version de l'Atelier, et les modèles de la page publiée (partage.py)
     sys.path.insert(0, ICI)
-    from version import __version__
+    from version import __version__, PUBLIEE
     with open(os.path.join(STATIQUE, "telephone", "partage.js"), encoding="utf-8") as f:
         js = f.read().replace("__VERSION_ATELIER__", __version__)
     with open(os.path.join(dossier, "partage.js"), "w", encoding="utf-8", newline="\n") as f:
@@ -98,8 +98,9 @@ def construire(dossier, base="base/"):
         tel = (f.read().replace("__CARTES__", "cartes.js?v=" + _empreinte(os.path.join(dossier, "cartes.js")))
                .replace("__SIMU__", "simulateur.js?v=" + _empreinte(os.path.join(dossier, "simulateur.js")))
                .replace("__SIMU_FICHIERS__", json.dumps(simu)).replace("__SIMU_OPTIONS__", json.dumps(options, ensure_ascii=False))
-               .replace("__BASE_CARTES__", base))
-        if "__SIMU" in tel or "__BASE_CARTES__" in tel:
+               .replace("__BASE_CARTES__", base)
+               .replace("__VERSION_MODULE__", __version__).replace("__MODULE_PUBLIEE__", PUBLIEE))   # majModule
+        if "__SIMU" in tel or "__BASE_CARTES__" in tel or "_MODULE_" in tel:
             raise SystemExit("telephone.js : une marque n'a pas été remplacée")
     with open(os.path.join(dossier, "telephone.js"), "w", encoding="utf-8", newline="\n") as f:
         f.write(tel)

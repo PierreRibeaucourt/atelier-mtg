@@ -1386,6 +1386,17 @@
   const MODULE_VU = "atelier-module";                 // ce navigateur a déjà joint un module : « Lancer l'Atelier » (app.js › surPC)
   const ROUTES_PONT = /^\/api\/(discussion(\/|$)|decks\/[^/]+\/(synergies|mtgpics)(\/|$))/;
   let pc = null, claudeActif = false;
+  // le module Claude de ce PC, en retard sur la dernière version (version.py quand le site a été construit) : sa page
+  // propose « Mettre à jour ». Seulement une fois qu'il a pu la voir : il regarde au lancement, puis toutes les 20 heures
+  // (mise_a_jour.INTERVALLE) ; avant, sa page n'aurait pas encore le bouton. {version, adresse} ou null
+  const MODULE_DERNIER = { version: "__VERSION_MODULE__", publiee: "__MODULE_PUBLIEE__" };
+  function majModule() {
+    const n = (v) => String(v || "").split(".").map((x) => parseInt(x, 10) || 0);
+    if (!pc || !pc.version) return null;
+    const a = n(pc.version), b = n(MODULE_DERNIER.version), i = [0, 1, 2].find((k) => a[k] !== b[k]);
+    if (i === undefined || a[i] > b[i] || !(Date.now() - Date.parse(MODULE_DERNIER.publiee) > 21 * 3600000)) return null;
+    return { version: MODULE_DERNIER.version, adresse: `http://127.0.0.1:${pc.port}/` };
+  }
   async function chercherPc() {
     if (!ORDI || !compte || pc) return;
     let l = {};
@@ -2481,7 +2492,7 @@
     installer: () => { ecrireLocal(PLUS_TARD, "0"); bandeauInstaller(); },     // Options : le bandeau, même après « Plus tard »
     enregistrerFichier,
     preparerJeu,
-    appairerModule, chercherPc: () => chercherPc().catch(() => {}), moduleVu: () => lireLocal(MODULE_VU) === "1",   // le module Claude
+    appairerModule, chercherPc: () => chercherPc().catch(() => {}), moduleVu: () => lireLocal(MODULE_VU) === "1", majModule,   // le module Claude
     ordi: ORDI,                                                       // (app.js › vueModule, surPC)
   };
 

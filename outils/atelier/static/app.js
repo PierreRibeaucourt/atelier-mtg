@@ -6201,7 +6201,24 @@ function demarrerChat() {
   api("/api/discussion/en-cours").then((s) => { if (s.actives.length) suivreChat(); }).catch(() => {});   // une réponse tournait déjà
 }
 if (PC) demarrerChat();
-window.quandPc = () => { demarrerChat(); document.documentElement.classList.add("avec-pc"); if (TELEPHONE.pret) route(); };
+window.quandPc = () => { demarrerChat(); document.documentElement.classList.add("avec-pc"); if (TELEPHONE.pret) route(); bandeauModule(); };
+// sur le site, le module Claude de ce PC en retard d'une version (telephone.js › majModule) : la page du module, qui
+// l'installe (son bandeau « Mettre à jour », verifierVersion), s'ouvre dans un onglet
+function bandeauModule() {
+  const m = TELEPHONE.majModule && TELEPHONE.majModule();
+  if (!m || $("#bandeau-maj")) return;
+  try { if (sessionStorage.getItem("maj-plus-tard") === m.version) return; } catch (_) {}
+  $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-maj" id="bandeau-maj" role="status">
+    <p class="maj-texte"><strong><span class="maj-large">Nouvelle version du module Claude</span><span class="maj-etroit">Module Claude</span> ${esc(m.version)}</strong></p>
+    <div class="maj-actions">
+      <button class="btn btn-accent btn-petit" id="maj-installer">${ico("telecharger")}Mettre à jour</button>
+      <button class="btn btn-petit btn-discret" id="maj-plus-tard" aria-label="Plus tard">${ico("fermer")}<span class="maj-large">Plus tard</span></button>
+    </div>
+  </div>`);
+  const fermer = () => { try { sessionStorage.setItem("maj-plus-tard", m.version); } catch (_) {} $("#bandeau-maj").remove(); };
+  $("#maj-plus-tard").onclick = fermer;
+  $("#maj-installer").onclick = () => { window.open(m.adresse, "_blank", "noopener"); fermer(); };
+}
 
 route();
 if (PC) suivreMaj();

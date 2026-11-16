@@ -71,7 +71,7 @@ La page Options règle aussi le lancement au démarrage de Windows (raccourci «
 
 ## Mettre à jour
 
-L'Atelier se met à jour tout seul (`outils/atelier/mise_a_jour.py`). Au lancement, puis toutes les 20 heures, il lit les étiquettes `vX.Y.Z` du dépôt (`git fetch --tags origin`). Si l'une est plus récente que `outils/atelier/version.py`, un bandeau propose « Mettre à jour » : `git merge --ff-only vX.Y.Z`, dépendances réinstallées si `requirements.txt` a changé, puis redémarrage. Il refuse si des fichiers suivis par git ont été modifiés, ou si Claude répond, une recherche de synergies ou une simulation tourne.
+L'Atelier se met à jour tout seul (`outils/atelier/mise_a_jour.py`). Au lancement, puis toutes les 20 heures, il lit les étiquettes `vX.Y.Z` du dépôt (`git fetch --tags origin`). Si l'une est plus récente que `outils/atelier/version.py`, un bandeau propose « Mettre à jour » : `git merge --ff-only vX.Y.Z`, dépendances réinstallées si `requirements.txt` a changé, puis redémarrage. Il refuse si des fichiers suivis par git ont été modifiés, ou si Claude répond, une recherche de synergies ou une simulation tourne. Ce bandeau est sur la page de l'Atelier (http://127.0.0.1:5000/) ; relié à un compte, l'Atelier s'ouvre sur atelier-mtg.com : le site, qui connaît la dernière version (`version.py` › `PUBLIEE`, à sa construction), y montre « Nouvelle version du module Claude » 21 heures après la publication (le temps que l'Atelier l'ait vue), et son bouton ouvre la page de l'Atelier.
 
 À la main : `git pull`, puis `python installer.py` (pour les nouvelles dépendances), puis relancer l'Atelier. Installé par l'installeur Windows : voir plus haut. Les decks ne bougent pas : ils sont ignorés par git.
 

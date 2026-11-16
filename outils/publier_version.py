@@ -5,7 +5,7 @@
 
 1. vérifie le numéro (X.Y.Z, plus grand que la version actuelle et que les étiquettes existantes), la branche (main)
    et qu'aucune modification n'attend d'être commitée ;
-2. écrit le numéro dans outils/atelier/version.py et le commite (« Version X.Y.Z ») ;
+2. écrit le numéro et la date dans outils/atelier/version.py et le commite (« Version X.Y.Z ») ;
 3. pose l'étiquette annotée vX.Y.Z, dont le message (les nouveautés) s'affiche dans le bandeau des Ateliers installés ;
 4. envoie le commit et l'étiquette ensemble : git push origin main vX.Y.Z.
 Un envoi sur main sans nouvelle étiquette ne propose rien aux Ateliers installés.
@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import sys
+from datetime import datetime
 
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FICHIER = os.path.join(RACINE, "outils", "atelier", "version.py")
@@ -60,8 +61,11 @@ def main():
     if git("status", "--porcelain", "--untracked-files=no"):
         sys.exit("ÉCHEC : des modifications ne sont pas commitées ; commite-les d'abord.")
 
+    publiee = datetime.now().astimezone().replace(microsecond=0).isoformat()
+    texte = texte.replace(f'__version__ = "{actuelle}"', f'__version__ = "{version}"')
+    texte = re.sub(r'PUBLIEE = "[^"]*"', f'PUBLIEE = "{publiee}"', texte)
     with open(FICHIER, "w", encoding="utf-8", newline="\n") as f:
-        f.write(texte.replace(f'__version__ = "{actuelle}"', f'__version__ = "{version}"'))
+        f.write(texte)
     git("add", FICHIER)
     git("commit", "-q", "-m", f"Version {version}", "-m", nouveautes)
     git("tag", "-a", f"v{version}", "-m", nouveautes)
