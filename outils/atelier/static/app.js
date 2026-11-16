@@ -5285,7 +5285,18 @@ async function rendreEditions() {
   if (!z) return;
   if (!rch.editions) {
     try { rch.editions = await api("/api/recherche/editions"); }
-    catch (e) { z.innerHTML = `<p class="erreur petit">${esc(e.message)}</p>`; return; }
+    catch (e) {
+      if (e.statut !== 503 && !/pas encore prête/.test(e.message)) { z.innerHTML = `<p class="erreur petit">${esc(e.message)}</p>`; return; }
+      z.innerHTML = `<p class="chargement petit">Chargement des éditions…</p>`;     // la base de cartes arrive : on l'attend
+      for (;;) {
+        await attendre(2000);
+        if (!z.isConnected) return;
+        const b = await api("/api/recherche/base").catch(() => null);
+        if (b && b.prete) return rendreEditions();
+        const err = b && b.construction && b.construction.erreur;
+        if (err) { z.innerHTML = `<p class="erreur petit">${esc(err)}</p>`; return; }
+      }
+    }
   }
   const tous = new Map(rch.editions.flatMap((g) => g.editions.map((e) => [e.code, e])));
   const choisies = () => {
