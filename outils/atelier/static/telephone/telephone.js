@@ -1627,7 +1627,7 @@
     res[INDEX_PAGES] = await sha1(["index " + FORMAT_PAGES, reg, cl, ...l.sort()].join("\n"));
     return res;
   }
-  const niveauDe = (id, page) => (etatBase.prete ? 2 : 0) + (((page.api || {})[`/api/decks/${id}/bracket`] || {}).spellbook_a_jour ? 1 : 0);
+  const niveauDe = (id, page, base) => (base ? 2 : 0) + (((page.api || {})[`/api/decks/${id}/bracket`] || {}).spellbook_a_jour ? 1 : 0);
   const pagesDuCompte = async () => (await serveur("/pages")).pages || {};
   async function lirePage(id) {                       // {empreinte, niveau, donnees}
     const r = await fetch(API_COMPTE + avecGz(`/pages/lire?deck=${encodeURIComponent(id)}`), { cache: "no-store",
@@ -2071,9 +2071,10 @@
       const k = "decks/" + id;
       if (aFaire.has(id)) {
         if (suivi) suivi(fait++, aFaire.size);
-        const avant = gardees[id] ? gardees[id].niveau ?? 0 : -1;
+        // la base de cartes prête pendant le calcul : la page, faite surtout sans elle, sera refaite avec (BESOIN)
+        const avant = gardees[id] ? gardees[id].niveau ?? 0 : -1, base = etatBase.prete;
         pages[id] = await PAGES.deck(id, f, { ...o, modifie: (d.modifies || {})[id] || 0 });
-        const nv = niveauDe(id, pages[id]);
+        const nv = niveauDe(id, pages[id], base);
         if (avant >= 0 && avant < 2 && nv >= 2) ameliorees++;
         await BD.ecrire(k, { sha: "local", empreinte: emp[id], niveau: nv, donnees: pages[id] });
         faites.push(id);
