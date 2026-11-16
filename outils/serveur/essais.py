@@ -207,6 +207,14 @@ class Essais(unittest.TestCase):
         r = self.c.post("/fichiers/lire", json={"chemins": ["Deck A/archidekt.txt"]}, headers=h)    # sans gzip : tel quel
         self.assertIsNone(r.headers.get("Content-Encoding"))
         self.assertIn("Sol Ring", r.json["fichiers"]["Deck A/archidekt.txt"])
+        # derrière un proxy qui ne transmet pas Accept-Encoding : demandée compressée (?gz=1), même petite
+        for chemin in ("/fichiers/lire?gz=1", "/compte?gz=1"):
+            r = (self.c.post(chemin, json={"chemins": ["Deck A/archidekt.txt"]}, headers=h) if "lire" in chemin
+                 else self.c.get(chemin, headers=h))
+            self.assertEqual((r.status_code, r.mimetype, r.headers.get("Content-Encoding")), (200, "application/octet-stream", None))
+            self.assertIsInstance(json.loads(gzip.decompress(r.get_data())), dict)
+        r = self.c.post("/fichiers/lire?gz=1", json={"chemins": "pas une liste"}, headers=h)          # erreur : en JSON
+        self.assertEqual((r.status_code, r.mimetype), (400, "application/json"))
 
     def test_pages_toutes_pretes(self):
         h, _ = self.connecter(appareil="PC")
@@ -238,6 +246,9 @@ class Essais(unittest.TestCase):
         self.assertEqual(json.loads(gzip.decompress(r.get_data()))["api"]["/api/decks/Deck Kels"], {"total": 1})
         r = self.c.get("/pages/lire?deck=Deck%20Tromo", headers=h2)              # sans gzip : décompressée
         self.assertEqual(r.json, {"deck": "Deck Tromo"})
+        r = self.c.get("/pages/lire?deck=Deck%20Tromo&gz=1", headers=h2)         # demandée compressée : telle quelle
+        self.assertEqual((r.mimetype, r.headers.get("Content-Encoding"), r.headers["X-Niveau"]), ("application/octet-stream", None, "0"))
+        self.assertEqual(json.loads(gzip.decompress(r.get_data())), {"deck": "Deck Tromo"})
         # même empreinte, niveau plus bas : celle qui est là reste ; plus haut, ou d'autres fichiers : remplacée
         self.assertEqual(deposer(h2, "Deck Kels", e1, 0, {"moins": 1}).json["garde"], True)
         self.assertEqual(json.loads(gzip.decompress(lire(h, "Deck Kels").get_data()))["deck"], "Deck Kels")

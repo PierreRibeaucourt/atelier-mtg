@@ -128,13 +128,19 @@ def creer(reglages):
             rep.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
             rep.headers["Access-Control-Expose-Headers"] = "X-Empreinte, X-Niveau"
             rep.headers["Access-Control-Max-Age"] = "86400"
-        # les fichiers et les pages d'un compte arrivent bien plus vite compressés, surtout sur un téléphone
+        # les fichiers et les pages d'un compte arrivent bien plus vite compressés, surtout sur un téléphone. Le proxy
+        # d'o2switch ne transmet pas « Accept-Encoding » et ne compresse pas le JSON : l'appli demande donc la réponse
+        # compressée elle-même (?gz=1) et la reçoit en application/octet-stream, qu'elle décompresse.
         if (rep.status_code == 200 and rep.mimetype == "application/json" and not rep.direct_passthrough
-                and "Content-Encoding" not in rep.headers and "gzip" in request.headers.get("Accept-Encoding", "")):
-            corps = rep.get_data()
-            if len(corps) > COMPRESSER:
-                rep.set_data(gzip.compress(corps, compresslevel=5))
-                rep.headers["Content-Encoding"] = "gzip"
+                and "Content-Encoding" not in rep.headers):
+            if request.args.get("gz") == "1":
+                rep.set_data(gzip.compress(rep.get_data(), compresslevel=5))
+                rep.mimetype = "application/octet-stream"
+            elif "gzip" in request.headers.get("Accept-Encoding", ""):
+                corps = rep.get_data()
+                if len(corps) > COMPRESSER:
+                    rep.set_data(gzip.compress(corps, compresslevel=5))
+                    rep.headers["Content-Encoding"] = "gzip"
         rep.headers["Vary"] = "Origin, Accept-Encoding"
         rep.headers["Cache-Control"] = "no-store"
         rep.headers["X-Content-Type-Options"] = "nosniff"
@@ -557,14 +563,17 @@ def creer(reglages):
     @app.get("/pages/lire")
     @connecte
     def lire_page():
-        """?deck= : la page (JSON), compressée comme elle est gardée ; son empreinte et son niveau dans les en-têtes."""
+        """?deck= : la page (JSON), compressée comme elle est gardée ; son empreinte et son niveau dans les en-têtes.
+        &gz=1 : telle quelle, en application/octet-stream (voir entetes)."""
         deck = nom_deck(request.args.get("deck"))
         with base.session() as s:
             r = s.un("SELECT empreinte, niveau, contenu FROM pages WHERE compte = ? AND deck = ?", g.compte, deck)
         if not r:
             raise Refus("Page introuvable.", 404)
         contenu = bytes(r[2])
-        if "gzip" in request.headers.get("Accept-Encoding", ""):
+        if request.args.get("gz") == "1":
+            rep = Response(contenu, mimetype="application/octet-stream")
+        elif "gzip" in request.headers.get("Accept-Encoding", ""):
             rep = Response(contenu, mimetype="application/json")
             rep.headers["Content-Encoding"] = "gzip"
         else:
