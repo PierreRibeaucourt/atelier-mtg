@@ -114,6 +114,10 @@
   };
   const copie = (x) => (x == null ? x : structuredClone(x));
   const absente = () => Object.assign(new Error("À faire depuis l'Atelier de ton PC."), { statut: 404 });
+  // l'essentiel d'un deck, tiré de sa page (la plus récente : modifiée ici, sinon celle du compte) : le bandeau de la
+  // Recherche pour ce deck et ses couleurs, et la date qui dit si un autre onglet l'a changé (comme app.py › api_apercu)
+  const apercuDe = (id, pg) => (pg ? { id, titre: pg.titre, identite: pg.identite, commandant: pg.commandant, total: pg.total,
+    maybe: pg.maybe, categories: pg.categories, art: pg.art, modifie: pg.modifie } : null);
   // les tests du simulateur faits sur le PC, venus par la sauvegarde : comme simulation.rapports
   function rapportsSimulation(f, pre) {
     return Object.keys(f).filter((k) => k.startsWith(pre) && k.endsWith(".json") && !k.slice(pre.length).includes("/")).sort().reverse()
@@ -354,11 +358,11 @@
       const ka = ancien === id ? k : k.split(id).join(ancien);
       if (ka in d.api) return copie(d.api[ka]);
       if (p.endsWith("/comparer") && d.comparer) return comparerPartage(u.searchParams.get("a") || "", u.searchParams.get("b") || "", d.comparer);
-      if (p.endsWith("/apercu")) return { modifie: d.api[`/api/decks/${ancien}`] && d.api[`/api/decks/${ancien}`].modifie };
+      if (p.endsWith("/apercu")) return apercuDe(id, (sur[`/api/decks/${id}`] || {}).v || d.api[`/api/decks/${ancien}`]);
     }
     // un deck créé ici, pas encore passé par le PC
     const cree = id && sur[`/api/decks/${id}`];
-    if (cree && p.endsWith("/apercu")) return { modifie: cree.v.modifie };
+    if (cree && p.endsWith("/apercu")) return apercuDe(id, cree.v);
     // un deck qui n'est pas encore arrivé (fait sur un autre appareil, ouvert par sa page publique) : on attend le compte
     if (m && id && compte && !cree && !(ancien && index.decks[ancien])) {
       if (!opts.apresSynchro) { await deckEnRoute(id); return api(chemin, { ...opts, apresSynchro: true }); }
