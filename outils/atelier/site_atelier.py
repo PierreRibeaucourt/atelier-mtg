@@ -51,6 +51,9 @@ FAN_CONTENT = "https://company.wizards.com/en/legal/fancontentpolicy"
 # base, publiée sur le site de l'appli (base_telephone.py) ; le navigateur du visiteur la télécharge de là
 APPLI = "https://atelier-mtg.com/mes-decks/"           # l'appli en ligne, avec un compte (telephone_site.py, branche accueil)
 APPLI_CHEMIN = "/mes-decks/"
+# les écrans de l'appli (app.js › ECRANS_APPLI_ROUTE, serveur/pages.py) : la page introuvable d'un deck privé, ouverte
+# dans un nouvel onglet depuis l'appli (Ctrl+clic), renvoie son propriétaire vers l'appli avec sa route
+ECRANS_APPLI = "deck|recherche|options|classeur|proxies|compte|deconnexion|slug|a-propos|module"
 BASE_CARTES = "https://app.atelier-mtg.com/base/"      # la base de cartes, toujours publiée avec l'ancienne adresse de l'appli
 SOURCE_MOTEUR = os.path.join(partage.STATIQUE, "telephone", "cartes.js")
 MOTEUR = "cartes.js?v=" + partage._version(SOURCE_MOTEUR)                 # dans recherche/
@@ -289,7 +292,7 @@ def introuvable(dossier):
   <script>try {{ const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; }} catch (e) {{}}</script>
   <script>try {{ const c = JSON.parse(localStorage.getItem("atelier-compte") || "null"), m = location.pathname.match(/^\\/decks\\/([^/]+)\\/(?:([^/]+)\\/?)?$/);
     if (c && c.jeton && m && c.pseudo === m[1]) {{ const h = location.hash.replace(/^#\\/?/, "");
-      location.replace("{APPLI_CHEMIN}" + (m[2] ? "#/slug/" + m[2] + (h ? "/" + h : "") : "#/")); }} }} catch (e) {{}}</script>
+      location.replace("{APPLI_CHEMIN}" + (/^({ECRANS_APPLI})([/?]|$)/.test(h) ? "#/" + h : m[2] && location.hash !== "#/" ? "#/slug/" + m[2] + (h ? "/" + h : "") : "#/")); }} }} catch (e) {{}}</script>
 </head>
 <body>
   <header class="barre"><a href="/fr/" class="logo">Atelier MTG</a></header>

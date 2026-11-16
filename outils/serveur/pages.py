@@ -45,12 +45,18 @@ class Reglages:
         self.appli = r.get("appli", "/mes-decks/").rstrip("/") + "/"
 
 
+# les écrans de l'appli (app.js › ECRANS_APPLI_ROUTE) : un lien de l'appli ouvert dans un nouvel onglet (Ctrl+clic) arrive
+# sur l'adresse publique avec sa route après « # » (/decks/<pseudo>/#/deck/…) ; elle suit jusqu'à l'appli
+ECRANS_APPLI = "deck|recherche|options|classeur|proxies|compte|deconnexion|slug|a-propos|module"
+
+
 def proprietaire(cfg, pseudo, deck=None):
     """Le script de tête d'une page : connecté avec ce pseudo, on est chez soi ; l'appli ouvre le deck (ou ses decks)
-    à modifier, avant tout affichage. Un onglet après « # » (#/stats) suit."""
+    à modifier, avant tout affichage. Une route de l'appli après « # » (#/deck/…, #/classeur ; « #/ » : ses decks) ou, sur
+    un deck, un onglet (#/stats) suit."""
     return ('<script>try { const c = JSON.parse(localStorage.getItem("atelier-compte") || "null"); '
             f'if (c && c.jeton && c.pseudo === {json.dumps(pseudo)}) {{ const d = {json.dumps(deck)}, h = location.hash.replace(/^#\\/?/, ""); '
-            f'location.replace({json.dumps(cfg.appli)} + (d === null ? "#/" : h.startsWith("deck/") ? "#/" + h '
+            f'location.replace({json.dumps(cfg.appli)} + (/^({ECRANS_APPLI})([/?]|$)/.test(h) ? "#/" + h : d === null || location.hash === "#/" ? "#/" '
             ': "#/deck/" + encodeURIComponent(d) + (h ? "/" + h : ""))); } } catch (e) {}</script>')
 
 
