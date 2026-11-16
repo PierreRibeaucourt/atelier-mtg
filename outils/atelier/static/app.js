@@ -4895,11 +4895,8 @@ const DEPOT_ATELIER = "https://github.com/PierreRibeaucourt/atelier-mtg";
 const CAPTURES_ATELIER = (PARTAGE && PARTAGE.captures) || DOMAINE_ATELIER + "a-propos/";
 // les decks partagés de l'auteur : à quoi ressemble une page partagée, en vrai
 const EXEMPLES_ATELIER = "https://atelier-mtg.com/decks/pierre/";
-// l'Atelier sur téléphone (telephone.js), et son adresse en QR code pour qui visite la page depuis un ordinateur
+// l'Atelier en ligne (telephone.js)
 const APPLI_TELEPHONE = MES_DECKS_URL;
-const QR_APPLI = `<svg class="ap-qr" viewBox="0 0 33 33" role="img" aria-label="QR code de atelier-mtg.com/mes-decks"><rect width="33" height="33" fill="#fff"/><path fill="#000" d="M2 2h7v1h-7zM11 2h7v1h-7zM19 2h4v1h-4zM24 2h7v1h-7zM2 3h1v1h-1zM8 3h1v1h-1zM11 3h8v1h-8zM22 3h1v1h-1zM24 3h1v1h-1zM30 3h1v1h-1zM2 4h1v1h-1zM4 4h3v1h-3zM8 4h1v1h-1zM10 4h1v1h-1zM12 4h2v1h-2zM15 4h1v1h-1zM17 4h1v1h-1zM21 4h2v1h-2zM24 4h1v1h-1zM26 4h3v1h-3zM30 4h1v1h-1zM2 5h1v1h-1zM4 5h3v1h-3zM8 5h1v1h-1zM10 5h1v1h-1zM12 5h1v1h-1zM14 5h1v1h-1zM16 5h2v1h-2zM19 5h3v1h-3zM24 5h1v1h-1zM26 5h3v1h-3zM30 5h1v1h-1zM2 6h1v1h-1zM4 6h3v1h-3zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h2v1h-2zM17 6h6v1h-6zM24 6h1v1h-1zM26 6h3v1h-3zM30 6h1v1h-1zM2 7h1v1h-1zM8 7h1v1h-1zM10 7h1v1h-1zM14 7h1v1h-1zM19 7h1v1h-1zM22 7h1v1h-1zM24 7h1v1h-1zM30 7h1v1h-1zM2 8h7v1h-7zM10 8h1v1h-1zM12 8h1v1h-1zM14 8h1v1h-1zM16 8h1v1h-1zM18 8h1v1h-1zM20 8h1v1h-1zM22 8h1v1h-1zM24 8h7v1h-7zM10 9h5v1h-5zM16 9h1v1h-1zM18 9h1v1h-1zM21 9h1v1h-1zM2 10h1v1h-1zM4 10h5v1h-5zM19 10h1v1h-1zM24 10h5v1h-5zM7 11h1v1h-1zM15 11h3v1h-3zM19 11h8v1h-8zM30 11h1v1h-1zM3 12h1v1h-1zM5 12h1v1h-1zM8 12h1v1h-1zM11 12h1v1h-1zM15 12h4v1h-4zM23 12h2v1h-2zM26 12h1v1h-1zM2 13h4v1h-4zM7 13h1v1h-1zM9 13h3v1h-3zM13 13h3v1h-3zM18 13h1v1h-1zM21 13h2v1h-2zM25 13h1v1h-1zM27 13h1v1h-1zM29 13h1v1h-1zM4 14h5v1h-5zM10 14h5v1h-5zM16 14h1v1h-1zM19 14h1v1h-1zM21 14h1v1h-1zM27 14h2v1h-2zM4 15h3v1h-3zM9 15h1v1h-1zM12 15h1v1h-1zM20 15h2v1h-2zM23 15h4v1h-4zM30 15h1v1h-1zM2 16h2v1h-2zM5 16h6v1h-6zM13 16h2v1h-2zM17 16h2v1h-2zM22 16h1v1h-1zM25 16h4v1h-4zM2 17h1v1h-1zM12 17h1v1h-1zM16 17h1v1h-1zM21 17h2v1h-2zM25 17h2v1h-2zM29 17h1v1h-1zM3 18h2v1h-2zM6 18h3v1h-3zM10 18h2v1h-2zM13 18h2v1h-2zM17 18h3v1h-3zM27 18h2v1h-2zM2 19h6v1h-6zM9 19h1v1h-1zM11 19h2v1h-2zM14 19h3v1h-3zM18 19h1v1h-1zM21 19h2v1h-2zM24 19h3v1h-3zM28 19h1v1h-1zM30 19h1v1h-1zM2 20h1v1h-1zM6 20h1v1h-1zM8 20h2v1h-2zM11 20h10v1h-10zM23 20h1v1h-1zM26 20h1v1h-1zM28 20h1v1h-1zM2 21h1v1h-1zM4 21h2v1h-2zM9 21h1v1h-1zM12 21h1v1h-1zM15 21h1v1h-1zM22 21h5v1h-5zM29 21h1v1h-1zM2 22h1v1h-1zM4 22h7v1h-7zM12 22h3v1h-3zM16 22h1v1h-1zM19 22h2v1h-2zM22 22h5v1h-5zM28 22h3v1h-3zM10 23h1v1h-1zM12 23h3v1h-3zM18 23h5v1h-5zM26 23h5v1h-5zM2 24h7v1h-7zM14 24h1v1h-1zM17 24h2v1h-2zM21 24h2v1h-2zM24 24h1v1h-1zM26 24h3v1h-3zM2 25h1v1h-1zM8 25h1v1h-1zM10 25h4v1h-4zM16 25h1v1h-1zM21 25h2v1h-2zM26 25h1v1h-1zM29 25h2v1h-2zM2 26h1v1h-1zM4 26h3v1h-3zM8 26h1v1h-1zM10 26h1v1h-1zM12 26h1v1h-1zM17 26h1v1h-1zM19 26h1v1h-1zM22 26h5v1h-5zM28 26h2v1h-2zM2 27h1v1h-1zM4 27h3v1h-3zM8 27h1v1h-1zM10 27h2v1h-2zM14 27h1v1h-1zM16 27h1v1h-1zM18 27h1v1h-1zM20 27h2v1h-2zM23 27h1v1h-1zM25 27h1v1h-1zM27 27h4v1h-4zM2 28h1v1h-1zM4 28h3v1h-3zM8 28h1v1h-1zM10 28h2v1h-2zM13 28h3v1h-3zM17 28h2v1h-2zM21 28h9v1h-9zM2 29h1v1h-1zM8 29h1v1h-1zM12 29h3v1h-3zM17 29h2v1h-2zM20 29h1v1h-1zM22 29h1v1h-1zM24 29h4v1h-4zM29 29h1v1h-1zM2 30h7v1h-7zM10 30h8v1h-8zM19 30h1v1h-1zM21 30h1v1h-1zM26 30h1v1h-1zM28 30h1v1h-1z"/></svg>`;
-// un téléphone ou une tablette (iPadOS se présente comme un Mac, mais tactile)
-const SUR_TELEPHONE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 // [capture, titre, texte] ; « Les bases » : ce qu'on attend de tout gestionnaire de decks
 const MODULES_BASES = [
   ["appareils", "Vos decks sur tous vos appareils", "Création, import, affichage en liste ou visuel, taille des cartes réglable, tri par type, tag ou fonction : organisez vos cartes exactement comme vous l'entendez. Sur ordinateur ou sur téléphone, votre compte garde vos decks à jour partout."],
@@ -4923,7 +4920,7 @@ const FAQ_ATELIER = [
     ["Je ne suis pas informaticien : c'est compliqué à installer ?",
       "Non : il n'y a rien à installer. Créez un compte, et l'Atelier s'ouvre dans votre navigateur ou sur votre téléphone. Seul Claude demande un petit module sur votre PC Windows : il se propose quand vous demandez quelque chose à Claude, s'installe comme n'importe quel programme et se met à jour tout seul."],
     ["Ça marche sur Mac et Linux ?",
-      "<p>Oui : l'Atelier s'ouvre dans n'importe quel navigateur. Le module Claude n'existe pour l'instant que pour Windows.</p>"],
+      "<p>Oui : l'Atelier s'ouvre dans n'importe quel navigateur. Le module Claude s'installe en un clic sous Windows ; sous macOS et Linux, depuis le dépôt, sans garantie.</p>"],
     ["Est-ce sûr ?",
       "On se connecte avec un code envoyé par e-mail : il n'y a pas de mot de passe à se faire voler. Le module Claude ne répond qu'à atelier-mtg.com, et seulement pour Claude, les synergies et les combos MTGPics. Son installeur n'est pas signé (une signature coûte plusieurs centaines d'euros par an), d'où l'avertissement de Windows au premier lancement ; mais tout son code est public : vous, ou votre assistant IA, pouvez le lire avant de l'installer."],
   ]],
@@ -4997,20 +4994,6 @@ function vueAPropos(installation = false) {
           <figure class="ap-ecran-tel">${capture("appareils-tel", "Le même deck dans l'Atelier, sur téléphone")}</figure>
         </div>` : `<figure>${capture(f, titre)}</figure>`}
       </section>`).join("");
-  // commencer : le compte (sur ordinateur, avec le QR code pour le téléphone)
-  const installEnLigne = `<section class="ap-install ap-en-ligne">
-          <div class="ap-install-tete">${ico("nuage")}<h3>En ligne</h3></div>
-          <p class="ap-install-pour">Navigateur, Android et iPhone · un compte gratuit</p>
-          <a class="btn btn-accent ap-install-action hors-compte" href="${APPLI_TELEPHONE}#inscription">${ico("plus")}Créer un compte</a>
-          <a class="btn btn-accent ap-install-action en-compte" href="${APPLI_TELEPHONE}">${ico("cartes")}Mes decks</a>
-          ${SUR_TELEPHONE ? "" : `<div class="ap-qr-ligne"><span class="ap-qr-cadre">${QR_APPLI}</span>
-              <p>Sur votre téléphone : scannez ce code, ou ouvrez <a href="${APPLI_TELEPHONE}">atelier-mtg.com/mes-decks</a>.</p></div>`}
-          <ol>
-            <li>Entrez votre adresse e-mail : vous recevez un code à 6 chiffres. Pas de mot de passe.</li>
-            <li>Sur téléphone, ajoutez l'appli à l'écran d'accueil. Android : <b>Installer l'application</b> ; iPhone :
-              <b>Partager</b>, puis <b>Sur l'écran d'accueil</b>.</li>
-          </ol>
-        </section>`;
   vue.classList.add("vue-pleine");
   vue.innerHTML = `
     <header class="ap-tete">
@@ -5036,7 +5019,7 @@ function vueAPropos(installation = false) {
         <p class="ap-promesse">Gratuit, <em>en ligne</em>, et <em>Claude</em> si vous l'avez.</p>
         <div class="ap-grille ap-duo">
           ${fonction(`${ico("nuage")}En ligne`, "Dans le navigateur et sur téléphone, avec un compte : vos decks se synchronisent tout seuls entre vos appareils.")}
-          ${fonction(`${ico("discussion")}Claude`, "Avec votre abonnement Claude, depuis votre PC Windows : le module Claude relie le site à Claude Code. Il se propose quand vous demandez quelque chose à Claude.")}
+          ${fonction(`${ico("discussion")}Claude`, `Avec votre abonnement Claude, depuis votre PC Windows : le module Claude relie le site à Claude Code. <a href="#installation" id="ap-voir-module">Comment ça marche</a>`)}
         </div>
         <p>L'Atelier est un deck builder en français, pensé pour concevoir, tester et faire évoluer vos decks Magic: The
           Gathering en Commander.</p>
@@ -5064,11 +5047,26 @@ function vueAPropos(installation = false) {
           fonctionnent sans aucune configuration IA.</li>
       </ul>
 
-      <h2 id="installation">Commencer</h2>
-      <p>Ce logiciel de construction de deck Magic s'utilise en ligne, dans votre navigateur ou sur votre téléphone.
-        Gratuit.</p>
-      <div class="ap-install-duo ap-install-seul">${installEnLigne}</div>
-      <p class="ap-install-sous">Code source : <a class="ap-depot" href="${depot}" target="_blank" rel="noopener">${depot.replace("https://", "")}</a></p>
+      <h2 id="installation">Le module Claude</h2>
+      <p>Claude ne tourne pas chez nous : il tourne sur votre PC, avec votre abonnement. Le module fait le pont entre le
+        site et Claude Code.</p>
+      <div class="ap-grille ap-flux">
+        ${fonction("1. Le site", "Vous écrivez à Claude sur atelier-mtg.com, dans la discussion d'un deck ou la discussion générale.")}
+        ${fonction("2. Le module", "Sur votre PC, il reçoit la demande en local (127.0.0.1) et lance Claude Code dans le dossier de vos decks.")}
+        ${fonction("3. Claude Code", "Il lit vos listes, calcule avec les outils de l'Atelier (prix, probabilités, simulation) et les modifie. Le module renvoie tout à votre compte : le site se met à jour.")}
+      </div>
+      <ul class="ap-principes">
+        <li><strong>Vos decks en fichiers.</strong> Une copie synchronisée avec votre compte : un dossier par deck, sa liste
+          en texte au format Archidekt, son historique. Claude Code y travaille comme dans n'importe quel dépôt.</li>
+        <li><strong>Votre abonnement.</strong> Claude Code, avec un abonnement Claude Pro ou plus : c'est votre PC qui
+          l'appelle, jamais nos serveurs. Rien ne tourne tant que vous ne lui écrivez pas.</li>
+        <li><strong>Fermé au reste du monde.</strong> Le module n'écoute que sur 127.0.0.1 et ne répond qu'à atelier-mtg.com,
+          avec un secret propre à votre PC, pour Claude, les synergies et les combos MTGPics seulement.</li>
+        <li><strong>L'installer.</strong> Sous Windows, il se propose la première fois que vous demandez quelque chose à
+          Claude, puis se lance avec Windows et se met à jour seul. Sous macOS et Linux : depuis le dépôt, avec
+          <code>python installer.py</code> (non testé).</li>
+      </ul>
+      <p class="ap-install-sous">Code source, sous licence MIT : <a class="ap-depot" href="${depot}" target="_blank" rel="noopener">${depot.replace("https://", "")}</a></p>
 
       <h2>Questions fréquentes</h2>
       ${FAQ_ATELIER.map(([groupe, questions]) => `<h3 class="ap-faq-groupe">${groupe}</h3>
@@ -5114,7 +5112,7 @@ function vueAPropos(installation = false) {
   });
   // un saut, pas un défilement animé : les captures qui se chargent en chemin le feraient s'arrêter trop tôt
   const aInstallation = () => $("#installation").scrollIntoView();
-  if ($("#ap-installer")) $("#ap-installer").onclick = (ev) => { ev.preventDefault(); aInstallation(); };   // même page : sans la redessiner
+  if ($("#ap-voir-module")) $("#ap-voir-module").onclick = (ev) => { ev.preventDefault(); aInstallation(); };   // même page : sans la redessiner
   if (installation) aInstallation();
 }
 
