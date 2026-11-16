@@ -2162,8 +2162,21 @@
   // ------------------------------------------------------------------ l'appli installée sur l'écran d'accueil
   const installee = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
   const iphone = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  // ouverte une fois depuis son icône : retenu ici. Sur Android, le navigateur le lit aussi (même stockage) et ne la
+  // propose plus ; Chrome sait aussi le dire (getInstalledRelatedApps, related_applications du manifeste)
+  const APPLI_ICI = "telephone-appli-installee";
+  if (installee()) ecrireLocal(APPLI_ICI, "1");
+  async function dejaInstallee() {
+    if (installee() || lireLocal(APPLI_ICI) === "1") return true;
+    try { return !!(navigator.getInstalledRelatedApps && (await navigator.getInstalledRelatedApps()).length); } catch (_) { return false; }
+  }
   let invite = null;                                   // Android : la demande d'installation du navigateur
-  if (!VOIR) addEventListener("beforeinstallprompt", (ev) => { ev.preventDefault(); invite = ev; bandeauInstaller(); });
+  if (!VOIR) addEventListener("beforeinstallprompt", (ev) => {   // le navigateur ne la propose que si elle n'est pas installée
+    ev.preventDefault();
+    invite = ev;
+    ecrireLocal(APPLI_ICI, null);
+    bandeauInstaller();
+  });
   addEventListener("appinstalled", () => { const b = document.getElementById("tel-bandeau"); if (b) b.remove(); });
   if (!VOIR && "serviceWorker" in navigator) navigator.serviceWorker.register(new URL("sw.js", ICI)).catch(() => {});
 
@@ -2182,9 +2195,10 @@
     const b = document.querySelector("body > .tel-bandeau");
     document.documentElement.style.setProperty("--tel-bandeau", b ? b.offsetHeight + 12 + "px" : "0px");
   }
-  function bandeauInstaller() {
+  async function bandeauInstaller() {
     if (ORDI || installee() || !local || T.pseudoRequis || !document.body) return;     // ordinateur : l'Atelier à installer, c'est l'autre
     if (Date.now() - Number(lireLocal(PLUS_TARD) || 0) < 3 * 86400 * 1000) return;
+    if (!invite && await dejaInstallee()) return;
     let b = document.getElementById("tel-bandeau");
     if (!b) {
       b = document.createElement("div");
@@ -2505,7 +2519,7 @@
     local,
     compte: () => compte && { email: compte.email },
     synchroniser: () => demarrer(),
-    installee,
+    installee: () => installee() || lireLocal(APPLI_ICI) === "1",      // Options : rien à proposer
     installer: () => { ecrireLocal(PLUS_TARD, "0"); bandeauInstaller(); },     // Options : le bandeau, même après « Plus tard »
     enregistrerFichier,
     preparerJeu,

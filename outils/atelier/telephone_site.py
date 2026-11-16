@@ -107,8 +107,12 @@ def construire(dossier, base="base/"):
     _icones(dossier)
     with open(os.path.join(dossier, "manifest.webmanifest"), "w", encoding="utf-8") as f:
         json.dump(dict(name="Atelier MTG", short_name="Atelier MTG", description="Tes decks Commander, partout.", lang="fr",
-                       start_url="./", scope="./", display="standalone", orientation="portrait",
+                       # tout le site : l'appli affiche l'adresse publique des decks (/decks/<pseudo>/…), et un lien
+                       # vers le site ouvert depuis une autre appli arrive dans l'appli installée (Android)
+                       start_url="./", scope="/", display="standalone", orientation="portrait",
                        background_color=FOND, theme_color=FOND,
+                       # « déjà installée ? » : le navigateur peut le dire au site (telephone.js › dejaInstallee)
+                       related_applications=[dict(platform="webapp", url="manifest.webmanifest")],
                        icons=[dict(src="icone-192.png", sizes="192x192", type="image/png"),
                               dict(src="icone-512.png", sizes="512x512", type="image/png"),
                               dict(src="icone-masque-512.png", sizes="512x512", type="image/png", purpose="maskable")]),
