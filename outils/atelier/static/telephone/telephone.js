@@ -1373,6 +1373,7 @@
   // synergies, MTGPics) passe par lui. Il range son adresse et un secret dans « Réglages Atelier/pont.json »
   // (compte.publier_pont) : on ne l'appelle que si ce fichier est là, car le navigateur demande alors, une fois, d'accéder
   // au réseau local. Quand Claude a fini, ce qu'il a changé sur le PC arrive ici aussitôt.
+  const MODULE_VU = "atelier-module";                 // ce navigateur a déjà joint un module : « Lancer l'Atelier » (app.js › surPC)
   const ROUTES_PONT = /^\/api\/(discussion(\/|$)|decks\/[^/]+\/(synergies|mtgpics)(\/|$))/;
   let pc = null, claudeActif = false;
   async function chercherPc() {
@@ -1386,18 +1387,19 @@
         if (d.email && d.email === compte.email) {
           pc = { port: Number(x.port), secret: String(x.secret), version: d.atelier };
           T.pc = pc;
+          ecrireLocal(MODULE_VU, "1");
           if (window.quandPc) window.quandPc();
           return;
         }
       } catch (_) { /* pas sur ce PC, ou l'Atelier n'est pas lancé */ }
     }
   }
-  async function auPc(chemin, opts = {}) {
+  async function auPc(chemin, opts = {}, cible = pc) {
     const corps = opts.body !== undefined && opts.body !== null;
     let r;
     try {
-      r = await fetch(`http://127.0.0.1:${pc.port}${chemin}`, { method: opts.method || "GET", cache: "no-store",
-        headers: { "X-Atelier-Pont": pc.secret, ...(corps ? { "Content-Type": "application/json" } : {}) },
+      r = await fetch(`http://127.0.0.1:${cible.port}${chemin}`, { method: opts.method || "GET", cache: "no-store",
+        headers: { "X-Atelier-Pont": cible.secret, ...(corps ? { "Content-Type": "application/json" } : {}) },
         body: corps ? JSON.stringify(opts.body) : undefined });
     } catch (_) { throw Object.assign(new Error("L'Atelier de ce PC ne répond plus : relance-le."), { statut: 0 }); }
     const d = await r.json().catch(() => ({}));
@@ -1412,6 +1414,27 @@
       claudeActif = actif;
     }
     return d;
+  }
+  // Le module Claude : un Atelier de PC pas encore connecté ouvre le site à #/module/<port>/<secret>
+  // (compte.lien_module). Connecté ici, on demande au serveur une connexion pour ce PC (/connexion/appareil), qu'on lui
+  // passe par le pont (/api/module/appairer) : il se synchronise alors (ses decks arrivent ici) et publie le pont.
+  async function appairerModule(port, secret) {
+    if (!compte) throw new Error("Connecte-toi d'abord.");
+    const cible = { port: Number(port), secret: String(secret) };
+    let info;
+    try { info = await auPc("/api/pont", {}, cible); }
+    catch (e) { throw Object.assign(new Error("L'Atelier de ce PC ne répond pas : lance « Atelier MTG » sur ce PC, puis recharge cette page."), { statut: e.statut }); }
+    if (info.email && info.email !== compte.email) throw new Error(`Ce PC est connecté à un autre compte (${info.email}).`);
+    if (!info.email) {
+      const c = await serveur("/connexion/appareil", "POST", { appareil: info.appareil || "PC" });
+      await auPc("/api/module/appairer", { method: "POST", body: { jeton: c.jeton, email: c.email, pseudo: c.pseudo } }, cible);
+    }
+    pc = { ...cible, version: info.atelier };
+    T.pc = pc;
+    ecrireLocal(MODULE_VU, "1");
+    if (window.quandPc) window.quandPc();
+    setTimeout(() => apresClaude().catch(() => {}), 3000);         // ses decks, envoyés au compte, arrivent ici
+    return { decks: info.decks || 0, claude: !!info.claude, deja: !!info.email };
   }
   async function apresClaude() {
     try { await auPc("/api/compte/synchroniser", { method: "POST", body: {} }); } catch (_) { /* il se synchronisera seul */ }
@@ -2274,6 +2297,8 @@
     installer: () => { ecrireLocal(PLUS_TARD, "0"); bandeauInstaller(); },     // Options : le bandeau, même après « Plus tard »
     enregistrerFichier,
     preparerJeu,
+    appairerModule, chercherPc: () => chercherPc().catch(() => {}), moduleVu: () => lireLocal(MODULE_VU) === "1",   // le module Claude
+    ordi: ORDI,                                                       // (app.js › vueModule, surPC)
   };
 
   demarrer();

@@ -89,6 +89,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* le compte en haut à droite (site et appli) : connecté (classe « connecte », posée avant l'affichage), « Mes decks » et le
    rond du pseudo ; sinon « Se connecter » et « Créer un compte ». Le rond : 36 px visibles, 44 px à toucher */
 html:not(.connecte) .en-compte, html.connecte .hors-compte { display: none !important; }
+/* « Masquer les fonctions Claude » (Options de l'appli) : ni Claude ni MTGPics, qui passent par le module Claude */
+.sans-claude #btn-chat, .sans-claude [data-pc="claude"], .sans-claude [data-pc="synergies"], .sans-claude [data-pc="mtgpics"],
+.sans-claude #cb-claude, .sans-claude #cb-mtgpics { display: none !important; }
+.page-module { max-width: 560px; margin: 24px auto; }
+.page-module h1 { display: flex; align-items: center; gap: 10px; font-size: 1.4rem; margin: 0 0 12px; }
 .btn.btn-compte { width: 44px; height: 44px; padding: 0; flex: none; justify-content: center; border: 4px solid transparent; border-radius: 50%;
   background: var(--accent) padding-box; color: var(--accent-texte, #fff); font-weight: 700; font-size: 1rem; line-height: 1; }
 .btn.btn-compte:hover { filter: brightness(1.1); background: var(--accent) padding-box; border-color: transparent; }
@@ -1083,6 +1088,7 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 }
 /* installation : Windows et le téléphone côte à côte ; les autres façons en dessous, repliées */
 .ap-install-duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: .9rem; align-items: start; }
+.ap-install-duo.ap-install-seul { grid-template-columns: minmax(0, 560px); }
 .ap-install-duo .ap-install { margin-top: 0; display: grid; gap: .85rem; align-content: start; }
 .ap-install-tete { display: flex; align-items: center; gap: .6rem; }
 .a-propos .ap-install-tete h3 { margin: 0; font-size: 1.15rem; }

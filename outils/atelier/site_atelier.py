@@ -181,8 +181,8 @@ def pre_rendre(dossier, marque='id="installation"'):
 
 def inserer(dossier, rendu, installation="#installation", classe="vue vue-pleine"):
     """Le pré-rendu dans la page ; en haut, le champ « Rechercher une carte… » (app.js › BASE_WEB) et, à droite, à la
-    place de « Demander à Claude » (son panneau n'est qu'une vitrine ici) : « Se connecter » et les deux mêmes choix que
-    le haut de l'accueil, « Créer un compte » (l'appli) et « Télécharger » (sa section Installation) ; connecté (classe
+    place de « Demander à Claude » (son panneau n'est qu'une vitrine ici) : « Se connecter » et « Créer un compte »
+    (l'appli ; rien à télécharger : le module Claude ne se propose que dans l'appli) ; connecté (classe
     « connecte », partage.TETE_COMPTE), « Mes decks » et le rond du compte, avec son menu (app.js › menuCompte)."""
     index = os.path.join(dossier, "index.html")
     with open(index, encoding="utf-8") as f:
@@ -194,7 +194,6 @@ def inserer(dossier, rendu, installation="#installation", classe="vue vue-pleine
     creer = (f'<a href="{APPLI}#connexion" id="btn-connexion" class="btn btn-discret hors-compte" data-ico="compte" '
              f'aria-label="Se connecter"><span class="txt">Se connecter</span></a>\n      '
              f'<a href="{APPLI}#inscription" id="btn-creer" class="btn btn-accent hors-compte" data-ico="plus">Créer un compte</a>\n      '
-             f'<a href="{installation}" id="btn-installer" class="btn btn-contour hors-compte" data-ico="telecharger">Télécharger</a>\n      '
              f'<a href="{APPLI}" id="btn-mes-decks" class="btn btn-accent en-compte" data-ico="cartes">Mes decks</a>\n      '
              f'<button id="btn-compte" class="btn btn-compte en-compte" data-ico="compte" aria-label="Mon compte"></button>')
     html = html.replace(vide, f'<main id="vue" class="{classe}">{rendu}</main>').replace(chat.group(0), creer)

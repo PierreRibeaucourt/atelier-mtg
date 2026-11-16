@@ -208,6 +208,33 @@ def se_connecter(email, code):
     return etat()
 
 
+def adopter(jeton, email, pseudo=None):
+    """Le site (atelier-mtg.com, connecté) donne à ce PC sa propre connexion au compte (serveur : /connexion/appareil),
+    par le pont : app.py › api_module_appairer. Comme se_connecter, sans code."""
+    jeton, email = str(jeton or "").strip(), str(email or "").strip().lower()
+    if len(jeton) < 32 or "@" not in email:
+        raise Erreur("Connexion incomplète.")
+    actuel = _connexion()
+    if actuel.get("jeton") and actuel.get("email") != email:
+        raise Erreur(f"Ce PC est connecté à un autre compte ({actuel.get('email')}).", 409)
+    with _verrou:
+        garder_chiffre(FICHIER, dict(email=email, jeton=jeton, pseudo=pseudo or None))
+    suivi["erreur"] = ""
+    reveil.set()
+    if actuel.get("jeton") and actuel["jeton"] != jeton:
+        try:
+            _appel("POST", "/deconnexion", {}, autre_jeton=actuel["jeton"])
+        except Erreur:
+            pass
+    return etat()
+
+
+def lien_module(port):
+    """L'adresse qui associe cet Atelier au compte ouvert sur le site (app.py, au lancement sans connexion)."""
+    site = os.environ.get("ATELIER_SITE") or "https://atelier-mtg.com/mes-decks/"
+    return f"{site}#/module/{int(port)}/{secret_pont()}"
+
+
 def deconnecter():
     """Se déconnecter : le jeton est retiré du compte, puis oublié ici. Les decks de ce PC restent."""
     with _verrou:                                                 # pas au milieu d'une synchronisation

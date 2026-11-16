@@ -350,7 +350,7 @@ def api_options_ecrire():
 # Claude, les synergies, MTGPics, et une synchronisation tout de suite. Seulement ces routes, seulement depuis cette
 # origine, et avec le secret du pont (compte.publier_pont le range dans les fichiers du compte, que l'appli lit).
 ORIGINES_PONT = {"https://atelier-mtg.com"} | {o for o in os.environ.get("ATELIER_PONT_ORIGINES", "").split(",") if o}
-ROUTES_PONT = re.compile(r"^/api/(pont|compte/synchroniser|discussion(/[a-z-]+)?|decks/[^/]+/(synergies|mtgpics)(/[a-z-]+)?)$")
+ROUTES_PONT = re.compile(r"^/api/(pont|module/appairer|compte/synchroniser|discussion(/[a-z-]+)?|decks/[^/]+/(synergies|mtgpics)(/[a-z-]+)?)$")
 
 
 @app.before_request
@@ -380,10 +380,40 @@ def pont_apres(rep):
 
 @app.get("/api/pont")
 def api_pont():
-    """L'appli en ligne cherche l'Atelier de ce PC : sa version, et le compte où il est connecté (le même, ou rien)."""
+    """L'appli en ligne cherche l'Atelier de ce PC : sa version, le compte où il est connecté (le même, ou rien), son nom
+    d'appareil, ses decks et si Claude Code y est installé."""
     import compte
+    import discussion
     from version import __version__
-    return jsonify(atelier=__version__, email=compte._connexion().get("email"))
+    return jsonify(atelier=__version__, email=compte._connexion().get("email"), appareil=compte.nom_appareil(),
+                   decks=len(decks.dossiers()), claude=bool(discussion.trouver_claude()))
+
+
+@app.post("/api/module/appairer")
+def api_module_appairer():
+    """{jeton, email, pseudo} : le site, ouvert par lien_module et connecté au compte, donne à ce PC sa connexion
+    (serveur : /connexion/appareil). Ce PC devient le module Claude du site : il se synchronise, publie le pont et se
+    lance avec Windows."""
+    import compte
+    d = request.get_json() or {}
+    try:
+        e = compte.adopter(d.get("jeton"), d.get("email"), d.get("pseudo"))
+    except compte.Erreur as x:
+        return jsonify(erreur=str(x)), x.statut or 400
+    compte.publier_pont(PORT)
+    try:
+        if "--essai" not in sys.argv and demarrage() is False:    # un Atelier d'essai ne touche pas au démarrage du PC
+            regler_demarrage(True)
+    except Exception:                                      # noqa: BLE001 - le lancement au démarrage reste facultatif
+        pass
+    return jsonify(e)
+
+
+@app.get("/api/module/lien")
+def api_module_lien():
+    """L'adresse du site qui associe ce PC au compte (bandeau « Passer en ligne » de l'accueil)."""
+    import compte
+    return jsonify(url=compte.lien_module(PORT))
 
 
 @app.post("/api/compte/synchroniser")
@@ -1406,7 +1436,7 @@ def montrer_icone():
         pass
 
 
-SITE_APPLI = "https://atelier-mtg.com/mes-decks/"   # l'appli en ligne : connecté, c'est elle qu'on ouvre (2.3.0)
+SITE_APPLI = os.environ.get("ATELIER_SITE") or "https://atelier-mtg.com/mes-decks/"   # l'appli en ligne : connecté, c'est elle qu'on ouvre (2.3.0)
 
 
 def barre_etat(url):
@@ -1416,7 +1446,7 @@ def barre_etat(url):
     from image_partage import _chaudron
 
     def ouvrir(icone, item):
-        webbrowser.open(url)
+        webbrowser.open(url() if callable(url) else url)
 
     def quitter(icone, item):
         icone.stop()
@@ -1448,13 +1478,13 @@ if __name__ == "__main__":
         if atelier_sur(p):                         # l'Atelier est déjà ouvert : on montre sa page
             if "--sans-navigateur" not in sys.argv:
                 import compte
-                webbrowser.open(SITE_APPLI if compte._connexion().get("jeton") else f"http://127.0.0.1:{p}")
+                webbrowser.open(SITE_APPLI if compte._connexion().get("jeton") else compte.lien_module(p))
             sys.exit(0)
     url = f"http://127.0.0.1:{PORT}"
     os.environ["ATELIER_PORT"] = str(PORT)         # pour demander.py, que Claude lance depuis la discussion
     import compte
-    if compte._connexion().get("jeton") and "--essai" not in sys.argv:
-        url = SITE_APPLI                           # connecté : l'appli en ligne, qui passe par cet Atelier pour Claude
+    if "--essai" not in sys.argv:                  # l'appli en ligne, qui passe par cet Atelier pour Claude (le module) ;
+        url = SITE_APPLI if compte._connexion().get("jeton") else compte.lien_module(PORT)    # pas connecté : l'y associer
     import simulation
     simulation.effacer_anciens()                   # rapports d'avant les jauges de régularité, avant que le partage ne parte
     en_fond(ic.mise_a_jour, tous_les_noms())
@@ -1476,7 +1506,9 @@ if __name__ == "__main__":
         threading.Timer(1.5, lambda: webbrowser.open(url)).start()
     if barre:
         threading.Thread(target=lambda: app.run(host="127.0.0.1", port=PORT, threaded=True, debug=False), daemon=True).start()
-        barre_etat(url)
+        import compte
+        local = url
+        barre_etat(local if "--essai" in sys.argv else lambda: SITE_APPLI if compte._connexion().get("jeton") else compte.lien_module(PORT))
         os._exit(0)                                # « Quitter » : tout s'arrête, comme en fermant la fenêtre
     print(f"Atelier MTG : {url}  (ferme cette fenêtre pour arrêter l'Atelier)")
     app.run(host="127.0.0.1", port=PORT, threaded=True, debug=False)

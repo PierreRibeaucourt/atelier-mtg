@@ -33,15 +33,41 @@ const SUR_PC = {
   mtgpics: "La lecture des combos MTGPics se lance sur le PC.",
   jouer: "La table de jeu s'ouvre sur le PC : elle se joue à la souris.",
 };
-// l'appli seule, sans PC relié : ces fonctions sont dans l'Atelier à installer
-const SANS_PC = { claude: "la discussion avec Claude", synergies: "la recherche des synergies",
-  mtgpics: "la lecture des combos MTGPics" };
-function surPC(quoi) {
-  if (TELEPHONE && TELEPHONE.local) return ouvrirModale(`<h2>Dans l'Atelier installé</h2>
-    <p>Pour utiliser ${esc(SANS_PC[quoi] || "cette fonction")}, il faut installer l'Atelier sur ton PC. Tu y récupéreras ensuite tes decks depuis ton compte.</p>
-    <div class="boutons"><a class="btn btn-accent" href="${INSTALLER}" target="_blank" rel="noopener">${ico("telecharger")}Installer l'Atelier</a></div>`);
-  ouvrirModale(`<h2>Sur le PC</h2>
+// l'appli en ligne : Claude, les synergies et MTGPics passent par le module Claude, l'Atelier d'un PC Windows associé
+// au compte (vueModule). Cette fenêtre est le seul endroit où l'on propose de le télécharger.
+const MODULE_CLAUDE = "https://github.com/PierreRibeaucourt/atelier-mtg/releases/latest/download/Atelier-MTG-Windows.exe";
+const CLAUDE_CODE = "https://code.claude.com/docs/fr/setup";
+// « Masquer » Claude (Options) : sur cet appareil, aucun bouton Claude ni MTGPics ; sur téléphone, jamais (le module est
+// sur un PC). Classe sans-claude, posée avant l'affichage par telephone_site.py › habillage.
+const claudeMasque = () => { if (ECRAN_TELEPHONE) return true; try { return localStorage.getItem("atelier-claude") === "non"; } catch (_) { return false; } };
+function masquerClaude(oui) {
+  try { if (oui) localStorage.setItem("atelier-claude", "non"); else localStorage.removeItem("atelier-claude"); } catch (_) {}
+  document.documentElement.classList.toggle("sans-claude", claudeMasque());
+}
+if (TELEPHONE) document.documentElement.classList.toggle("sans-claude", claudeMasque());
+async function surPC(quoi) {
+  if (!(TELEPHONE && TELEPHONE.local)) return ouvrirModale(`<h2>Sur le PC</h2>
     <p>${esc(SUR_PC[quoi] || "Ça se fait sur le PC.")}</p>`);
+  // ce navigateur a déjà joint le module : il est installé sur ce PC, le lien atelier-mtg:// le lance ; sinon, le télécharger
+  const vu = TELEPHONE.moduleVu();
+  ouvrirModale(`<h2>Module Claude</h2>
+    <p>${vu ? "Le module Claude de ce PC ne répond pas : lance l'Atelier." : "Claude répond depuis ton PC Windows : le module Claude relie ce site à ton PC."}</p>
+    <p>Il faut aussi Claude Code sur ce PC, avec un abonnement Claude Pro ou plus.</p>${vu ? "" : `
+    <p class="muet petit">Si Windows le bloque : « Informations complémentaires », puis « Exécuter quand même ».</p>`}
+    <p class="muet petit">Sans abonnement Claude, tu peux masquer tout ce qui concerne Claude dans les Options.</p>
+    <div class="boutons">${vu ? `<a class="btn btn-accent" id="mc-lancer" href="atelier-mtg://lancer">${ico("lancer")}Lancer l'Atelier</a>`
+      : `<a class="btn btn-accent" href="${MODULE_CLAUDE}">${ico("telecharger")}Télécharger le module</a>`}
+      <a class="btn btn-discret" href="#/options">Masquer Claude</a></div>`, (b) => {
+    if ($("#mc-lancer", b)) $("#mc-lancer", b).addEventListener("click", () => attendreModule(quoi));
+  });
+}
+// « Lancer l'Atelier » : le lien atelier-mtg:// le démarre ; on le cherche quelques secondes, puis on reprend la demande
+async function attendreModule(quoi) {
+  toast("Lancement de l'Atelier…", 3000);
+  for (let i = 0; i < 20 && !TELEPHONE.pc; i++) { await attendre(2000); await TELEPHONE.chercherPc(); }
+  if (!TELEPHONE.pc) return toast("L'Atelier ne répond pas.", 5000);
+  if (!$("#modale").hidden) fermerModale();
+  if (quoi === "claude") ouvrirChat();
 }
 // page partagée : à qui sont ces decks (le pseudo du compte qui publie)
 // titre_accueil : la page d'accueil de l'Atelier (site_atelier.py), qui n'est le site de decks de personne
@@ -280,16 +306,13 @@ const ACCUEIL_ATELIER = DOMAINE_ATELIER + "fr/";                    // la page d
 const A_PROPOS = !PARTAGE ? "#/a-propos" : PARTAGE.page === "a-propos" ? "./" : PARTAGE.page === "recherche" ? "../" : ACCUEIL_ATELIER;
 // pages du site de l'Atelier (site_atelier.py) : la page d'accueil et sa recherche de cartes
 const SITE_ATELIER = !!PARTAGE && ["a-propos", "recherche"].includes(PARTAGE.page);
-// « Installer l'Atelier MTG » : la section Installation de cette page, pas GitHub (un débutant y attend un fichier à
-// télécharger, il y trouve du code)
-const INSTALLER = TELEPHONE ? ACCUEIL_ATELIER + "#installation" : !PARTAGE ? "#/a-propos/installation" : PARTAGE.page === "a-propos" ? "#installation" : A_PROPOS + "#installation";
 // l'appli en ligne (telephone_site.py), sur le même domaine que le site : il sait si l'on y est connecté
 const MES_DECKS_URL = "https://atelier-mtg.com/mes-decks/";
 // les deux choix proposés partout hors de l'Atelier : un compte (l'appli en ligne) ou la version à installer ; connecté
 // (classe « connecte » : partage.TETE_COMPTE, telephone.js › marquerCompte), « Mes decks » à la place du compte
 const DEUX_CHOIX = (petit = "") => `<span class="deux-choix"><a class="btn btn-accent${petit} hors-compte" href="${MES_DECKS_URL}#inscription">${ico("plus")}Créer un compte</a>
   <a class="btn btn-accent${petit} en-compte" href="${MES_DECKS_URL}">${ico("cartes")}Mes decks</a>
-  <a class="btn btn-contour${petit}" href="${INSTALLER}">${ico("telecharger")}Télécharger</a></span>`;
+</span>`;
 // ------------------------------------------------------------------ l'adresse, dans l'appli en ligne (site unique)
 // L'appli montre l'adresse publique de ce qu'on regarde, celle qu'on partage : ses decks à /decks/<pseudo>/, un deck à
 // /decks/<pseudo>/<slug>/ (#/onglet ensuite), le reste à l'adresse de l'appli (/mes-decks/#/…). Sa route reste
@@ -297,7 +320,7 @@ const DEUX_CHOIX = (petit = "") => `<span class="deux-choix"><a class="btn btn-a
 // route écrite dans l'adresse (lien « #/… », location.hash = …) est traduite (hashchange, plus bas).
 const SITE_APPLI = !!TELEPHONE && !PARTAGE && !window.ATELIER_VOIR;
 const CHEMIN_APPLI = SITE_APPLI ? new URL(".", document.currentScript.src).pathname : "";
-const ECRANS_APPLI_ROUTE = new Set(["deck", "recherche", "options", "classeur", "proxies", "compte", "deconnexion", "slug", "a-propos"]);
+const ECRANS_APPLI_ROUTE = new Set(["deck", "recherche", "options", "classeur", "proxies", "compte", "deconnexion", "slug", "a-propos", "module"]);
 const pseudoLocal = () => { try { return (JSON.parse(localStorage.getItem("atelier-compte") || "null") || {}).pseudo || ""; } catch (_) { return ""; } };
 function adresseDeRoute(h) {
   const p = pseudoLocal(), r = String(h || "").replace(/^#\/?/, "");
@@ -454,7 +477,7 @@ function barreAppli(parts, qs) {
   else if (parts[0] === "compte") { titre = "Mon compte"; retour = "#/"; }
   else if (parts[0] === "classeur") titre = "Classeur";
   else if (parts[0]) retour = "#/";
-  else etat.menuEcran = () => [["Importer des decks…", modaleImportDecks, "", "dossier"], ["Demander à Claude", () => (TELEPHONE && TELEPHONE.pc ? ouvrirChat() : surPC("claude")), "", "discussion"]];
+  else etat.menuEcran = () => [["Importer des decks…", modaleImportDecks, "", "dossier"], ...(claudeMasque() ? [] : [["Demander à Claude", () => (TELEPHONE && TELEPHONE.pc ? ouvrirChat() : surPC("claude")), "", "discussion"]])];
   $("#app-titre").textContent = titre;
   const r = $("#app-retour");
   r.hidden = !retour;
@@ -975,6 +998,14 @@ async function route() {
   if (!$("#modale").hidden) fermerModale();
   cacherApercu();
   if (TELEPHONE) document.documentElement.classList.toggle("appli-prete", !!TELEPHONE.pret);
+  if (SITE_APPLI) {                                // un module à associer (vueModule) : gardé le temps de se connecter
+    const m = routeActuelle.match(/^#\/module\/(\d+)\/([^/?]+)/);
+    try {
+      if (m && !TELEPHONE.pret) sessionStorage.setItem("atelier-module-attente", `${m[1]}/${m[2]}`);
+      const a = TELEPHONE.pret && !m && sessionStorage.getItem("atelier-module-attente");
+      if (a) { sessionStorage.removeItem("atelier-module-attente"); routeActuelle = "#/module/" + a; }
+    } catch (_) { /* stockage refusé : l'Atelier du PC rouvrira cette page */ }
+  }
   if (TELEPHONE && !TELEPHONE.pret) return TELEPHONE.attente(vue);     // téléphone pas encore relié, ou decks en route
   if (SITE_APPLI) {
     const s = routeActuelle.match(/^#\/slug\/([^/?]+)\/?(.*)$/s);
@@ -1011,6 +1042,7 @@ async function route() {
     else if (parts[0] === "recherche") await vueRecherche(new URLSearchParams(qs || ""));
     else if (window.TELEPHONE && !PARTAGE && parts[0] === "compte") vueCompte();
     else if (window.TELEPHONE && !PARTAGE && parts[0] === "deconnexion") await deconnexionDemandee();
+    else if (window.TELEPHONE && !PARTAGE && parts[0] === "module") await vueModule(parts[1], parts[2]);
     else if (!PARTAGE && parts[0] === "options") await vueOptions();
     else if (!PARTAGE && parts[0] === "classeur") await vueClasseur();
     else if (!PARTAGE && parts[0] === "proxies") await vueProxies(new URLSearchParams(qs || ""));
@@ -1484,7 +1516,7 @@ function menuDeck(d) {
     ...(PARTAGE ? [] : [["Cardmarket (à acheter)", () => copierCardmarket(d), "", "panier"]])];
   return [
     ...(ECRAN_TELEPHONE ? [["Chercher pour ce deck", () => { location.hash = `#/recherche?deck=${enc(d.id)}`; }, "", "chercher"],
-      ["Jouer", () => (TELEPHONE ? ouvrirJeu(d.id) : surPC("jouer")), "", "lancer"], ["Demander à Claude", () => (TELEPHONE && TELEPHONE.pc ? ouvrirChat() : surPC("claude")), "", "discussion"], null] : []),
+      ["Jouer", () => (TELEPHONE ? ouvrirJeu(d.id) : surPC("jouer")), "", "lancer"], ...(claudeMasque() ? [] : [["Demander à Claude", () => (TELEPHONE && TELEPHONE.pc ? ouvrirChat() : surPC("claude")), "", "discussion"]]), null] : []),
     ...(PARTAGEABLE ? [["Partager le deck…", () => modaleLien(d), "", "partager"]] : []),
     ...(PARTAGE ? [] : [["Imprimer les proxies…", () => { location.hash = `#/proxies?deck=${enc(d.id)}`; }, "", "imprimer"]]),
     ...(PARTAGEABLE ? [null] : []),
@@ -2115,9 +2147,31 @@ function modaleCompte(contexte, fin = () => {}) {
   }, { focus: false, fermer: () => { fermerModale(); fin(); } });
 }
 
-// accueil du PC : où en est la synchronisation avec le compte (un mot discret), ou un bandeau tant que les decks ne
-// sont que sur ce PC
-const PLUS_TARD_COMPTE = 7 * 86400 * 1000;
+// #/module/<port>/<secret> : l'Atelier d'un PC pas encore connecté ouvre cette adresse (compte.lien_module) ; connecté
+// ici, on l'associe au compte (telephone.js › appairerModule), et l'adresse perd son secret
+async function vueModule(port, secret) {
+  if (secret) remplacerRoute("#/module");
+  const page = (corps) => { vue.innerHTML = `<div class="panneau page-module"><h1>${ico("discussion")}Module Claude</h1>${corps}</div>`; };
+  if (!port || !secret) return page(`<p>Lance « Atelier MTG » sur ton PC : il ouvre cette page pour se relier à ton compte.</p>
+    <div class="boutons"><a class="btn btn-accent" href="#/">Mes decks</a></div>`);
+  page(`<p class="chargement">Connexion de ce PC à ton compte…</p>`);
+  try {
+    const r = await TELEPHONE.appairerModule(port, secret);
+    page(`<p>Ce PC est relié à ton compte${r.deja ? "" : " et se lancera avec Windows"}.${!r.deja && r.decks ? ` Ses ${r.decks > 1 ? `${r.decks} decks` : "decks"} arrivent dans Mes decks.` : ""}</p>
+      ${r.claude ? "" : `<p>Il reste à installer Claude Code sur ce PC, puis à t'y connecter avec ton abonnement Claude.</p>`}
+      <div class="boutons"><a class="btn btn-accent" href="#/">${ico("cartes")}Mes decks</a>
+        ${r.claude ? "" : `<a class="btn" href="${CLAUDE_CODE}" target="_blank" rel="noopener">Installer Claude Code</a>`}</div>`);
+  } catch (e) {
+    page(`<p class="erreur">${esc(e.message)}</p>
+      <div class="boutons"><button class="btn btn-accent" id="mod-encore">Réessayer</button>
+        <a class="btn btn-discret" href="http://127.0.0.1:${Number(port)}/#/options">Se connecter depuis ce PC</a></div>`);
+    $("#mod-encore", vue).onclick = () => vueModule(port, secret);
+  }
+}
+
+// accueil du PC : où en est la synchronisation avec le compte (un mot discret), ou, pas connecté, le bandeau qui
+// l'emmène en ligne : le site, connecté, associe ce PC à son compte (lien_module) et y envoie ses decks
+const PLUS_TARD_COMPTE = 86400 * 1000;
 async function etatCompte(petit, bandeau) {
   const c = await api("/api/compte").catch(() => null);
   if (!c || !petit.isConnected) return;
@@ -2130,10 +2184,12 @@ async function etatCompte(petit, bandeau) {
   let tard = 0;
   try { tard = +localStorage.getItem("pref-compte-plus-tard") || 0; } catch (_) {}
   if (Date.now() - tard < PLUS_TARD_COMPTE) return;
-  bandeau.innerHTML = `<div class="bandeau-sauvegarde">${ico("nuage")}<p>Tes decks ne sont que sur ce PC : s'il tombe en panne, ils sont perdus.</p>
-    <button class="btn btn-accent btn-petit" id="bs-oui">Connecter mon compte</button>
+  bandeau.innerHTML = `<div class="bandeau-sauvegarde">${ico("nuage")}<p>L'Atelier passe en ligne, sur atelier-mtg.com. Connecte ce PC à ton compte : ${c.decks ? `tes ${c.decks > 1 ? `${c.decks} decks` : "decks"} y seront envoyés, et ` : ""}Claude y répondra depuis ce PC.</p>
+    <button class="btn btn-accent btn-petit" id="bs-oui">Passer en ligne</button>
     <button class="btn btn-discret btn-petit" id="bs-tard">Plus tard</button></div>`;
-  $("#bs-oui", bandeau).onclick = () => modaleCompte("envoyer", encore);
+  $("#bs-oui", bandeau).onclick = async () => {
+    try { window.open((await api("/api/module/lien")).url, "_blank", "noopener"); } catch (e) { erreur(e); }
+  };
   $("#bs-tard", bandeau).onclick = () => { PREF.set("compte-plus-tard", String(Date.now())); bandeau.innerHTML = ""; };
 }
 
@@ -2203,6 +2259,11 @@ function optionsTelephone() {
         <div id="opt-compte"><p class="chargement">Chargement…</p></div>
       </div></section>
     <section class="panneau options opt-bloc" id="opt-cartes"></section>
+    ${ECRAN_TELEPHONE ? "" : `<section class="panneau options"><div class="opt-titre"><h2>${ico("discussion")}Claude</h2></div>
+      <div class="segments" role="group" aria-label="Fonctions Claude" id="opt-claude">${[["", "Afficher"], ["non", "Masquer"]].map(([k, l]) => {
+        const actif = (claudeMasque() ? "non" : "") === k;   // sur téléphone, pas de section : Claude n'y est jamais
+        return `<button type="button" data-claude="${k}" class="${actif ? "actif" : ""}" aria-pressed="${actif}">${l}</button>`;
+      }).join("")}</div></section>`}
     <section class="panneau options"><div class="opt-titre"><h2>${ico("theme")}Thème</h2></div>
       <div class="segments" role="group" aria-label="Thème" id="opt-theme">${[["", "Auto"], ["light", "Clair"], ["dark", "Sombre"]].map(([k, l]) => {
         const actif = (document.documentElement.dataset.theme || "") === k;
@@ -2214,6 +2275,10 @@ function optionsTelephone() {
     else delete document.documentElement.dataset.theme;
     try { if (t) localStorage.setItem("theme", t); else localStorage.removeItem("theme"); } catch (_) {}
     $$("#opt-theme button").forEach((x) => { x.classList.toggle("actif", x === b); x.setAttribute("aria-pressed", x === b); });
+  }));
+  $$("#opt-claude button").forEach((b) => b.addEventListener("click", () => {
+    masquerClaude(b.dataset.claude === "non");
+    $$("#opt-claude button").forEach((x) => { x.classList.toggle("actif", x === b); x.setAttribute("aria-pressed", x === b); });
   }));
   optionsCartes($("#opt-cartes"));                 // les mêmes réglages sur tous les appareils
   if ($("#tel-installer-app")) $("#tel-installer-app").onclick = () => TELEPHONE.installer();
@@ -4794,12 +4859,12 @@ async function vueRecherche(params) {
   if (c.r === "1") await lancerRecherche();
 }
 
-// page partagée : la recherche et la discussion en vitrine, grisées, avec le lien pour installer l'Atelier chez soi
+// page partagée : la recherche et la discussion en vitrine, grisées, avec le lien pour créer son compte
 function invitation(titre, texte) {
   return `<div class="vitrine-invite panneau">
     <h2>${esc(titre)}</h2>
     <p>${esc(texte)}</p>
-    <a class="btn btn-accent" href="${INSTALLER}">${ico("telecharger")}Installer l'Atelier MTG</a>
+    ${DEUX_CHOIX()}
   </div>`;
 }
 
@@ -4817,7 +4882,7 @@ function vueRechercheVitrine() {
     </div>
     <div class="vitrine">
       <div class="vitrine-fond" inert aria-hidden="true">${formulaireRecherche(rch.crit)}</div>
-      ${invitation("Recherche avancée", "Disponible dans l'Atelier MTG, à installer gratuitement sur son ordinateur.")}
+      ${invitation("Recherche avancée", "Disponible dans l'Atelier MTG, gratuit, avec un compte.")}
     </div>`;
 }
 
@@ -4835,8 +4900,6 @@ const APPLI_TELEPHONE = MES_DECKS_URL;
 const QR_APPLI = `<svg class="ap-qr" viewBox="0 0 33 33" role="img" aria-label="QR code de atelier-mtg.com/mes-decks"><rect width="33" height="33" fill="#fff"/><path fill="#000" d="M2 2h7v1h-7zM11 2h7v1h-7zM19 2h4v1h-4zM24 2h7v1h-7zM2 3h1v1h-1zM8 3h1v1h-1zM11 3h8v1h-8zM22 3h1v1h-1zM24 3h1v1h-1zM30 3h1v1h-1zM2 4h1v1h-1zM4 4h3v1h-3zM8 4h1v1h-1zM10 4h1v1h-1zM12 4h2v1h-2zM15 4h1v1h-1zM17 4h1v1h-1zM21 4h2v1h-2zM24 4h1v1h-1zM26 4h3v1h-3zM30 4h1v1h-1zM2 5h1v1h-1zM4 5h3v1h-3zM8 5h1v1h-1zM10 5h1v1h-1zM12 5h1v1h-1zM14 5h1v1h-1zM16 5h2v1h-2zM19 5h3v1h-3zM24 5h1v1h-1zM26 5h3v1h-3zM30 5h1v1h-1zM2 6h1v1h-1zM4 6h3v1h-3zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h2v1h-2zM17 6h6v1h-6zM24 6h1v1h-1zM26 6h3v1h-3zM30 6h1v1h-1zM2 7h1v1h-1zM8 7h1v1h-1zM10 7h1v1h-1zM14 7h1v1h-1zM19 7h1v1h-1zM22 7h1v1h-1zM24 7h1v1h-1zM30 7h1v1h-1zM2 8h7v1h-7zM10 8h1v1h-1zM12 8h1v1h-1zM14 8h1v1h-1zM16 8h1v1h-1zM18 8h1v1h-1zM20 8h1v1h-1zM22 8h1v1h-1zM24 8h7v1h-7zM10 9h5v1h-5zM16 9h1v1h-1zM18 9h1v1h-1zM21 9h1v1h-1zM2 10h1v1h-1zM4 10h5v1h-5zM19 10h1v1h-1zM24 10h5v1h-5zM7 11h1v1h-1zM15 11h3v1h-3zM19 11h8v1h-8zM30 11h1v1h-1zM3 12h1v1h-1zM5 12h1v1h-1zM8 12h1v1h-1zM11 12h1v1h-1zM15 12h4v1h-4zM23 12h2v1h-2zM26 12h1v1h-1zM2 13h4v1h-4zM7 13h1v1h-1zM9 13h3v1h-3zM13 13h3v1h-3zM18 13h1v1h-1zM21 13h2v1h-2zM25 13h1v1h-1zM27 13h1v1h-1zM29 13h1v1h-1zM4 14h5v1h-5zM10 14h5v1h-5zM16 14h1v1h-1zM19 14h1v1h-1zM21 14h1v1h-1zM27 14h2v1h-2zM4 15h3v1h-3zM9 15h1v1h-1zM12 15h1v1h-1zM20 15h2v1h-2zM23 15h4v1h-4zM30 15h1v1h-1zM2 16h2v1h-2zM5 16h6v1h-6zM13 16h2v1h-2zM17 16h2v1h-2zM22 16h1v1h-1zM25 16h4v1h-4zM2 17h1v1h-1zM12 17h1v1h-1zM16 17h1v1h-1zM21 17h2v1h-2zM25 17h2v1h-2zM29 17h1v1h-1zM3 18h2v1h-2zM6 18h3v1h-3zM10 18h2v1h-2zM13 18h2v1h-2zM17 18h3v1h-3zM27 18h2v1h-2zM2 19h6v1h-6zM9 19h1v1h-1zM11 19h2v1h-2zM14 19h3v1h-3zM18 19h1v1h-1zM21 19h2v1h-2zM24 19h3v1h-3zM28 19h1v1h-1zM30 19h1v1h-1zM2 20h1v1h-1zM6 20h1v1h-1zM8 20h2v1h-2zM11 20h10v1h-10zM23 20h1v1h-1zM26 20h1v1h-1zM28 20h1v1h-1zM2 21h1v1h-1zM4 21h2v1h-2zM9 21h1v1h-1zM12 21h1v1h-1zM15 21h1v1h-1zM22 21h5v1h-5zM29 21h1v1h-1zM2 22h1v1h-1zM4 22h7v1h-7zM12 22h3v1h-3zM16 22h1v1h-1zM19 22h2v1h-2zM22 22h5v1h-5zM28 22h3v1h-3zM10 23h1v1h-1zM12 23h3v1h-3zM18 23h5v1h-5zM26 23h5v1h-5zM2 24h7v1h-7zM14 24h1v1h-1zM17 24h2v1h-2zM21 24h2v1h-2zM24 24h1v1h-1zM26 24h3v1h-3zM2 25h1v1h-1zM8 25h1v1h-1zM10 25h4v1h-4zM16 25h1v1h-1zM21 25h2v1h-2zM26 25h1v1h-1zM29 25h2v1h-2zM2 26h1v1h-1zM4 26h3v1h-3zM8 26h1v1h-1zM10 26h1v1h-1zM12 26h1v1h-1zM17 26h1v1h-1zM19 26h1v1h-1zM22 26h5v1h-5zM28 26h2v1h-2zM2 27h1v1h-1zM4 27h3v1h-3zM8 27h1v1h-1zM10 27h2v1h-2zM14 27h1v1h-1zM16 27h1v1h-1zM18 27h1v1h-1zM20 27h2v1h-2zM23 27h1v1h-1zM25 27h1v1h-1zM27 27h4v1h-4zM2 28h1v1h-1zM4 28h3v1h-3zM8 28h1v1h-1zM10 28h2v1h-2zM13 28h3v1h-3zM17 28h2v1h-2zM21 28h9v1h-9zM2 29h1v1h-1zM8 29h1v1h-1zM12 29h3v1h-3zM17 29h2v1h-2zM20 29h1v1h-1zM22 29h1v1h-1zM24 29h4v1h-4zM29 29h1v1h-1zM2 30h7v1h-7zM10 30h8v1h-8zM19 30h1v1h-1zM21 30h1v1h-1zM26 30h1v1h-1zM28 30h1v1h-1z"/></svg>`;
 // un téléphone ou une tablette (iPadOS se présente comme un Mac, mais tactile)
 const SUR_TELEPHONE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
-// pour qui n'a pas encore d'assistant IA : Claude Code dans l'application de bureau, sans terminal (guide en français)
-const CLAUDE_BUREAU = "https://code.claude.com/docs/fr/desktop-quickstart";
 // [capture, titre, texte] ; « Les bases » : ce qu'on attend de tout gestionnaire de decks
 const MODULES_BASES = [
   ["appareils", "Vos decks sur tous vos appareils", "Création, import, affichage en liste ou visuel, taille des cartes réglable, tri par type, tag ou fonction : organisez vos cartes exactement comme vous l'entendez. Sur ordinateur ou sur téléphone, votre compte garde vos decks à jour partout."],
@@ -4858,32 +4921,32 @@ const MODULES_ATOUTS = [
 const FAQ_ATELIER = [
   ["Installation et sécurité", [
     ["Je ne suis pas informaticien : c'est compliqué à installer ?",
-      "Non. Le plus simple : créez un compte, il n'y a rien à installer. Pour la version complète, sous Windows, téléchargez l'installeur et lancez-le, comme n'importe quel programme : il contient tout ce qu'il faut et crée un raccourci sur le bureau. Ensuite, les mises à jour s'installent en un clic. Sous macOS et Linux, confiez l'installation à un assistant IA qui agit sur votre ordinateur, comme Claude Code : collez-lui la consigne ci-dessus."],
+      "Non : il n'y a rien à installer. Créez un compte, et l'Atelier s'ouvre dans votre navigateur ou sur votre téléphone. Seul Claude demande un petit module sur votre PC Windows : il se propose quand vous demandez quelque chose à Claude, s'installe comme n'importe quel programme et se met à jour tout seul."],
     ["Ça marche sur Mac et Linux ?",
-      "<p>En ligne, oui : l'Atelier s'ouvre dans n'importe quel navigateur. La version à installer marche en principe aussi, lancée par <code>atelier.sh</code>, mais pour l'instant seul Windows est testé.</p>"],
+      "<p>Oui : l'Atelier s'ouvre dans n'importe quel navigateur. Le module Claude n'existe pour l'instant que pour Windows.</p>"],
     ["Est-ce sûr ?",
-      "En ligne, on se connecte avec un code envoyé par e-mail : il n'y a pas de mot de passe à se faire voler. Sur votre PC, l'Atelier ne s'ouvre que chez vous : il n'est pas accessible depuis le réseau. Son installeur n'est pas signé (une signature coûte plusieurs centaines d'euros par an), d'où l'avertissement de Windows au premier lancement ; mais tout son code est public : vous, ou votre assistant IA, pouvez le lire avant de l'installer."],
+      "On se connecte avec un code envoyé par e-mail : il n'y a pas de mot de passe à se faire voler. Le module Claude ne répond qu'à atelier-mtg.com, et seulement pour Claude, les synergies et les combos MTGPics. Son installeur n'est pas signé (une signature coûte plusieurs centaines d'euros par an), d'où l'avertissement de Windows au premier lancement ; mais tout son code est public : vous, ou votre assistant IA, pouvez le lire avant de l'installer."],
   ]],
   ["Claude", [
     ["Faut-il payer pour Claude ?",
-      "Claude est facultatif : sans lui, tout le reste fonctionne. Pour s'en servir, il faut un abonnement Claude payant (Pro ou plus), car le compte gratuit ne donne pas accès à Claude Code."],
+      "Claude est facultatif : sans lui, tout le reste fonctionne, et les options permettent de masquer ses boutons. Pour s'en servir, il faut un abonnement Claude payant (Pro ou plus), car le compte gratuit ne donne pas accès à Claude Code, et un PC Windows pour le module Claude."],
+    ["Que fait le module Claude ?",
+      "Il garde sur votre PC une copie de vos decks, synchronisée avec votre compte, et y lance Claude Code quand vous lui écrivez depuis le site. Il se lance avec Windows, sans fenêtre : tout se fait sur atelier-mtg.com."],
     ["Va-t-il épuiser mon abonnement ?",
       "Il ne travaille que quand vous lui écrivez, ou quand vous cliquez sur un bouton qui l'appelle, comme l'analyse des synergies d'un deck ou « Affiner avec Claude » : rien ne tourne en arrière-plan. Les suggestions, les combos, le bracket, les statistiques, les fonctions des cartes et le test du simulateur ne passent pas par lui. « Compacter » résume une longue discussion pour qu'elle consomme moins."],
   ]],
   ["Votre compte et vos données", [
     ["Pourquoi un compte ?",
-      "Pour retrouver vos decks sur tous vos appareils : navigateur, téléphone et PC. Il ne demande qu'une adresse e-mail, qui sert seulement à vous envoyer le code de connexion. Vos decks sont gardés en France, et les options permettent à tout moment de les exporter ou de supprimer le compte."],
-    ["Faut-il un compte pour la version à installer ?",
-      "Non. Sur PC, vos decks sont dans un dossier de votre disque. Avec un compte, ils se synchronisent tout seuls avec vos autres appareils, et l'appli en ligne ouverte sur ce PC lui demande Claude."],
+      "Pour retrouver vos decks sur tous vos appareils : navigateur, téléphone, PC. Il ne demande qu'une adresse e-mail, qui sert seulement à vous envoyer le code de connexion. Vos decks sont gardés en France, et les options permettent à tout moment de les exporter ou de supprimer le compte."],
     ["Comment entrent mes cartes ?",
       "On colle une liste copiée depuis Moxfield, Archidekt ou MTG Arena. La liste d'un deck préconstruit se trouve sur ces sites. Les cartes rangées hors des decks se collent de la même façon dans le classeur."],
     ["Peut-on créer un deck Magic en ligne, depuis son téléphone ?",
-      `<p>Oui : <a href="${APPLI_TELEPHONE}#inscription">créez votre compte</a>, puis ajoutez l'appli à l'écran d'accueil de votre téléphone. Vos decks y restent même sans réseau, et se synchronisent dès qu'il revient. La discussion avec Claude et les combos MTGPics demandent l'Atelier installé sur votre PC : sur ce PC, l'appli en ligne passe par lui.</p>
+      `<p>Oui : <a href="${APPLI_TELEPHONE}#inscription">créez votre compte</a>, puis ajoutez l'appli à l'écran d'accueil de votre téléphone. Vos decks y restent même sans réseau, et se synchronisent dès qu'il revient. La discussion avec Claude et les combos MTGPics passent par le module Claude, sur votre PC Windows.</p>
       <p>Pour montrer un deck à quelqu'un, son adresse suffit : sa page s'ouvre sans compte, sur téléphone comme sur ordinateur.</p>`],
     ["Et si mon PC tombe en panne ?",
-      "Avec un compte, vos decks y sont déjà : le PC s'y synchronise tout seul, versions et classeur compris. Sur un nouveau PC, connectez-vous : ils reviennent."],
+      "Rien n'est perdu : vos decks sont sur votre compte, versions et classeur compris. Le module Claude n'en garde qu'une copie."],
     ["Puis-je partir avec mes decks ?",
-      "Oui. Sur PC, chaque deck est un dossier sur votre disque, avec sa liste en texte (format Archidekt, tags compris), son historique et ses versions. En ligne, « Exporter mes données » enregistre tout dans un fichier. Partout, le menu « … » copie la liste pour Archidekt, Moxfield, MTG Arena ou MTGO."],
+      "Oui. « Exporter mes données » (Mon compte) enregistre tout dans un fichier, et le menu « … » d'un deck copie sa liste pour Archidekt, Moxfield, MTG Arena ou MTGO. Avec le module Claude, chaque deck est aussi un dossier sur votre PC, avec sa liste en texte."],
   ]],
   ["Magic", [
     ["Peut-on jouer en ligne contre d'autres joueurs ?",
@@ -4924,7 +4987,6 @@ function vueAPropos(installation = false) {
     const img = (n, classe) => `<img${classe ? ` class="${classe}"` : ""} src="${PARTAGE ? CAPTURES_ATELIER : "/a-propos/"}${n}.webp" data-f="${n}" alt="${esc(alt)}" loading="lazy">`;
     return theme ? img(f, "cap-sombre") + img(f + "-clair", "cap-clair") : img(f);
   };
-  const consigne = `Installe et lance l'Atelier MTG depuis ${(PARTAGE && PARTAGE.atelier || DEPOT_ATELIER).replace("https://", "")}`;
   const fonction = (titre, texte) => `<div class="ap-carte"><h3>${titre}</h3><p>${texte}</p></div>`;
   // « appareils » : la même page sur ordinateur, et sur téléphone posé devant
   const modules = (liste) => liste.map(([f, titre, texte]) => `<section class="ap-module">
@@ -4935,27 +4997,12 @@ function vueAPropos(installation = false) {
           <figure class="ap-ecran-tel">${capture("appareils-tel", "Le même deck dans l'Atelier, sur téléphone")}</figure>
         </div>` : `<figure>${capture(f, titre)}</figure>`}
       </section>`).join("");
-  // installation : Windows et le téléphone côte à côte (le téléphone d'abord, lu sur un téléphone) ; l'assistant IA et
-  // l'installation à la main en dessous, repliés (l'assistant ouvert pour qui lit sur Mac ou Linux)
-  const plateforme = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "") + " " + navigator.userAgent;
-  const autreOuvert = !SUR_TELEPHONE && /Mac|Linux|X11|CrOS/i.test(plateforme) && !/Windows/i.test(plateforme);
-  const installWindows = `<section class="ap-install">
-          <div class="ap-install-tete"><svg class="ico ap-logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h8.4v8.4H3zM12.6 3H21v8.4h-8.4zM3 12.6h8.4V21H3zM12.6 12.6H21V21h-8.4z"/></svg><h3>Sur ordinateur</h3></div>
-          <p class="ap-install-pour">Windows 10 et 11 · tout, Claude compris</p>
-          <a class="btn ${SUR_TELEPHONE ? "" : "btn-accent "}ap-install-action ap-windows" href="${depot}/releases/latest/download/Atelier-MTG-Windows.exe">${ico("telecharger")}Télécharger pour Windows</a>
-          <ol>
-            <li>Double-cliquez sur le fichier, puis sur <b>Installer</b>. Si Windows affiche <b>Windows a protégé votre
-              ordinateur</b> : <b>Informations complémentaires</b>, puis <b>Exécuter quand même</b>.</li>
-            <li>L'Atelier s'ouvre dans votre navigateur. Pour le rouvrir : raccourci <b>Atelier MTG</b> sur le bureau.</li>
-            <li>Vous avez un compte ? <b>Options</b>, puis <b>Compte</b>&nbsp;: connectez-vous. Vos decks se synchronisent tout
-              seuls, et l'Atelier s'ouvre ensuite sur atelier-mtg.com, Claude compris.</li>
-          </ol>
-        </section>`;
+  // commencer : le compte (sur ordinateur, avec le QR code pour le téléphone)
   const installEnLigne = `<section class="ap-install ap-en-ligne">
           <div class="ap-install-tete">${ico("nuage")}<h3>En ligne</h3></div>
           <p class="ap-install-pour">Navigateur, Android et iPhone · un compte gratuit</p>
-          <a class="btn ${SUR_TELEPHONE ? "btn-accent " : ""}ap-install-action hors-compte" href="${APPLI_TELEPHONE}#inscription">${ico("plus")}Créer un compte</a>
-          <a class="btn ${SUR_TELEPHONE ? "btn-accent " : ""}ap-install-action en-compte" href="${APPLI_TELEPHONE}">${ico("cartes")}Mes decks</a>
+          <a class="btn btn-accent ap-install-action hors-compte" href="${APPLI_TELEPHONE}#inscription">${ico("plus")}Créer un compte</a>
+          <a class="btn btn-accent ap-install-action en-compte" href="${APPLI_TELEPHONE}">${ico("cartes")}Mes decks</a>
           ${SUR_TELEPHONE ? "" : `<div class="ap-qr-ligne"><span class="ap-qr-cadre">${QR_APPLI}</span>
               <p>Sur votre téléphone : scannez ce code, ou ouvrez <a href="${APPLI_TELEPHONE}">atelier-mtg.com/mes-decks</a>.</p></div>`}
           <ol>
@@ -4975,22 +5022,21 @@ function vueAPropos(installation = false) {
         </div>
         <div class="ap-tete-texte">
           <h1>L'Atelier <span>MTG</span></h1>
-          <p class="ap-accroche">Le deck builder Commander assisté,<br>en ligne et sur votre PC.</p>
+          <p class="ap-accroche">Le deck builder Commander assisté,<br>en ligne, avec Claude en renfort.</p>
           <ul class="ap-puces">${["Suggestions", "Base de mana", "Combos", "Bracket", "Simulation", "Table de jeu", "Recherche avancée", "Claude"].map((x) => `<li>${x}</li>`).join("")}</ul>
           <p class="ap-cta"><a class="btn btn-accent hors-compte" href="${APPLI_TELEPHONE}#inscription" id="ap-creer">${ico("plus")}Créer un compte</a>
             <a class="btn btn-accent en-compte" href="${APPLI_TELEPHONE}" id="ap-mes-decks">${ico("cartes")}Mes decks</a>
-            <a class="btn btn-contour" href="${INSTALLER}" id="ap-installer">${ico("telecharger")}Télécharger</a>
             <a class="ap-voir" href="${EXEMPLES_ATELIER}">Voir à quoi ça ressemble</a></p>
-          <p class="ap-mention"><b>Gratuit</b> · open source · navigateur, téléphone et PC${versionAtelier ? ` · version ${esc(versionAtelier)}` : ""}</p>
+          <p class="ap-mention"><b>Gratuit</b> · open source · navigateur et téléphone${versionAtelier ? ` · version ${esc(versionAtelier)}` : ""}</p>
         </div>
       </div>
     </header>
     <article class="a-propos">
       <div class="ap-bandeau">
-        <p class="ap-promesse">Gratuit, <em>en ligne</em> ou <em>sur votre PC</em>.</p>
+        <p class="ap-promesse">Gratuit, <em>en ligne</em>, et <em>Claude</em> si vous l'avez.</p>
         <div class="ap-grille ap-duo">
-          ${fonction(`${ico("nuage")}En ligne`, "Dans le navigateur et sur téléphone, avec un compte : vos decks se synchronisent tout seuls entre vos appareils. Claude, avec l'Atelier installé sur votre PC.")}
-          ${fonction(`${ico("telecharger")}Sur votre PC`, "Installé sur Windows : tout, Claude compris. Connecté à votre compte, il se synchronise tout seul et prête Claude à l'appli en ligne.")}
+          ${fonction(`${ico("nuage")}En ligne`, "Dans le navigateur et sur téléphone, avec un compte : vos decks se synchronisent tout seuls entre vos appareils.")}
+          ${fonction(`${ico("discussion")}Claude`, "Avec votre abonnement Claude, depuis votre PC Windows : le module Claude relie le site à Claude Code. Il se propose quand vous demandez quelque chose à Claude.")}
         </div>
         <p>L'Atelier est un deck builder en français, pensé pour concevoir, tester et faire évoluer vos decks Magic: The
           Gathering en Commander.</p>
@@ -5013,46 +5059,16 @@ function vueAPropos(installation = false) {
         <li><strong>Open source et gratuit.</strong> Le code est publié sous <a href="${depot}/blob/main/LICENSE" target="_blank" rel="noopener">licence MIT</a> :
           accessible, vérifiable et modifiable par tous sur GitHub.</li>
         <li><strong>Vos decks vous appartiennent.</strong> Avec un compte, ils sont gardés en France, et vous pouvez à tout
-          moment les exporter ou supprimer le compte. Sur votre PC, chaque deck est un dossier de votre disque, qui ne
-          rejoint votre compte que si vous le demandez. Votre adresse e-mail ne sert qu'à vous connecter.</li>
+          moment les exporter ou supprimer le compte. Votre adresse e-mail ne sert qu'à vous connecter.</li>
         <li><strong>L'IA est optionnelle.</strong> Tri, statistiques, suggestions, test du simulateur et jeu en solo
           fonctionnent sans aucune configuration IA.</li>
       </ul>
 
-      <h2 id="installation">Installation</h2>
-      <p>Ce logiciel de construction de deck Magic s'utilise en ligne, dans votre navigateur ou sur votre téléphone, ou
-        installé sur votre ordinateur Windows. Gratuit dans les deux cas.</p>
-      <div class="ap-install-duo">${SUR_TELEPHONE ? installEnLigne + installWindows : installWindows + installEnLigne}</div>
-      <p class="ap-autres-titre">Autres façons d'installer</p>
-      <p class="ap-autres-texte">Sur Mac, sur Linux, ou pour tout contrôler vous-même.</p>
-      <div class="ap-autres">
-        <details class="ap-autre"${autreOuvert ? " open" : ""}><summary>${ico("discussion")}<span class="ap-autre-nom"><b>Avec un assistant IA</b>
-          <small>Windows, macOS, Linux · il s'occupe de tout</small></span>${ico("plus")}</summary>
-          <ol>
-            <li>Ouvrez un assistant IA qui agit sur votre ordinateur : Claude Code, Cursor, Copilot… Sinon,
-              <a href="${CLAUDE_BUREAU}" target="_blank" rel="noopener">l'application Claude pour ordinateur</a>
-              (abonnement Pro ou plus), onglet <b>Code</b>.</li>
-            <li>Collez-lui cette consigne :
-              <div class="ap-commande"><code>${esc(consigne)}</code><button type="button" data-copier>Copier</button></div></li>
-            <li>Répondez à ses trois questions : il installe tout et crée le raccourci sur le bureau.</li>
-          </ol>
-        </details>
-        <details class="ap-autre"><summary>${ico("terminal")}<span class="ap-autre-nom"><b>À la main</b>
-          <small>Windows, macOS, Linux · Python et git</small></span>${ico("plus")}</summary>
-          <ol>
-            <li>Installez <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Python</a> 3.10 ou plus
-              récent, et <a href="https://git-scm.com/downloads" target="_blank" rel="noopener">git</a>.</li>
-            <li>Dans un terminal :
-              <div class="ap-commande"><code>git clone ${depot}.git "Atelier MTG"
-cd "Atelier MTG"
-python installer.py</code><button type="button" data-copier>Copier</button></div></li>
-            <li>Pour rouvrir l'Atelier : raccourci <b>Atelier MTG</b> sur le bureau, ou <code>./atelier.sh</code> sous macOS et
-              Linux.</li>
-          </ol>
-        </details>
-      </div>
-      <p class="ap-install-sous">Les nouvelles versions s'annoncent dans l'Atelier et s'installent en un clic ; vos decks sont
-        conservés. Code source : <a class="ap-depot" href="${depot}" target="_blank" rel="noopener">${depot.replace("https://", "")}</a></p>
+      <h2 id="installation">Commencer</h2>
+      <p>Ce logiciel de construction de deck Magic s'utilise en ligne, dans votre navigateur ou sur votre téléphone.
+        Gratuit.</p>
+      <div class="ap-install-duo ap-install-seul">${installEnLigne}</div>
+      <p class="ap-install-sous">Code source : <a class="ap-depot" href="${depot}" target="_blank" rel="noopener">${depot.replace("https://", "")}</a></p>
 
       <h2>Questions fréquentes</h2>
       ${FAQ_ATELIER.map(([groupe, questions]) => `<h3 class="ap-faq-groupe">${groupe}</h3>
@@ -5927,7 +5943,7 @@ async function afficheHistorique() {
   const fil = $("#chat-fil");
   fil.innerHTML = "";
   chat.reponse = null;
-  if (!h.disponible) ajouteMessage("outil", "Claude Code est introuvable sur ce PC : la discussion ne marchera pas (installe l'extension Claude Code de VS Code).");
+  if (!h.disponible) ajouteMessage("outil", "Claude Code est introuvable sur ce PC : installe-le (code.claude.com/docs/fr/setup), puis connecte-toi avec ton abonnement Claude.");
   for (const m of h.messages) {
     if (m.role === "moi") ajouteMessage("moi", m.texte);
     else if (m.role === "compact") ajouteMessage("compact", `Discussion compactée · ${kTokens(m.avant)} → ${kTokens(m.apres)} tokens`);
@@ -5997,7 +6013,7 @@ async function montageChat() {
   if (PARTAGE) {                                   // page partagée : le panneau en vitrine, grisé
     $$(".chat-tete select, #chat-nouvelle, #chat-fil, .chat-saisie", a).forEach((x) => { x.classList.add("vitrine-fond"); x.inert = true; });
     a.insertAdjacentHTML("beforeend", invitation("Discussion avec Claude",
-      "Disponible dans l'Atelier MTG, à installer gratuitement sur son ordinateur. Il faut aussi Claude Code (abonnement Claude)."));
+      "Dans l'Atelier MTG, gratuit, avec un compte et le module Claude sur son PC Windows (abonnement Claude)."));
     $("#chat-fermer").onclick = () => basculeChat(false);
     chat.charge = true;
     return;
@@ -6145,7 +6161,7 @@ async function arreterChat() {
   try { await api("/api/discussion/arreter", { method: "POST", body: { deck: chat.cle } }); } catch (e) { erreur(e); }
 }
 
-$("#btn-chat")?.addEventListener("click", () => basculeChat());       // page d'accueil : « Créer un compte » et « Télécharger » à sa place (site_atelier.py)
+$("#btn-chat")?.addEventListener("click", () => basculeChat());       // page d'accueil : « Créer un compte » à sa place (site_atelier.py)
 // l'appli : la table de jeu s'ouvre dans le même onglet (l'appli installée sur iPhone n'en ouvre pas d'autre qui voie ses
 // decks), une fois le deck et ses jetons gardés pour elle (telephone.js › preparerJeu, jouer-appli.js)
 async function ouvrirJeu(id) {

@@ -114,10 +114,12 @@ def construire(dossier, base="base/"):
     v = {f: _empreinte(os.path.join(dossier, f)) for f in ("app.js", "style.css", "moteur.js", "pages.js", "partage.js", "telephone.js", "cartes.js")}
     with open(os.path.join(STATIQUE, "index.html"), encoding="utf-8") as f:
         html = f.read()
-    # avant tout affichage : l'habillage (grand écran à la souris : la barre du PC, sans onglets en bas), le thème choisi
-    # et la connexion (le rond du compte, comme telephone.js › marquerCompte)
+    # avant tout affichage : l'habillage (grand écran à la souris : la barre du PC, sans onglets en bas), le thème choisi,
+    # les fonctions Claude masquées (Options) et la connexion (le rond du compte, comme telephone.js › marquerCompte)
     habillage = ('<script>(function (h) { if (matchMedia("(min-width: 900px) and (pointer: fine)").matches) h.className = "ordinateur";\n'
-                 '    try { var t = localStorage.getItem("theme"); if (t) h.dataset.theme = t; } catch (e) {}\n'
+                 '    else h.classList.add("sans-claude");\n'
+                 '    try { var t = localStorage.getItem("theme"); if (t) h.dataset.theme = t;\n'
+                 '      if (localStorage.getItem("atelier-claude") === "non") h.classList.add("sans-claude"); } catch (e) {}\n'
                  '    try { var c = JSON.parse(localStorage.getItem("atelier-compte") || "null"); if (c && c.jeton) { h.classList.add("connecte");\n'
                  '      if (c.pseudo) h.style.setProperty("--initiale", JSON.stringify(c.pseudo[0].toUpperCase())); } } catch (e) {}\n'
                  '  })(document.documentElement);</script>')
