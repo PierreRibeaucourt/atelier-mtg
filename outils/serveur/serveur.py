@@ -9,10 +9,15 @@ Réglages : un JSON hors du dépôt (variable ATELIER_API_REGLAGES, sinon ~/atel
   {"base": "mysql://…" ou "sqlite:///…", "poivre": "<secret>", "origines": ["https://app.atelier-mtg.com"],
    "courriel": {"mode": "sendmail", "expediteur": "ne-pas-repondre@atelier-mtg.com"}}
 Facultatifs : "quota" (octets par compte), "taille_max" (octets par fichier), "requete_max" (octets par requête),
+"quota_pages" et "page_max" (octets compressés : les pages toutes prêtes d'un compte, une page),
 "pages" (les pages publiques des decks, voir pages.py : dossier, url, modeles, interface, interface_url).
+
+Les pages des decks toutes prêtes (GET/PUT /pages) : chaque appareil fait celles de ses decks et les dépose ici, pour
+qu'un autre appareil qui a les mêmes fichiers les reprenne au lieu de les refaire (voir « pages toutes prêtes »).
 """
 import base64
 import functools
+import gzip
 import hashlib
 import hmac
 import json
@@ -21,9 +26,10 @@ import re
 import secrets
 import sys
 import time
+import zlib
 from datetime import datetime, timezone
 
-from flask import Flask, g, jsonify, request
+from flask import Flask, Response, g, jsonify, request
 from werkzeug.exceptions import HTTPException
 
 import courriel
@@ -42,9 +48,15 @@ CHEMIN_MAX = 400
 LOT_MAX = 2000                  # fichiers par lecture ou écriture
 FORMAT_APPLI = "atelier-mtg-appli"
 IMAGE_MAX = 2 * 1024 * 1024       # l'image d'aperçu d'une page publique (JPEG)     # celui de « Enregistrer dans un fichier » (decks.lire_appli sur le PC)
+QUOTA_PAGES = 40 * 2**20          # les pages toutes prêtes d'un compte, compressées
+PAGE_MAX = 4 * 2**20              # une page, compressée
+PAGE_TEXTE_MAX = 40 * 2**20       # une page, décompressée
+INDEX_PAGES = "@index"            # l'accueil : la liste des decks, le classeur, où sont mes cartes
+COMPRESSER = 1400                 # au-delà (octets), une réponse JSON part compressée si le navigateur le veut
 
 EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s]+\.[^@\s.]{2,}$")
 CONTROLES = re.compile(r"[\x00-\x1f\x7f]")
+EMPREINTE = re.compile(r"^[0-9a-f]{40}$")
 
 
 class Refus(Exception):
@@ -87,6 +99,8 @@ def creer(reglages):
     origines = set(reglages.get("origines", []))
     quota = int(reglages.get("quota", QUOTA))
     taille_max = int(reglages.get("taille_max", TAILLE_MAX))
+    quota_pages = int(reglages.get("quota_pages", QUOTA_PAGES))
+    page_max = int(reglages.get("page_max", PAGE_MAX))
     envoi = reglages.get("courriel", {"mode": "memoire"})
 
     def empreinte(*morceaux):
@@ -112,8 +126,16 @@ def creer(reglages):
             rep.headers["Access-Control-Allow-Origin"] = o
             rep.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
             rep.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+            rep.headers["Access-Control-Expose-Headers"] = "X-Empreinte, X-Niveau"
             rep.headers["Access-Control-Max-Age"] = "86400"
-        rep.headers["Vary"] = "Origin"
+        # les fichiers et les pages d'un compte arrivent bien plus vite compressés, surtout sur un téléphone
+        if (rep.status_code == 200 and rep.mimetype == "application/json" and not rep.direct_passthrough
+                and "Content-Encoding" not in rep.headers and "gzip" in request.headers.get("Accept-Encoding", "")):
+            corps = rep.get_data()
+            if len(corps) > COMPRESSER:
+                rep.set_data(gzip.compress(corps, compresslevel=5))
+                rep.headers["Content-Encoding"] = "gzip"
+        rep.headers["Vary"] = "Origin, Accept-Encoding"
         rep.headers["Cache-Control"] = "no-store"
         rep.headers["X-Content-Type-Options"] = "nosniff"
         return rep
@@ -277,7 +299,7 @@ def creer(reglages):
             raise Refus("Confirme avec l'adresse e-mail du compte.")
         with base.session() as s:
             pseudo = s.un("SELECT pseudo FROM comptes WHERE id = ?", g.compte)[0]
-            for table in ("fichiers", "sessions", "partages"):
+            for table in ("fichiers", "sessions", "partages", "pages"):
                 s.faire(f"DELETE FROM {table} WHERE compte = ?", g.compte)
             s.faire("DELETE FROM codes WHERE email = ?", g.email)
             s.faire("DELETE FROM comptes WHERE id = ?", g.compte)
@@ -509,6 +531,91 @@ def creer(reglages):
             if not s.un("SELECT 1 FROM partages WHERE compte = ? AND deck = ?", g.compte, nouveau):
                 s.faire("UPDATE partages SET deck = ? WHERE compte = ? AND deck = ?", nouveau, g.compte, ancien)
         return jsonify(ok=True)
+
+    # --- pages toutes prêtes -------------------------------------------------------------------------------------
+    # Chaque appareil fait les pages de ses decks (l'appli : pages.js ; le PC : son Atelier) et les dépose ici avec
+    # l'empreinte des fichiers dont elles sont tirées (même calcul partout : telephone.js › empreintes, compte.py) et
+    # leur niveau (2 : faite avec la base de cartes ; +1 : avec l'analyse de Commander Spellbook de la liste). Un appareil
+    # qui a les mêmes fichiers reprend la page telle quelle : rien à refaire, rien à demander à Scryfall. Un cache : ni
+    # dans l'export, ni dans le quota des fichiers ; la page d'un deck qui n'est plus dans le compte est oubliée.
+    def decks_presents(s):
+        return {c.rsplit("/", 1)[0] for (c,) in s.tous("SELECT chemin FROM fichiers WHERE compte = ? AND chemin LIKE ?",
+                                                          g.compte, "%/archidekt.txt") if c.count("/") == 1}
+
+    @app.get("/pages")
+    @connecte
+    def liste_pages():
+        """{pages: {deck: {empreinte, niveau, maj, taille}}} ; « @index » : l'accueil."""
+        with base.session() as s:
+            presents = decks_presents(s)
+            lignes = s.tous("SELECT deck, empreinte, niveau, maj, taille FROM pages WHERE compte = ?", g.compte)
+            partis = {d for d, *_ in lignes if d != INDEX_PAGES and d not in presents}
+            for d in partis:
+                s.faire("DELETE FROM pages WHERE compte = ? AND deck = ?", g.compte, d)
+        return jsonify(pages={d: dict(empreinte=e, niveau=n, maj=m, taille=t) for d, e, n, m, t in lignes if d not in partis})
+
+    @app.get("/pages/lire")
+    @connecte
+    def lire_page():
+        """?deck= : la page (JSON), compressée comme elle est gardée ; son empreinte et son niveau dans les en-têtes."""
+        deck = nom_deck(request.args.get("deck"))
+        with base.session() as s:
+            r = s.un("SELECT empreinte, niveau, contenu FROM pages WHERE compte = ? AND deck = ?", g.compte, deck)
+        if not r:
+            raise Refus("Page introuvable.", 404)
+        contenu = bytes(r[2])
+        if "gzip" in request.headers.get("Accept-Encoding", ""):
+            rep = Response(contenu, mimetype="application/json")
+            rep.headers["Content-Encoding"] = "gzip"
+        else:
+            rep = Response(gzip.decompress(contenu), mimetype="application/json")
+        rep.headers["X-Empreinte"], rep.headers["X-Niveau"] = r[0], str(r[1])
+        return rep
+
+    @app.put("/pages")
+    @connecte
+    def ecrire_page():
+        """?deck=&empreinte=&niveau= ; le corps : la page en JSON, compressée (Content-Type: application/gzip) ou non.
+        Une page des mêmes fichiers (même empreinte) de niveau plus haut, déjà là, est gardée. {ok, garde}."""
+        a = request.args
+        deck, empreinte = nom_deck(a.get("deck")), str(a.get("empreinte") or "")
+        if not EMPREINTE.match(empreinte):
+            raise Refus("Empreinte invalide.")
+        try:
+            niveau = int(a.get("niveau", ""))
+        except ValueError:
+            raise Refus("Niveau invalide.") from None
+        if not 0 <= niveau <= 9:
+            raise Refus("Niveau invalide.")
+        corps = request.get_data(cache=False)
+        try:
+            if request.mimetype == "application/gzip":
+                d = zlib.decompressobj(16 + zlib.MAX_WBITS)
+                texte = d.decompress(corps, PAGE_TEXTE_MAX + 1)
+                if len(texte) > PAGE_TEXTE_MAX or d.unconsumed_tail:
+                    raise Refus("Page trop grosse.", 413)
+                if not d.eof:
+                    raise ValueError
+                contenu = corps
+            else:
+                texte, contenu = corps, gzip.compress(corps, compresslevel=6)
+            if not isinstance(json.loads(texte), dict):
+                raise ValueError
+        except (ValueError, zlib.error):
+            raise Refus("Page invalide.") from None
+        if len(contenu) > page_max:
+            raise Refus("Page trop grosse.", 413)
+        with base.session() as s:
+            verrouiller(s)
+            r = s.un("SELECT empreinte, niveau, taille FROM pages WHERE compte = ? AND deck = ?", g.compte, deck)
+            if r and r[0] == empreinte and r[1] > niveau:
+                return jsonify(ok=True, garde=True)
+            total = int(s.un("SELECT COALESCE(SUM(taille), 0) FROM pages WHERE compte = ?", g.compte)[0])
+            if total - (r[2] if r else 0) + len(contenu) > quota_pages:
+                raise Refus("Trop de pages gardées pour ce compte.", 413)
+            s.faire("REPLACE INTO pages (compte, deck, empreinte, niveau, maj, taille, contenu) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    g.compte, deck, empreinte, niveau, maintenant(), len(contenu), contenu)
+        return jsonify(ok=True, garde=False)
 
     return app
 

@@ -21,6 +21,9 @@ TABLES = {
     "partages": "compte BIGINT NOT NULL, deck VARCHAR(200) NOT NULL, slug VARCHAR(80) NOT NULL, maj BIGINT NOT NULL, "
                 "resume {texte} NOT NULL, visibilite VARCHAR(20) NOT NULL DEFAULT 'public', "
                 "PRIMARY KEY (compte, deck), UNIQUE (compte, slug)",
+    # les pages des decks toutes prêtes (JSON compressé), faites par un appareil pour les autres : voir serveur › pages
+    "pages": "compte BIGINT NOT NULL, deck VARCHAR(200) NOT NULL, empreinte CHAR(40) NOT NULL, niveau INT NOT NULL, "
+             "maj BIGINT NOT NULL, taille INT NOT NULL, contenu {octets} NOT NULL, PRIMARY KEY (compte, deck)",
 }
 # les colonnes venues après la création des tables : ajoutées à une base qui ne les a pas encore
 AJOUTS = {"partages": {"visibilite": "VARCHAR(20) NOT NULL DEFAULT 'public'"}}
@@ -62,10 +65,11 @@ class Base:
     def creer_tables(self):
         pk = "BIGINT AUTO_INCREMENT PRIMARY KEY" if self.mysql else "INTEGER PRIMARY KEY AUTOINCREMENT"
         texte = "MEDIUMTEXT" if self.mysql else "TEXT"
+        octets = "MEDIUMBLOB" if self.mysql else "BLOB"
         fin = " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin" if self.mysql else ""
         with self.session() as s:
             for nom, colonnes in TABLES.items():
-                s.faire(f"CREATE TABLE IF NOT EXISTS {nom} ({colonnes.format(pk=pk, texte=texte)}){fin}")
+                s.faire(f"CREATE TABLE IF NOT EXISTS {nom} ({colonnes.format(pk=pk, texte=texte, octets=octets)}){fin}")
             for nom, ajouts in AJOUTS.items():
                 if self.mysql:
                     vues = {x for (x,) in s.tous("SELECT column_name FROM information_schema.columns WHERE table_schema = "

@@ -3,11 +3,14 @@
     python outils/serveur/essais.py
 Sur o2switch, contre MariaDB : ATELIER_API_ESSAI_BASE="mysql://…" python essais.py (base d'essai vide).
 """
+import gzip
+import json
 import os
 import shutil
 import sys
 import tempfile
 import unittest
+import urllib.parse
 
 ICI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ICI)
@@ -190,8 +193,88 @@ class Essais(unittest.TestCase):
                                                  "Access-Control-Request-Headers": "authorization"})
         self.assertEqual(r.headers.get("Access-Control-Allow-Origin"), APPLI)
         self.assertIn("Authorization", r.headers.get("Access-Control-Allow-Headers"))
+        self.assertIn("X-Empreinte", r.headers.get("Access-Control-Expose-Headers"))
         r = self.c.get("/", headers={"Origin": "https://ailleurs.example"})
         self.assertIsNone(r.headers.get("Access-Control-Allow-Origin"))
+
+    def test_reponses_compressees(self):
+        h, _ = self.connecter()
+        self.ecrire(h, [{"chemin": "Deck A/archidekt.txt", "contenu": "1x Sol Ring\n" * 120, "base": None}])
+        r = self.c.post("/fichiers/lire", json={"chemins": ["Deck A/archidekt.txt"]}, headers={**h, "Accept-Encoding": "gzip"})
+        self.assertEqual(r.headers.get("Content-Encoding"), "gzip")
+        self.assertIn("Accept-Encoding", r.headers["Vary"])
+        self.assertEqual(json.loads(gzip.decompress(r.get_data()))["fichiers"]["Deck A/archidekt.txt"], "1x Sol Ring\n" * 120)
+        r = self.c.post("/fichiers/lire", json={"chemins": ["Deck A/archidekt.txt"]}, headers=h)    # sans gzip : tel quel
+        self.assertIsNone(r.headers.get("Content-Encoding"))
+        self.assertIn("Sol Ring", r.json["fichiers"]["Deck A/archidekt.txt"])
+
+    def test_pages_toutes_pretes(self):
+        h, _ = self.connecter(appareil="PC")
+        h2, _ = self.connecter(appareil="iPhone")
+        e1, e2 = "1" * 40, "2" * 40
+
+        def deposer(hh, deck, emp, niveau, page, gz=True):
+            corps = json.dumps(page).encode()
+            q = urllib.parse.urlencode({"deck": deck, "empreinte": emp, "niveau": niveau})
+            return self.c.put("/pages?" + q, data=gzip.compress(corps) if gz else corps, headers=hh,
+                              content_type="application/gzip" if gz else "application/json")
+
+        def lire(hh, deck):
+            return self.c.get("/pages/lire?" + urllib.parse.urlencode({"deck": deck}), headers={**hh, "Accept-Encoding": "gzip"})
+
+        self.ecrire(h, [{"chemin": "Deck Kels/archidekt.txt", "contenu": "1x Sol Ring\n", "base": None},
+                        {"chemin": "Deck Tromo/archidekt.txt", "contenu": "1x Island\n", "base": None}])
+        self.assertEqual(self.c.get("/pages", headers=h).json["pages"], {})
+        r = deposer(h, "Deck Kels", e1, 2, {"deck": "Deck Kels", "api": {"/api/decks/Deck Kels": {"total": 1}}})
+        self.assertEqual(r.json, {"ok": True, "garde": False})
+        self.assertEqual(deposer(h, "Deck Tromo", e1, 0, {"deck": "Deck Tromo"}, gz=False).status_code, 200)
+        self.assertEqual(deposer(h, "@index", e2, 2, {"api": {}}).status_code, 200)
+        # un autre appareil du compte : la liste, puis la page telle quelle (compressée), empreinte et niveau en en-têtes
+        l = self.c.get("/pages", headers=h2).json["pages"]
+        self.assertEqual({d: (x["empreinte"], x["niveau"]) for d, x in l.items()},
+                         {"Deck Kels": (e1, 2), "Deck Tromo": (e1, 0), "@index": (e2, 2)})
+        r = lire(h2, "Deck Kels")
+        self.assertEqual((r.headers["Content-Encoding"], r.headers["X-Empreinte"], r.headers["X-Niveau"]), ("gzip", e1, "2"))
+        self.assertEqual(json.loads(gzip.decompress(r.get_data()))["api"]["/api/decks/Deck Kels"], {"total": 1})
+        r = self.c.get("/pages/lire?deck=Deck%20Tromo", headers=h2)              # sans gzip : décompressée
+        self.assertEqual(r.json, {"deck": "Deck Tromo"})
+        # même empreinte, niveau plus bas : celle qui est là reste ; plus haut, ou d'autres fichiers : remplacée
+        self.assertEqual(deposer(h2, "Deck Kels", e1, 0, {"moins": 1}).json["garde"], True)
+        self.assertEqual(json.loads(gzip.decompress(lire(h, "Deck Kels").get_data()))["deck"], "Deck Kels")
+        self.assertEqual(deposer(h2, "Deck Kels", e1, 3, {"plus": 1}).json["garde"], False)
+        self.assertEqual(deposer(h2, "Deck Kels", e2, 0, {"autre": 1}).json["garde"], False)
+        self.assertEqual(lire(h, "Deck Kels").headers["X-Empreinte"], e2)
+        # refus : empreinte, niveau, contenu
+        self.assertEqual(deposer(h, "Deck Kels", "xyz", 2, {}).status_code, 400)
+        self.assertEqual(deposer(h, "Deck Kels", e1, 12, {}).status_code, 400)
+        self.assertEqual(self.c.put("/pages?deck=Deck%20Kels&empreinte=" + e1 + "&niveau=2", data=b"pas du gzip", headers=h,
+                                    content_type="application/gzip").status_code, 400)
+        self.assertEqual(deposer(h, "Deck Kels", e1, 2, [1, 2]).status_code, 400)
+        self.assertEqual(self.c.put("/pages?deck=Deck%20Kels&empreinte=" + e1 + "&niveau=2", data=gzip.compress(b"{}"),
+                                    content_type="application/gzip").status_code, 401)
+        self.assertEqual(lire(h, "Deck Absent").status_code, 404)
+        # un deck parti du compte : sa page est oubliée ; l'accueil reste
+        self.ecrire(h, [{"chemin": "Deck Tromo/archidekt.txt", "contenu": None, "base": serveur.sha_blob("1x Island\n")}])
+        self.assertEqual(sorted(self.c.get("/pages", headers=h).json["pages"]), ["@index", "Deck Kels"])
+        # pas dans l'export ; parties avec le compte
+        self.assertNotIn("@index", self.c.get("/compte/export", headers=h).get_data(as_text=True))
+        self.assertEqual(self.c.delete("/compte", json={"email": "joueur@exemple.fr"}, headers=h).status_code, 200)
+        h3, _ = self.connecter()
+        self.assertEqual(self.c.get("/pages", headers=h3).json["pages"], {})
+
+    def test_pages_limites(self):
+        app = serveur.creer({**self.reglages, "quota_pages": 1500, "page_max": 2000})
+        c = app.test_client()
+        r = c.post("/connexion/code", json={"email": "b@exemple.fr"})
+        self.assertEqual(r.status_code, 200)
+        r = c.post("/connexion/verifier", json={"email": "b@exemple.fr", "code": courriel.ENVOYES[-1][1]})
+        h = {"Authorization": "Bearer " + r.json["jeton"]}
+        bruit = lambda n: json.dumps({"x": os.urandom(n).hex()}).encode()   # noqa: E731 - peu compressible
+        q = lambda d: "/pages?deck=" + d + "&empreinte=" + "a" * 40 + "&niveau=2"   # noqa: E731
+        self.assertEqual(c.put(q("A"), data=gzip.compress(bruit(2500)), headers=h, content_type="application/gzip").status_code, 413)
+        self.assertEqual(c.put(q("A"), data=gzip.compress(bruit(700)), headers=h, content_type="application/gzip").status_code, 200)
+        self.assertEqual(c.put(q("B"), data=gzip.compress(bruit(700)), headers=h, content_type="application/gzip").status_code, 413)
+        self.assertEqual(c.put(q("A"), data=gzip.compress(bruit(500)), headers=h, content_type="application/gzip").status_code, 200)
 
     def test_message(self):
         m = courriel.message({"expediteur": "ne-pas-repondre@atelier-mtg.com"}, "a@exemple.fr", "123456")
