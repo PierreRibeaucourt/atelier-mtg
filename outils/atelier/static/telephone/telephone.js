@@ -97,7 +97,11 @@
   let enCours = null;
   function synchroniser() {
     return enCours || (enCours = (async () => {
-      if (!(await fichier("index.json.gz"))) { await recalculer(await depot(), null, true); return true; }
+      const idx = await fichier("index.json.gz"), d = await depot();
+      if (!idx) { await recalculer(d, null, true); return true; }
+      // des decks arrivés sans leur page (l'appli fermée pendant le calcul), ou partis : l'accueil les suit
+      const ids = PAGES.decksDe(d.fichiers);
+      if (ids.length !== Object.keys(idx.decks || {}).length || ids.some((id) => !idx.decks[id])) { await recalculer(d, new Set(), true); return true; }
       return false;
     })().finally(() => { enCours = null; }));
   }
@@ -355,6 +359,11 @@
     // un deck créé ici, pas encore passé par le PC
     const cree = id && sur[`/api/decks/${id}`];
     if (cree && p.endsWith("/apercu")) return { modifie: cree.v.modifie };
+    // un deck qui n'est pas encore arrivé (fait sur un autre appareil, ouvert par sa page publique) : on attend le compte
+    if (m && id && compte && !cree && !(ancien && index.decks[ancien])) {
+      if (!opts.apresSynchro) { await deckEnRoute(id); return api(chemin, { ...opts, apresSynchro: true }); }
+      throw Object.assign(new Error(erreurSauvegarde || "Ce deck n'existe plus."), { statut: 404 });
+    }
     // l'aperçu d'une carte citée : dans la page d'un deck qui la cite
     if (p === "/api/apercu-carte") {
       for (const f of Object.values(index.decks)) {
@@ -1859,13 +1868,20 @@
   // un seul à la fois : les modifications faites ici (envoyerLocal) et la synchronisation touchent aux mêmes fichiers
   let verrouDepot = Promise.resolve();
   const avecVerrou = (fn) => { const p = verrouDepot.then(fn); verrouDepot = p.catch(() => {}); return p; };
-  let sauvegarde = null, erreurSauvegarde = "";
+  let sauvegarde = null, erreurSauvegarde = "", synchroFaite = false;
   // synchroniser : {envoyes, recus, conflits, decks, decks_recus}
   function sauvegarder() {
     return sauvegarde || (sauvegarde = avecVerrou(() => synchroniserCompte())
-      .then((r) => { erreurSauvegarde = ""; if (pagesAEnvoyer) planifierEnvoiPages(1000); return r; },
+      .then((r) => { erreurSauvegarde = ""; synchroFaite = true; if (pagesAEnvoyer) planifierEnvoiPages(1000); return r; },
         (e) => { erreurSauvegarde = e.message; throw e; })
       .finally(() => { sauvegarde = null; }));
+  }
+  // un deck demandé avant d'être ici : la synchronisation de cette visite (lancée si elle ne l'est pas encore), puis sa page
+  async function deckEnRoute(id) {
+    if (sauvegarde || !synchroFaite) await sauvegarder().catch(() => {});
+    await calculs;
+    const idx = await fichier("index.json.gz");
+    if (idx && !idx.decks[id] && PAGES.decksDe((await depot()).fichiers).includes(id)) await recalculer(null, new Set([id]), true).catch(() => {});
   }
   const pareils = (a, b) => { const k = Object.keys(a); return k.length === Object.keys(b).length && k.every((x) => a[x] === b[x]); };
   function enLots(liste) {
