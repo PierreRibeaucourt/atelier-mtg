@@ -373,15 +373,22 @@ function menuCompte() {
   });
 }
 menuCompte();
+// connecté (classe « connecte », posée avant l'affichage : pages.TETE_COMPTE), sur la page d'un autre : sa navigation à
+// lui, celle de l'appli (en haut ; au téléphone, ses écrans en bas), sans le bandeau pour découvrir l'Atelier
+const CHEZ_UN_AUTRE = !!PARTAGE && !SITE_ATELIER && document.documentElement.classList.contains("connecte");
 if (PARTAGE) {
   const depot = PARTAGE.atelier ? esc(PARTAGE.atelier) : "";
-  if (PARTAGE.recherche) $("#lien-recherche").href = PARTAGE.recherche;
+  if (CHEZ_UN_AUTRE) {
+    $(".logo").href = MES_DECKS_URL;
+    for (const [id, h] of [["#lien-recherche", "#/recherche"], ["#lien-classeur", "#/classeur"], ["#lien-options", "#/options"]]) $(id).href = MES_DECKS_URL + h;
+  } else if (PARTAGE.recherche) $("#lien-recherche").href = PARTAGE.recherche;
   // lien instantané (voir/ de l'appli) : la liste au moment du partage
-  if (PARTAGE.instantane) $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-partage">
+  if (PARTAGE.instantane && CHEZ_UN_AUTRE) $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-partage"><p>Deck tel qu'il était au moment du partage.</p></div>`);
+  else if (PARTAGE.instantane) $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-partage">
     <p>Deck partagé avec <a href="${A_PROPOS}">l'Atelier MTG</a>, tel qu'il était au moment du partage. Pour gérer, tester et partager vos propres decks Commander, l'Atelier est gratuit.</p>
     ${DEUX_CHOIX(" btn-petit")}
   </div>`);
-  else if (!SITE_ATELIER) $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-partage">
+  else if (!SITE_ATELIER && !CHEZ_UN_AUTRE) $(".barre").insertAdjacentHTML("afterend", `<div class="bandeau-partage">
     <p>Page ${PARTAGE.auteur ? `de <strong>${esc(PARTAGE.auteur)}</strong>, ` : ""}partagée avec <a href="${A_PROPOS}">l'Atelier MTG</a>. Pour gérer, tester et partager vos propres decks Commander, l'Atelier est gratuit.</p>
     ${DEUX_CHOIX(" btn-petit")}
   </div>`);
@@ -460,6 +467,9 @@ if (ECRAN_TELEPHONE) {
   $("#app-menu").onclick = (ev) => { if (etat.menuEcran) ouvrirMenu(ev.currentTarget, etat.menuEcran()); };
   hauteurBarre();
 }
+// sur la page d'un autre : les écrans de son appli, en bas au téléphone (CSS)
+if (CHEZ_UN_AUTRE) document.body.insertAdjacentHTML("beforeend", `<nav class="app-onglets" aria-label="Mes écrans">${ECRANS_APPLI.map(([k, l, i]) =>
+  `<a href="${MES_DECKS_URL}#/${k}">${ico(i)}<span>${l}</span></a>`).join("")}</nav>`);
 // après chaque écran : son titre, le retour, ses actions, et l'onglet du bas allumé
 function barreAppli(parts, qs) {
   if (!ECRAN_TELEPHONE) return;

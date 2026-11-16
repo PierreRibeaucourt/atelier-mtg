@@ -137,6 +137,9 @@ def _euros(x):
 
 
 # ---------------------------------------------------------------- une page
+CHAT = '<span class="txt">Demander à Claude</span></button>'      # le modèle : le rond du compte se met après
+
+
 def _page(cfg, dossier, donnees, entete):
     """index.html et donnees.js d'une page (comme partage._page) ; entete : titre, description, url, image, alt,
     indexer (False : noindex), tete (lignes HTML en plus dans <head>)."""
@@ -168,8 +171,10 @@ def _page(cfg, dossier, donnees, entete):
          .replace('  <script src="/reglages.js"></script>\n', "")
          .replace('<script src="/static/app.js"></script>',
                   f'<script src="donnees.js?v={v["donnees.js"]}"></script>\n'
-                  f'  <script src="{cfg.interface_url}app.js?v={v["app.js"]}"></script>'))
-    if "/static/" in t or "/reglages.js" in t:
+                  f'  <script src="{cfg.interface_url}app.js?v={v["app.js"]}"></script>')
+         # connecté (classe « connecte ») : le rond du compte, en haut à droite (app.js › menuCompte)
+         .replace(CHAT, CHAT + '\n      <button id="btn-compte" class="btn btn-compte en-compte" data-ico="compte" aria-label="Mon compte"></button>'))
+    if "/static/" in t or "/reglages.js" in t or 'id="btn-compte"' not in t:
         raise RuntimeError("le modèle de page a changé : page non écrite")
     _ecrire(os.path.join(dossier, "index.html"), t)
     return v["donnees.js"]
