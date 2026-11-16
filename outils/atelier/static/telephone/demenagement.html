@@ -15,11 +15,12 @@
 <body>
   <p id="etat">Transfert de tes decks…</p>
   <script>
-  // L'appli déménage : la passerelle de l'ancienne adresse (passerelle.html), qui a ouvert cette page, lui envoie ce que
-  // l'appli gardait là-bas (le contenu d'un fichier de sauvegarde) ; on le range ici, dans la même base que telephone.js
-  // (IndexedDB « atelier-telephone », magasin « fichiers »), puis l'appli s'ouvre.
+  // L'appli a déménagé : la passerelle d'une ancienne adresse (passerelle.html), qui a ouvert cette page, lui envoie les
+  // decks gardés là-bas (format atelier-mtg-appli). On les garde ici, dans la même base que telephone.js (IndexedDB
+  // « atelier-telephone », clé « @demenagement », une liste : deux anciennes adresses peuvent envoyer) ; connectée au
+  // compte, l'appli les y ajoute (telephone.js › reprendreDemenagement), sans doublons. Rien d'autre n'est touché.
   (() => {
-    const ANCIENNE = "https://atelier-mtg.github.io";
+    const ANCIENNES = ["https://atelier-mtg.github.io", "https://app.atelier-mtg.com"];
     const etat = (t) => { document.getElementById("etat").textContent = t; };
     if (!window.opener) { location.replace("./"); return; }
     const ouvrir = () => new Promise((ok, ko) => {
@@ -34,21 +35,15 @@
       t.onerror = () => ko(t.error);
     });
     addEventListener("message", async (ev) => {
-      if (ev.origin !== ANCIENNE || !ev.data || ev.data.atelier !== "donnees") return;
-      const repondre = (m) => { try { ev.source.postMessage(m, ANCIENNE); } catch (_) {} };
+      if (!ANCIENNES.includes(ev.origin) || ev.source !== window.opener || !ev.data || ev.data.atelier !== "donnees") return;
+      const repondre = (m) => { try { ev.source.postMessage(m, ev.origin); } catch (_) {} };
       try {
-        const d = ev.data, db = await ouvrir();
-        const deja = (await tx(db, "readonly", (s) => s.getAllKeys())).filter((k) => k !== "@base");
-        if (deja.length && !confirm("Des decks sont déjà gardés à la nouvelle adresse. Les remplacer par ceux de l'ancienne ?")) {
-          repondre({ atelier: "refus" });
-          location.replace("./");
-          return;
-        }
-        await tx(db, "readwrite", (s) => {
-          for (const k of deja) s.delete(k);
-          for (const [k, v] of Object.entries(d.fichiers || {})) s.put(v, k);
-        });
-        for (const [k, v] of Object.entries(d.local || {})) localStorage.setItem(k, v);
+        const f = ((ev.data.fichiers || {})["@depot"] || {}).fichiers;
+        if (!f || typeof f !== "object") throw new Error("aucun deck reçu");
+        const recu = { format: "atelier-mtg-appli", version: 1, date: String(ev.data.date || ""), fichiers: { "@depot": { fichiers: f } } };
+        const db = await ouvrir(), avant = await tx(db, "readonly", (s) => s.get("@demenagement"));
+        await tx(db, "readwrite", (s) => s.put([...(Array.isArray(avant) ? avant : []), recu], "@demenagement"));
+        localStorage.setItem("atelier-demenagement", "1");
         etat("C'est fait.");
         repondre({ atelier: "recu" });
         setTimeout(() => location.replace("./"), 1500);         // si la passerelle n'a pas pu fermer cet onglet
@@ -57,7 +52,7 @@
         repondre({ atelier: "echec", message: String((e && e.message) || e) });
       }
     });
-    window.opener.postMessage({ atelier: "pret" }, ANCIENNE);
+    for (const o of ANCIENNES) window.opener.postMessage({ atelier: "pret" }, o);    // seule la bonne origine le reçoit
   })();
   </script>
 </body>

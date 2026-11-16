@@ -1,7 +1,8 @@
 """Fabrique l'appli du téléphone : un site statique, installable sur l'écran d'accueil (appli web), sans serveur.
 
     python outils/atelier/telephone_site.py [dossier] [--base URL]      (site-telephone/ à la racine par défaut)
-    python outils/atelier/telephone_site.py dossier --demenagement     (l'ancienne adresse : vers la nouvelle)
+    python outils/atelier/telephone_site.py dossier --passerelle       (une ancienne adresse : vers la nouvelle)
+    python outils/atelier/telephone_site.py dossier --demenagement     (la même, pour app.atelier-mtg.com)
 
 Depuis la refonte « site unique », l'appli est à https://atelier-mtg.com/mes-decks/, avec la page d'accueil (branche
 « accueil », .github/workflows/site.yml) : même domaine, donc les pages du site savent si l'on est connecté. --base :
@@ -204,53 +205,16 @@ def voir(dossier, v):
         f.write(html)
 
 
-DEMENAGEMENT = """<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Atelier MTG</title>
-  <meta name="robots" content="noindex">
-  <link rel="canonical" href="{nouvelle}">
-  <script>
-    // la même page de l'appli à la nouvelle adresse : l'écran (#/deck/…), un lien instantané (voir/#…), la table de jeu
-    (function () {{
-      var p = location.pathname.replace(/^\\/+/, "");
-      location.replace("{nouvelle}" + (/^(voir|jouer)\\//.test(p) ? p : "") + location.search + location.hash);
-    }})();
-  </script>
-</head>
-<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:{fond};color:#ece6df;font-family:system-ui,sans-serif">
-  <p>L'Atelier MTG est maintenant à <a style="color:#f26b2c" href="{nouvelle}">atelier-mtg.com/mes-decks</a>.</p>
-</body>
-</html>
-"""
-
-
-def demenagement(dossier, nouvelle="https://atelier-mtg.com/mes-decks/"):
-    """L'ancienne adresse de l'appli (app.atelier-mtg.com, GitHub Pages) : toute page renvoie à la même à la nouvelle
-    adresse ; le service worker de l'ancienne appli efface ses fichiers puis s'en va. Le dépôt « app » y ajoute base/,
-    la base de cartes, que l'appli lit toujours là (--base)."""
-    if os.path.isdir(dossier):
-        shutil.rmtree(dossier)
-    os.makedirs(dossier)
-    page = DEMENAGEMENT.format(nouvelle=nouvelle, fond=FOND)
-    for f in ("index.html", "404.html"):
-        with open(os.path.join(dossier, f), "w", encoding="utf-8", newline="\n") as x:
-            x.write(page)
-    with open(os.path.join(dossier, "sw.js"), "w", encoding="utf-8", newline="\n") as f:
-        f.write("// L'ancienne adresse de l'appli : plus rien à garder ici (telephone_site.demenagement).\n"
-                "self.addEventListener(\"install\", () => self.skipWaiting());\n"
-                "self.addEventListener(\"activate\", (ev) => ev.waitUntil(caches.keys()\n"
-                "  .then((l) => Promise.all(l.map((k) => caches.delete(k)))).then(() => self.registration.unregister())));\n")
-    open(os.path.join(dossier, ".nojekyll"), "w").close()
-    return dossier
+def demenagement(dossier):
+    """L'ancienne adresse app.atelier-mtg.com (dépôt « app », GitHub Pages) : la même passerelle que l'autre ancienne
+    adresse ; le dépôt « app » y ajoute base/, la base de cartes, que l'appli lit toujours là (--base)."""
+    return passerelle(dossier)
 
 
 def passerelle(dossier):
-    """L'ancienne adresse de l'appli (atelier-mtg.github.io) : la passerelle vers la nouvelle (passerelle.html), qui
-    emporte ce que le navigateur gardait ici ; la même page pour toute adresse (404.html), et un service worker qui
-    efface les fichiers de l'ancienne appli puis s'en va."""
+    """Les anciennes adresses de l'appli (atelier-mtg.github.io, app.atelier-mtg.com) : la passerelle vers
+    atelier-mtg.com/mes-decks/ (passerelle.html), qui emporte les decks d'un téléphone sans compte gardés là ; la même
+    page pour toute adresse (404.html), et un service worker qui efface les fichiers de l'ancienne appli puis s'en va."""
     if os.path.isdir(dossier):
         shutil.rmtree(dossier)
     os.makedirs(dossier)

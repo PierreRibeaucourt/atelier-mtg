@@ -33,6 +33,8 @@
   if (!VOIR) marquerCompte();
   // d'avant les comptes : des decks gardés seulement ici (« Commencer »), ou reçus d'un PC relié par QR code
   const ANCIEN_LOCAL = !compte && lireLocal("telephone-local") === "1";
+  // les decks d'une ancienne adresse de l'appli (demenagement.html), gardés ici jusqu'à la connexion au compte
+  const DEMENAGEMENT = "@demenagement", DEMENAGE = "atelier-demenagement";
   const ANCIEN_PC = !compte && (!!lireLocal("telephone-acces") || location.hash.includes("#appairer="));
   if (location.hash.includes("#appairer=")) history.replaceState(null, "", location.pathname + location.search);
   // connecté : les decks sont ici (@depot) et leurs pages faites ici
@@ -1676,7 +1678,7 @@
     return os + (nav ? " · " + nav : "") + (installee() ? " · appli" : "");
   }
   async function viderIci() {                         // tout ce que l'appli garde ici, sauf la base de cartes et les caches
-    for (const k of await BD.cles()) if (!CACHES.has(k)) await BD.effacer(k);
+    for (const k of await BD.cles()) if (!CACHES.has(k) && k !== DEMENAGEMENT) await BD.effacer(k);
     memoire.clear();
     fusion = null;
     connus = null;
@@ -2054,8 +2056,8 @@
           <p class="tel-accroche">Tes decks Commander, partout.</p></div>
         <section class="tel-choix">
           <h2>${creer ? "Créer ton compte" : "Connexion"}</h2>
-          ${ANCIEN_LOCAL ? `<p>Connecte-toi pour garder les decks de ${CET_APPAREIL} : ils rejoignent ton compte.</p>` : ""}
-          ${ANCIEN_PC ? `<p>Tes decks passent maintenant par ton compte. Sur ton PC : mets l'Atelier à jour, puis Options › Compte › Envoyer.</p>` : ""}
+          ${ANCIEN_LOCAL || lireLocal(DEMENAGE) ? `<p>Connecte-toi pour garder les decks de ${CET_APPAREIL} : ils rejoignent ton compte.</p>` : ""}
+          ${ANCIEN_PC ? `<p>Tes decks passent maintenant par ton compte. Sur ton PC : mets l'Atelier à jour, puis « Passer en ligne ».</p>` : ""}
           <form class="form-ligne" id="tel-form-email">
             <input class="champ" id="tel-email" type="email" autocomplete="email" placeholder="ton@adresse.fr" aria-label="Adresse e-mail" required>
             <button class="btn btn-accent">Recevoir un code</button></form>
@@ -2159,6 +2161,7 @@
     envoyer().catch(() => {});                            // ce qui n'était pas parti (hors ligne)
     try { await synchroniser(); T.erreur = ""; } catch (err) { T.erreur = err.message; }
     await majSlugs().catch(() => {});
+    await reprendreDemenagement().catch(() => {});
     T.pret = true;
     setTimeout(() => publierManquants().catch(() => {}), 5000);
     chercherPc().catch(() => {});
@@ -2223,6 +2226,18 @@
       planifierSauvegarde();
       return { decks: crees, deja };
     });
+  }
+
+  // les decks reçus d'une ancienne adresse (demenagement.html) rejoignent le compte, comme un fichier de sauvegarde :
+  // même liste → déjà là, autre liste du même nom → un nom libre
+  async function reprendreDemenagement() {
+    const l = await BD.lire(DEMENAGEMENT).catch(() => null);
+    if (!Array.isArray(l) || !l.length) return ecrireLocal(DEMENAGE, null);
+    let n = 0;
+    for (const d of l) n += ((await importerAppli(JSON.stringify(d))) || { decks: [] }).decks.length;
+    await BD.effacer(DEMENAGEMENT);
+    ecrireLocal(DEMENAGE, null);
+    if (n && window.toast) toast(n > 1 ? `${n} decks ajoutés depuis l'ancienne adresse.` : "1 deck ajouté depuis l'ancienne adresse.", 5000);
   }
 
   // ------------------------------------------------------------------ voir/ : le lien instantané d'un deck
