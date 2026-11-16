@@ -1031,9 +1031,9 @@ async function route() {
   document.body.classList.toggle("impression", parts[0] === "proxies");   // à l'impression, rien d'autre que les feuilles
   try {
     if (PARTAGE && parts[0] === "a-propos" && PARTAGE.page !== "a-propos")                              // ancienne adresse
-      location.replace(A_PROPOS + (parts[1] === "installation" ? "#installation" : ""));
+      location.replace(A_PROPOS + (parts[1] === "installation" ? "#module-claude" : ""));
     else if (parts[0] === "a-propos") vueAPropos(parts[1] === "installation");
-    else if (PARTAGE && PARTAGE.page === "a-propos" && (!parts[0] || parts[0] === "installation")) vueAPropos(parts[0] === "installation");
+    else if (PARTAGE && PARTAGE.page === "a-propos" && (!parts[0] || ["installation", "module-claude"].includes(parts[0]))) vueAPropos(!!parts[0]);
     else if (PARTAGE && parts[0] === "recherche" && PARTAGE.recherche) location.replace(PARTAGE.recherche);   // page d'accueil
     else if (PARTAGE && parts[0] === "recherche" && !BASE_WEB) vueRechercheVitrine();
     else if (PARTAGE && PARTAGE.deck) await vueDeck(PARTAGE.deck, (parts[0] === "deck" && parts[2]) || "liste",
@@ -4912,21 +4912,23 @@ const MODULES_ATOUTS = [
   ["suggestions", "Suggestions de cartes", "Des recommandations ciblées selon votre commandant, vos combos et votre classeur. Triées par pertinence, adaptées à vos couleurs et à votre budget, avec filtres par type, coût et prix."],
   ["budget", "Prix Cardmarket et budget", "Les prix Cardmarket pour vos cartes et vos decks, avec alerte en cas de dépassement de budget. Exportez les cartes manquantes au format liste de souhaits Cardmarket en un clic pour calculer directement votre panier."],
   ["combos", "Combos", "Les combos du deck sont repérées automatiquement, en croisant plusieurs sources : MTGPics (la base de Magic-Ville) et Commander Spellbook."],
-  ["discussion", "Discussion avec Claude (optionnel)", "Un copilote optionnel qui a accès à tout votre Atelier (decks, stats, combos, classeur). Il vous aide à faire vos cuts, explorer des synergies ou vérifier des règles complexes. Aucune clé d'API à configurer : il utilise directement votre abonnement Claude payant (Pro ou supérieur)."],
+  ["discussion", "Discussion avec Claude (optionnel)", "Un copilote optionnel qui a accès à tout votre Atelier (decks, stats, combos, classeur). Il vous aide à faire vos cuts, explorer des synergies ou vérifier des règles complexes. Aucune clé d'API à configurer : il utilise directement votre abonnement Claude payant (Pro ou supérieur). 100 % facultatif : si vous ne l'utilisez pas, ses boutons se masquent en un clic dans les options."],
 ];
 // les questions des visiteurs (joueurs experts, débutants, non-informaticiens), repliées ; une réponse en HTML commence par « < »
 const FAQ_ATELIER = [
-  ["Installation et sécurité", [
-    ["Je ne suis pas informaticien : c'est compliqué à installer ?",
-      "Non : il n'y a rien à installer. Créez un compte, et l'Atelier s'ouvre dans votre navigateur ou sur votre téléphone. Seul Claude demande un petit module sur votre PC Windows : il se propose quand vous demandez quelque chose à Claude, s'installe comme n'importe quel programme et se met à jour tout seul."],
-    ["Ça marche sur Mac et Linux ?",
-      "<p>Oui : l'Atelier s'ouvre dans n'importe quel navigateur. Le module Claude s'installe en un clic sous Windows ; sous macOS et Linux, depuis le dépôt, sans garantie.</p>"],
-    ["Est-ce sûr ?",
-      "On se connecte avec un code envoyé par e-mail : il n'y a pas de mot de passe à se faire voler. Le module Claude ne répond qu'à atelier-mtg.com, et seulement pour Claude, les synergies et les combos MTGPics. Son installeur n'est pas signé (une signature coûte plusieurs centaines d'euros par an), d'où l'avertissement de Windows au premier lancement ; mais tout son code est public : vous, ou votre assistant IA, pouvez le lire avant de l'installer."],
+  ["Accès et sécurité", [
+    ["Faut-il installer quelque chose ?",
+      "Rien du tout. L'Atelier est une application web : créez votre compte et accédez à vos decks depuis n'importe quel navigateur, sur ordinateur comme sur téléphone. Seul le module optionnel pour Claude Code s'installe sur PC Windows (en un clic, avec mises à jour automatiques)."],
+    ["L'Atelier fonctionne-t-il sur Mac, Linux et mobile ?",
+      "Tout à fait : le site s'ouvre dans n'importe quel navigateur moderne (ordinateur, iOS, Android) et peut s'ajouter à l'écran d'accueil de votre téléphone. Seul le module local pour Claude Code est conçu pour Windows (un script Python expérimental est disponible sur GitHub pour macOS et Linux)."],
+    ["Mes données sont-elles en sécurité ?",
+      "La connexion se fait par code unique envoyé par e-mail : aucun mot de passe n'est stocké ni ne peut être volé. Vos decks sont hébergés en France et tout le code source est public sous licence MIT."],
   ]],
   ["Claude", [
     ["Faut-il payer pour Claude ?",
       "Claude est facultatif : sans lui, tout le reste fonctionne, et les options permettent de masquer ses boutons. Pour s'en servir, il faut un abonnement Claude payant (Pro ou plus), car le compte gratuit ne donne pas accès à Claude Code, et un PC Windows pour le module Claude."],
+    ["Pourquoi Windows affiche-t-il un avertissement sur le module Claude ?",
+      "L'installeur n'est pas signé numériquement (un certificat coûte plusieurs centaines d'euros par an), d'où l'alerte de sécurité Windows au premier lancement. Le module n'écoute qu'en local (127.0.0.1) et son code source est intégralement vérifiable sur GitHub avant installation."],
     ["Que fait le module Claude ?",
       "Il garde sur votre PC une copie de vos decks, synchronisée avec votre compte, et y lance Claude Code quand vous lui écrivez depuis le site. Il se lance avec Windows, sans fenêtre : tout se fait sur atelier-mtg.com."],
     ["Va-t-il épuiser mon abonnement ?",
@@ -4934,24 +4936,21 @@ const FAQ_ATELIER = [
   ]],
   ["Votre compte et vos données", [
     ["Pourquoi un compte ?",
-      "Pour retrouver vos decks sur tous vos appareils : navigateur, téléphone, PC. Il ne demande qu'une adresse e-mail, qui sert seulement à vous envoyer le code de connexion. Vos decks sont gardés en France, et les options permettent à tout moment de les exporter ou de supprimer le compte."],
-    ["Comment entrent mes cartes ?",
+      "Pour retrouver vos decks sur tous vos appareils : navigateur, téléphone, PC. Il ne demande qu'une adresse e-mail, qui sert seulement à vous envoyer le code de connexion. Vos decks sont hébergés en France, et les options permettent à tout moment de les exporter ou de supprimer le compte."],
+    ["Comment importer mes cartes et mes decks ?",
       "On colle une liste copiée depuis Moxfield, Archidekt ou MTG Arena. La liste d'un deck préconstruit se trouve sur ces sites. Les cartes rangées hors des decks se collent de la même façon dans le classeur."],
     ["Peut-on créer un deck Magic en ligne, depuis son téléphone ?",
-      `<p>Oui : <a href="${APPLI_TELEPHONE}#inscription">créez votre compte</a>, puis ajoutez l'appli à l'écran d'accueil de votre téléphone. Vos decks y restent même sans réseau, et se synchronisent dès qu'il revient. La discussion avec Claude et les combos MTGPics passent par le module Claude, sur votre PC Windows.</p>
-      <p>Pour montrer un deck à quelqu'un, son adresse suffit : sa page s'ouvre sans compte, sur téléphone comme sur ordinateur.</p>`],
-    ["Et si mon PC tombe en panne ?",
-      "Rien n'est perdu : vos decks sont sur votre compte, versions et classeur compris. Le module Claude n'en garde qu'une copie."],
+      `<p><a href="${APPLI_TELEPHONE}#inscription">Créez votre compte</a> puis ajoutez l'Atelier à l'écran d'accueil de votre téléphone : l'application fonctionne même hors connexion et synchronise vos modifications dès que le réseau revient. Pour partager un deck, envoyez simplement son lien : la page s'ouvre sans compte.</p>`],
     ["Puis-je partir avec mes decks ?",
-      "Oui. « Exporter mes données » (Mon compte) enregistre tout dans un fichier, et le menu « … » d'un deck copie sa liste pour Archidekt, Moxfield, MTG Arena ou MTGO. Avec le module Claude, chaque deck est aussi un dossier sur votre PC, avec sa liste en texte."],
+      "« Exporter mes données » (Mon compte) enregistre tout dans un fichier, et le menu « … » d'un deck copie sa liste pour Archidekt, Moxfield, MTG Arena ou MTGO."],
   ]],
   ["Magic", [
     ["Peut-on jouer en ligne contre d'autres joueurs ?",
-      "Non, ce n'est pas un jeu vidéo. La table de jeu se joue seul, à la main, pour tester les mains de départ et les premiers tours."],
+      "L'Atelier n'est pas un client de jeu multijoueur : la table de jeu est un mode solitaire (<i>goldfish</i>) pour tester vos mains de départ, vos sorties et les premiers tours à la main."],
     ["Comment simuler des parties à quatre ?",
       "En simplifiant. Les trois adversaires sont des archétypes (aggro, contrôle, jetons, combo…). Selon des probabilités, ils posent des créatures, retirent vos menaces, rasent la table ou gagnent sur une combo, mais sans politique. Seul, le simulateur juge la régularité du deck : le mana, les cartes jouées, le board, le commandant. Il comprend une partie des cartes en lisant leur texte, et joue les autres sans leur effet, ou avec une partie seulement : c'est Claude qui lui apprend celles-là. Les taux de victoire ne s'affichent qu'ensuite, quand ils ont un sens."],
     ["Je débute, est-ce pour moi ?",
-      `<p>Oui. Les statistiques comparent votre deck à un modèle type, et Claude peut expliquer une règle, une carte ou proposer des ajouts dans votre budget. Les mots de cette page :</p>
+      `<p>Les statistiques comparent votre deck à un modèle type, et Claude peut expliquer une règle, une carte ou proposer des ajouts dans votre budget. Les mots de cette page :</p>
       <ul class="ap-lexique">
         <li><dfn>Ramp</dfn> : les cartes qui donnent du mana en plus, pour jouer plus gros plus tôt.</li>
         <li><dfn>Removal</dfn> : les cartes qui détruisent ou exilent une menace adverse.</li>
@@ -4962,18 +4961,18 @@ const FAQ_ATELIER = [
         <li><dfn>Game Changers</dfn> : une liste officielle de cartes très puissantes, qui font monter le bracket.</li>
       </ul>`],
     ["La recherche comprend-elle la syntaxe Scryfall ?",
-      "Non. Elle reprend le formulaire de Magic-Ville, où les mêmes critères se cochent : identité de couleur, texte, coût… Elle ajoute le prix et la fonction des cartes."],
+      "Elle privilégie un formulaire multicritère visuel (inspiré de Magic-Ville) où l'on coche ses critères : identité de couleur, type, texte, coût de mana, prix Cardmarket et fonction dans le deck (ramp, pioche, tuteur, removal…)."],
     ["Les règles et les combos sont-ils à jour ?",
-      "La liste des Game Changers est relue chaque jour, et les nouvelles cartes arrivent toutes seules à chaque extension. Les combos viennent de Commander Spellbook et de MTGPics, entretenues par leurs communautés. Si les règles des brackets changent, une mise à jour de l'Atelier les suit."],
+      "La liste officielle des Game Changers est actualisée quotidiennement, et les nouvelles cartes sont ajoutées automatiquement dès leur sortie. Les combos proviennent de Commander Spellbook et de MTGPics, maintenus par leurs communautés."],
     ["Les prix tiennent-ils compte de l'état, de la langue, du port ?",
-      "Non : c'est le prix indicatif de Cardmarket, pour l'édition la moins chère. On n'achète pas dans l'Atelier. En revanche, l'onglet Achats copie les cartes qui vous manquent au format des listes de souhaits de Cardmarket, et c'est Cardmarket qui calcule ensuite le panier."],
+      "Les montants affichés correspondent au prix de tendance Cardmarket pour l'édition la moins chère, à titre indicatif. L'Atelier ne vend pas de cartes, mais l'onglet Achats exporte vos cartes manquantes au format <i>wishlist</i> Cardmarket en un clic."],
   ]],
 ];
 
 // espaces insécables de la typographie française : « ? » ou « » » jamais seuls en début de ligne
 const insecables = (t) => t.replace(/ ([?!:;»])/g, " $1").replace(/« /g, "« ");
 
-// installation : arriver directement à la section Installation (bouton « Installer l'Atelier MTG » d'une autre page)
+// installation : arriver directement à la section du module Claude (#module-claude, ou l'ancienne adresse #installation)
 function vueAPropos(installation = false) {
   scrollTo(0, 0);
   etat.deck = null;
@@ -5005,23 +5004,24 @@ function vueAPropos(installation = false) {
         </div>
         <div class="ap-tete-texte">
           <h1>L'Atelier <span>MTG</span></h1>
-          <p class="ap-accroche">Le deck builder Commander assisté,<br>en ligne, avec Claude en renfort.</p>
+          <p class="ap-accroche">Le deck builder Commander complet&nbsp;: recherche multicritère, prix Cardmarket, combos, bracket et simulateur de parties.</p>
           <ul class="ap-puces">${["Suggestions", "Base de mana", "Combos", "Bracket", "Simulation", "Table de jeu", "Recherche avancée", "Claude"].map((x) => `<li>${x}</li>`).join("")}</ul>
           <p class="ap-cta"><a class="btn btn-accent hors-compte" href="${APPLI_TELEPHONE}#inscription" id="ap-creer">${ico("plus")}Créer un compte</a>
             <a class="btn btn-accent en-compte" href="${APPLI_TELEPHONE}" id="ap-mes-decks">${ico("cartes")}Mes decks</a>
             <a class="ap-voir" href="${EXEMPLES_ATELIER}">Voir à quoi ça ressemble</a></p>
-          <p class="ap-mention"><b>Gratuit</b> · open source · navigateur et téléphone${versionAtelier ? ` · version ${esc(versionAtelier)}` : ""}</p>
+          <p class="ap-mention"><b>Gratuit</b> · open source · navigateur et téléphone</p>
         </div>
       </div>
     </header>
     <article class="a-propos">
       <div class="ap-bandeau">
-        <p class="ap-promesse">Gratuit, <em>en ligne</em>, et <em>Claude</em> si vous l'avez.</p>
-        <div class="ap-grille ap-duo">
-          ${fonction(`${ico("nuage")}En ligne`, "Dans le navigateur et sur téléphone, avec un compte : vos decks se synchronisent tout seuls entre vos appareils.")}
-          ${fonction(`${ico("discussion")}Claude`, `Avec votre abonnement Claude, depuis votre PC Windows : le module Claude relie le site à Claude Code. <a href="#installation" id="ap-voir-module">Comment ça marche</a>`)}
+        <p class="ap-promesse">Gratuit, <em>open source</em>, et <em>pensé pour le Commander</em>.</p>
+        <div class="ap-grille ap-piliers">
+          ${fonction(`${ico("chercher")}Recherche & prix Cardmarket`, "Trouvez la carte qui manque avec une recherche multicritère à la Magic-Ville, et gardez l'œil sur son prix Cardmarket et votre budget.")}
+          ${fonction(`${ico("simulation")}Simulateur, stats & bracket`, "Mesurez la régularité de votre deck sur 1 000 parties, vérifiez votre base de mana et connaissez son bracket avant de vous asseoir à la table.")}
+          ${fonction(`${ico("discussion")}Copilote Claude (optionnel)`, `Faites vos cuts, explorez des synergies, vérifiez une règle : Claude travaille sur vos listes avec votre abonnement. <a href="#module-claude" id="ap-voir-module">Comment ça marche</a>`)}
         </div>
-        <p>L'Atelier est un deck builder en français, pensé pour concevoir, tester et faire évoluer vos decks Magic: The
+        <p>L'Atelier est un deck builder gratuit et open source, pensé pour concevoir, tester et faire évoluer vos decks Magic: The
           Gathering en Commander.</p>
       </div>
 
@@ -5041,13 +5041,13 @@ function vueAPropos(installation = false) {
       <ul class="ap-principes">
         <li><strong>Open source et gratuit.</strong> Le code est publié sous <a href="${depot}/blob/main/LICENSE" target="_blank" rel="noopener">licence MIT</a> :
           accessible, vérifiable et modifiable par tous sur GitHub.</li>
-        <li><strong>Vos decks vous appartiennent.</strong> Avec un compte, ils sont gardés en France, et vous pouvez à tout
+        <li><strong>Vos decks vous appartiennent.</strong> Avec un compte, vos decks sont hébergés en France (UE), et vous pouvez à tout
           moment les exporter ou supprimer le compte. Votre adresse e-mail ne sert qu'à vous connecter.</li>
         <li><strong>L'IA est optionnelle.</strong> Tri, statistiques, suggestions, test du simulateur et jeu en solo
           fonctionnent sans aucune configuration IA.</li>
       </ul>
 
-      <h2 id="installation">Le module Claude</h2>
+      <h2 id="module-claude">Le module Claude</h2>
       <p>Claude ne tourne pas chez nous : il tourne sur votre PC, avec votre abonnement. Le module fait le pont entre le
         site et Claude Code.</p>
       <div class="ap-grille ap-flux">
@@ -5063,7 +5063,7 @@ function vueAPropos(installation = false) {
         <li><strong>Fermé au reste du monde.</strong> Le module n'écoute que sur 127.0.0.1 et ne répond qu'à atelier-mtg.com,
           avec un secret propre à votre PC, pour Claude, les synergies et les combos MTGPics seulement.</li>
         <li><strong>L'installer.</strong> Sous Windows, il se propose la première fois que vous demandez quelque chose à
-          Claude, puis se lance avec Windows et se met à jour seul. Sous macOS et Linux : depuis le dépôt, avec
+          Claude, puis se lance avec Windows et se met à jour automatiquement. Sous macOS et Linux : depuis le dépôt, avec
           <code>python installer.py</code> (non testé).</li>
       </ul>
       <p class="ap-install-sous">Code source, sous licence MIT : <a class="ap-depot" href="${depot}" target="_blank" rel="noopener">${depot.replace("https://", "")}</a></p>
@@ -5086,8 +5086,8 @@ function vueAPropos(installation = false) {
         <li><strong>Cardmarket</strong> pour les cotations du jour ;</li>
         <li><strong>les règles officielles</strong> pour le contrôle direct des cartes interdites, des brackets et des Game Changers.</li>
       </ul>
-      <p>J'ai donc créé l'Atelier pour réunir tout ça : une vraie interface sur PC pour construire vos decks, avec la
-        possibilité d'appeler l'IA en renfort si besoin.</p>
+      <p>J'ai donc créé l'Atelier pour réunir tout ça : une interface web rapide, sur ordinateur comme sur téléphone, pour
+        construire vos decks, avec un copilote IA en option quand on veut creuser une liste.</p>
     </article>`;
   $$(".ap-tete img[data-f], .a-propos img[data-f]").forEach((img) => {
     img.onerror = () => {                       // dans l'Atelier : la capture de ce PC, sinon celle du site de l'auteur
@@ -5111,7 +5111,7 @@ function vueAPropos(installation = false) {
     }
   });
   // un saut, pas un défilement animé : les captures qui se chargent en chemin le feraient s'arrêter trop tôt
-  const aInstallation = () => $("#installation").scrollIntoView();
+  const aInstallation = () => $("#module-claude").scrollIntoView();
   if ($("#ap-voir-module")) $("#ap-voir-module").onclick = (ev) => { ev.preventDefault(); aInstallation(); };   // même page : sans la redessiner
   if (installation) aInstallation();
 }

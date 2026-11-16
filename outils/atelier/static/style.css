@@ -1000,8 +1000,9 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .ap-flux { margin: .9rem 0 .6rem; }                                 /* le module Claude : du site à Claude Code */
 .ap-carte p { margin: 0; font-size: .88rem; line-height: 1.5; color: var(--texte-2); }
 .ap-duo { max-width: 44rem; margin: .9rem auto 1rem; text-align: center; }
-.ap-duo h3 { display: flex; align-items: center; justify-content: center; gap: .4rem; font-size: 1.05rem; }
-.ap-duo h3 .ico { width: 1.1rem; height: 1.1rem; color: var(--accent); }
+.ap-duo h3, .ap-piliers h3 { display: flex; align-items: center; justify-content: center; gap: .4rem; font-size: 1.05rem; }
+.ap-duo h3 .ico, .ap-piliers h3 .ico { width: 1.1rem; height: 1.1rem; color: var(--accent); }
+.ap-piliers { max-width: 62rem; margin: .9rem auto 1rem; text-align: center; }    /* les trois piliers, sous la promesse */
 .ap-portrait { float: right; width: min(40%, 230px); margin: .2rem 0 .8rem 1.5rem; }
 .ap-portrait img { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--bord); box-shadow: var(--ombre); }
 /* en-tête pleine largeur : le titre, l'accroche et le bouton à gauche ; trois captures en perspective à droite */
@@ -1121,7 +1122,7 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 /* l'adresse de l'appli du téléphone en QR code, pour qui lit la page sur un ordinateur */
 .ap-qr-cadre { display: block; width: fit-content; margin-top: .6rem; padding: 6px; background: #fff; border-radius: 8px; border: 1px solid var(--bord); }
 .ap-qr { display: block; width: 136px; height: 136px; }
-#installation { scroll-margin-top: var(--haut-barre, 56px); }        /* bouton « Installer » : le titre sous la barre du haut */
+#module-claude { scroll-margin-top: var(--haut-barre, 56px); }      /* « Comment ça marche » : le titre sous la barre du haut */
 .ap-depot { white-space: nowrap; }                                   /* l'adresse du dépôt d'un seul tenant */
 /* questions fréquentes : une question par ligne, la réponse se déplie au clic ; le + tourne en × */
 .a-propos .ap-faq-groupe { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--texte-2); margin: 1.8rem 0 .1rem; }

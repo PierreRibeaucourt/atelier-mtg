@@ -164,7 +164,7 @@ def chrome():
     raise SystemExit("Chrome introuvable (variable CHROME : son chemin) : la page ne peut pas être pré-rendue.")
 
 
-def pre_rendre(dossier, marque='id="installation"'):
+def pre_rendre(dossier, marque='id="module-claude"'):
     """Ce que dessine app.js dans la page : les moteurs de recherche le lisent sans JavaScript (inserer), et app.js le
     redessine à l'identique au chargement. Une image introuvable y est retirée : elles doivent être en ligne."""
     index = os.path.join(dossier, "index.html")
@@ -327,7 +327,7 @@ def mentions_legales(dossier):
       </ul>
 
       <h2>Pages des decks</h2>
-      <p>Les pages publiées sous {DOMAINE}/decks/ sont celles des decks que leurs auteurs choisissent de partager, sous
+      <p>Les pages publiées sous {DOMAINE}/decks/ sont celles des decks publics ou non répertoriés de leurs auteurs, sous
         leur pseudo. Pour signaler un contenu qui n'a rien à y faire, écrivez à {contact} en donnant l'adresse de la
         page : elle sera retirée si elle enfreint la loi ou les droits d'autrui.</p>
 
@@ -362,14 +362,13 @@ def confidentialite(dossier):
         {contact}.</p>
 
       <h2>Le compte</h2>
-      <p>Le compte est facultatif : la version à installer s'en passe. Il garde vos decks et les synchronise entre vos
-        appareils. Pour cela, il conserve :</p>
+      <p>Le compte garde vos decks et les synchronise entre vos appareils. Pour cela, il conserve :</p>
       <ul>
         <li><strong>votre adresse e-mail</strong>, pour vous envoyer le code de connexion, et rien d'autre : ni lettre
           d'information, ni publicité ;</li>
         <li><strong>vos decks</strong> et ce qui les accompagne : listes, historique, versions, achats, classeur, réglages
-          des cartes, rapports de simulation, et les discussions avec Claude que votre PC y envoie ;</li>
-        <li><strong>votre pseudo</strong>, si vous partagez une page, et ce qu'elle montre ;</li>
+          des cartes, rapports de simulation, et les discussions avec Claude que le module Claude y envoie ;</li>
+        <li><strong>votre pseudo</strong>, choisi à l'inscription : il est dans l'adresse des pages de vos decks ;</li>
         <li><strong>vos appareils connectés</strong> : un nom (« iPhone · Safari », « PC · … »), la date de connexion et
           celle de la dernière visite, pour que vous puissiez les voir et les déconnecter ;</li>
         <li><strong>pour la sécurité</strong> : le code de connexion, gardé sous une forme illisible et valable 15 minutes,
@@ -393,15 +392,15 @@ def confidentialite(dossier):
       <h2>L'appli en ligne</h2>
       <p>L'appli ({DOMAINE}/mes-decks/) garde une copie de vos decks dans le stockage de votre navigateur, pour marcher
         sans réseau, avec la clé de votre connexion et la base des cartes. Rien de tout cela ne sert à vous suivre, et
-        « Se déconnecter » efface vos decks et la clé. Sur un PC où l'Atelier est installé et connecté au même compte,
-        l'appli lui parle directement, sur ce PC, pour la discussion avec Claude. Elle interroge Scryfall pour les cartes, et Commander Spellbook par un petit relais
-        (Cloudflare) qui transmet les demandes sans rien garder. Pour simuler des parties, elle télécharge une fois le
-        langage Python, adapté au navigateur (Pyodide), depuis jsDelivr. Elle est hébergée par GitHub Pages, qui tient ses
-        propres journaux techniques.</p>
+        « Se déconnecter » efface vos decks et la clé. Sur un PC où le module Claude est relié au même compte, l'appli lui
+        parle directement, sur ce PC, pour Claude, les synergies et MTGPics. Elle interroge Scryfall pour les cartes, et
+        Commander Spellbook par un petit relais (Cloudflare) qui transmet les demandes sans rien garder. Pour simuler des
+        parties, elle télécharge une fois le langage Python, adapté au navigateur (Pyodide), depuis jsDelivr. La base des
+        cartes vient de GitHub Pages, qui tient ses propres journaux techniques.</p>
 
-      <h2>L'Atelier sur votre ordinateur</h2>
-      <p>L'Atelier s'installe et tourne sur votre ordinateur. Vos decks, votre classeur et vos réglages y sont rangés, et
-        ne vont sur votre compte que si vous cliquez sur « Envoyer ». Pour fonctionner, il interroge :</p>
+      <h2>Le module Claude</h2>
+      <p>Facultatif, le module Claude s'installe sur votre PC Windows. Il y garde une copie de vos decks, de votre classeur
+        et de vos réglages, synchronisée avec votre compte. Pour fonctionner, il interroge :</p>
       <ul>
         <li><strong>Scryfall</strong>, pour les données, les prix et les images des cartes ;</li>
         <li><strong>Commander Spellbook</strong>, avec la liste des cartes d'un deck, pour trouver ses combos et estimer
@@ -409,17 +408,15 @@ def confidentialite(dossier):
         <li><strong>MTGPics</strong>, avec des noms de cartes, pour d'autres combos ;</li>
         <li><strong>GitHub</strong>, pour savoir s'il existe une nouvelle version.</li>
       </ul>
-      <p>La discussion et les synergies passent par <strong>Claude</strong>, installé sur votre ordinateur avec votre
-        propre compte Anthropic : vos messages et les decks dont vous parlez sont alors envoyés à Anthropic, selon ses
+      <p>La discussion et les synergies passent par <strong>Claude Code</strong>, installé sur votre PC avec votre propre
+        compte Anthropic : vos messages et les decks dont vous parlez sont alors envoyés à Anthropic, selon ses
         conditions. Rien ne part si vous ne vous en servez pas.</p>
 
       <h2>Le partage</h2>
-      <p>Le lien instantané contient la liste du deck dans son adresse : rien n'est publié, et seules les personnes à qui
-        vous l'envoyez la voient.</p>
-      <p>La page permanente d'un deck, que vous publiez depuis votre compte, est publique : sous {DOMAINE}/decks/, avec
-        votre pseudo, la liste, les statistiques, les combos et les tests du deck, et les moteurs de recherche peuvent la
-        trouver. Ni votre adresse e-mail, ni votre classeur, ni vos achats, ni vos discussions avec Claude n'y figurent.
-        « Ne plus partager » la retire, et « Supprimer mon compte » retire toutes vos pages.</p>
+      <p>Chaque deck a sa page, sous {DOMAINE}/decks/ avec votre pseudo : la liste, les statistiques, les combos et les
+        tests du deck. Public, elle est trouvable par les moteurs de recherche ; non répertorié, seulement par son lien ;
+        privé, elle n'existe pas. Ni votre adresse e-mail, ni votre classeur, ni vos achats, ni vos discussions avec
+        Claude n'y figurent. Rendre un deck privé retire sa page, et « Supprimer mon compte » retire toutes vos pages.</p>
 
       <h2>Vos droits</h2>
       <p>À tout moment, depuis les options du compte : « Exporter mes données » vous les donne dans un fichier, et

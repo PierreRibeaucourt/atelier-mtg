@@ -340,9 +340,9 @@ DOMAINE_ATELIER = "https://atelier-mtg.com/"                # sa racine renvoie 
 ACCUEIL_ATELIER = DOMAINE_ATELIER + "fr/"                   # la page d'accueil, en français
 IMAGE_ATELIER = DOMAINE_ATELIER + "a-propos/atelier.jpg"    # les images : à la racine, pour toutes les langues
 TITRE_ATELIER = "L'Atelier MTG : Deck Builder Commander Gratuit (en Français)"
-DESCRIPTION_ATELIER = ("Deck builder Magic gratuit et en français : créez, testez et partagez vos decks Commander (combos, "
-                       "bracket, simulation), en ligne ou sur votre PC.")
-ALT_ATELIER = "L'Atelier MTG : le deck builder Commander assisté, en ligne et sur votre PC"
+DESCRIPTION_ATELIER = ("Deck builder Commander gratuit et open source : créez, testez et partagez vos decks Magic (recherche "
+                       "multicritère, prix Cardmarket, combos, bracket, simulateur).")
+ALT_ATELIER = "L'Atelier MTG : deck builder Commander gratuit et open source"
 
 
 def redirection(cible):
