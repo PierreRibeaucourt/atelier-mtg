@@ -30,6 +30,8 @@ outils/atelier/connexion_compte.dat
 outils/atelier/pont.dat
 outils/atelier/compte_etat.json
 outils/atelier/compte_etat.json.tmp
+outils/atelier/pages_compte.json
+outils/atelier/pages_compte.json.tmp
 # les pages publiques du compte, publiées depuis ce PC (partage.py)
 outils/atelier/partages_compte.json
 outils/atelier/partages_compte.json.tmp

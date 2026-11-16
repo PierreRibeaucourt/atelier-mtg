@@ -150,16 +150,17 @@ def _cause(e):
     return quoi + ". Vérifie ta connexion, puis réessaie."
 
 
-def _appel(methode, chemin, corps=None, avec_jeton=True, autre_jeton=None):
+def _appel(methode, chemin, corps=None, avec_jeton=True, autre_jeton=None, brut=None, type_brut=None):
+    """corps : envoyé en JSON ; brut (octets, de type type_brut) : tel quel."""
     entetes = {"Accept": "application/json", "User-Agent": "atelier-mtg"}
     if avec_jeton:
         jeton = autre_jeton or _connexion().get("jeton")
         if not jeton:
             raise NonConnecte("Connecte-toi à ton compte.")
         entetes["Authorization"] = f"Bearer {jeton}"
-    donnees = None if corps is None else json.dumps(corps).encode()
+    donnees = brut if brut is not None else None if corps is None else json.dumps(corps).encode()
     if donnees is not None:
-        entetes["Content-Type"] = "application/json"
+        entetes["Content-Type"] = type_brut if brut is not None else "application/json"
     req = urllib.request.Request(API + chemin, data=donnees, method=methode, headers=entetes)
     try:
         with urllib.request.urlopen(req, timeout=120) as r:
@@ -672,6 +673,132 @@ def _synchroniser():
     raise Erreur("Le compte change sans arrêt (un autre appareil ?) : réessaie dans un instant.")
 
 
+# ---------------------------------------------------------------- les pages toutes prêtes (serveur › pages)
+# Comme l'appli (telephone.js › envoyerPages) : ce PC dépose dans le compte les pages de ses decks, faites par son
+# Atelier, pour qu'un téléphone ou un navigateur qui a les mêmes fichiers les reprenne telles quelles au lieu de les
+# refaire (sans base de cartes, il lui faudrait tout demander à Scryfall). L'empreinte : les fichiers du deck, le
+# classeur et les réglages des cartes, le même calcul que l'appli ; le niveau : 2 (la base de cartes du PC), +1 avec
+# l'analyse de Commander Spellbook de la liste actuelle. Une page n'est déposée qu'une fois les fichiers du deck dans le
+# compte tels qu'ici, au calme, et de nouveau chaque semaine (les prix).
+FORMAT_PAGES = "1"
+INDEX_PAGES = "@index"                                  # l'accueil : la liste des decks, le classeur, où sont mes cartes
+PAGES = os.path.join(ICI, "pages_compte.json")          # {email, pages: {deck: [empreinte, niveau, date]}}
+CALME_PAGES = 60                                        # secondes sans modification d'un deck avant de déposer sa page
+REESSAI_PAGES = 900                                     # une page qui n'a pas pu se faire : nouvel essai un quart d'heure après
+SEMAINE = 7 * 86400
+capteur = None         # app.py : le client de test de Flask (get), qui fait les pages comme l'Atelier les montre
+_echecs_pages = {}     # deck : heure du dernier échec
+
+
+def _sha1(texte):
+    return hashlib.sha1(texte.encode("utf-8")).hexdigest()
+
+
+def empreintes(shas):
+    """{deck: empreinte, "@index": empreinte} tirées de {chemin: sha} : le même calcul que l'appli (telephone.js ›
+    empreintes), pour que deux appareils qui ont les mêmes fichiers trouvent la même."""
+    def ligne(rel):
+        return f"{_sha1(rel)} {shas.get(rel) or '-'}"
+    reg, cl = ligne(f"{reglages.DOSSIER_CARTES}/cartes.json"), ligne(f"{CLASSEUR}/classeur.txt")   # classeur : suggestions
+    par_deck, res = {}, {}
+    for rel in shas:
+        par_deck.setdefault(rel.split("/")[0], []).append(rel)
+    for d, rels in par_deck.items():
+        if d.startswith("Deck ") and f"{d}/{decks.FICHIER}" in shas:
+            res[d] = _sha1("\n".join(["pages " + FORMAT_PAGES, reg, cl, *sorted(ligne(r) for r in rels)]))
+    res[INDEX_PAGES] = _sha1("\n".join(["index " + FORMAT_PAGES, reg, cl, *sorted(f"{_sha1(d)} {e}" for d, e in res.items())]))
+    return res
+
+
+def _pages_deposees():
+    try:
+        with open(PAGES, encoding="utf-8") as f:
+            e = json.load(f)
+        return (e.get("pages") or {}) if e.get("email") == _connexion().get("email") else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _garder_pages(p):
+    with open(PAGES + ".tmp", "w", encoding="utf-8") as f:
+        json.dump(dict(email=_connexion().get("email"), pages=p), f, ensure_ascii=False)
+    os.replace(PAGES + ".tmp", PAGES)
+
+
+def capturer_page(deck, get):
+    """La page du deck comme l'appli la fait (pages.js › deck) : celle de la page partagée (partage.capturer), avec ce
+    qui reste privé, les suggestions entières (classeur compris, cartes écartées) et les achats."""
+    import urllib.parse
+    import partage
+    d = partage.capturer(deck, get)
+    racine = f"/api/decks/{deck}"
+    for chemin in (racine + "/suggestions", racine + "/achats"):
+        r = get(urllib.parse.quote(chemin))
+        if r.status_code == 200:
+            d["api"][partage._cle(chemin)] = r.get_json()
+    return d
+
+
+def capturer_index(get):
+    """L'accueil comme l'appli le fait (pages.js › index) : la liste des decks, le classeur, où sont mes cartes."""
+    api = {}
+    for chemin in ("/api/decks", "/api/classeur", "/api/ou-sont"):
+        r = get(chemin)
+        if r.status_code != 200:
+            raise Erreur(f"{chemin} : {r.status_code}")
+        api[chemin] = r.get_json()
+    t = time.time()
+    return dict(date=t, date_fiches=t, api=api)
+
+
+def deposer_pages(get):
+    """Les pages de ce PC, déposées dans le compte : celles des decks dont les fichiers y sont tels qu'ici, au calme
+    depuis CALME_PAGES secondes, que ce PC n'a pas encore déposées (ou il y a plus d'une semaine), si le compte n'a pas
+    déjà la même. L'accueil en dernier. Renvoie le nombre de pages déposées."""
+    import gzip
+    import urllib.parse
+    import partage
+    if not _connexion().get("jeton"):
+        return 0
+    ici, commun, t = _ici(), _etat().get("fichiers") or {}, time.time()
+    emp, dans_le_compte, faites = empreintes(ici), empreintes(commun), _pages_deposees()
+    chemins = locaux()
+
+    def calme(d):
+        dates = [os.path.getmtime(p) for rel, p in chemins.items() if (d == INDEX_PAGES or rel.split("/")[0] == d)
+                 and os.path.exists(p)]
+        return t - max(dates, default=0) >= CALME_PAGES
+
+    a_faire = [d for d in emp if emp[d] == dans_le_compte.get(d) and ((faites.get(d) or [None])[0] != emp[d]
+                                                                       or t - faites[d][2] > SEMAINE)
+               and t - _echecs_pages.get(d, 0) > REESSAI_PAGES and calme(d)]
+    if not a_faire:
+        return 0
+    l = _appel("GET", "/pages").get("pages") or {}
+    n = 0
+    for d in sorted(a_faire, key=lambda x: (x == INDEX_PAGES, x)):
+        x = l.get(d) or {}
+        if x.get("empreinte") == emp[d] and x.get("niveau", 0) >= 2 and t - x.get("maj", 0) < SEMAINE:
+            faites[d] = [emp[d], x["niveau"], x["maj"]]           # déjà là, faite par un autre appareil
+            continue
+        try:
+            donnees = capturer_index(get) if d == INDEX_PAGES else capturer_page(d, get)
+            texte = json.dumps(donnees, ensure_ascii=False, separators=(",", ":"))
+            partage._verifier(texte)                               # aucun chemin de ce PC ne part
+        except Exception as e:                                     # noqa: BLE001 - la page attendra
+            print(f"Compte : page de {d} : {e}", file=sys.stderr, flush=True)
+            _echecs_pages[d] = t
+            continue
+        b = donnees["api"].get(f"/api/decks/{d}/bracket") or {}
+        niveau = 2 + (1 if b.get("spellbook_a_jour") else 0)
+        _appel("PUT", "/pages?" + urllib.parse.urlencode(dict(deck=d, empreinte=emp[d], niveau=niveau)),
+               brut=gzip.compress(texte.encode("utf-8"), compresslevel=6), type_brut="application/gzip")
+        faites[d] = [emp[d], niveau, t]
+        n += 1
+    _garder_pages({d: v for d, v in faites.items() if d in emp})
+    return n
+
+
 # ---------------------------------------------------------------- le pont avec l'appli en ligne (2.3.0)
 PONT = os.path.join(ICI, "pont.dat")
 
@@ -715,13 +842,18 @@ reveil = threading.Event()
 
 def boucle():
     """En fond (app.py) : synchronise toutes les PAUSE secondes, ou tout de suite si on la réveille (reveil.set() :
-    après une modification, ou quand l'appli en ligne le demande)."""
+    après une modification, ou quand l'appli en ligne le demande) ; puis dépose les pages des decks qui ont changé."""
     while True:
         if _connexion().get("jeton"):
             try:
                 synchroniser()
             except Exception:                                            # noqa: BLE001 - suivi["erreur"] le dit
                 pass
+            if capteur:
+                try:
+                    deposer_pages(capteur)
+                except Exception as e:                                   # noqa: BLE001 - au tour suivant
+                    print(f"Compte : pages : {e}", file=sys.stderr, flush=True)
         reveil.wait(PAUSE)
         reveil.clear()
 

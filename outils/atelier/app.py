@@ -1492,6 +1492,7 @@ if __name__ == "__main__":
     en_fond(recherche.demarrer)                    # base de la recherche de cartes : chargée, puis surveillée (nouvelles cartes, prix)
     import compte
     compte.quand_recu = lambda: en_fond(ic.mise_a_jour, tous_les_noms())     # decks reçus : fiches, prix
+    compte.capteur = app.test_client().get         # les pages des decks, déposées dans le compte pour les autres appareils
     if compte._connexion().get("jeton"):
         compte.publier_pont(PORT)                  # l'appli en ligne, sur ce PC, saura joindre cet Atelier
     en_fond(compte.boucle)                         # ce PC et le compte, synchronisés toutes les 20 s (connecté)
