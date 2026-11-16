@@ -286,6 +286,20 @@ class EssaisPages(unittest.TestCase):
             r = self.partager(h, deck=f"Deck {mauvais}", d=donnees(f"Deck {mauvais}"), slug=mauvais)
             self.assertNotEqual(r.json["slug"], mauvais)
 
+    def test_connexion_donnee_a_un_appareil(self):
+        self.assertEqual(self.c.post("/connexion/appareil", json={"appareil": "PC"}).status_code, 401)
+        h, _ = self.connecter()
+        self.c.post("/compte/pseudo", json={"pseudo": "pierre"}, headers=h)
+        r = self.c.post("/connexion/appareil", json={"appareil": "Module Claude · PC\x07"}, headers=h)
+        self.assertEqual((r.status_code, r.json["email"], r.json["pseudo"]), (200, "joueur@exemple.fr", "pierre"))
+        h2 = {"Authorization": "Bearer " + r.json["jeton"]}
+        self.assertEqual(self.c.get("/compte", headers=h2).json["email"], "joueur@exemple.fr")
+        noms = [a["appareil"] for a in self.c.get("/appareils", headers=h).json["appareils"]]
+        self.assertIn("Module Claude · PC", noms)
+        self.c.post("/deconnexion", json={}, headers=h)                       # le site se déconnecte : le module reste
+        self.assertEqual(self.c.get("/compte", headers=h2).status_code, 200)
+        self.assertEqual(self.c.get("/compte", headers=h).status_code, 401)
+
     def test_pseudo_a_l_inscription(self):
         h, r = self.connecter()
         self.assertIsNone(r["pseudo"])

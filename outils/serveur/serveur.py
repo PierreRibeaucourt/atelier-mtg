@@ -34,6 +34,7 @@ DUREE_CODE = 15 * 60
 ESSAIS_CODE = 5
 CODES_PAR_HEURE = 3             # par adresse e-mail
 CODES_PAR_HEURE_IP = 20         # par adresse IP
+SESSIONS_MAX = 50               # appareils connectés à un compte, au plus (une connexion donnée par un autre appareil)
 QUOTA = 50 * 2**20
 TAILLE_MAX = 2**20
 REQUETE_MAX = 20 * 2**20
@@ -208,6 +209,22 @@ def creer(reglages):
             s.inserer("INSERT INTO sessions (compte, empreinte, appareil, cree, vu) VALUES (?, ?, ?, ?, ?)",
                       compte, hashlib.sha256(jeton.encode()).hexdigest(), appareil, t, t)
         return jsonify(jeton=jeton, email=email, nouveau=nouveau, pseudo=pseudo)
+
+    @app.post("/connexion/appareil")
+    @connecte
+    def connecter_appareil():
+        """{appareil} : une connexion de plus pour la même personne, donnée par un appareil déjà connecté (le site la passe
+        au module Claude de son PC, sans code). Son propre jeton : elle se retire seule (Mon compte › appareils)."""
+        appareil = CONTROLES.sub("", str(corps().get("appareil") or "Appareil")).strip()[:80] or "Appareil"
+        t = maintenant()
+        jeton = secrets.token_urlsafe(32)
+        with base.session() as s:
+            if s.un("SELECT COUNT(*) FROM sessions WHERE compte = ?", g.compte)[0] >= SESSIONS_MAX:
+                raise Refus("Trop d'appareils connectés : retire ceux que tu n'utilises plus (Mon compte).", 409)
+            s.inserer("INSERT INTO sessions (compte, empreinte, appareil, cree, vu) VALUES (?, ?, ?, ?, ?)",
+                      g.compte, hashlib.sha256(jeton.encode()).hexdigest(), appareil, t, t)
+            pseudo = s.un("SELECT pseudo FROM comptes WHERE id = ?", g.compte)[0]
+        return jsonify(jeton=jeton, email=g.email, pseudo=pseudo)
 
     @app.post("/deconnexion")
     @connecte
