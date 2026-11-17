@@ -58,6 +58,7 @@ AIDE = """Ce que montre l'Atelier, en texte. <deck> : nom du dossier (« Deck Ke
 Recherche (mêmes critères que la page, tous facultatifs) :
   nom=, type=, texte=     mots à trouver (anglais ou français) ; "expression exacte", !mot exclu
   coul=WUBRG(C)           couleurs permises ; oblig=… couleurs obligatoires ; id=1 : identité de couleur au lieu de la couleur
+                          (coul seul, sans id : au moins une de ces couleurs, d'autres permises, plus les incolores)
   types=CR,AR,EN,IN,SO,PL,LA,BAT   tm=2 : tous ces types à la fois
   mv=, mvmin=, mvmax=     valeur de mana ; f=, fmin=, fmax= (force) ; e=, emin=, emax= (endurance)
   fn=ramp,pioche…         fonctions (voir « fonctions ») ; prixmin=, prixmax= ; gc=sans|seul ; cmd=peut|duo (commandants)

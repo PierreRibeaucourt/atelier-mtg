@@ -761,13 +761,18 @@ def _filtre(p, b):
     # Couleurs
     # chaque couleur choisie « peut » (au moins une d'elles) ou « doit » (oblig), et aucune autre couleur que celles
     # choisies (pour en permettre d'autres, on les choisit aussi). cm=2 (ancienne case « Toutes ») : toutes obligatoires.
+    # Sauf, comme Magic-Ville, les couleurs du coût avec seulement des « peut » : au moins une d'elles, d'autres couleurs
+    # permises, et les incolores. L'identité de couleur garde « rien d'autre » : les cartes jouables dans le deck.
     oblig = _lettres(g("oblig"), COULEURS)
     sel, incolore = _lettres(g("coul"), COULEURS) | oblig, "C" in g("coul").upper()
     if g("cm") == "2":
         oblig = set(sel)
     if sel or incolore:
         ident = oui("id")
-        tests.append(lambda x: _ok_couleurs(set(x["ci"] if ident else x["co"]), sel, incolore, False, True, oblig))
+        if ident or oblig:
+            tests.append(lambda x: _ok_couleurs(set(x["ci"] if ident else x["co"]), sel, incolore, False, True, oblig))
+        else:
+            tests.append(lambda x: not x["co"] or bool(set(x["co"]) & sel))
 
     # Types
     types = [TYPES[t] for t in g("types").split(",") if t in TYPES]

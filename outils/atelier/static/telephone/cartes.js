@@ -237,13 +237,16 @@ function filtre(p) {
     hyb: (x) => symboles(x.c).some((s) => s.includes("/") && !s.includes("P")), phy: (x) => symboles(x.c).some((s) => s.split("/").includes("P")),
     time: (x) => x.ts, historic: (x) => (x._ty & (TY.Legendary | TY.Artifact | TY.Saga)) !== 0, X: (x) => x._x }[g("spe")];
   if (spe) tests.push(spe);
-  // couleurs : chaque couleur choisie « peut » (une au moins) ou « doit » (oblig), aucune autre que celles choisies
+  // couleurs : chaque couleur choisie « peut » (une au moins) ou « doit » (oblig), aucune autre que celles choisies.
+  // Sauf, comme Magic-Ville, les couleurs du coût avec seulement des « peut » : une au moins, d'autres permises, et les
+  // incolores. L'identité de couleur garde « rien d'autre » : les cartes jouables dans le deck.
   let oblig = lettres(g("oblig"), COULEURS);
   const sel = new Set([...lettres(g("coul"), COULEURS), ...oblig]), incolore = g("coul").toUpperCase().includes("C");
   if (g("cm") === "2") oblig = new Set(sel);
   if (sel.size || incolore) {
     const ident = oui("id");
-    tests.push((x) => okCouleurs(new Set(ident ? x.ci : x.co), sel, incolore, false, true, oblig));
+    if (ident || oblig.size) tests.push((x) => okCouleurs(new Set(ident ? x.ci : x.co), sel, incolore, false, true, oblig));
+    else tests.push((x) => !x.co.length || [...x.co].some((k) => sel.has(k)));
   }
   const types = g("types").split(",").filter((t) => TYPES[t]).map((t) => TYPES[t]);
   if (types.length) { const tous = g("tm") === "2"; tests.push((x) => (tous ? types.every((t) => aType(x, t)) : types.some((t) => aType(x, t)))); }
