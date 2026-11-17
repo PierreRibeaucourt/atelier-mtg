@@ -741,7 +741,7 @@ a.btn-accent { color: var(--accent-texte); }      /* un lien en bouton orange : 
   transform: translateX(-50%); font-size: .72rem; line-height: 1; color: var(--texte-2); white-space: nowrap; }
 .fen-couleurs .rch-sym.oblig[data-etat]::after { color: var(--accent); font-weight: 650; }
 /* ce que la sélection veut dire : deux lignes gardées, rien ne bouge au clic */
-.rch-explic { margin: 0; min-height: 2.7em; font-size: .82rem; line-height: 1.35; color: var(--texte-2); text-align: center; cursor: help; }
+.rch-explic { margin: 0; min-height: 2.7em; line-height: 1.35; text-align: center; }
 .rch-sym .sym { width: 22px; height: 22px; vertical-align: 0; }
 .rch-sym:focus-visible, .rch-bascule:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .rch-bascules { display: flex; flex-wrap: wrap; gap: .3rem; }

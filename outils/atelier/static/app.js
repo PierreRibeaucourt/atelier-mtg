@@ -4571,10 +4571,7 @@ function marquerCouleur(b, etat) {            // etat : "" (retirée), "actif" (
   b.title = titreCouleur(b.dataset.k, etat);
 }
 
-// sous les couleurs : ce que la sélection veut dire ; la règle complète en infobulle
-const REGLE_COULEURS = "1 clic : peut · 2 clics : doit · 3 clics : retirée\n"
-  + "Que des « peut » : au moins une de ces couleurs, d'autres permises, et les incolores\n"
-  + "Un « doit », ou l'identité de couleur : rien d'autre que les couleurs choisies";
+// sous les couleurs : ce que la sélection veut dire ; la règle complète dans le pense-bête (le « ? », comme Texte)
 function texteCouleurs(coul, oblig, id) {
   const doit = [...lettresWUBRG(oblig)], peut = [...lettresWUBRG(coul)].filter((k) => !doit.includes(k)), incolore = (coul || "").includes("C");
   const noms = (ks, mot, art = "") => ks.map((k) => art + NOMS_COULEURS[k]).join(", ").replace(/, ([^,]*)$/, ` ${mot} $1`);
@@ -4585,7 +4582,7 @@ function texteCouleurs(coul, oblig, id) {
   return `Avec ${noms(peut, "ou", "du ")}, d'autres couleurs permises, et les incolores`;
 }
 function majTexteCouleurs(form) {
-  const z = $(".rch-explic", form);
+  const z = $(".rch-explic-txt", form);
   if (!z) return;
   const b = $$('.rch-symboles[data-groupe="coul"] .rch-sym.actif', form);
   z.textContent = texteCouleurs(b.map((x) => x.dataset.k).join(""), b.filter((x) => x.classList.contains("oblig")).map((x) => x.dataset.k).join(""),
@@ -4707,6 +4704,47 @@ function penseBeteTexte(form) {
   }, { focus: false, large: true });
 }
 
+// exemples : [peut, doit, identité, ce que ça donne] ; un clic les met dans le formulaire, comme ceux de la recherche texte
+const PB_COULEURS = [["G", "", false, "Vert, vert + une autre couleur, puis les incolores"], ["", "G", false, "Vert seul"],
+  ["R", "G", false, "Vert seul, puis vert-rouge"], ["BR", "W", false, "Blanc seul, blanc-noir, blanc-rouge, blanc-noir-rouge"],
+  ["UC", "", true, "Jouables dans un deck bleu (la recherche lancée depuis un deck)"]];
+
+function penseBeteCouleurs(form) {
+  const syms = (ks) => [...ks].map(symbole).join("");
+  const ligne = ([peut, doit, id, texte], i) => `<tr><td><button type="button" class="pb-exemple" data-i="${i}"><code class="brut">${id ? "Identité : " : ""}${
+    [doit && syms(doit) + " doit", peut && syms(peut) + " peut"].filter(Boolean).join(", ")}</code></button></td><td>${esc(texte)}</td></tr>`;
+  ouvrirModale(`
+    <h2>Couleurs</h2>
+    <div class="pense-bete">
+      <table>
+        <tr><td>1 clic : peut</td><td>La carte peut avoir cette couleur</td></tr>
+        <tr><td>2 clics : doit</td><td>La carte doit avoir cette couleur</td></tr>
+        <tr><td>3 clics</td><td>Retirée</td></tr>
+      </table>
+      <h3>Règles</h3>
+      <ul>
+        <li>Que des « peut » : au moins une de ces couleurs, d'autres couleurs permises, et les incolores, comme sur Magic-Ville.</li>
+        <li>Au moins un « doit » : toutes les « doit », et rien d'autre que les couleurs choisies.</li>
+        <li>« Identité de couleur » : l'identité Commander au lieu des couleurs du coût, et « peut » veut dire rien d'autre : les cartes jouables dans un deck de ces couleurs.</li>
+        <li>Incolore : seul, il ne garde que les incolores.</li>
+      </ul>
+      <h3>Exemples</h3>
+      <table>${PB_COULEURS.map(ligne).join("")}</table>
+    </div>`,
+  (b) => {
+    $$("[data-i]", b).forEach((x) => {
+      x.onclick = () => {
+        const [peut, doit, id] = PB_COULEURS[x.dataset.i];
+        $$('.rch-symboles[data-groupe="coul"] .rch-sym', form).forEach((s) =>
+          marquerCouleur(s, doit.includes(s.dataset.k) ? "oblig" : peut.includes(s.dataset.k) ? "actif" : ""));
+        form.elements.id.checked = id;
+        majTexteCouleurs(form);
+        fermerModale();
+      };
+    });
+  }, { focus: false, large: true });
+}
+
 // la disposition du moteur de Magic-Ville, simplifiée : Couleurs (coût compris) | Types | Recherche texte,
 // puis Valeur de mana, Force, Endurance, Rechercher, Format, Rareté ; en dessous, ce que l'Atelier ajoute, puis les éditions
 function formulaireRecherche(c) {
@@ -4715,7 +4753,7 @@ function formulaireRecherche(c) {
     <div class="mt-rang mt-haut">
       <section class="fen fen-couleurs"><h3 class="fen-titre">Couleurs</h3>
         ${rchSymboles("coul", c.coul, "WUBRGC", c.oblig)}
-        <p class="rch-explic" title="${esc(REGLE_COULEURS)}">${esc(texteCouleurs(c.coul, c.oblig, c.id === "1"))}</p>
+        <p class="rch-explic muet petit"><span class="rch-explic-txt">${esc(texteCouleurs(c.coul, c.oblig, c.id === "1"))}</span><button type="button" class="aide-q" data-act="aide-couleurs" aria-label="Pense-bête des couleurs">?</button></p>
         <div class="rch-cases ${d && d.identite ? "rch-entre" : "rch-centre"}">${rchCase("id", "Identité de couleur", c)}${d && d.identite ? `<button type="button" class="lien-discret" data-act="identite" title="Couleurs du commandant et incolores">Couleurs de ${esc(d.titre)} ${identiteHtml(d.identite)}</button>` : ""}</div>
         ${rchSelect("spe", RCH_SPE, c)}
       </section>
@@ -5215,6 +5253,7 @@ function rendreFormulaire() {
     if (!a) return;
     if (a.dataset.act === "raz") return nouvelleRecherche();
     if (a.dataset.act === "aide-texte") return penseBeteTexte(form);
+    if (a.dataset.act === "aide-couleurs") return penseBeteCouleurs(form);
     if (a.dataset.act === "budget") { form.elements.prixmax.value = String(BUDGET); form.elements.prixmax.focus(); return; }
     if (a.dataset.act === "identite" && rch.deck) {
       const id = critIdentite(rch.deck);
