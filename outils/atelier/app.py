@@ -347,10 +347,11 @@ def api_options_ecrire():
 
 # ---------------------------------------------------------------- le pont avec l'appli en ligne (2.3.0)
 # Sur ce PC, l'appli en ligne (atelier-mtg.com, connectée au même compte) demande ici ce que seul le PC sait faire :
-# Claude, les synergies, MTGPics, et une synchronisation tout de suite. Seulement ces routes, seulement depuis cette
-# origine, et avec le secret du pont (compte.publier_pont le range dans les fichiers du compte, que l'appli lit).
+# Claude, les synergies, MTGPics (et l'onglet Combos qui les réunit, 2.5.1), et une synchronisation tout de suite.
+# Seulement ces routes, seulement depuis cette origine, et avec le secret du pont (compte.publier_pont le range dans
+# les fichiers du compte, que l'appli lit).
 ORIGINES_PONT = {"https://atelier-mtg.com"} | {o for o in os.environ.get("ATELIER_PONT_ORIGINES", "").split(",") if o}
-ROUTES_PONT = re.compile(r"^/api/(pont|module/appairer|compte/synchroniser|discussion(/[a-z-]+)?|decks/[^/]+/(synergies|mtgpics)(/[a-z-]+)?)$")
+ROUTES_PONT = re.compile(r"^/api/(pont|module/appairer|compte/synchroniser|discussion(/[a-z-]+)?|decks/[^/]+/(synergies|mtgpics|combos)(/[a-z-]+)?)$")
 
 
 @app.before_request

@@ -4116,6 +4116,11 @@ async function vueCombosDeck(zone, d) {
   let r;
   try { r = await api(`/api/decks/${enc(d.id)}/combos`); }
   catch (e) { zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; return; }
+  if (TELEPHONE && TELEPHONE.pc && !r.mtgpics) {     // un PC d'avant 2.5.1 : la vue d'ici, avec où en sont MTGPics et Claude
+    const [m, s] = await Promise.all([api(`/api/decks/${enc(d.id)}/mtgpics`).catch(() => null),
+      api(`/api/decks/${enc(d.id)}/synergies`).catch(() => null)]);
+    r = { ...r, mtgpics: m || r.mtgpics, synergies: s || r.synergies };
+  }
   if (!zone.isConnected) return;
   zone.innerHTML = `
     <p><strong>${r.combos.length ? `${r.combos.length} combo${r.combos.length > 1 ? "s" : ""} dans le deck` : "Aucune combo connue dans le deck"}</strong></p>
@@ -4132,13 +4137,16 @@ async function vueCombosDeck(zone, d) {
 // une source de combos, en bas de l'onglet : son nom et son état, puis son bouton
 const ligneSource = (nom, etat, bouton = "") => `<div class="source-texte"><strong>${nom}</strong><span class="muet">${etat}</span></div>${bouton}`;
 
+// l'appli sans l'Atelier d'un PC : MTGPics et les synergies se lancent sur le PC (data-pc). Avec lui, comme sur le PC.
+const sansPc = () => !!TELEPHONE && !TELEPHONE.pc;
+
 // Combos MTGPics : lues carte par carte (une requête toutes les 1,5 s), gardées 30 jours
 function rendreMtgpics(zone, d, st, apres) {
   if (!st) {                                         // téléphone sans PC : rien de lu ici
     if (TELEPHONE) zone.innerHTML = ligneSource("MTGPics", "Pas encore lues", `<button class="btn btn-petit" data-pc="mtgpics">Lire</button>`);
     return;
   }
-  if (st.actif && TELEPHONE) { zone.innerHTML = ligneSource("MTGPics", `<span class="pulse">●</span> lecture en cours sur le PC…`); return; }
+  if (st.actif && sansPc()) { zone.innerHTML = ligneSource("MTGPics", `<span class="pulse">●</span> lecture en cours sur le PC…`); return; }
   if (st.actif) {
     zone.innerHTML = ligneSource("MTGPics", `<span class="pulse">●</span> ${st.fait} / ${st.total}…`);
     setTimeout(async () => {
@@ -4166,7 +4174,7 @@ function rendreMtgpics(zone, d, st, apres) {
 
 function rendreClaude(zone, d, st, apres) {
   st = st || {};                                     // téléphone sans PC : jamais lancé ici
-  if (st.actif && TELEPHONE) { zone.innerHTML = ligneSource("Claude", `<span class="pulse">●</span> cherche les synergies sur le PC…`); return; }
+  if (st.actif && sansPc()) { zone.innerHTML = ligneSource("Claude", `<span class="pulse">●</span> cherche les synergies sur le PC…`); return; }
   if (st.actif) {
     const duree = (debut) => { const m = debut ? Math.floor((Date.now() / 1000 - debut) / 60) : 0; return m >= 1 ? ` · ${m} min` : ""; };
     zone.innerHTML = ligneSource("Claude", `<span class="pulse">●</span> cherche les synergies…<span data-duree>${duree(st.debut)}</span>`);

@@ -283,7 +283,7 @@
 
   async function api(chemin, opts = {}) {
     const u = new URL(chemin, "http://atelier"), k = cleDe(u), p = u.pathname;
-    if (pc && ROUTES_PONT.test(p)) return pontAppel(chemin, opts);
+    if (pc && (ROUTES_PONT.test(p) || (ROUTES_PONT_251.test(p) && pcAuMoins("2.5.1")))) return pontAppel(chemin, opts);
     if ((opts.method || "GET") !== "GET") return ecrire(u, opts.body || {});
     const s = (await lesSurcharges())[k];                // modifiée ici, pas encore recalculée par le PC
     if (s) return copie(s.v);
@@ -1398,6 +1398,11 @@
   // au réseau local. Quand Claude a fini, ce qu'il a changé sur le PC arrive ici aussitôt.
   const MODULE_VU = "atelier-module";                 // ce navigateur a déjà joint un module : « Lancer l'Atelier » (app.js › surPC)
   const ROUTES_PONT = /^\/api\/(discussion(\/|$)|decks\/[^/]+\/(synergies|mtgpics)(\/|$))/;
+  // l'onglet Combos (MTGPics, Spellbook et les synergies de Claude ensemble) : calculé par le PC depuis 2.5.1
+  const ROUTES_PONT_251 = /^\/api\/decks\/[^/]+\/combos(\/|$|\?)/;
+  const pcAuMoins = (v) => { const n = (x) => String(x || "").split(".").map((k) => parseInt(k, 10) || 0), a = n(pc && pc.version), b = n(v);
+    for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i];
+    return true; };
   let pc = null, claudeActif = false;
   // le module Claude de ce PC, en retard sur la dernière version (version.py quand le site a été construit) : sa page
   // propose « Mettre à jour ». Seulement une fois qu'il a pu la voir : il regarde au lancement, puis toutes les 20 heures
