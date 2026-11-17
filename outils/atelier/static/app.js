@@ -1066,18 +1066,17 @@ async function route() {
   barreAppli(parts, qs);
 }
 if (SITE_APPLI) {
-  let parHistorique = false;
-  addEventListener("popstate", () => {
-    parHistorique = true;
-    setTimeout(() => { parHistorique = false; });
+  // un lien « #/… » envoie popstate puis hashchange, quand route() a déjà réécrit l'adresse ; l'ordre des tâches varie
+  // (Firefox : un minuteur posé dans popstate passe avant hashchange). La route se relit donc toujours dans l'adresse,
+  // et une route déjà affichée ne se rouvre pas ; un lien vers la page affichée ne fait que remettre son adresse
+  const suivreAdresse = () => {
     const r = routeDepuisAdresse();
-    if (r !== routeActuelle) { routeActuelle = r; route(); }
-  });
-  addEventListener("hashchange", () => {
-    if (parHistorique) return;                     // l'historique : popstate s'en est chargé
-    routeActuelle = location.hash;
-    route();
-  });
+    if (r !== routeActuelle) { routeActuelle = r; route(); return; }
+    const voulue = new URL(adresseDeRoute(r), location.href).href;
+    if (location.href !== voulue) history.replaceState(history.state, "", voulue);
+  };
+  addEventListener("popstate", suivreAdresse);
+  addEventListener("hashchange", suivreAdresse);
 } else window.addEventListener("hashchange", route);
 
 // « Tymna the Weaver + Thrasios, Triton Hero » : les deux commandants d'un deck à partenaires
