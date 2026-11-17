@@ -169,17 +169,21 @@ def chrome():
 
 def pre_rendre(dossier, marque='id="module-claude"'):
     """Ce que dessine app.js dans la page : les moteurs de recherche le lisent sans JavaScript (inserer), et app.js le
-    redessine à l'identique au chargement. Une image introuvable y est retirée : elles doivent être en ligne."""
+    redessine à l'identique au chargement. Une image introuvable y est retirée : elles doivent être en ligne.
+    Trois essais : Chrome sans interface rate parfois une page (Action GitHub du 2026-11-17)."""
     index = os.path.join(dossier, "index.html")
-    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as profil:     # à part du Chrome ouvert sur ce PC
-        r = subprocess.run([chrome(), "--headless=new", "--disable-gpu", "--no-sandbox", "--no-first-run",
-                            "--no-default-browser-check", f"--user-data-dir={profil}", f"--user-agent={UA_WINDOWS}",
-                            "--virtual-time-budget=15000", "--dump-dom", pathlib.Path(index).as_uri()],
-                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
-    m = re.search(r'<main id="vue"[^>]*>(.*?)</main>', r.stdout, re.S)
-    if not m or marque not in m.group(1):
-        raise SystemExit("Pré-rendu impossible : Chrome n'a pas dessiné la page.\n" + r.stderr[-2000:])
-    return m.group(1)
+    for essai in range(3):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as profil:     # à part du Chrome ouvert sur ce PC
+            r = subprocess.run([chrome(), "--headless=new", "--disable-gpu", "--no-sandbox", "--no-first-run",
+                                "--no-default-browser-check", f"--user-data-dir={profil}", f"--user-agent={UA_WINDOWS}",
+                                "--virtual-time-budget=15000", "--dump-dom", pathlib.Path(index).as_uri()],
+                               capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
+        m = re.search(r'<main id="vue"[^>]*>(.*?)</main>', r.stdout, re.S)
+        if m and marque in m.group(1):
+            return m.group(1)
+        print(f"Pré-rendu de {index} raté (essai {essai + 1}/3).\n" + r.stderr[-2000:], file=sys.stderr)
+        time.sleep(5)
+    raise SystemExit("Pré-rendu impossible : Chrome n'a pas dessiné la page.")
 
 
 def inserer(dossier, rendu, installation="#installation", classe="vue vue-pleine"):
@@ -220,8 +224,17 @@ def captures(dossier, rendu, chemin="../a-propos/"):
     os.makedirs(d, exist_ok=True)
     for nom in sorted(noms):
         req = urllib.request.Request(SOURCE_CAPTURES + nom, headers={"User-Agent": "atelier-mtg"})
-        with urllib.request.urlopen(req, timeout=60) as r, open(os.path.join(d, nom), "wb") as f:
-            f.write(r.read())
+        for essai in range(3):                                                 # trois essais, comme le pré-rendu
+            try:
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    contenu = r.read()
+                break
+            except OSError as e:
+                if essai == 2:
+                    raise SystemExit(f"Capture introuvable : {SOURCE_CAPTURES + nom} ({e})")
+                time.sleep(5)
+        with open(os.path.join(d, nom), "wb") as f:
+            f.write(contenu)
     return rendu.replace(SOURCE_CAPTURES, chemin)
 
 
