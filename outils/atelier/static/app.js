@@ -4203,14 +4203,20 @@ function rendreClaude(zone, d, st, apres) {
 }
 
 // ---- vue « une carte » : les autres cartes qui combotent avec elle
+// le choix de la carte : un champ qui propose les cartes du deck (comme le champ Fonctions de la recherche, avec les
+// lignes de carte du champ du haut) ; Entrée sur un nom hors du deck le cherche partout
 async function vueCombosCarte(zone, d, carte = null) {
-  const cartes = d.cartes.filter((c) => c.cat !== "Maybeboard").map((c) => ({ nom: c.nom, aff: c.info.fr || c.nom }))
+  const cartes = [...new Map(d.cartes.filter((c) => c.cat !== "Maybeboard").map((c) => [c.nom, c])).values()]
+    .map((c) => ({ nom: c.nom, aff: c.info.fr || c.nom, cout: c.info.cout || "", type: c.info.type || "", image: c.info.image || "" }))
     .sort((a, b) => a.aff.localeCompare(b.aff, "fr"));
   const affiche = (nom) => (cartes.find((c) => c.nom === nom) || { aff: nom }).aff;
   zone.innerHTML = `<div class="cb-carte">
     <div class="barre-outils">
-      <input class="champ" id="cb-carte" list="cb-cartes" placeholder="Choisis une carte du deck…" value="${carte ? esc(affiche(carte)) : ""}" style="flex:1;min-width:220px" autocomplete="off">
-      <datalist id="cb-cartes">${cartes.map((c) => `<option value="${esc(c.aff)}">`).join("")}</datalist>
+      <div class="fn-champ" style="flex:1;min-width:220px">
+        <input class="champ" id="cb-carte" type="search" placeholder="Choisis une carte du deck…" value="${carte ? esc(affiche(carte)) : ""}" autocomplete="off"
+          aria-label="Carte du deck" role="combobox" aria-expanded="false" aria-controls="cb-cartes" aria-autocomplete="list">
+        <div id="cb-cartes" class="fn-liste" role="listbox" hidden></div>
+      </div>
       <label class="petit"><input type="checkbox" id="cb-couleurs" ${PREF.get("combos-couleurs", "1") === "1" ? "checked" : ""}> Dans les couleurs du deck</label>
     </div>
     <div id="cb-src" class="petit"></div>
@@ -4246,16 +4252,59 @@ async function vueCombosCarte(zone, d, carte = null) {
   };
   zone.choisir = choisir;
 
-  champ.addEventListener("change", async () => {
-    const v = sansAccent(champ.value.trim());
-    if (!v) return;
-    let c = cartes.find((x) => sansAccent(x.aff) === v || sansAccent(x.nom) === v);
-    if (!c) {                                                    // une carte hors du deck : la recherche habituelle
-      const res = await api("/api/chercher?q=" + enc(champ.value.trim())).catch(() => []);
-      if (res[0]) c = { nom: res[0].nom };
-    }
-    if (c) choisir(c.nom); else toast("Carte introuvable.");
+  const boite = $("#cb-cartes", zone);
+  let trouvees = [], actif = 0;
+  const ligne = (c, i) => `<button type="button" class="aller-item aller-carte ${i === actif ? "choisi" : ""}" data-i="${i}" role="option"
+      data-image="${esc(c.image)}" data-legende="${esc(c.aff)}">
+      <span class="aller-cout">${mana(c.cout)}</span>
+      <span class="aller-nom">${esc(c.aff)}${c.aff !== c.nom ? ` <span class="aller-vo">${esc(c.nom)}</span>` : ""}</span>
+      <span class="aller-cmd">${esc(c.type)}</span>
+    </button>`;
+  const ouvrir = (tout = false) => {                             // au clic : tout le deck ; en tapant : ce qui correspond
+    const q = tout ? "" : sansAccent(champ.value.trim());
+    trouvees = cartes.filter((c) => !q || sansAccent(c.aff).includes(q) || sansAccent(c.nom).includes(q));
+    if (q) trouvees.sort((a, b) => (sansAccent(b.aff).startsWith(q) || sansAccent(b.nom).startsWith(q))
+      - (sansAccent(a.aff).startsWith(q) || sansAccent(a.nom).startsWith(q)));
+    actif = 0;
+    boite.innerHTML = trouvees.length ? trouvees.map(ligne).join("") : `<div class="aller-vide muet petit">Aucune carte du deck.</div>`;
+    boite.hidden = false;
+    boite.scrollTop = 0;
+    champ.setAttribute("aria-expanded", "true");
+  };
+  const fermer = () => { boite.hidden = true; champ.setAttribute("aria-expanded", "false"); };
+  const marque = () => $$(".aller-item", boite).forEach((el, i) => el.classList.toggle("choisi", i === actif));
+  const prendre = (c) => { fermer(); champ.blur(); choisir(c.nom); };
+  const horsDeck = async () => {                                 // une carte hors du deck : la recherche habituelle
+    const q = champ.value.trim();
+    if (!q) return;
+    const res = await api("/api/chercher?q=" + enc(q)).catch(() => []);
+    if (res[0]) { fermer(); champ.blur(); choisir(res[0].nom); } else toast("Carte introuvable.");
+  };
+  champ.addEventListener("focus", () => { champ.select(); ouvrir(true); });
+  champ.addEventListener("input", () => ouvrir());
+  champ.addEventListener("keydown", (ev) => {
+    if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+      ev.preventDefault();
+      if (boite.hidden) return ouvrir(true);
+      if (!trouvees.length) return;
+      actif = (actif + (ev.key === "ArrowDown" ? 1 : -1) + trouvees.length) % trouvees.length;
+      marque();
+      $$(".aller-item", boite)[actif].scrollIntoView({ block: "nearest" });
+    } else if (ev.key === "Enter") {
+      ev.preventDefault();
+      if (!boite.hidden && trouvees[actif]) prendre(trouvees[actif]); else horsDeck();
+    } else if (ev.key === "Escape") { fermer(); champ.blur(); }
   });
+  boite.addEventListener("mousedown", (ev) => { if (ev.target.closest(".aller-item")) ev.preventDefault(); });
+  boite.addEventListener("mousemove", (ev) => {
+    const b = ev.target.closest(".aller-item");
+    if (b && +b.dataset.i !== actif) { actif = +b.dataset.i; marque(); }
+  });
+  boite.addEventListener("click", (ev) => { const b = ev.target.closest(".aller-item"); if (b) prendre(trouvees[+b.dataset.i]); });
+  champ.addEventListener("blur", () => setTimeout(() => {         // on sort du champ : la liste se ferme, la carte affichée revient
+    fermer();
+    if (courante) champ.value = affiche(courante);
+  }, 150));
   coul.onchange = () => { PREF.set("combos-couleurs", coul.checked ? "1" : "0"); afficher(); };
   src.addEventListener("click", (ev) => { if (ev.target.closest("[data-actualiser]")) afficher(true); });
   if (carte) choisir(carte);
