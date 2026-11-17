@@ -402,7 +402,8 @@ function piedPartage(aPropos, depot, legal, racine = "") {
   return `<footer class="pied-partage">
     <nav>${aPropos ? `<a href="${aPropos}">C'est quoi, l'Atelier MTG ?</a>` : ""}${depot ? `<a href="${depot}" target="_blank" rel="noopener">Code source sur GitHub</a>
       <a href="${depot}/blob/main/LICENSE" target="_blank" rel="noopener">Licence MIT</a>` : ""}${legal ? `
-      <a href="${racine}mentions-legales/">Mentions légales</a><a href="${racine}confidentialite/">Confidentialité</a>` : ""}</nav>
+      <a href="${racine}mentions-legales/">Mentions légales</a><a href="${racine}confidentialite/">Confidentialité</a>
+      <button type="button" class="pied-theme">Thème clair ou sombre</button>` : ""}</nav>
     <p lang="en">L'Atelier MTG is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC.</p>
     <p>Données des cartes : Scryfall.</p>
   </footer>`;
@@ -431,14 +432,14 @@ function erreur(e) {
   let t = null;
   try { t = localStorage.getItem("theme"); } catch (_) {}
   if (t) document.documentElement.dataset.theme = t;
-  $("#btn-theme").addEventListener("click", () => {
+  $$("#btn-theme, .pied-theme").forEach((b) => b.addEventListener("click", () => {      // pied : site au téléphone
     const sombre = document.documentElement.dataset.theme
       ? document.documentElement.dataset.theme === "dark"
       : matchMedia("(prefers-color-scheme: dark)").matches;
     const nouveau = sombre ? "light" : "dark";
     document.documentElement.dataset.theme = nouveau;
     try { localStorage.setItem("theme", nouveau); } catch (_) {}
-  });
+  }));
 })();
 
 // ------------------------------------------------------------------ l'appli du téléphone : comme une appli

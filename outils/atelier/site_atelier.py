@@ -184,7 +184,7 @@ def pre_rendre(dossier, marque='id="module-claude"'):
 
 def inserer(dossier, rendu, installation="#installation", classe="vue vue-pleine"):
     """Le pré-rendu dans la page ; en haut, le champ « Rechercher une carte… » (app.js › BASE_WEB) et, à droite, à la
-    place de « Demander à Claude » (son panneau n'est qu'une vitrine ici) : « Se connecter » et « Créer un compte »
+    place de « Demander à Claude » (son panneau n'est qu'une vitrine ici) : « Se connecter » et « S'inscrire »
     (l'appli ; rien à télécharger : le module Claude ne se propose que dans l'appli) ; connecté (classe
     « connecte », partage.TETE_COMPTE), « Mes decks » et le rond du compte, avec son menu (app.js › menuCompte)."""
     index = os.path.join(dossier, "index.html")
@@ -196,7 +196,7 @@ def inserer(dossier, rendu, installation="#installation", classe="vue vue-pleine
         raise SystemExit("static/index.html a changé : pré-rendu impossible.")
     creer = (f'<a href="{APPLI}#connexion" id="btn-connexion" class="btn btn-discret hors-compte" data-ico="compte" '
              f'aria-label="Se connecter"><span class="txt">Se connecter</span></a>\n      '
-             f'<a href="{APPLI}#inscription" id="btn-creer" class="btn btn-accent hors-compte" data-ico="plus">Créer un compte</a>\n      '
+             f'<a href="{APPLI}#inscription" id="btn-creer" class="btn btn-accent hors-compte">S\'inscrire</a>\n      '
              f'<a href="{APPLI}" id="btn-mes-decks" class="btn btn-accent en-compte" data-ico="cartes">Mes decks</a>\n      '
              f'<button id="btn-compte" class="btn btn-compte en-compte" data-ico="compte" aria-label="Mon compte"></button>')
     html = html.replace(vide, f'<main id="vue" class="{classe}">{rendu}</main>').replace(chat.group(0), creer)

@@ -72,20 +72,16 @@ button, input, select, textarea { font: inherit; color: inherit; }
 @media (max-width: 700px) { .etat-maj { display: none; } }
 @media (max-width: 560px) { .barre { gap: .5rem; padding: .5rem .6rem; } .logo { font-size: 0; gap: 0; }
   .lien-recherche > span, #btn-chat .txt { display: none; } }
-/* site de l'Atelier, sur téléphone : le champ du haut et « Recherche avancée » sur une 2e ligne */
+/* site de l'Atelier, sur téléphone : une ligne. Le logo, la loupe (la recherche de cartes), « Se connecter » et
+   « S'inscrire », en toutes lettres ; le thème passe dans le pied de page */
 @media (max-width: 560px) {
-  .site-atelier .barre { flex-wrap: wrap; row-gap: 0; }
-  .site-atelier .barre::after { content: ""; order: 2; flex-basis: 100%; }
-  .site-atelier .barre-droite { order: 1; }
-  .site-atelier :is(.aller, #lien-recherche) { order: 3; margin-top: .5rem; }
-  .site-atelier .aller { flex: 1 1 0; }
+  .site-atelier .barre :is(.aller, .espace, #btn-theme) { display: none; }
+  .site-atelier #lien-recherche { width: 44px; height: 44px; padding: 0; justify-content: center; margin-left: auto; }
   .site-atelier .logo { font-size: inherit; gap: .45rem; }
-  .site-atelier #lien-recherche > span, .site-atelier #lien-recherche .long { display: inline; }
+  .site-atelier .barre-droite .btn:not(.btn-compte) { min-height: 44px; padding-inline: .75rem; }
+  .site-atelier .barre-droite .btn:not(.btn-compte) .ico { display: none; }
 }
-@media (max-width: 400px) { .site-atelier #lien-recherche .ico { display: none; } }
-/* plus étroit : le chaudron seul, puis les boutons sans icône (une seule ligne) */
-@media (max-width: 440px) { .site-atelier .logo { font-size: 0; gap: 0; } }
-@media (max-width: 380px) { :is(#btn-installer, #btn-creer, #btn-mes-decks) .ico { display: none; } }
+@media (max-width: 440px) { .site-atelier .logo { font-size: 0; gap: 0; } }      /* plus étroit : le chaudron seul */
 /* le compte en haut à droite (site et appli) : connecté (classe « connecte », posée avant l'affichage), « Mes decks » et le
    rond du pseudo ; sinon « Se connecter » et « Créer un compte ». Le rond : 36 px visibles, 44 px à toucher */
 html:not(.connecte) .en-compte, html.connecte .hors-compte { display: none !important; }
@@ -108,11 +104,7 @@ html[style*="--initiale"] .btn-compte .ico { display: none; }
   .ap-qr-ligne { display: none !important; }                                   /* le QR code : pour passer de l'ordinateur au téléphone */
   .ap-en-ligne .ap-install-action { background: var(--accent); border-color: var(--accent); color: var(--accent-texte); }
 }
-@media (max-width: 560px) {
-  .site-atelier #btn-installer { display: none; }                  /* et dans une fenêtre étroite, la place manque */
-  #btn-connexion .txt { display: none; }
-  #btn-connexion { width: 44px; height: 44px; padding: 0; justify-content: center; }
-}
+@media (max-width: 560px) { .site-atelier #btn-installer { display: none; } }   /* et dans une fenêtre étroite, la place manque */
 .telephone .barre .btn-compte { margin-left: .15rem; order: 9; }
 /* partager un deck (app.js › modaleLien) : son lien, puis sa visibilité, une ligne par choix (44 px à toucher) */
 .pt-visibilite { border: 0; padding: 0; margin: 1rem 0 0; }
@@ -979,6 +971,8 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
 .pied-partage { border-top: 1px solid var(--bord); padding: 1.2rem 1rem 1.6rem; text-align: center; font-size: .82rem; color: var(--texte-2); }
 .pied-partage nav { display: flex; flex-wrap: wrap; justify-content: center; gap: .3rem 1.4rem; margin-bottom: .5rem; }
 .pied-partage nav a { color: var(--texte); }
+.pied-theme { display: none; border: 0; padding: 0; background: none; font: inherit; color: var(--texte); cursor: pointer; text-decoration: underline; }
+@media (max-width: 560px) { .site-atelier .pied-theme { display: inline; } }       /* l'en-tête n'a plus la place */
 .pied-partage p { margin: 0 auto; max-width: 720px; }
 .pied-partage p + p { margin-top: .3rem; }
 .pied-partage p a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
@@ -1060,6 +1054,13 @@ button.aller-item { width: 100%; border: 0; background: none; font: inherit; col
   .ap-tete-texte { max-width: none; padding: 2rem 0; }
   .ap-tete h1 { font-size: 2.2rem; }
   .ap-accroche { font-size: 1.2rem; }
+}
+@media (max-width: 560px) {                        /* téléphone : le titre, l'accroche et les deux liens, sans plus */
+  .ap-puces, .ap-mention { display: none; }
+  .ap-tete-texte { padding: 1.6rem 0 1.5rem; }
+  .ap-tete h1 { font-size: 2rem; }
+  .ap-accroche { font-size: 1.08rem; margin: .9rem 0 1.2rem; }
+  .ap-cta { margin: 0; }
 }
 .ap-module { margin: 1.4rem 0 2.6rem; }
 .ap-module h3 { margin: 0 0 .15rem; font-size: 1.02rem; color: var(--accent); }
