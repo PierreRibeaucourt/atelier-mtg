@@ -4393,8 +4393,11 @@ function afficheRapport(zone, r) {
       </details>
       <div class="boutons ecrit"><button class="btn" id="rap-claude" ${TELEPHONE ? 'data-pc="claude"' : ""}>${ico("discussion")}Expliquer avec Claude</button></div>
     </div>`;
-  $("#rap-claude", zone).onclick = () => ouvrirChat(`Explique-moi le test du simulateur ${r.deck}/simulations/${zone.dataset.fichier || ""}`
-    + ` (python outils/atelier/demander.py rapport) : qu'est-ce qui ressort, et que me conseilles-tu ?`);
+  $("#rap-claude", zone).onclick = async () => {
+    await ouvrirChat(`Explique-moi le test du simulateur ${r.deck}/simulations/${zone.dataset.fichier || ""}`
+      + ` (python outils/atelier/demander.py rapport) : qu'est-ce qui ressort, et que me conseilles-tu ?`);
+    envoyerChat();
+  };
 }
 
 async function ongletSimulation(conteneur, d, rapportInitial = null) {
