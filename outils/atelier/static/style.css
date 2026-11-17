@@ -1513,6 +1513,19 @@ body:has(.tel-accueil) .barre { display: none; }        /* l'accueil a déjà so
 .telephone .repliable:not(.ouvert) > .pli { display: none; }
 .telephone .repliable.ouvert > .pli { order: 1; }
 .telephone .repliable.ouvert::after { content: ""; order: 0; flex-basis: 100%; }      /* les réglages dépliés : à la ligne */
+/* les pages partagées (decks d'un joueur), au téléphone (pas l'habillage « ordinateur » de l'appli) : les mêmes */
+@media not all and (min-width: 900px) and (pointer: fine) {
+  .partage .repliable { gap: .5rem; }
+  .partage .barre-outils.repliable { flex-wrap: wrap; margin-top: .75rem; }
+  .partage .repliable .filtre, .partage .sg-filtres.repliable input[type=search] { order: -2; flex: 1 1 0; min-width: 0; }
+  .partage .repliable > .segments { order: -1; }
+  .partage .repliable .seg-txt { display: none; }
+  .partage .repliable .outils-plus { display: inline-flex; order: -1; width: 44px; }
+  .partage .repliable .outils-plus[aria-expanded=true] { color: var(--accent); border-color: var(--accent); }
+  .partage .repliable:not(.ouvert) > .pli { display: none; }
+  .partage .repliable.ouvert > .pli { order: 1; }
+  .partage .repliable.ouvert::after { content: ""; order: 0; flex-basis: 100%; }
+}
 .telephone .sg-tete { flex-wrap: nowrap; }
 .telephone .sg-tete .segments { flex-wrap: nowrap; }
 .telephone .sg-tete .segments:first-child { overflow-x: auto; min-width: 0; }
