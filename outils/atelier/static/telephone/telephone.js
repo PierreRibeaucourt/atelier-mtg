@@ -2172,11 +2172,19 @@
   // l'adresse publique des decks (/decks/<pseudo>/) la remplace ; une appli installée avant la portée « / » n'y est pas
   const APPLI_ICI = "telephone-appli-installee";
   if (installee()) ecrireLocal(APPLI_ICI, "1");
-  const chromeLaVoit = !ORDI && !installee() && lireLocal(APPLI_ICI) !== "1" && navigator.getInstalledRelatedApps
-    ? navigator.getInstalledRelatedApps().then((l) => { if (l.length) ecrireLocal(APPLI_ICI, "1"); return l.length > 0; }).catch(() => false)
-    : Promise.resolve(false);
+  // une vraie appli installée (Chrome sur Android), que le navigateur voit : le bandeau propose alors de l'ouvrir
+  const appliVue = () => (!ORDI && !iphone && !installee() && navigator.getInstalledRelatedApps
+    ? navigator.getInstalledRelatedApps().then((l) => l.length > 0).catch(() => false) : Promise.resolve(false));
+  let appliReelle = appliVue();
+  appliReelle.then((v) => { if (v) ecrireLocal(APPLI_ICI, "1"); });
   async function dejaInstallee() {
-    return installee() || lireLocal(APPLI_ICI) === "1" || await chromeLaVoit;
+    return installee() || lireLocal(APPLI_ICI) === "1" || await appliReelle;
+  }
+  // l'adresse affichée, en lien intent:// : Android la donne à l'appli installée, seule à la prendre hors navigateurs
+  // (un navigateur ne laisse pas une page en sortir seule : il faut ce toucher) ; sans elle, la même page, ici
+  function versAppli() {
+    const p = location.pathname + location.search;
+    return `intent://${location.host}${p}#Intent;scheme=https;S.browser_fallback_url=${encodeURIComponent(location.origin + p)};end`;
   }
   // Android : la demande d'installation du navigateur. Il la refait même quand l'icône est déjà là : Brave (comme les
   // navigateurs autres que Chrome) ne pose qu'un raccourci sur l'écran d'accueil, qu'il ne retient pas ; ce qui est
@@ -2191,6 +2199,13 @@
     ecrireLocal(APPLI_ICI, "1");
     const b = document.getElementById("tel-bandeau");
     if (b) b.remove();
+    // Chrome finit l'installation un peu après : dès qu'il voit l'appli, le bandeau propose de l'ouvrir
+    (async () => {
+      for (let i = 0; i < 20; i++) {
+        await new Promise((ok) => setTimeout(ok, 1500));
+        if (await (appliReelle = appliVue())) return bandeauInstaller(true);
+      }
+    })();
   });
   if (!VOIR && "serviceWorker" in navigator) navigator.serviceWorker.register(new URL("sw.js", ICI)).catch(() => {});
 
@@ -2209,18 +2224,28 @@
     const b = document.querySelector("body > .tel-bandeau");
     document.documentElement.style.setProperty("--tel-bandeau", b ? b.offsetHeight + 12 + "px" : "0px");
   }
-  async function bandeauInstaller() {
+  // apres : l'installation vient d'être faite ici (même après « Plus tard »)
+  async function bandeauInstaller(apres = false) {
     if (ORDI || installee() || !local || T.pseudoRequis || !document.body) return;     // ordinateur : l'Atelier à installer, c'est l'autre
-    if (Date.now() - Number(lireLocal(PLUS_TARD) || 0) < 3 * 86400 * 1000) return;
-    if (await dejaInstallee()) return;
+    if (!apres && Date.now() - Number(lireLocal(PLUS_TARD) || 0) < 3 * 86400 * 1000) return;
+    const ouvrir = await appliReelle;
+    if (!ouvrir && await dejaInstallee()) return;
     let b = document.getElementById("tel-bandeau");
     if (!b) {
       b = document.createElement("div");
       b.id = "tel-bandeau";
       b.className = "tel-bandeau";
       b.setAttribute("role", "region");
-      b.setAttribute("aria-label", "Ajouter à l'écran d'accueil");
       document.body.appendChild(b);
+    }
+    b.setAttribute("aria-label", ouvrir ? "Ouvrir l'appli" : "Ajouter à l'écran d'accueil");
+    if (ouvrir) {
+      b.innerHTML = `<div class="tel-bandeau-texte"><strong>L'appli est installée</strong></div>
+        <div class="tel-bandeau-boutons"><button class="btn btn-accent btn-petit" id="tel-ouvrir">Ouvrir</button>
+        <button class="btn btn-discret btn-petit" id="tel-installer-non">Plus tard</button></div>`;
+      b.querySelector("#tel-ouvrir").onclick = () => { location.href = versAppli(); };
+      b.querySelector("#tel-installer-non").onclick = () => { ecrireLocal(PLUS_TARD, String(Date.now())); b.remove(); };
+      return majBandeau();
     }
     b.innerHTML = `<div class="tel-bandeau-texte"><strong>Ajoute l'Atelier à ton écran d'accueil</strong>
         <span>${invite ? "Elle s'ouvrira depuis son icône, même sans réseau."
