@@ -4571,6 +4571,27 @@ function marquerCouleur(b, etat) {            // etat : "" (retirée), "actif" (
   b.title = titreCouleur(b.dataset.k, etat);
 }
 
+// sous les couleurs : ce que la sélection veut dire ; la règle complète en infobulle
+const REGLE_COULEURS = "1 clic : peut · 2 clics : doit · 3 clics : retirée\n"
+  + "Que des « peut » : au moins une de ces couleurs, d'autres permises, et les incolores\n"
+  + "Un « doit », ou l'identité de couleur : rien d'autre que les couleurs choisies";
+function texteCouleurs(coul, oblig, id) {
+  const doit = [...lettresWUBRG(oblig)], peut = [...lettresWUBRG(coul)].filter((k) => !doit.includes(k)), incolore = (coul || "").includes("C");
+  const noms = (ks, mot, art = "") => ks.map((k) => art + NOMS_COULEURS[k]).join(", ").replace(/, ([^,]*)$/, ` ${mot} $1`);
+  const maj = (t) => t[0].toUpperCase() + t.slice(1), s = (ks) => (ks.length > 1 ? "s" : "");
+  if (!doit.length && !peut.length) return incolore ? "Incolores seulement" : "1 clic : peut · 2 clics : doit";
+  if (doit.length) return maj(noms(doit, "et")) + (peut.length ? ` obligatoire${s(doit)}, ${noms(peut, "et")} possible${s(peut)}` : "") + ", rien d'autre";
+  if (id) return `Jouables dans un deck ${peut.map((k) => NOMS_COULEURS[k]).join("-")}${incolore ? "" : ", sauf les incolores"}`;
+  return `Avec ${noms(peut, "ou", "du ")}, d'autres couleurs permises, et les incolores`;
+}
+function majTexteCouleurs(form) {
+  const z = $(".rch-explic", form);
+  if (!z) return;
+  const b = $$('.rch-symboles[data-groupe="coul"] .rch-sym.actif', form);
+  z.textContent = texteCouleurs(b.map((x) => x.dataset.k).join(""), b.filter((x) => x.classList.contains("oblig")).map((x) => x.dataset.k).join(""),
+    form.elements.id.checked);
+}
+
 function rchBascules(groupe, items, valeur, unique = false) {
   return `<div class="rch-bascules" data-groupe="${groupe}" ${unique ? 'data-unique="1"' : ""} role="group">${items.map(([k, l]) => {
     const on = unique ? valeur === k : (valeur || "").includes(k);
@@ -4694,6 +4715,7 @@ function formulaireRecherche(c) {
     <div class="mt-rang mt-haut">
       <section class="fen fen-couleurs"><h3 class="fen-titre">Couleurs</h3>
         ${rchSymboles("coul", c.coul, "WUBRGC", c.oblig)}
+        <p class="rch-explic" title="${esc(REGLE_COULEURS)}">${esc(texteCouleurs(c.coul, c.oblig, c.id === "1"))}</p>
         <div class="rch-cases ${d && d.identite ? "rch-entre" : "rch-centre"}">${rchCase("id", "Identité de couleur", c)}${d && d.identite ? `<button type="button" class="lien-discret" data-act="identite" title="Couleurs du commandant et incolores">Couleurs de ${esc(d.titre)} ${identiteHtml(d.identite)}</button>` : ""}</div>
         ${rchSelect("spe", RCH_SPE, c)}
       </section>
@@ -5174,10 +5196,13 @@ function rendreFormulaire() {
   form.addEventListener("keydown", (ev) => {
     if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey) && ev.target.name === "texte") { ev.preventDefault(); soumettre(form); }
   });
+  form.addEventListener("change", (ev) => { if (ev.target.name === "id") majTexteCouleurs(form); });
   form.addEventListener("click", (ev) => {
     const s = ev.target.closest(".rch-sym, .rch-bascule:not([data-fn])");
-    if (s && s.closest('[data-groupe="coul"]'))
-      return marquerCouleur(s, !s.classList.contains("actif") ? "actif" : s.classList.contains("oblig") || s.dataset.k === "C" ? "" : "oblig");
+    if (s && s.closest('[data-groupe="coul"]')) {
+      marquerCouleur(s, !s.classList.contains("actif") ? "actif" : s.classList.contains("oblig") || s.dataset.k === "C" ? "" : "oblig");
+      return majTexteCouleurs(form);
+    }
     if (s) {
       const g = s.closest("[data-groupe]");
       const v = !s.classList.contains("actif");
@@ -5195,6 +5220,7 @@ function rendreFormulaire() {
       const id = critIdentite(rch.deck);
       $$('.rch-symboles[data-groupe="coul"] .rch-sym', form).forEach((b) => marquerCouleur(b, id.coul.includes(b.dataset.k) ? "actif" : ""));
       form.elements.id.checked = true;
+      majTexteCouleurs(form);
       const f = $('.rch-bascules[data-groupe="format"]', form);
       $$(".rch-bascule", f).forEach((b) => { const on = b.dataset.k === "commander"; b.classList.toggle("actif", on); b.setAttribute("aria-pressed", on); });
     }
