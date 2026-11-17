@@ -2178,14 +2178,20 @@
   async function dejaInstallee() {
     return installee() || lireLocal(APPLI_ICI) === "1" || await chromeLaVoit;
   }
-  let invite = null;                                   // Android : la demande d'installation du navigateur
-  if (!VOIR) addEventListener("beforeinstallprompt", (ev) => {   // le navigateur ne la propose que si elle n'est pas installée
+  // Android : la demande d'installation du navigateur. Il la refait même quand l'icône est déjà là : Brave (comme les
+  // navigateurs autres que Chrome) ne pose qu'un raccourci sur l'écran d'accueil, qu'il ne retient pas ; ce qui est
+  // retenu ici l'emporte donc sur elle
+  let invite = null;
+  if (!VOIR) addEventListener("beforeinstallprompt", (ev) => {
     ev.preventDefault();
     invite = ev;
-    ecrireLocal(APPLI_ICI, null);
     bandeauInstaller();
   });
-  addEventListener("appinstalled", () => { const b = document.getElementById("tel-bandeau"); if (b) b.remove(); });
+  addEventListener("appinstalled", () => {
+    ecrireLocal(APPLI_ICI, "1");
+    const b = document.getElementById("tel-bandeau");
+    if (b) b.remove();
+  });
   if (!VOIR && "serviceWorker" in navigator) navigator.serviceWorker.register(new URL("sw.js", ICI)).catch(() => {});
 
   // ouverte dans le navigateur (par le QR code) : un bandeau en bas propose de l'installer, tant qu'elle ne l'est pas.
@@ -2206,7 +2212,7 @@
   async function bandeauInstaller() {
     if (ORDI || installee() || !local || T.pseudoRequis || !document.body) return;     // ordinateur : l'Atelier à installer, c'est l'autre
     if (Date.now() - Number(lireLocal(PLUS_TARD) || 0) < 3 * 86400 * 1000) return;
-    if (!invite && await dejaInstallee()) return;
+    if (await dejaInstallee()) return;
     let b = document.getElementById("tel-bandeau");
     if (!b) {
       b = document.createElement("div");
