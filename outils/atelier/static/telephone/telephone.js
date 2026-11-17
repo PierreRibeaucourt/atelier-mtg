@@ -2167,12 +2167,16 @@
   const installee = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
   const iphone = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   // ouverte une fois depuis son icône : retenu ici. Sur Android, le navigateur le lit aussi (même stockage) et ne la
-  // propose plus ; Chrome sait aussi le dire (getInstalledRelatedApps, related_applications du manifeste)
+  // propose plus. Chrome sait aussi le dire (getInstalledRelatedApps, related_applications du manifeste) pour une page
+  // dans la portée de l'appli installée : demandé dès le chargement, à l'adresse de l'appli (/mes-decks/), avant que
+  // l'adresse publique des decks (/decks/<pseudo>/) la remplace ; une appli installée avant la portée « / » n'y est pas
   const APPLI_ICI = "telephone-appli-installee";
   if (installee()) ecrireLocal(APPLI_ICI, "1");
+  const chromeLaVoit = !ORDI && !installee() && lireLocal(APPLI_ICI) !== "1" && navigator.getInstalledRelatedApps
+    ? navigator.getInstalledRelatedApps().then((l) => { if (l.length) ecrireLocal(APPLI_ICI, "1"); return l.length > 0; }).catch(() => false)
+    : Promise.resolve(false);
   async function dejaInstallee() {
-    if (installee() || lireLocal(APPLI_ICI) === "1") return true;
-    try { return !!(navigator.getInstalledRelatedApps && (await navigator.getInstalledRelatedApps()).length); } catch (_) { return false; }
+    return installee() || lireLocal(APPLI_ICI) === "1" || await chromeLaVoit;
   }
   let invite = null;                                   // Android : la demande d'installation du navigateur
   if (!VOIR) addEventListener("beforeinstallprompt", (ev) => {   // le navigateur ne la propose que si elle n'est pas installée
