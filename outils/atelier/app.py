@@ -378,6 +378,17 @@ def pont_apres(rep):
     return rep
 
 
+def appel_relais(methode, chemin, corps):
+    """Une demande du site arrivée par le relais (relais_pont.py, signature vérifiée) : elle passe ici comme si le site
+    l'avait faite directement, avec les mêmes contrôles (pont_avant : routes permises, secret). -> (statut, corps)"""
+    import compte
+    entetes = {"Origin": "https://atelier-mtg.com", "X-Atelier-Pont": compte.secret_pont()}
+    if corps:
+        entetes["Content-Type"] = "application/json"
+    r = app.test_client().open(chemin, method=methode, data=corps.encode("utf-8") if corps else None, headers=entetes)
+    return r.status_code, r.get_data(as_text=True)
+
+
 @app.get("/api/pont")
 def api_pont():
     """L'appli en ligne cherche l'Atelier de ce PC : sa version, le compte où il est connecté (le même, ou rien), son nom
@@ -1496,6 +1507,9 @@ if __name__ == "__main__":
     if compte._connexion().get("jeton"):
         compte.publier_pont(PORT)                  # l'appli en ligne, sur ce PC, saura joindre cet Atelier
     en_fond(compte.boucle)                         # ce PC et le compte, synchronisés toutes les 20 s (connecté)
+    if "--essai" not in sys.argv or os.environ.get("ATELIER_RELAIS"):     # un Atelier d'essai : seulement vers son relais
+        import relais_pont
+        en_fond(relais_pont.boucle, compte.secret_pont, appel_relais)    # le site joint ce PC par le relais (2.5.0)
     if "--essai" not in sys.argv:                  # un Atelier d'essai lancé à côté ne publie rien et ne se met pas à jour
         import mise_a_jour
         import partage

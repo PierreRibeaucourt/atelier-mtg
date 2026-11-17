@@ -821,7 +821,8 @@ def secret_pont():
 
 def publier_pont(port):
     """L'adresse de cet Atelier et le secret du pont, dans « Réglages Atelier/pont.json » (synchronisé) : l'appli en
-    ligne ouverte sur ce PC sait ainsi le joindre (Claude, synergies, MTGPics). Une entrée par PC."""
+    ligne sait ainsi le joindre (Claude, synergies, MTGPics), par le relais (relais_pont.py) depuis 2.5.0. Une entrée
+    par PC."""
     p = os.path.join(decks.RACINE, reglages.DOSSIER_CARTES, "pont.json")
     try:
         with open(p, encoding="utf-8") as f:
@@ -829,7 +830,7 @@ def publier_pont(port):
     except (OSError, ValueError):
         l = {}
     l = l if isinstance(l, dict) else {}
-    entree = dict(port=int(port), secret=secret_pont())
+    entree = dict(port=int(port), secret=secret_pont(), relais=True)     # relais : le site le joint par le relais (2.5.0)
     if l.get(nom_appareil()) != entree:
         l[nom_appareil()] = entree
         _ecrire(p, json.dumps(l, ensure_ascii=False, indent=1) + "\n")

@@ -3,3 +3,12 @@ main = "relais.js"
 compatibility_date = "2026-10-01"
 workers_dev = true
 preview_urls = false
+
+# le pont avec le module Claude des PC (relais.js › Pont) : un objet par PC, ses connexions en hibernation
+[[durable_objects.bindings]]
+name = "PONT"
+class_name = "Pont"
+
+[[migrations]]
+tag = "pont"
+new_sqlite_classes = ["Pont"]

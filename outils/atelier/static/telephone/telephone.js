@@ -1410,25 +1410,105 @@
     if (i === undefined || a[i] > b[i] || !(Date.now() - Date.parse(MODULE_DERNIER.publiee) > 21 * 3600000)) return null;
     return { version: MODULE_DERNIER.version, adresse: `http://127.0.0.1:${pc.port}/` };
   }
-  async function chercherPc() {
-    if (!ORDI || !compte || pc) return;
-    let l = {};
-    try { l = JSON.parse((await depot()).fichiers["Réglages Atelier/pont.json"] || "{}") || {}; } catch (_) { return; }
-    for (const x of Object.values(l)) {
-      try {
-        const r = await fetch(`http://127.0.0.1:${Number(x.port)}/api/pont`, { cache: "no-store", headers: { "X-Atelier-Pont": String(x.secret) } });
-        const d = r.ok ? await r.json() : {};
-        if (d.email && d.email === compte.email) {
-          pc = { port: Number(x.port), secret: String(x.secret), version: d.atelier };
-          T.pc = pc;
-          ecrireLocal(MODULE_VU, "1");
-          if (window.quandPc) window.quandPc();
-          return;
+  // Depuis 2.5.0, le site joint le PC par le relais (relais/relais.js) : le PC y garde une connexion ouverte, le site
+  // ouvre la sienne au même canal, et aucun navigateur ne demande d'autorisation. Le canal et la preuve du PC sont tirés
+  // du secret (relais_pont.py) ; chaque demande est signée avec lui. Un PC en 2.4.0 (pont.json sans « relais ») se
+  // joint encore directement, à son adresse locale.
+  const RELAIS_PONT = (lireLocal("atelier-relais") || "wss://relais.atelier-mtg.workers.dev") + "/pont/";
+  const hexa = (b) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
+  const empreinte = async (t) => hexa(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)));
+  async function signer(secret, texte) {
+    const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    return hexa(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(texte)));
+  }
+  const liaisons = new Map();                         // secret -> la connexion au relais pour ce PC
+  function liaison(secret) {
+    const deja = liaisons.get(secret);
+    if (deja && !deja.fermee) return deja;
+    const l = { pc: false, fermee: false, attente: new Map() };
+    let etatRecu;
+    l.etat = new Promise((ok) => { etatRecu = ok; });
+    l.ouverte = empreinte("atelier-pont-pc:" + secret).then(empreinte).then((canal) => new Promise((ok, ko) => {
+      const ws = new WebSocket(RELAIS_PONT + canal);
+      l.ws = ws;
+      ws.onopen = () => ok(ws);
+      ws.onerror = () => ko(Object.assign(new Error("Le relais ne répond pas : vérifie ta connexion."), { statut: 0 }));
+      ws.onclose = () => {
+        l.fermee = true;
+        clearInterval(l.battement);
+        etatRecu(false);
+        for (const a of l.attente.values()) { clearTimeout(a.minuteur); a.ko(Object.assign(new Error("La connexion avec ton PC a été coupée : réessaie."), { statut: 0 })); }
+        l.attente.clear();
+        if (l.pc) { l.pc = false; pcParti(secret); setTimeout(() => chercherPc().catch(() => {}), 3000); }   // veille, réseau : on se rebranche
+      };
+      ws.onmessage = (ev) => {
+        if (ev.data === "pong") return;
+        let m;
+        try { m = JSON.parse(ev.data); } catch (_) { return; }
+        if (m.type === "etat") {
+          const avant = l.pc;
+          l.pc = !!m.pc;
+          etatRecu(l.pc);
+          if (avant && !l.pc) pcParti(secret);
+          if (!avant && l.pc && !pc) chercherPc().catch(() => {});
+        } else if (m.type === "reponse" && l.attente.has(m.id)) {
+          const a = l.attente.get(m.id);
+          l.attente.delete(m.id);
+          clearTimeout(a.minuteur);
+          a.ok(m);
         }
-      } catch (_) { /* pas sur ce PC, ou l'Atelier n'est pas lancé */ }
-    }
+      };
+    }));
+    l.ouverte.catch(() => { l.fermee = true; etatRecu(false); });
+    l.battement = setInterval(() => { if (l.ws && l.ws.readyState === 1) l.ws.send("ping"); }, 50000);
+    liaisons.set(secret, l);
+    return l;
+  }
+  function pcParti(secret) {                          // le module de ce PC s'est arrêté : « Lancer l'Atelier » au prochain clic
+    if (pc && pc.secret === secret) { pc = null; T.pc = null; }
+  }
+  async function parRelais(secret, chemin, opts = {}) {
+    const l = liaison(secret);
+    const ws = await l.ouverte;
+    await l.etat;
+    if (!l.pc) throw Object.assign(new Error("Le module Claude de ton PC n'est pas lancé."), { statut: 503, absent: true });
+    const id = crypto.randomUUID(), ts = Date.now(), methode = opts.method || "GET";
+    const corps = opts.body !== undefined && opts.body !== null ? JSON.stringify(opts.body) : "";
+    const sig = await signer(secret, `${id}\n${ts}\n${methode}\n${chemin}\n${corps}`);
+    const m = await new Promise((ok, ko) => {
+      const minuteur = setTimeout(() => { l.attente.delete(id); ko(Object.assign(new Error("L'Atelier de ton PC ne répond pas."), { statut: 0 })); }, 60000);
+      l.attente.set(id, { ok, ko, minuteur });
+      ws.send(JSON.stringify({ type: "appel", id, ts, methode, chemin, corps, sig }));
+    });
+    let d = {};
+    try { d = JSON.parse(m.corps || "{}"); } catch (_) { /* réponse vide */ }
+    if (m.statut === 503 && d.absent) throw Object.assign(new Error("Le module Claude de ton PC n'est pas lancé."), { statut: 503, absent: true });
+    if (m.statut >= 400) throw Object.assign(new Error(d.erreur || `L'Atelier de ton PC refuse (${m.statut}).`), { statut: m.statut });
+    return d;
+  }
+  let recherchePc = null;
+  function chercherPc() {
+    if (!ORDI || !compte || pc) return Promise.resolve();
+    return recherchePc || (recherchePc = (async () => {
+      let l = {};
+      try { l = JSON.parse((await depot()).fichiers["Réglages Atelier/pont.json"] || "{}") || {}; } catch (_) { return; }
+      for (const x of Object.values(l)) {
+        const cible = { port: Number(x.port), secret: String(x.secret), relais: !!x.relais };
+        try {
+          const d = await auPc("/api/pont", {}, cible);
+          if (d.email && d.email === compte.email) {
+            pc = { ...cible, version: d.atelier };
+            T.pc = pc;
+            ecrireLocal(MODULE_VU, "1");
+            if (window.quandPc) window.quandPc();
+            return;
+          }
+        } catch (_) { /* module arrêté, ou (2.4.0) pas sur ce PC */ }
+      }
+    })().finally(() => { recherchePc = null; }));
   }
   async function auPc(chemin, opts = {}, cible = pc) {
+    if (cible.relais) return parRelais(cible.secret, chemin, opts);     // jamais l'adresse locale : pas d'autorisation à demander
     const corps = opts.body !== undefined && opts.body !== null;
     let r;
     try {
@@ -1454,10 +1534,15 @@
   // passe par le pont (/api/module/appairer) : il se synchronise alors (ses decks arrivent ici) et publie le pont.
   async function appairerModule(port, secret) {
     if (!compte) throw new Error("Connecte-toi d'abord.");
-    const cible = { port: Number(port), secret: String(secret) };
+    const cible = { port: Number(port), secret: String(secret), relais: true };
     let info;
     try { info = await auPc("/api/pont", {}, cible); }
-    catch (e) { throw Object.assign(new Error("L'Atelier de ce PC ne répond pas : lance « Atelier MTG » sur ce PC, puis recharge cette page."), { statut: e.statut }); }
+    catch (e) {
+      if (!e.absent) throw e;
+      cible.relais = false;                           // un module 2.4.0 : pas au relais, joint à son adresse locale
+      try { info = await auPc("/api/pont", {}, cible); }
+      catch (e2) { throw Object.assign(new Error("L'Atelier de ce PC ne répond pas : lance « Atelier MTG » sur ce PC, puis recharge cette page."), { statut: e2.statut }); }
+    }
     if (info.email && info.email !== compte.email) throw new Error(`Ce PC est connecté à un autre compte (${info.email}).`);
     if (!info.email) {
       const c = await serveur("/connexion/appareil", "POST", { appareil: info.appareil || "PC" });
