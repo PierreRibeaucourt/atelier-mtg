@@ -81,18 +81,50 @@ export default {
 // Le pont d'un PC : sa connexion (une seule : la nouvelle remplace l'ancienne) et celles des pages du site ouvertes.
 // Les connexions dorment entre deux messages (hibernation : rien n'est facturé) ; « ping » reçoit « pong » sans
 // réveiller l'objet. Messages (JSON) :
-//   site → relais : {type: "etat"} ; {type: "appel", id, ts, methode, chemin, corps, sig}
+//   site → relais : {type: "etat"} ; {type: "appel", id, ts, methode, chemin, corps, sig} ; {type: "relance"}
 //   relais → PC   : l'appel, avec de (la page qui attend la réponse)
 //   PC → relais   : {type: "reponse", id, de, statut, corps}
 //   relais → site : {type: "reponse", id, statut, corps} ; {type: "etat", pc} (à l'ouverture, puis quand le PC arrive ou part)
+//
+// Le PC d'un pont, c'est sa connexion la plus récente, si elle vit encore. Une connexion morte sans le dire (veille,
+// réseau perdu) peut rester « ouverte » ici : après un réveil de l'objet, son readyState ne le dit pas toujours, et
+// l'ancien relais lui envoyait les demandes à la place de la nouvelle (le PC branché, le site sans réponse, 2026-11-19).
+// Vivante = un « ping » du PC (toutes les 30 s, relais_pont.BATTEMENT) depuis moins de VIVANT ; les autres connexions
+// du PC sont fermées. « relance » (le site n'a pas de réponse, même à une demande courte) ferme celles du PC, qui se
+// rebranche aussitôt.
+const VIVANT = 100000;                                    // ms : trois battements du PC manqués
+const RELANCE = 10000;                                    // ms : au plus une relance par pont dans ce délai
+
 export class Pont extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+    this.relancee = 0;
   }
 
   ouverts(tag, sauf) {
     return this.ctx.getWebSockets(tag).filter((w) => w !== sauf && w.readyState === WebSocket.OPEN);
+  }
+
+  fermer(w, code, raison) {
+    try { w.close(code, raison); } catch (_) { /* déjà fermée */ }
+  }
+
+  // la connexion du PC à qui parler (ou null) ; ferme au passage les autres, et la plus récente si elle s'est tue
+  pcActuel(sauf) {
+    const maintenant = Date.now();
+    const pcs = this.ctx.getWebSockets("pc").filter((w) => w !== sauf)
+      .map((w) => ({ w, a: w.deserializeAttachment() || {} }))
+      .sort((x, y) => (y.a.depuis || 0) - (x.a.depuis || 0));
+    let actuel = null;
+    for (const [i, { w, a }] of pcs.entries()) {
+      if (i > 0) { this.fermer(w, 4000, "remplacée"); continue; }
+      const ping = this.ctx.getWebSocketAutoResponseTimestamp(w);
+      const vu = Math.max(ping ? ping.getTime() : 0, a.depuis || 0);
+      if (w.readyState === WebSocket.OPEN && maintenant - vu < VIVANT) actuel = w;
+      else this.fermer(w, 4002, "silencieuse");
+    }
+    return actuel;
   }
 
   diffuser(message, sauf) {
@@ -104,15 +136,15 @@ export class Pont extends DurableObject {
     const role = req.headers.get("X-Pont-Role");
     const [client, serveur] = Object.values(new WebSocketPair());
     if (role === "pc") {
-      for (const w of this.ouverts("pc")) { try { w.close(4000, "remplacée"); } catch (_) { /* déjà fermée */ } }
+      for (const w of this.ctx.getWebSockets("pc")) this.fermer(w, 4000, "remplacée");
       this.ctx.acceptWebSocket(serveur, ["pc"]);
-      serveur.serializeAttachment({ role: "pc" });
+      serveur.serializeAttachment({ role: "pc", depuis: Date.now() });
       this.diffuser({ type: "etat", pc: true });
     } else {
       const id = crypto.randomUUID();
       this.ctx.acceptWebSocket(serveur, ["site", "site:" + id]);
       serveur.serializeAttachment({ role: "site", id });
-      serveur.send(JSON.stringify({ type: "etat", pc: this.ouverts("pc").length > 0 }));
+      serveur.send(JSON.stringify({ type: "etat", pc: !!this.pcActuel() }));
     }
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -124,9 +156,15 @@ export class Pont extends DurableObject {
     try { m = JSON.parse(brut); } catch (_) { return; }
     if (!m || typeof m !== "object") return;
     if (a.role === "site") {
-      if (m.type === "etat") return ws.send(JSON.stringify({ type: "etat", pc: this.ouverts("pc").length > 0 }));
+      if (m.type === "etat") return ws.send(JSON.stringify({ type: "etat", pc: !!this.pcActuel() }));
+      if (m.type === "relance") {
+        if (Date.now() - this.relancee < RELANCE) return;
+        this.relancee = Date.now();
+        for (const w of this.ctx.getWebSockets("pc")) this.fermer(w, 4001, "relancée");
+        return this.diffuser({ type: "etat", pc: false });
+      }
       if (m.type !== "appel") return;
-      const pc = this.ouverts("pc")[0];
+      const pc = this.pcActuel();
       if (!pc) return ws.send(JSON.stringify({ type: "reponse", id: m.id, statut: 503, corps: '{"erreur":"absent","absent":true}' }));
       pc.send(JSON.stringify({ ...m, de: a.id }));
     } else if (a.role === "pc" && m.type === "reponse" && typeof m.de === "string") {
@@ -137,12 +175,12 @@ export class Pont extends DurableObject {
 
   async webSocketClose(ws, code, raison) {
     const a = ws.deserializeAttachment() || {};
-    try { ws.close(code >= 1000 && code < 5000 && code !== 1005 && code !== 1006 ? code : 1000, String(raison || "").slice(0, 100)); } catch (_) { /* déjà fermée */ }
-    if (a.role === "pc") this.diffuser({ type: "etat", pc: this.ouverts("pc", ws).length > 0 });
+    this.fermer(ws, code >= 1000 && code < 5000 && code !== 1005 && code !== 1006 ? code : 1000, String(raison || "").slice(0, 100));
+    if (a.role === "pc") this.diffuser({ type: "etat", pc: !!this.pcActuel(ws) });
   }
 
   async webSocketError(ws) {
     const a = ws.deserializeAttachment() || {};
-    if (a.role === "pc") this.diffuser({ type: "etat", pc: this.ouverts("pc", ws).length > 0 });
+    if (a.role === "pc") this.diffuser({ type: "etat", pc: !!this.pcActuel(ws) });
   }
 }

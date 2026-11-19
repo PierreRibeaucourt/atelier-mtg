@@ -1430,7 +1430,7 @@
   function liaison(secret) {
     const deja = liaisons.get(secret);
     if (deja && !deja.fermee) return deja;
-    const l = { pc: false, fermee: false, attente: new Map() };
+    const l = { pc: false, fermee: false, attente: new Map(), surEtat: new Set(), relance: false };
     let etatRecu;
     l.etat = new Promise((ok) => { etatRecu = ok; });
     l.ouverte = empreinte("atelier-pont-pc:" + secret).then(empreinte).then((canal) => new Promise((ok, ko) => {
@@ -1454,7 +1454,8 @@
           const avant = l.pc;
           l.pc = !!m.pc;
           etatRecu(l.pc);
-          if (avant && !l.pc) pcParti(secret);
+          for (const f of [...l.surEtat]) f(l.pc);
+          if (avant && !l.pc && !l.relance) pcParti(secret);           // une relance : le PC revient dans 2 s
           if (!avant && l.pc && !pc) chercherPc().catch(() => {});
         } else if (m.type === "reponse" && l.attente.has(m.id)) {
           const a = l.attente.get(m.id);
@@ -1472,19 +1473,73 @@
   function pcParti(secret) {                          // le module de ce PC s'est arrêté : « Lancer l'Atelier » au prochain clic
     if (pc && pc.secret === secret) { pc = null; T.pc = null; }
   }
+  const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
+  const avant = (p, ms) => Promise.race([p, pause(ms).then(() => null)]);   // la réponse, ou null au bout de ms
+  async function demande(secret, methode, chemin, corps) {
+    const id = crypto.randomUUID(), ts = Date.now();
+    const sig = await signer(secret, `${id}\n${ts}\n${methode}\n${chemin}\n${corps}`);
+    return { id, texte: JSON.stringify({ type: "appel", id, ts, methode, chemin, corps, sig }) };
+  }
+  function attendre(l, id) {                          // la réponse à la demande id ; rejetée si le relais coupe le site
+    const p = new Promise((ok, ko) => l.attente.set(id, { ok, ko }));
+    p.catch(() => {});
+    return p;
+  }
+  function etatPc(l, voulu, ms) {                     // true au prochain etat {pc: voulu}, false au bout de ms
+    return new Promise((ok) => {
+      const fin = (r) => { clearTimeout(t); l.surEtat.delete(f); ok(r); };
+      const f = (pc) => { if (pc === voulu) fin(true); };
+      const t = setTimeout(() => fin(false), ms);
+      l.surEtat.add(f);
+    });
+  }
+  // Une demande sans réponse : le PC est-il encore là ? Une demande courte le dit (« vivant » : la première est juste
+  // longue). Sans réponse non plus, le relais ferme la connexion du PC (relance), qui se rebranche en 2 s (« revenu ») ;
+  // sinon « absent ». Une seule vérification à la fois pour toutes les demandes en attente.
+  function verifierPc(l, secret) {
+    return l.verification || (l.verification = (async () => {
+      try {
+        const s = await demande(secret, "GET", "/api/pont", "");
+        const r = attendre(l, s.id);
+        l.ws.send(s.texte);
+        if (await avant(r, 6000)) return "vivant";
+        l.attente.delete(s.id);
+        l.relance = true;
+        const revenu = etatPc(l, true, 20000);
+        l.ws.send(JSON.stringify({ type: "relance" }));
+        return (await revenu) ? "revenu" : "absent";
+      } catch (_) {
+        return "absent";
+      } finally {
+        l.relance = false;
+        l.verification = null;
+      }
+    })());
+  }
   async function parRelais(secret, chemin, opts = {}) {
     const l = liaison(secret);
     const ws = await l.ouverte;
     await l.etat;
     if (!l.pc) throw Object.assign(new Error("Le module Claude de ton PC n'est pas lancé."), { statut: 503, absent: true });
-    const id = crypto.randomUUID(), ts = Date.now(), methode = opts.method || "GET";
+    const methode = opts.method || "GET";
     const corps = opts.body !== undefined && opts.body !== null ? JSON.stringify(opts.body) : "";
-    const sig = await signer(secret, `${id}\n${ts}\n${methode}\n${chemin}\n${corps}`);
-    const m = await new Promise((ok, ko) => {
-      const minuteur = setTimeout(() => { l.attente.delete(id); ko(Object.assign(new Error("L'Atelier de ton PC ne répond pas."), { statut: 0 })); }, 60000);
-      l.attente.set(id, { ok, ko, minuteur });
-      ws.send(JSON.stringify({ type: "appel", id, ts, methode, chemin, corps, sig }));
-    });
+    const { id, texte } = await demande(secret, methode, chemin, corps);
+    const reponse = attendre(l, id);
+    ws.send(texte);
+    let m = await avant(reponse, 10000);
+    if (!m) {
+      const v = await verifierPc(l, secret);
+      if (v === "revenu") l.ws.send(texte);          // la même demande (même id : le PC ne la traite jamais deux fois)
+      if (v !== "absent") m = await avant(reponse, 50000);
+      if (!m) {
+        l.attente.delete(id);
+        if (v === "absent") {
+          pcParti(secret);
+          throw Object.assign(new Error("Le module Claude de ton PC n'est pas lancé."), { statut: 503, absent: true });
+        }
+        throw Object.assign(new Error("L'Atelier de ton PC ne répond pas."), { statut: 0 });
+      }
+    }
     let d = {};
     try { d = JSON.parse(m.corps || "{}"); } catch (_) { /* réponse vide */ }
     if (m.statut === 503 && d.absent) throw Object.assign(new Error("Le module Claude de ton PC n'est pas lancé."), { statut: 503, absent: true });

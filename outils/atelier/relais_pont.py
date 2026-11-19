@@ -241,7 +241,7 @@ def boucle(secret_pont, appel_local):
             ws = Socket(f"{RELAIS}/pont/{canal(secret)}?pc={preuve(secret)}")
             suivi.update(connecte=True, erreur="", depuis=time.time())
             if dernier_message:
-                print("Relais : reconnecté", file=sys.stderr, flush=True)
+                print(f"{time.strftime('%d/%m %H:%M:%S')} Relais : reconnecté", file=sys.stderr, flush=True)
             attente, dernier_message = 2, ""
             sortie = queue.Queue()
             try:
@@ -270,7 +270,7 @@ def boucle(secret_pont, appel_local):
             message = str(e) or type(e).__name__
             suivi.update(connecte=False, erreur=message)
             if message != dernier_message:
-                print(f"Relais : {message}", file=sys.stderr, flush=True)
+                print(f"{time.strftime('%d/%m %H:%M:%S')} Relais : {message}", file=sys.stderr, flush=True)
                 dernier_message = message
         time.sleep(attente)
         attente = min(attente * 2, 60)
