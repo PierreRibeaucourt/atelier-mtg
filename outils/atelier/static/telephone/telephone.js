@@ -263,11 +263,28 @@
     return { ...defaut, ...propre };
   }
 
-  // les noms des cartes citées de tous les decks, pour l'aperçu au survol partout
-  let fusion = null;
+  // les noms des cartes citées de tous les decks, pour l'aperçu au survol partout. Sur ordinateur (la discussion avec
+  // Claude, qui cite des cartes hors des decks), ceux de toutes les cartes s'y ajoutent dès qu'ils arrivent (publiés
+  // avec la base de cartes : base_telephone.py ; gardés par le navigateur, leur nom change avec eux) : app.js
+  // › chargerCites les relit à l'événement « atelier-noms ».
+  let fusion = null, nomsBase = null, nomsBaseDemandes = false;
+  async function chargerNomsBase() {
+    nomsBaseDemandes = true;
+    try {
+      const idx = await (await fetch(new URL("index.json", BASE_CARTES), { cache: "no-store" })).json();
+      if (!idx.noms || !GZ) return;
+      const r = await fetch(new URL(idx.noms, BASE_CARTES));
+      if (!r.ok) return;
+      nomsBase = await new Response(r.body.pipeThrough(new DecompressionStream("gzip"))).json();
+      fusion = null;
+      dispatchEvent(new Event("atelier-noms"));
+    } catch (_) { /* pas de réseau : les noms des decks suffiront */ }
+  }
   async function nomsCartes(index) {
     if (fusion) return fusion;
     const noms = new Map(), communs = new Set();
+    for (const n of nomsBase ? nomsBase.noms : []) noms.set(n[0], n);
+    for (const m of nomsBase ? nomsBase.communs : []) communs.add(m);
     for (const f of Object.values(index.decks || {})) {
       const d = await fichier(f);
       const r = d && d.api["/api/noms-cartes"];
@@ -278,6 +295,7 @@
     for (const x of (index.api["/api/classeur"] || {}).cartes || []) {
       if (!noms.has(x.nom)) noms.set(x.nom, x.info && x.info.fr && x.info.fr !== x.nom ? [x.nom, x.info.fr] : [x.nom]);
     }
+    if (ORDI && !nomsBaseDemandes) chargerNomsBase();
     return (fusion = { noms: [...noms.values()], communs: [...communs] });
   }
 
@@ -375,6 +393,17 @@
         if (d && k in d.api) return copie(d.api[k]);
       }
       if (etatBase.prete) return message("apercu", [u.searchParams.get("nom") || ""]);
+      // la base n'est pas là (la recherche n'a pas été ouverte) : une carte citée hors des decks (la discussion avec
+      // Claude), vue chez Scryfall ; son nom français vient des noms de toutes les cartes (chargerNomsBase)
+      const nom = u.searchParams.get("nom") || "";
+      if (nom) {
+        const c = await scryfall(`${SCRYFALL}/cards/named?exact=${encodeURIComponent(nom)}`);
+        if (!c) return null;
+        const im = c.image_uris || ((c.card_faces || [])[0] || {}).image_uris || {};
+        const n = nomsBase && nomsBase.noms.find((x) => x[0] === c.name);
+        const eur = Number((c.prices || {}).eur) || null, foil = Number((c.prices || {}).eur_foil) || null;
+        return { nom: c.name, fr: n && n[1] ? n[1] : "", image: im.normal || im.large || "", prix: eur || foil, foil: !eur && !!foil };
+      }
     }
     throw absente();
   }

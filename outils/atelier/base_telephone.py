@@ -4,8 +4,9 @@
 
 Refait d'abord la base si besoin, comme l'Atelier (recherche.verifier : chaque semaine, ou dès qu'une édition a de
 nouvelles cartes ; base_cartes.json.gz, gardé d'une fois sur l'autre par le dépôt qui publie l'appli), puis écrit
-<dossier>/cartes-<empreinte>.json.gz et <dossier>/index.json ({format, fichier, date, taille, nb}). Le téléphone la
-télécharge une fois, puis seulement quand elle change (static/telephone/cartes.js la lit et y cherche).
+<dossier>/cartes-<empreinte>.json.gz, <dossier>/noms-<empreinte>.json.gz (les noms des cartes, pour l'aperçu au
+survol : telephone.js › nomsCartes) et <dossier>/index.json ({format, fichier, date, taille, nb, noms}). Le téléphone
+la télécharge une fois, puis seulement quand elle change (static/telephone/cartes.js la lit et y cherche).
 
 Allégée : les champs vides ne sont pas écrits, ni l'identifiant Oracle ; chaque impression garde l'identifiant de son
 image chez Scryfall au lieu de son chemin ; les descriptions des fonctions sont raccourcies.
@@ -59,6 +60,14 @@ def ecrire(b, dossier):
     with open(os.path.join(dossier, nom), "wb") as f:
         f.write(gz)
     index = dict(format=FORMAT, fichier=nom, date=b["date"], taille=len(gz), nb=len(b["cartes"]))
+    # les noms de toutes les cartes, pour reconnaître une carte citée (la discussion avec Claude sur le site : les
+    # cartes qu'il propose ne sont dans aucun deck) : ceux de l'Atelier du PC (recherche.noms_cites), environ 570 Ko
+    import recherche
+    noms = gzip.compress(json.dumps(recherche.calculer_cites(b), ensure_ascii=False, separators=(",", ":")).encode(),
+                         compresslevel=9, mtime=0)
+    index["noms"] = f"noms-{hashlib.sha1(noms).hexdigest()[:12]}.json.gz"
+    with open(os.path.join(dossier, index["noms"]), "wb") as f:
+        f.write(noms)
     with open(os.path.join(dossier, "index.json"), "w", encoding="utf-8") as f:
         json.dump(index, f)
     return index

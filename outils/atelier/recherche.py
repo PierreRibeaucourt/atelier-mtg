@@ -1047,6 +1047,23 @@ def _empreinte():
         return None
 
 
+def calculer_cites(b):
+    """{noms, communs} de noms_cites, à partir d'une base (aussi pour le site : base_telephone.py)."""
+    jouables = [x for x in b["cartes"] if x["spe"] not in HORS_JEU and not x["dig"] and not x["fun"]]
+    noms = [[x["n"], x["fr"]] if x.get("fr") and x["fr"] != x["n"] else [x["n"]] for x in jouables]
+    seuls = {a.lower().replace("’", "'") for n in noms for nom in n for a in [nom, *nom.split(" // ")] if not re.search(r"\s", a)}
+    courants = set()
+    for x in b["cartes"]:
+        for k in ("o", "of", "t", "tf"):
+            courants.update(m for m in re.findall(r"[^\W_][\w'’-]*", (x.get(k) or "").replace("’", "'")) if m == m.lower())
+    for f in ("app.js", "index.html"):
+        with open(os.path.join(ICI, "static", f), encoding="utf-8") as fh:
+            src = re.sub(r"/\*.*?\*/|(?<!:)//[^\n]*|<!--.*?-->", "", fh.read(), flags=re.S)   # sans les commentaires
+        src = re.sub(r"\b\w+(?=:)", "", src)                           # ni les clés du code (aube: "Dawn of the Dead")
+        courants.update(m.lower() for m in re.findall(r"[^\W_][\w'’-]*", src.replace("’", "'")))
+    return dict(noms=noms, communs=sorted(seuls & courants))
+
+
 def noms_cites():
     """Noms des cartes jouables, pour reconnaître une carte citée n'importe où dans l'Atelier : {noms: [anglais] ou
     [anglais, français], communs: les noms d'un seul mot qui sont aussi des mots courants (« Sacrifice », « Endurance »),
@@ -1070,20 +1087,8 @@ def noms_cites():
             return _citees
         if b is None or cle is None:
             return None
-        jouables = [x for x in b["cartes"] if x["spe"] not in HORS_JEU and not x["dig"] and not x["fun"]]
-        noms = [[x["n"], x["fr"]] if x.get("fr") and x["fr"] != x["n"] else [x["n"]] for x in jouables]
-        seuls = {a.lower().replace("’", "'") for n in noms for nom in n for a in [nom, *nom.split(" // ")] if not re.search(r"\s", a)}
-        courants = set()
-        for x in b["cartes"]:
-            for k in ("o", "of", "t", "tf"):
-                courants.update(m for m in re.findall(r"[^\W_][\w'’-]*", (x.get(k) or "").replace("’", "'")) if m == m.lower())
-        for f in ("app.js", "index.html"):
-            with open(os.path.join(ICI, "static", f), encoding="utf-8") as fh:
-                src = re.sub(r"/\*.*?\*/|(?<!:)//[^\n]*|<!--.*?-->", "", fh.read(), flags=re.S)   # sans les commentaires
-            src = re.sub(r"\b\w+(?=:)", "", src)                       # ni les clés du code (aube: "Dawn of the Dead")
-            courants.update(m.lower() for m in re.findall(r"[^\W_][\w'’-]*", src.replace("’", "'")))
         _citees.clear()
-        _citees.update(cle=cle, date=b["date"], noms=noms, communs=sorted(seuls & courants))
+        _citees.update(cle=cle, date=b["date"], **calculer_cites(b))
         try:
             with open(CACHE_CITEES + ".tmp", "w", encoding="utf-8") as f:
                 json.dump(_citees, f, ensure_ascii=False, separators=(",", ":"))

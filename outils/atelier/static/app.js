@@ -854,6 +854,7 @@ async function chargerCites() {
 observateur.observe(document.body, { childList: true, subtree: true, characterData: true });
 symbolesDans(document.body);
 chargerCites();
+addEventListener("atelier-noms", () => chargerCites());    // site, ordinateur : les noms de toutes les cartes sont arrivés
 
 // ------------------------------------------------------------------ menu contextuel et modale
 function ouvrirMenu(bouton, items, ev = null) {
