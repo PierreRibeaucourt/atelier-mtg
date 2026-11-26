@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /fr/modeles/
+
+Sitemap: https://atelier-mtg.com/sitemap.xml
+Sitemap: https://atelier-mtg.com/decks/sitemap.xml
